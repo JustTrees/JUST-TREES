@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.2</title>
+<title>JUST TREES 1.21</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -180,16 +180,6 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
         <div class="fh"><b>Weather</b><span class="val" id="weatherVal"></span></div>
         <div class="months" id="weathers" role="group" aria-label="Weather" style="grid-template-columns:repeat(3,1fr)"></div>
       </div>
-      <div class="field" id="vrRow" style="display:none">
-        <div class="fh"><b>VR</b><span class="val">Headset found</span></div>
-        <div class="seg" role="group" aria-label="Handedness"><button data-hand="right">Right-handed</button><button data-hand="left">Left-handed</button></div>
-        <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Fling strength (climbing)</span><span class="val" id="flingVal"></span></div>
-        <input type="range" id="fling" min="1" max="12" step="0.5" aria-label="Fling strength">
-        <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Resolution</span>
-          <div class="seg" role="group" aria-label="VR resolution"><button data-vrres="smooth">Smooth</button><button data-vrres="balanced">Balanced</button><button data-vrres="sharp">Sharp</button></div></div>
-        <button class="btn primary" id="vrBtn" style="margin-top:12px;width:100%">Enter VR</button>
-        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks (click it to sprint), trigger shows the map, hold Y for the menu, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide the way they point.</div>
-      </div>
       <div class="field" id="zoneCard">
         <div class="fh"><b>Zone</b><span class="val" id="zoneVal"></span></div>
         <div class="seg" role="group" aria-label="Zone"><button data-zone="off">Off</button><button data-zone="on">On</button></div>
@@ -198,6 +188,14 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
       <div class="field">
         <div class="fh"><b>Month</b><span class="val" id="seasonVal"></span></div>
         <div class="months" id="months" role="group" aria-label="Month"></div>
+      </div>
+      <div class="field" id="vrRow" style="display:none">
+        <div class="fh"><b>VR</b><span class="val">Headset found</span></div>
+        <div class="seg" role="group" aria-label="Handedness"><button data-hand="right">Right-handed</button><button data-hand="left">Left-handed</button></div>
+        <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Fling strength (climbing)</span><span class="val" id="flingVal"></span></div>
+        <input type="range" id="fling" min="1" max="12" step="0.5" aria-label="Fling strength">
+        <button class="btn primary" id="vrBtn" style="margin-top:12px;width:100%">Enter VR</button>
+        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks (click it to sprint), trigger shows the map, hold Y for the menu, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide the way they point.</div>
       </div>
     </div>
     <div class="go">
@@ -291,7 +289,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.2";               // Just Trees 1.2
+const VERSION = "1.21";              // Just Trees 1.21
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4299,7 +4297,7 @@ function vrFire() {
   const hit = castShot(from, dir, vr.scoped ? 2400 : 900); hit.dist = from.distanceTo(hit.p);
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; scene.add(head, trail);
-  tracers.push({ head, trail, from, end: hit.p.clone(), len: from.distanceTo(hit.p), d: 0, hit, fade: 0 });
+  tracers.push({ head, trail, from, end: hit.p.clone(), len: from.distanceTo(hit.p), d: 0, hit, fade: 0, vr: true });
   gunshot();
 }
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
@@ -4367,7 +4365,8 @@ function limbHit(p, tolW) {                                 // inside one of the
 function climbableAt(p) {                                  // is this point inside something you can hold? (matches what you see)
   const g = H(p.x, p.z);
   if (p.y < g + .04) return { kind: "ground", y: g };
-  const rk = rockTopAt(p.x, p.z); if (rk > g + .05 && p.y < rk + .03 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders and fallen logs
+  const rk = rockAround(p.x, p.z, .15); if (rk > g + .05 && p.y < rk + .05 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders, cliffs and fallen logs
+  if (H(p.x + .12, p.z) > p.y || H(p.x - .12, p.z) > p.y || H(p.x, p.z + .12) > p.y || H(p.x, p.z - .12) > p.y) return { kind: "ground", y: g };   // a steep face of the mountain
   if (limbHit(p, .04)) return { kind: "limb" };
   const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -4383,7 +4382,9 @@ function climbableAt(p) {                                  // is this point insi
 }
 function headBlocked(x, y, z) {                            // your face can't go inside trunks, limbs or boulders
   _hd.set(x, y, z);
-  const rk = rockTopAt(x, z); if (rk > H(x, z) + .3 && y < rk + .08) return true;
+  if (y < H(x, z) + .12) return true;                                         // inside the mountain itself
+  { let n = 0; for (const [a, c] of [[0, 0], [.35, 0], [-.35, 0], [0, .35], [0, -.35]]) { const rk = rockTopAt(x + a, z + c); if (rk > H(x + a, z + c) + .3 && y < rk - .05) n++; }
+    if (n >= 4) return true; }                                                // well inside a rock (right up against its face is fine, so you can climb it)
   if (limbHit(_hd, .1)) return true;
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
@@ -4527,8 +4528,13 @@ function zoomOverlay() {
   return zoomOv;
 }
 const _zm = new THREE.Matrix4(), _zi = new THREE.Matrix4(), _zone = new THREE.Vector3(1, 1, 1);
+const _lvM = new THREE.Matrix4(), _lvF = new THREE.Vector3(), _lvQ = new THREE.Quaternion(), _lvO = new THREE.Vector3();
+function levelQ(q) {                                       // same aim, but never rolled: the horizon stays level whatever your wrist does
+  _lvF.set(0, 0, -1).applyQuaternion(q); if (Math.abs(_lvF.y) > .995) return q;
+  return _lvQ.setFromRotationMatrix(_lvM.lookAt(_lvO, _lvF, _UPv));
+}
 function vrZoomRender() {
-  const xr = renderer.xr, k = vr.zoomK, q = vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ;
+  const xr = renderer.xr, k = vr.zoomK, q = levelQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
@@ -4545,13 +4551,13 @@ function vrZoomRender() {
 /* ---- VR menus: the intro, the mode choice, the settings and the pause menu as curved panels around you.
         Point with either controller and pull the trigger. Before each map, a little model of it turns in front of you. ---- */
 const VRUI = { on: false, stage: "", panels: {}, root: null, env: null, lasers: [], prev: {}, drag: null, fade: null, fadeV: 0, fadeGo: null, t: 0, dio: null, dioSpin: null };
-const UIC = { bg: "rgba(19,36,27,.95)", panel: "#1B3226", line: "#2D4A39", text: "#EAF2EC", dim: "#9DB3A5", sun: "#F2C14E", btn: "#24452e", on: "#3f7a4a", off: "rgba(255,255,255,.08)" };
+const UIC = { bg: "rgba(48,86,62,.97)", panel: "#30563e", line: "#7fae8d", text: "#ffffff", dim: "#dcebe0", sun: "#FFD45A", btn: "#467a56", on: "#6aa878", off: "rgba(255,255,255,.14)" };   // bright enough to read easily in a headset   // bright enough to read easily in a headset
 const VR_RES = { smooth: .8, balanced: .9, sharp: 1 };
 function uiRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // one curved panel: a slice of a cylinder around you, with a canvas painted on the inside
 function uiPanel(name, W, H, radius, arcDeg, centerY, yawDeg = 0, src = null) {
   const cv = src || document.createElement("canvas"); if (!src) { cv.width = W; cv.height = H; }
-  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = -1;   // seen from the inside
+  const tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = -1;   // seen from the inside
   if (src) { tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; }
   const L = arcDeg * Math.PI / 180, height = radius * L * cv.height / cv.width;
   const geo = new THREE.CylinderGeometry(radius, radius, height, 48, 1, true, Math.PI + yawDeg * Math.PI / 180 - L / 2, L);
@@ -4569,16 +4575,16 @@ function uiDraw(P) {
     const hov = !!(P.hov && P.hov.includes(w)), dis = w.disabled && w.disabled();
     if (w.kind === "slider") {
       const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2;
-      g.fillStyle = "rgba(255,255,255,.14)"; uiRound(g, w.x, y - 7, w.w, 14, 7); g.fill();
+      g.fillStyle = "rgba(0,0,0,.25)"; uiRound(g, w.x, y - 7, w.w, 14, 7); g.fill();
       g.fillStyle = UIC.sun; uiRound(g, w.x, y - 7, Math.max(14, w.w * v), 14, 7); g.fill();
       g.beginPath(); g.arc(w.x + w.w * v, y, hov ? 24 : 20, 0, 6.283); g.fillStyle = "#fff"; g.fill();
     } else {
       const act = w.active && w.active();
-      g.fillStyle = dis ? "rgba(255,255,255,.05)" : w.primary ? (hov ? "#ffd772" : UIC.sun) : act ? UIC.on : hov ? "#33603f" : UIC.btn;
+      g.fillStyle = dis ? "rgba(255,255,255,.07)" : w.primary ? (hov ? "#ffe08e" : UIC.sun) : act ? UIC.on : hov ? "#5f9a70" : UIC.btn;
       uiRound(g, w.x, w.y, w.w, w.h, 12); g.fill();
       if (act && !w.primary) { g.strokeStyle = UIC.sun; g.lineWidth = 4; uiRound(g, w.x + 2, w.y + 2, w.w - 4, w.h - 4, 11); g.stroke(); }
       if (hov && !dis) { g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 3; uiRound(g, w.x + 1.5, w.y + 1.5, w.w - 3, w.h - 3, 11); g.stroke(); }
-      g.fillStyle = dis ? "rgba(234,242,236,.35)" : w.primary ? "#13241B" : UIC.text; g.textAlign = "center"; g.textBaseline = "middle";
+      g.fillStyle = dis ? "rgba(255,255,255,.45)" : w.primary ? "#13241B" : UIC.text; g.textAlign = "center"; g.textBaseline = "middle";
       if (w.sub) { g.font = "bold " + (w.fs || 46) + "px sans-serif"; g.fillText(w.label, w.x + w.w / 2, w.y + w.h * .36); g.font = "30px sans-serif"; g.fillStyle = dis ? "rgba(157,179,165,.5)" : UIC.dim; uiWrap(g, w.sub, w.x + w.w / 2, w.y + w.h * .68, w.w - 60, 36); }
       else { g.font = "bold " + (w.fs || 34) + "px sans-serif"; g.fillText(w.label, w.x + w.w / 2, w.y + w.h / 2 + 1); }
     }
@@ -4642,43 +4648,43 @@ function vruiParts() {
    ["hunt", "Hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
    ["pvp", "PvP · coming back soon", "Being rebuilt around VR, with climbing."]].forEach(([m, name, sub], i) =>
     uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { setMode(m); renderSetup(); vruiOpen("setup"); }, { sub, fs: 54, disabled: () => m === "pvp" }));
-  // ---- settings ----
-  const S2 = uiPanel("setup", 2048, 1060, 2.1, 104, 1.38);
+  // ---- settings: every choice with the same little explanation the flat menu gives ----
+  const S2 = uiPanel("setup", 2048, 1000, 2.1, 104, 1.4);
   const lx = 70, rx = 1078, cw = 900;
+  const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
     g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode], lx + 360, 92);
-    const lat = set.lat * set.hemi;
-    uiLabel(g, lx, 180, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"} · ${BIOME_TEXT[biomeOf(lat)].split(":")[0]}`);
-    uiLabel(g, lx, 310, "Terrain", roughText(set.rough));
-    uiLabel(g, lx, 440, "Time of day", hourText(set.hour));
-    uiLabel(g, lx, 570, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal" : densMul().toFixed(1) + "x");
-    uiLabel(g, lx, 700, "Month", MONTH_FULL[set.month] + (seasonOf(lat, set.month) === "tropical" ? "" : " · " + seasonOf(lat, set.month)));
-    uiLabel(g, rx, 180, "Map size", { xs: "250 m", small: "400 m", medium: "560 m", large: "800 m", xl: "1.2 km", xxl: "1.6 km" }[set.size]);
-    uiLabel(g, rx, 310, "Edges"); uiLabel(g, rx, 440, "Weather");
-    uiLabel(g, rx, 570, "Hand"); uiLabel(g, rx + 470, 570, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
-    uiLabel(g, rx, 700, "Resolution", { smooth: "Smooth", balanced: "Balanced", sharp: "Sharp" }[set.vrRes]);
-    g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Resolution takes effect the next time you enter VR.", rx, 822);
+    const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
+    uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, BIOME_TEXT[biomeOf(lat)]);
+    uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
+    uiLabel(g, lx, 468, "Time of day", hourText(set.hour)); note(g, lx, 504, $("sunNote").textContent);
+    uiLabel(g, lx, 618, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees"); note(g, lx, 654, "From today's forest up to very thick woods.");
+    uiLabel(g, lx, 768, "Month", MONTH_FULL[set.month]); note(g, lx + 420, 768, sea === "tropical" ? "Always warm" : sea[0].toUpperCase() + sea.slice(1));
+    uiLabel(g, rx, 168, "Map size", $("sizeVal").textContent);
+    uiLabel(g, rx, 318, "Edges"); note(g, rx + 150, 318, set.edges === "island" ? "Ocean all the way to the horizon." : "Forest rolls on past the edge.");
+    uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
+    uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
+    note(g, rx + 470, 654, "How hard you throw yourself climbing.");
   };
-  uiSlider(S2, lx, 196, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
-  uiBtn(S2, lx + 690, 192, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
-  uiBtn(S2, lx + 800, 192, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
-  uiSlider(S2, lx, 326, cw, 0, 1, () => set.rough, v => { set.rough = v; }, .01);
-  uiSlider(S2, lx, 456, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
-  uiSlider(S2, lx, 586, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
-  MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 722 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
+  uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
+  uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
+  uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
+  uiSlider(S2, lx, 366, cw, 0, 1, () => set.rough, v => { set.rough = v; }, .01);
+  uiSlider(S2, lx, 516, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
+  uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
+  MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 790 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 196, 140, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
-  uiBtn(S2, rx, 326, 440, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
-  uiBtn(S2, rx + 460, 326, 440, 62, "Endless trees", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
-  WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 456, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
-  uiBtn(S2, rx, 586, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right" });
-  uiBtn(S2, rx + 220, 586, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left" });
-  uiSlider(S2, rx + 470, 588, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5);
-  [["smooth", "Smooth"], ["balanced", "Balanced"], ["sharp", "Sharp"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 300, 716, 290, 62, l, () => { set.vrRes = k; saveVrRes(); }, { active: () => set.vrRes === k }));
-  uiBtn(S2, rx, 900, 300, 100, "Mode", () => vruiOpen("mode"));
-  uiBtn(S2, rx + 320, 900, 260, 100, "Randomize", () => { $("randomBtn").click(); });
-  uiBtn(S2, rx + 600, 900, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
-  uiBtn(S2, lx, 900, 420, 100, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); });
+  uiBtn(S2, rx, 346, 440, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
+  uiBtn(S2, rx + 460, 346, 440, 62, "Endless trees", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
+  WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
+  uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right" });
+  uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left" });
+  uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5);
+  uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"));
+  uiBtn(S2, rx + 300, 760, 280, 100, "Randomize", () => { $("randomBtn").click(); });
+  uiBtn(S2, rx + 600, 760, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
+  uiBtn(S2, rx + 600, 880, 300, 72, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 30 });
   // ---- growing the world ----
   const Ld = uiPanel("loading", 1200, 300, 2.0, 46, 1.5);
   Ld.paint = (g, P) => { uiBg(g, P); g.textAlign = "center"; g.font = "bold 64px sans-serif"; g.fillStyle = UIC.text; g.fillText("Growing trees…", 600, 150); g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Generating a new world", 600, 220); };
@@ -4839,10 +4845,10 @@ async function enterVR(menu) {
   initSound();
   try {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor({ smooth: .8, balanced: .9, sharp: 1 }[set.vrRes] || 1);
+    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(.8);
     await renderer.xr.setSession(session);
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true; vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
-    try { renderer.xr.setFoveation({ smooth: 1, balanced: .7, sharp: .4 }[set.vrRes] || .4); } catch (_) {}   // less edge blur when sharp
+    try { renderer.xr.setFoveation(1); } catch (_) {}
     session.addEventListener("end", () => {
       const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
       if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
@@ -4896,10 +4902,12 @@ function update(dt) {
   const swimming = !iced && H(P.x, P.z) < water - 1.25;
   const wading = riverAt(P.x, P.z) > H(P.x, P.z) + .15;
   // glide: only in the air (after a jump or off a drop), only while the button is held
-  P.gliding = (gameMode === "pvp" || vr.on) && (input.glide || input.glideMouse) && !P.onGround && !P.climb && !swimming;
+  const steepVR = vr.on && slopeNy(P.x, P.z) < .77;                         // steeper than about 40 degrees
+  P.gliding = (gameMode === "pvp" || vr.on) && (input.glide || input.glideMouse) && (!P.onGround || steepVR) && !P.climb && !swimming;
+  if (P.gliding && P.onGround) { P.onGround = false; P.vy = Math.max(P.vy, 1.5); P.y += .05; }   // push off the slope into the air
   if (swimming || P.gliding) P.crouch = false;
   if (vr.on && P.gliding && vr.glideDir) mag = 1;                            // in a headset you always fly forward, the way your arms point
-  let speed = P.gliding ? GLIDE_SPEED * mag : (running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
+  let speed = P.gliding ? GLIDE_SPEED * mag : (vr.on ? (running ? 12.5 : 8.5) : running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
   let moved = 0;
   if (mag > .02) {
     const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
@@ -4952,7 +4960,8 @@ function update(dt) {
     if (P.gliding) P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4);   // ease into a slow, steady drop
     else P.vy -= 22 * dt;
     P.y += P.vy * dt;
-    if (P.y <= gnd || (P.onGround && P.y - gnd < .6 && P.vy <= 0)) { P.y = gnd; P.vy = 0; P.onGround = true; }
+    if (steepVR && !P.gliding && P.y > gnd && P.y - gnd < .35 && P.onGround) P.onGround = false;
+    if (P.y <= gnd || (P.onGround && P.y - gnd < .6 && P.vy <= 0 && !(steepVR && !P.gliding))) { P.y = gnd; P.vy = 0; P.onGround = true; }   // on steep ground in VR the slope can drop away under you: little skips
     else P.onGround = false;
   }
   // steps come at a natural pace: about 2 a second walking, 2.7 sprinting, 1.5 crouched
@@ -5973,10 +5982,10 @@ function updateGun(dt) {
   for (let i = tracers.length - 1; i >= 0; i--) {             // glowing yellow tracer with a short fading trail
     const t = tracers[i];
     if (t.d < t.len) {
-      t.d += TRACER_SPEED * dt;
+      t.d += (t.vr ? 1100 : TRACER_SPEED) * dt;                 // in VR: a much faster round
       const k = Math.min(1, t.d / t.len), hp = new THREE.Vector3().lerpVectors(t.from, t.end, k);
-      const tp = new THREE.Vector3().lerpVectors(t.from, t.end, Math.max(0, k - 9 / t.len));
-      const w = .07 + hp.distanceTo(camera.position) * .0016;       // stays visible far away
+      const tp = new THREE.Vector3().lerpVectors(t.from, t.end, Math.max(0, k - (t.vr ? 18 : 9) / t.len));
+      const w = t.vr ? .009 + hp.distanceTo(camera.position) * .0007 : .07 + hp.distanceTo(camera.position) * .0016;       // stays visible far away (a thin streak in VR)
       place(t.head, tp, hp, w); place(t.trail, t.from, hp, w * .45);
       if (k >= 1 && t.hit.bot) { damageBot(t.hit.bot, t.hit.head); t.hit.bot = null; t.hit.kind = null; }
       if (k >= 1 && t.hit.botHit) { t.hit.botHit = false; if (state === "play") hurt(BOT.hitDmg); }
