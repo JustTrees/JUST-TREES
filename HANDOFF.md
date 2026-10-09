@@ -27,9 +27,9 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 2. How we work (his rules)
 
-1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **25**), restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
+1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **34**). **Don't log notes until he says to take notes.**, restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
 2. **Keep PC and phone exactly as they are** unless he says otherwise. Most new work is **VR only**; check before changing shared behaviour. Anything visual (tracers, fog, speed) gets a VR-only branch.
-3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → **1.21** (current). He names versions; if he just says go, pick the next small step (1.22) and mention it.
+3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → 1.21 → **1.22** (current). He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
 4. **After building:**
    - Run the tests (section 5).
    - Push `index.html` to the repo, which makes the game live on his link.
@@ -52,7 +52,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ---
 
-## 4. What exists now (v1.21)
+## 4. What exists now (v1.22)
 
 ### World and generation (all modes)
 - **Settings:**
@@ -108,7 +108,7 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Heavy, damped feel: small shakes are soaked up and deliberate swings are followed (`vr.gq`/`vr.gp` with an adaptive rate).
   - Less kick with two hands.
   - Bullet in VR: a thin streak at 1,100 m/s; shots count out to 2.4 km when scoped, 900 m otherwise.
-  - The rifle bolt doesn't animate in VR yet.
+  - In Hunting the bolt is worked by hand (see the guns section below).
 - **Scope:** both hands on the gun, eyepiece within about 14 cm of your eye and aimed roughly where you look. The **whole view zooms** (about 4.6×, 9× and 14×, matching the PC steps) with a black surround and crosshair.
   - One mono view (both eyes see the same image) for comfort.
   - The **horizon stays level** whatever your wrist does (`levelQ`).
@@ -133,7 +133,16 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Tree sway frozen (less leaf shimmer).
   - Leaf edges smoothed (alpha-to-coverage on foliage, set when the map is generated in VR).
   - Render scale 0.8 and maximum foveation. He found Smooth looked best, so the resolution option was removed.
-- **Wrist HUD:** a small panel on the off-hand wrist showing info and score.
+- **Wrist HUD:** a small panel on the off-hand wrist showing info and score (and "+24 Pistol ammo" when you loot).
+
+### VR Hunting guns (1.22, notes 26–34; VR Hunting only, PC and phone unchanged)
+- **Gun wheel:** hold B (0.3 s) opens a wheel; point the gun-hand ray at a gun and let go. Tap B still marks; tap A still holsters/draws.
+- **Guns (`WEAP`, models in `GUNMODEL` plus the sniper):** sniper (5 rounds, bolt after every shot, the only scope), assault rifle (30, full auto ~8/s), SMG (32, full auto ~12/s, less accurate, 350 m reach), pistol (12, semi-auto, 250 m, two-handed grip optional). Damage numbers are for future PvP; in Hunting a hit is still a kill.
+- **Reload, one step at a time, off-hand grip only** (`reloadTick`, `arms[kind].phase`: 0 ready, 1 magazine out, 2 bolt due): the empty magazine pops out and hovers glowing yellow; a squeeze within 35 cm (`SNAP_R`) snaps the glove onto it, push it in along its slot; then the bolt / charging handle / slide glows, squeeze to snap onto it, pull back, let go. Only then can the off hand snap to the front grip. Gun-hand stick click drops the magazine early (its rounds go back to spare). Dry trigger clicks.
+- **Scope:** only two-handing the sniper with the back of the gun within ~30 cm of your face, roughly pointing where you look. Letting go to work the bolt drops it; re-grip brings it back.
+- **Ammo counter** on the gun's side (magazine | spare), mirrored for left-handed. **Ammo cans** (instanced, one colour per gun) around the map, a few near spawn; walk over or touch to pick up; up to 300 spare each (`AMMO_CAP`).
+- **Shoot while hanging:** with the gun out, the off hand can still climb; the gun hand can't grab, and A won't draw the gun while the gun hand is holding on. No scope while hanging.
+- Test: `dev/test_vr_guns.py` on the debug copy.
 
 ### PvP (on hold; code kept, menu button disabled)
 - Five bots hunt you; shield 100 and health 100; the green zone mist in 10-minute rounds; grenades.
@@ -153,6 +162,7 @@ Read this first. It carries over the project, the person, the way we work, and e
     - `dev/test_vr_moves.py`: walk and sprint speed, level scope, bullet speed and width, rock and cliff grabs, face blocking, downhill skips, lifting off into a glide.
     - `dev/test_vr_climb_scope.py`: trunk, branch and limb grabs, the blue hand, pulling up, landing on limbs, scope zoom steps, the zoomed render.
     - `dev/test_vr_glide_gun.py`: sprint, glide direction, climbing face block, rifle steadiness (shake in vs out), far-tree switching.
+    - `dev/test_vr_guns.py`: magazines, the reload steps and snapping, bolt per sniper shot, scope on/off, gun wheel, fire rates, early magazine drop, ammo cans, shooting while hanging.
     - `dev/test_vr_menus.py`: the whole VR menu flow, from intro to settings to loading, preview, drop-in and pause. It saves screenshots to `/tmp/`.
   - Other checks:
     - `dev/test_animals.py`: stuck episodes and flee distance (run it on two builds to compare).
@@ -251,4 +261,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ---
 
-*Last updated at v1.21 (October 2026). The next chat: read this, check the repo (`index.html`, `dev/`), then ask Ron what he wants to start with. Birdwatching (note 25) and the body notes (9 and 10) are waiting, and multiplayer is the big next chapter.*
+*Last updated at v1.22 (October 2026). He asked to set the old backlog aside and only work on what he brings up; his stated direction is VR mechanics, how the characters look, climbing and gliding feel, and later a PC VR high-quality setting chosen automatically by device.*
+
+*Earlier note: The next chat: read this, check the repo (`index.html`, `dev/`), then ask Ron what he wants to start with. Birdwatching (note 25) and the body notes (9 and 10) are waiting, and multiplayer is the big next chapter.*
