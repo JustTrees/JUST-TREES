@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.1</title>
+<title>JUST TREES 1.12</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -184,7 +184,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
         <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Fling strength (climbing)</span><span class="val" id="flingVal"></span></div>
         <input type="range" id="fling" min="1" max="12" step="0.5" aria-label="Fling strength">
         <button class="btn primary" id="vrBtn" style="margin-top:12px;width:100%">Enter VR</button>
-        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks, trigger shows the map, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide.</div>
+        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks (click it to sprint), trigger shows the map, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide the way they point.</div>
       </div>
       <div class="field" id="zoneCard">
         <div class="fh"><b>Zone</b><span class="val" id="zoneVal"></span></div>
@@ -286,10 +286,11 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.1";               // Just Trees 1.1
+const VERSION = "1.12";              // Just Trees 1.12
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
+let VR_ON = false;                    // set while a headset session runs: long views, more distant forest
 
 const TILE = 160, SIZES = { xs: 250, small: 400, medium: 560, large: 800, xl: 1200, xxl: 1600 };
 let S = 640, HALF = 320, EDGE = 270, SEG = 230, NT = 4, AREA = 1;
@@ -770,19 +771,20 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) } };
 const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
-const GRADE = { uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
+const GRADE = { uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
   uShadowTex: { value: null }, uShadowTex2: { value: null }, uShadowMix: { value: 0 }, uShadowCol: { value: new THREE.Color(1, 1, 1) }, uShadowOn: { value: 0 }, uMapHalf: { value: 320 }, uMapS: { value: 640 } };
 const GRADE_CODE = `{ float gL = dot(outgoingLight, vec3(0.3, 0.59, 0.11));
     vec3 gr = outgoingLight * mix(uShTint, uLtTint, smoothstep(0.04, 0.45, gL));
-    outgoingLight = mix(vec3(dot(gr, vec3(0.3, 0.59, 0.11))), gr, uSat); }
+    outgoingLight = mix(vec3(dot(gr, vec3(0.3, 0.59, 0.11))), gr, uSat);
+    float lL = dot(outgoingLight, vec3(0.3, 0.59, 0.11)); outgoingLight *= 1.0 + uLift * (1.0 - smoothstep(0.02, 0.34, lL)); }   // lift the darks (headsets show them darker)
   #include <output_fragment>`;
 function grade(m) {
   const prev = m.onBeforeCompile, key = (prev ? prev.toString() : "") + "|graded";
   m.onBeforeCompile = (sh, r) => {
     if (prev) prev.call(m, sh, r);
-    addHF(sh); sh.uniforms.uShTint = GRADE.uShTint; sh.uniforms.uLtTint = GRADE.uLtTint; sh.uniforms.uSat = GRADE.uSat;
-    sh.fragmentShader = "uniform vec3 uShTint; uniform vec3 uLtTint; uniform float uSat;\n" + sh.fragmentShader.replace("#include <output_fragment>", GRADE_CODE);
+    addHF(sh); sh.uniforms.uShTint = GRADE.uShTint; sh.uniforms.uLtTint = GRADE.uLtTint; sh.uniforms.uSat = GRADE.uSat; sh.uniforms.uLift = GRADE.uLift;
+    sh.fragmentShader = "uniform vec3 uShTint; uniform vec3 uLtTint; uniform float uSat; uniform float uLift;\n" + sh.fragmentShader.replace("#include <output_fragment>", GRADE_CODE);
   };
   m.customProgramCacheKey = () => key;
   return m;
@@ -1052,6 +1054,12 @@ function card(L, W, y, ang, droop, roll) {
   for (let i = 0; i < p.count; i++) { v.set(p.getX(i) * 1.25, .55, p.getZ(i) * 1.25).normalize(); n.setXYZ(i, v.x, v.y, v.z); }
   return g;
 }
+function trunkLow(r, h, lean) {           // the far-away trunk: four sides
+  const g = remapV(new THREE.CylinderGeometry(r * .3, r, h + 1, 4, 2, true), 0, .2);
+  g.translate(0, (h + 1) / 2 - 1.3, 0);
+  if (lean) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = Math.max(0, p.getY(i)) / h; p.setX(i, p.getX(i) + t * t * lean); } }
+  return g;
+}
 function trunk(r, h, lean) {
   const g = remapV(new THREE.CylinderGeometry(r * .3, r, h + 1, 6, 3, true), 0, .2);
   g.translate(0, (h + 1) / 2 - 1.3, 0);                 // trunks continue well below the ground
@@ -1093,7 +1101,7 @@ function holdShape(parts, tr, th, lean) {
 // Every variant is built from its own recipe: proportions, droop, gaps, a bare side, scragginess.
 // `pruned` = grown in a crowded stand (bare lower trunk), `odd` = one of the ~10% with a broken, flat or double top.
 function treeVariant(kind, pruned, odd) {
-  const parts = []; let Ht, tr, Lmax, hb, lean = 0;
+  const parts = [], low = []; let Ht, tr, Lmax, hb, lean = 0, ls = 0, le = 0;   // low: the far-away version
   const oddType = odd ? (kind === "palm" ? "dead" : kind === "fir" ? pickS(["broken", "double", "flat"]) : pickS(["broken", "flat"])) : null;
   const gapsOf = () => Array.from({ length: Math.floor(rnd() * 3) }, () => [.1 + rnd() * .75, .04 + rnd() * .08]);
   if (kind === "fir") {
@@ -1103,7 +1111,7 @@ function treeVariant(kind, pruned, odd) {
     hb = pruned ? Math.max(3.2, Ht * (.3 + rnd() * .22)) : .25 + rnd() * .6;
     const n = Math.round((pruned ? 24 : 36) + rnd() * 22 * (.6 + form * .6)), gaps = gapsOf();
     const sideA = rnd() * 6.28, sideW = rnd() < .5 ? .5 + rnd() * .9 : 0, s0 = rnd() * .6, s1 = s0 + .2 + rnd() * .4;
-    const topT = oddType === "broken" ? .7 + rnd() * .12 : 1, lx = () => 0;
+    const topT = oddType === "broken" ? .7 + rnd() * .12 : 1, lx = () => 0; ls = parts.length;
     for (let k = 0; k < n; k++) {
       const t = k / (n - 1); if (t > topT) break;
       if (gaps.some(([c, w]) => Math.abs(t - c) < w) && rnd() < .8) continue;         // thin bands with missing branches
@@ -1118,7 +1126,9 @@ function treeVariant(kind, pruned, odd) {
       parts.push(sh(card(L, L * .82, y, ang, dr, roll)));
       parts.push(sh(card(L * .92, L * .55, y, ang, dr + .05, roll + Math.PI / 2)));
       if (rnd() < .5) parts.push(sh(card(L * .7, L * .6, y + .15, ang + .5, dr * .8, roll + Math.PI / 4)));
+      low.push(sh(k % 2 ? card(L * .96, L * .72, y, ang, dr + .05, roll + Math.PI / 2) : card(L * 1.04, L * .95, y, ang, dr, roll)));   // one card per branch, alternating flat and upright so the crown keeps its volume
     }
+    le = parts.length;
     const topCards = (ox, oz, yy, sc) => {
       for (const [a, l, w, dy, dr] of [[0, 2.4, 1.5, -.6, -1.35], [Math.PI / 2, 2.4, 1.5, -.6, -1.35], [Math.PI / 4, 1.8, 1.3, -1.2, -1.1]])
         parts.push(shadeGeo(card(l * sc, w * sc, yy + dy * sc, a, dr, 0).translate(ox, 0, oz), () => [1.02, 1.08, .95]));
@@ -1140,7 +1150,7 @@ function treeVariant(kind, pruned, odd) {
     const n = Math.round((pruned ? 12 : 18) + rnd() * 16), gaps = gapsOf();
     const lopA = rnd() * 6.28, lop = rnd() < .5 ? .2 + rnd() * .35 : 0;                 // lopsided toward the light
     const sideA = rnd() * 6.28, sideW = rnd() < .4 ? .5 + rnd() * .8 : 0, s0 = rnd() * .5, s1 = s0 + .25 + rnd() * .4;
-    const topT = oddType === "broken" ? .68 + rnd() * .1 : 1, flat = oddType === "flat";
+    const topT = oddType === "broken" ? .68 + rnd() * .1 : 1, flat = oddType === "flat"; ls = parts.length;
     for (let k = 0; k < n; k++) {
       const t = k / (n - 1); if (t > topT) break;
       if (gaps.some(([c, w]) => Math.abs(t - c) < w) && rnd() < .75) continue;
@@ -1153,7 +1163,9 @@ function treeVariant(kind, pruned, odd) {
       const tint = cardTint(), sh = g => shadeCard(g.translate(lx(y), 0, 0), Lmax, hb, Ht, lx, tint, false);
       parts.push(sh(card(L, L * .8, y, ang, dr, roll)));
       if (rnd() < .8) parts.push(sh(card(L * .9, L * .6, y, ang, dr, roll + Math.PI / 2)));
+      low.push(sh(k % 2 ? card(L * .94, L * .72, y, ang, dr, roll + Math.PI / 2) : card(L * 1.03, L * .9, y, ang, dr, roll)));
     }
+    le = parts.length;
     if (oddType !== "broken") for (const a of [0, Math.PI]) parts.push(shadeGeo(card(2.4, 2, Ht, a, -1.2, 0).translate(lx(Ht), 0, 0), () => [1.02, 1.05, .97]));
     else parts.push(shadeGeo(tubeGeo([new THREE.Vector3(lx(Ht * topT), Ht * topT - .6, 0), new THREE.Vector3(lx(Ht * topT) + .15, Ht * topT + .9, .1)], [tr * .4, tr * .3], 4), () => DEADC));
     if (pruned) deadStubs(parts, hb, true);
@@ -1169,7 +1181,7 @@ function treeVariant(kind, pruned, odd) {
     return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true, hold: holdShape(parts, tr, Ht, lean) };
   }
   parts.push(shadeGeo(trunk(tr, Ht + .6, lean), () => [.9, .9, .9]));
-  return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned, hold: holdShape(parts, tr, Ht + .6, lean) };
+  return { geo: mergeUV(parts), geoLow: mergeUV([...low, ...parts.slice(le).filter(g => g.attributes.position.count === 4), shadeGeo(trunkLow(tr, Ht + .6, lean), () => [.9, .9, .9])]), r: tr + .2, h: Ht, pruned, hold: holdShape(parts, tr, Ht + .6, lean) };
 }
 
 const phong = (color, extra = {}) => new THREE.MeshPhongMaterial({ color, flatShading: true, shininess: 0, specular: 0x000000, ...extra });
@@ -2408,7 +2420,7 @@ function generate() {
   for (let i = 0; i < NT; i++) for (let j = 0; j < NT; j++) {
     const grp = new THREE.Group(); world.add(grp);
     const cx = -HALF + (i + .5) * TILE, cz = -HALF + (j + .5) * TILE;
-    tiles.push({ group: grp, cx, cz, cy: H0(cx, cz) });
+    const hi = new THREE.Group(), lo = new THREE.Group(); grp.add(hi, lo); tiles.push({ group: grp, hi, lo, cx, cz, cy: H0(cx, cz) });
   }
   const tileOf = (x, z) => Math.min(NT - 1, Math.max(0, Math.floor((x + HALF) / TILE))) * NT + Math.min(NT - 1, Math.max(0, Math.floor((z + HALF) / TILE)));
 
@@ -2611,7 +2623,7 @@ function generate() {
       }
     }
   }
-  for (const k in limbVars) limbVars[k].forEach((lv, vi) => limbRecs[k][vi].forEach((list, ti) => addInstances(lv.geo, limbMats[k], list, true, tiles[ti].group)));
+  for (const k in limbVars) limbVars[k].forEach((lv, vi) => limbRecs[k][vi].forEach((list, ti) => addInstances(lv.geo, limbMats[k], list, true, tiles[ti].hi)));
 
   {                                     // bake the soft tree shadows for this map's sun (or moon)
     const sp0 = sunPos(lat, set.month, hourNow); shadowSrc = { trees: allTrees, kinds, lat };
@@ -2619,7 +2631,7 @@ function generate() {
   }
   for (const k in kinds) kinds[k].vars.forEach((variant, vi) => {
     const mat = kinds[k].mats[vi % 2];
-    for (let ti = 0; ti < tiles.length; ti++) addInstances(variant.geo, mat, recs[k][vi].filter(t => t.tile === ti), true, tiles[ti].group);
+    for (let ti = 0; ti < tiles.length; ti++) { const l = recs[k][vi].filter(t => t.tile === ti); addInstances(variant.geo, mat, l, true, tiles[ti].hi); addInstances(variant.geoLow || variant.geo, mat, l, true, tiles[ti].lo); }
   });
 
   // Terrain mesh, with rock blended in on steep and high ground
@@ -2658,7 +2670,7 @@ function generate() {
     };
     for (let i = 0; i < bp.count; i++) {
       const x = bp.getX(i), z = bp.getZ(i), inside = Math.abs(x) < HALF - 1 && Math.abs(z) < HALF - 1;
-      let h = bh(x, z); if (inside) h -= 2.5;                   // tucked under the real ground
+      let h = bh(x, z); if (inside) { const st = BS / BSEG; for (let a = -1; a <= 1; a++) for (let c = -1; c <= 1; c++) h = Math.min(h, H(x + a * st, z + c * st)); h -= 2.5; }   // tucked under the real ground everywhere between its points (even where peaks were worn down)
       bp.setY(i, h);
       const e = 3, ny = 1 / Math.sqrt(1 + ((bh(x + e, z) - bh(x - e, z)) / (2 * e)) ** 2 + ((bh(x, z + e) - bh(x, z - e)) / (2 * e)) ** 2);
       const v = (varN(x * .04, z * .04) + 1) / 2, rel = (h - water) / span;
@@ -2672,8 +2684,8 @@ function generate() {
     bgeo.setAttribute("color", new THREE.BufferAttribute(bcol, 3)); bgeo.setAttribute("rocky", new THREE.BufferAttribute(brk, 1)); bgeo.computeVertexNormals();
     world.add(new THREE.Mesh(bgeo, groundMaterial(litter, biome === "tropical" ? "#7a6a3a" : "#b5642a", weather.wet)));
     // forest on the borderlands: copies of this map's own trees, grouped in big chunks that get culled like the map tiles
-    const brand = mulberry32(seed * 17 + 3), bn = makeNoise(brand), CH = 320, reach = HALF + Math.min(ext, (isTouch ? 550 : 950) + 120);
-    const dens = allTrees.length / (S * S) * .55, cap = isTouch ? 2600 : 7500;
+    const brand = mulberry32(seed * 17 + 3), bn = makeNoise(brand), CH = 320, reach = HALF + Math.min(ext, (VR_ON ? 1500 : isTouch ? 550 : 950) + 120);
+    const dens = allTrees.length / (S * S) * .55, cap = VR_ON ? 7000 : isTouch ? 2600 : 7500;
     const ringArea = (2 * reach) ** 2 - (S - 40) ** 2, want = Math.min(cap, Math.round(dens * ringArea));
     const chunks = new Map();
     if (allTrees.length) for (let k = 0, tries = 0; k < want && tries < want * 4; tries++) {
@@ -2693,7 +2705,7 @@ function generate() {
     for (const ch of chunks.values()) {
       const group = new THREE.Group(); world.add(group);
       const by = {}; for (const t of ch.list) (by[t.kind + "|" + t.vi] = by[t.kind + "|" + t.vi] || []).push(t);
-      for (const key in by) { const [kd, vi] = key.split("|"); const kk = kinds[kd]; if (kk && kk.vars[+vi]) addInstances(kk.vars[+vi].geo, kk.mats[+vi % 2], by[key], true, group); }
+      for (const key in by) { const [kd, vi] = key.split("|"); const kk = kinds[kd]; if (kk && kk.vars[+vi]) addInstances(kk.vars[+vi].geoLow || kk.vars[+vi].geo, kk.mats[+vi % 2], by[key], true, group); }
       tiles.push({ group, cx: ch.cx, cz: ch.cz, cy: water + span * .3, r: CH * .72 });
     }
   }
@@ -3020,7 +3032,7 @@ function setLighting(lat, biome) {
   if (el > -4) { WATER_U.uSunDir.value.copy(sp.dir); WATER_U.uSunCol.value.copy(sunCol); WATER_U.uSunVis.value = smooth(-3, 2, el) * (1 - oc * .9); }
   else { WATER_U.uSunDir.value.copy(moonDir); WATER_U.uSunCol.value.set("#c8d4f0"); WATER_U.uSunVis.value = U.moonVis.value * .7; }
   if (fogBanks) fogBanks.material.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
-  fogBase = scene.fog.far = (isTouch ? 550 : 950) * weather.fogMul;   // you can see further before the haze takes over
+  fogBase = scene.fog.far = (VR_ON ? 1500 : isTouch ? 550 : 950) * weather.fogMul;   // you can see further before the haze takes over
 }
 
 /* ---------------- The zone: green spore mist that creeps inward in stages ---------------- */
@@ -3687,6 +3699,7 @@ const NATIVE = {
   polar:     [["polar", 7], ["seal", 14, [2, 5]], ["bird", 5]]
 };
 const BEAST_CAP = isTouch ? 90 : 170, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
+const beastDraw = () => vr.on ? 750 * Math.min(3, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
 const sealOk = (x, z) => Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) + 10) && !nearObstacle(x, z, 1.2)
   && (iced ? H(x, z) < water + 1.5 : H(x, z) > water + .05 && H(x, z) < water + 1.6) && slopeNy(x, z) > .85;     // the shore, or out on the ice
 const nearWater = (x, z) => { for (let k = 0; k < 8; k++) { const a = k * .785, X = x + Math.cos(a) * 30, Z = z + Math.sin(a) * 30; if (H(X, Z) < water) return true; } return false; };
@@ -3755,7 +3768,7 @@ function updateMonkey(A, dt, T) {
         A.yaw = Math.atan2(A.to.x - A.x, A.to.z - A.z); } else A.sitT = 2;
     }
   }
-  const vis = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < BEAST_DRAW;
+  const vis = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < beastDraw();
   A.root.visible = vis; A.root.position.set(A.x, A.y - (A.to ? 1.1 : .35), A.z); A.root.rotation.set(0, A.yaw, 0);
 }
 function animalSpot(minFromPlayer, ok, extra) {
@@ -3918,7 +3931,7 @@ function updateAnimals(dt) {
     }
     const gy = beastGround(A, A.x, A.z); A.y += (gy - A.y) * Math.min(1, dt * (gy > A.y ? 12 : 7));          // hops up onto logs, settles down off them
     A.grazeK += ((A.mode === "graze" ? 1 : 0) - A.grazeK) * Math.min(1, dt * 2);
-    const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), vis = cd < Math.min(far, BEAST_DRAW);
+    const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), vis = cd < Math.min(far, beastDraw());
     A.root.visible = vis; A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
     if (!vis) continue;
     A.phase += dt * A.speed / A.stride * Math.PI * 2;
@@ -4111,7 +4124,9 @@ function vrTick(dt) {
   P.x = I.head.x; P.z = I.head.z;                                           // walking around your room moves you too
   vr.lastP = [P.x, P.z];
   // off-hand stick walks where you look; gun-hand stick snaps 30 degrees (or zooms the scope)
-  input.jx = off ? off.sx : 0; input.jy = off ? -off.sy : 0; const mag = Math.hypot(input.jx, input.jy); input.run = mag > .95 && !P.crouch;
+  input.jx = off ? off.sx : 0; input.jy = off ? -off.sy : 0; const mag = Math.hypot(input.jx, input.jy);
+  if (off && edge("sprint", off.stickBtn)) vr.sprintT = 6;                 // click the walking stick: sprint for 6 seconds
+  vr.sprintT = Math.max(0, (vr.sprintT || 0) - dt); input.run = vr.sprintT > 0 && !P.crouch;
   if (mag < .15) input.jx = input.jy = 0;
   vr.moveAmt += ((mag > .15 ? 1 : 0) - vr.moveAmt) * Math.min(1, dt * 6);
   let turn = 0;
@@ -4126,9 +4141,12 @@ function vrTick(dt) {
   const gunOn = canGun && vr.gunOut && !!main;
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
-    const S = GUNSPOT[vr.gunKind], a = 1 - Math.exp(-dt * (vr.scoped ? 7 : 22));          // motion damping: steadier still in the scope
+    const S = GUNSPOT[vr.gunKind];
     if (!vr.gunInit) { vr.gq.copy(main.rayQ); vr.gp.copy(main.pos); vr.gunInit = true; }
-    vr.gq.slerp(main.rayQ, a); vr.gp.lerp(main.pos, Math.min(1, a * 1.6));
+    // a weighty rifle: small quick shakes are soaked up, a deliberate swing is followed (the bigger the swing, the faster it catches up); steadier again in the scope
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(vr.gq.dot(main.rayQ)))), gd = vr.gp.distanceTo(main.pos);
+    const rq = vr.scoped ? 2.2 + ang * 30 : 4.5 + ang * 55, rp = vr.scoped ? 3.5 + gd * 50 : 7 + gd * 90;
+    vr.gq.slerp(main.rayQ, 1 - Math.exp(-dt * rq)); vr.gp.lerp(main.pos, 1 - Math.exp(-dt * rp));
     vr.kick = Math.max(0, vr.kick - dt * 6);
     G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12));
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
@@ -4157,6 +4175,14 @@ function vrTick(dt) {
   vr.zoomWas = zoomOn;
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
   input.glide = !!main && !!off && main.pos.distanceTo(off.pos) > 1.05 && main.pos.y > I.head.y - .65 && off.pos.y > I.head.y - .65;
+  if (I.hands.left && I.hands.right) {
+    const Lh = I.hands.left, Rh = I.hands.right, rx = Rh.pos.x - Lh.pos.x, rz = Rh.pos.z - Lh.pos.z, rl = Math.hypot(rx, rz) || 1;
+    let gx = rz / rl, gz = -rx / rl;                                        // 90 degrees to the line from left hand to right hand
+    const hfx = -2 * (Lh.rayQ.x * Lh.rayQ.z + Lh.rayQ.w * Lh.rayQ.y) - 2 * (Rh.rayQ.x * Rh.rayQ.z + Rh.rayQ.w * Rh.rayQ.y);
+    const hfz = -(1 - 2 * (Lh.rayQ.x * Lh.rayQ.x + Lh.rayQ.y * Lh.rayQ.y)) - (1 - 2 * (Rh.rayQ.x * Rh.rayQ.x + Rh.rayQ.y * Rh.rayQ.y));
+    if (gx * hfx + gz * hfz < 0) { gx = -gx; gz = -gz; }                    // on the side your hands face
+    vr.glideDir = { x: gx, z: gz };
+  } else vr.glideDir = null;
   if (P.gliding && main && off) vr.pendTurn += ((set.hand === "right" ? off.pos.y - main.pos.y : main.pos.y - off.pos.y)) * dt * 1.4;
   vr.I = I; vr.main = main; vr.off = off;
   vr.climbing = climbTick(dt, I);
@@ -4204,7 +4230,7 @@ function vrFire() {
   GUN.cool = GUN.auto ? .1 : huntM ? BOLT_TIME : .28; vr.kick = vr.two ? .35 : 1;                // much less kick with two hands on the gun
   if (huntM) { boltSounds(); scatterBeasts(P); } else alertBots();
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
-  const hit = castShot(from, dir, vr.scoped ? 1800 : 700); hit.dist = from.distanceTo(hit.p);
+  const hit = castShot(from, dir, vr.scoped ? 2400 : 900); hit.dist = from.distanceTo(hit.p);
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; scene.add(head, trail);
   tracers.push({ head, trail, from, end: hit.p.clone(), len: from.distanceTo(hit.p), d: 0, hit, fade: 0 });
@@ -4325,7 +4351,13 @@ function climbTick(dt, I) {                               // returns true while 
   if (C.hold) {                                            // hanging: your body moves so the holding hand stays put
     const h = sides[C.hold]; if (!h) { C.hold = null; return false; }
     const d = C.anchor.clone().sub(h.pos);
-    const nx = I.head.x + d.x, nz = I.head.z + d.z, ny = vr.oy + d.y;
+    let nx = I.head.x + d.x, nz = I.head.z + d.z, ny = vr.oy + d.y;
+    const hy = vr.headLocalY;
+    if (headBlocked(nx, ny + hy, nz)) {                                     // pulling yourself into it: your face stops at the surface
+      if (!headBlocked(P.x, ny + hy, P.z)) { nx = P.x; nz = P.z; }          // still climb up or down along it
+      else if (!headBlocked(nx, P.y + hy, nz)) ny = P.y;
+      else { nx = P.x; ny = P.y; nz = P.z; }
+    }
     if (C.prevP && dt > 0) { C.vel.lerp(new THREE.Vector3((nx - C.prevP[0]) / dt, (ny - C.prevP[1]) / dt, (nz - C.prevP[2]) / dt), Math.min(1, dt * 18)); }
     C.prevP = [nx, ny, nz];
     P.x = nx; P.z = nz; P.y = ny; P.vy = 0; P.onGround = false; P.gliding = false;
@@ -4334,7 +4366,7 @@ function climbTick(dt, I) {                               // returns true while 
   C.prevP = null; C.vel.set(0, 0, 0);
   if (C.air) {                                             // flying through the air after a fling: high gravity, no fall damage, glide by spreading your arms
     P.gliding = !!input.glide;
-    if (P.gliding) { P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4); const want = GLIDE_SPEED, fx = -Math.sin(P.yaw) * want, fz = -Math.cos(P.yaw) * want; C.air.vx += (fx - C.air.vx) * Math.min(1, dt * 1.5); C.air.vz += (fz - C.air.vz) * Math.min(1, dt * 1.5); }
+    if (P.gliding) { P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4); const want = GLIDE_SPEED, fx = (vr.glideDir ? vr.glideDir.x : -Math.sin(P.yaw)) * want, fz = (vr.glideDir ? vr.glideDir.z : -Math.cos(P.yaw)) * want; C.air.vx += (fx - C.air.vx) * Math.min(1, dt * 1.5); C.air.vz += (fz - C.air.vz) * Math.min(1, dt * 1.5); }
     else P.vy -= CLIMB_G * dt;
     P.x = Math.max(-EDGE, Math.min(EDGE, P.x + C.air.vx * dt)); P.z = Math.max(-EDGE, Math.min(EDGE, P.z + C.air.vz * dt)); clampToMap(P);
     P.y += P.vy * dt;
@@ -4449,12 +4481,12 @@ async function enterVR() {
   initSound();
   try {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(isTouch ? .8 : .9);
+    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(isTouch ? .8 : .9);
     await renderer.xr.setSession(session);
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true; vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
     try { renderer.xr.setFoveation(1); } catch (_) {}
     session.addEventListener("end", () => {
-      vr.on = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
+      vr.on = false; VR_ON = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
       for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
@@ -4506,11 +4538,13 @@ function update(dt) {
   // glide: only in the air (after a jump or off a drop), only while the button is held
   P.gliding = (gameMode === "pvp" || vr.on) && (input.glide || input.glideMouse) && !P.onGround && !P.climb && !swimming;
   if (swimming || P.gliding) P.crouch = false;
+  if (vr.on && P.gliding && vr.glideDir) mag = 1;                            // in a headset you always fly forward, the way your arms point
   let speed = P.gliding ? GLIDE_SPEED * mag : (running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
   let moved = 0;
   if (mag > .02) {
     const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
-    const dx = (-sy * my + cy * mx) * speed * dt, dz = (-cy * my - sy * mx) * speed * dt;
+    let dx = (-sy * my + cy * mx) * speed * dt, dz = (-cy * my - sy * mx) * speed * dt;
+    if (vr.on && P.gliding && vr.glideDir) { dx = vr.glideDir.x * GLIDE_SPEED * dt; dz = vr.glideDir.z * GLIDE_SPEED * dt; }
     const tryMove = (nx, nz) => {
       const mx2 = nx - P.x, mz2 = nz - P.z, ml = Math.hypot(mx2, mz2) + 1e-6, lx = mx2 / ml, lz = mz2 / ml;
       // rocks and logs are solid; low ones you can step onto, and you can jump onto taller ones
@@ -5812,15 +5846,20 @@ addEventListener("resize", () => {
 });
 
 const FR = new THREE.Frustum(), PM = new THREE.Matrix4(), SPH = new THREE.Sphere();
+const cullCam = new THREE.PerspectiveCamera(118, 1.25, .1, 3000);   // a headset sees wider than the page camera
 function cullTiles() {
   camera.updateMatrixWorld();
-  PM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
+  let cc = camera;
+  if (vr.on && !(vr.scoped || vr.binos)) { cullCam.position.copy(camera.position); cullCam.quaternion.copy(camera.quaternion); cullCam.updateMatrixWorld(); cc = cullCam; }
+  PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
+  const lodD = 270 * Math.max(1, vr.on ? vr.zoomK : 72 / camera.fov);       // full-detail trees nearby (and further out through a scope)
   for (const t of tiles) {
     const d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
     const tr = t.r || TILE * .72;
     if (d - tr > scene.fog.far) { t.group.visible = false; continue; }
     SPH.center.set(t.cx, t.cy, t.cz); SPH.radius = tr + 60;
     t.group.visible = FR.intersectsSphere(SPH);
+    if (t.hi) { const near = d < lodD; t.hi.visible = near; t.lo.visible = !near; }
   }
 }
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -5865,11 +5904,12 @@ function loop(now) {
   fogLocal += (fogT - fogLocal) * Math.min(1, dt * .5);
   scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
-  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? .6 * Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
+  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     zoneFog();
   updateBirds(now);
   WIND.value = now / 1000;
   if (world) {
+    GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = vr.on ? 1.08 : .95;
     cullTiles(); updateGun(dt);
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
