@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1</title>
+<title>JUST TREES 1.1</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -184,7 +184,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
         <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Fling strength (climbing)</span><span class="val" id="flingVal"></span></div>
         <input type="range" id="fling" min="1" max="12" step="0.5" aria-label="Fling strength">
         <button class="btn primary" id="vrBtn" style="margin-top:12px;width:100%">Enter VR</button>
-        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks, trigger shows the map, grip holds the gun's front grip. Raise the gun to your eye to scope; crouch for real. With empty hands: reach into anything and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide.</div>
+        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks, trigger shows the map, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide.</div>
       </div>
       <div class="field" id="zoneCard">
         <div class="fh"><b>Zone</b><span class="val" id="zoneVal"></span></div>
@@ -286,7 +286,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1";                 // Just Trees 1
+const VERSION = "1.1";               // Just Trees 1.1
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -1079,6 +1079,17 @@ function deadStubs(parts, hb, up) {        // dead twiggy stubs left on the lowe
     parts.push(shadeGeo(tubeGeo([b, b.clone().addScaledVector(d, len * .5), b.clone().addScaledVector(d, len)], [.04, .025, .01], 3), () => DEADC));
   }
 }
+// What a hand can hold on a tree: the tapering trunk and each branch card exactly where it was drawn (tree-local space)
+function holdShape(parts, tr, th, lean) {
+  const cards = [];
+  for (const g of parts) {
+    const p = g.attributes.position; if (p.count !== 4) continue;                       // the flat branch cards (tubes have many more points)
+    const o = new THREE.Vector3(p.getX(0), p.getY(0), p.getZ(0)), U = new THREE.Vector3(p.getX(1), p.getY(1), p.getZ(1)).sub(o), W = new THREE.Vector3(p.getX(2), p.getY(2), p.getZ(2)).sub(o);
+    let y0 = 1e9, y1 = -1e9; for (let i = 0; i < 4; i++) { y0 = Math.min(y0, p.getY(i)); y1 = Math.max(y1, p.getY(i)); }
+    cards.push({ o, U, W, uu: U.lengthSq(), ww: W.lengthSq(), N: U.clone().cross(W).normalize(), y0: y0 - .25, y1: y1 + .25 });
+  }
+  return { cards, tr, th, lean };
+}
 // Every variant is built from its own recipe: proportions, droop, gaps, a bare side, scragginess.
 // `pruned` = grown in a crowded stand (bare lower trunk), `odd` = one of the ~10% with a broken, flat or double top.
 function treeVariant(kind, pruned, odd) {
@@ -1155,10 +1166,10 @@ function treeVariant(kind, pruned, odd) {
       f.translate(lean, 0, 0); parts.push(shadeCard(f, 4.5, Ht - 1.5, Ht + .5, lx, dead ? [.85, .65, .4] : cardTint(), false));
     }
     parts.push(shadeGeo(trunk(tr, Ht, lean), () => [.92, .92, .92]));
-    return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true };
+    return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true, hold: holdShape(parts, tr, Ht, lean) };
   }
   parts.push(shadeGeo(trunk(tr, Ht + .6, lean), () => [.9, .9, .9]));
-  return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned };
+  return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned, hold: holdShape(parts, tr, Ht + .6, lean) };
 }
 
 const phong = (color, extra = {}) => new THREE.MeshPhongMaterial({ color, flatShading: true, shininess: 0, specular: 0x000000, ...extra });
@@ -1232,8 +1243,9 @@ function branchVariant(kind) {
       bend * Math.sin(Math.PI * t * .9) + k * kink);
   };
   const ts = [0, .05, .15, .3, .45, .6, .78, .9, 1].filter(t => t <= tEnd + 1e-6);
-  const P = ts.map(at), R = ts.map(rad);
-  parts.push(tubeGeo(P, R, isTouch ? 5 : 6));
+  const P = ts.map(at), R = ts.map(rad), segs = [];
+  const keep = (pp, rr) => { for (let i = 0; i + 1 < pp.length; i++) segs.push({ a: pp[i].clone(), b: pp[i + 1].clone(), ra: rr[i], rb: rr[i + 1] }); };
+  parts.push(tubeGeo(P, R, isTouch ? 5 : 6)); keep(P, R);
   const pts = ts.map((t, i) => ({ x: P[i].x, y: P[i].y, z: P[i].z, r: R[i], t })), clear = P.map(p => p.clone());
   if (fork) {                                                         // splits into two smaller limbs
     const base = P[P.length - 1], dir = base.clone().sub(P[P.length - 2]).normalize(), rf = R[R.length - 1] * .8;
@@ -1241,7 +1253,7 @@ function branchVariant(kind) {
       const d2 = dir.clone().applyAxisAngle(Y, sd * (.3 + rnd() * .35)); d2.y += .1 + rnd() * .25; d2.normalize();
       const fl = L * (.28 + rnd() * .15), fp = [], fr = [];
       for (let k = 0; k <= 3; k++) { fp.push(base.clone().addScaledVector(d2, fl * k / 3).add(new THREE.Vector3(0, -sag * .3 * Math.sin(Math.PI * k / 3), 0))); fr.push(lerp(rf, .018, k / 3)); }
-      parts.push(tubeGeo(fp, fr, 4)); clear.push(fp[3]);
+      parts.push(tubeGeo(fp, fr, 4)); keep(fp, fr); clear.push(fp[3]);
     }
   }
   const nTw = fir ? 1 + Math.floor(rnd() * 2) : 2 + Math.floor(rnd() * 2);
@@ -1249,10 +1261,12 @@ function branchVariant(kind) {
     const t = .3 + rnd() * .45, b = at(t), dir = at(t + .05).sub(at(t - .05)).normalize();
     dir.applyAxisAngle(Y, (rnd() < .5 ? -1 : 1) * (.7 + rnd() * .5)); dir.y += .3 + rnd() * .4; dir.normalize();
     const tl = .35 + rnd() * .4, rt = rad(t) * .35;
-    parts.push(tubeGeo([b, b.clone().addScaledVector(dir, tl * .5), b.clone().addScaledVector(dir, tl)], [rt, rt * .6, .012], 3));
+    const tw = [b, b.clone().addScaledVector(dir, tl * .5), b.clone().addScaledVector(dir, tl)], twr = [rt, rt * .6, .012];
+    parts.push(tubeGeo(tw, twr, 3)); keep(tw, twr);
     clear.push(b.clone().addScaledVector(dir, tl));
   }
-  return { geo: mergeUV(parts), pts, clear };
+  let ext = 0; for (const s of segs) ext = Math.max(ext, Math.hypot(s.b.x, s.b.z) + s.rb);
+  return { geo: mergeUV(parts), pts, clear, segs, ext };
 }
 
 /* ---------------- Soft tree shadows, worked out once per map (the sun doesn't move during a hike) ---------------- */
@@ -1308,7 +1322,7 @@ function shadowDir(lat, hour) {
   return sp.el > -4 ? sp.dir : new THREE.Vector3(-sp.dir.x, Math.max(.45, -sp.dir.y * .5 + .4), -sp.dir.z).normalize();
 }
 /* ---------------- Limb platforms: solid from above only, so you can walk underneath ---------------- */
-let limbGrid = null;
+let limbGrid = null, limbHold = null;
 function limbGround(x, z, feet) {
   if (!limbGrid) return -1e9;
   const l = limbGrid.get(Math.floor(x / 8) + "," + Math.floor(z / 8)); if (!l) return -1e9;
@@ -2301,7 +2315,7 @@ function generate() {
   rndF = mulberry32(seed * 31 + 17);
   if (groundDetail) { groundDetail.dispose(); groundDetail = null; }
   if (rockTex) { rockTex.dispose(); rockTex = null; }
-  obstacles = new Map(); limbGrid = null; animals = []; birds = null; runner = null; precipFx = null;
+  obstacles = new Map(); limbGrid = null; limbHold = new Map(); animals = []; birds = null; runner = null; precipFx = null;
   const lat = set.lat * set.hemi, biome = biomeOf(lat), season = seasonOf(lat, set.month);
   hourNow = set.hour;
   const rand = mulberry32(seed);
@@ -2510,7 +2524,7 @@ function generate() {
       giant.s = maxH * 1.2 / kinds[giant.kind].vars[giant.vi].h; giant.giant = true; setTreeSize(giant);
     }
   }
-  for (const t of allTrees) recs[t.kind][t.vi].push(t);
+  for (const t of allTrees) { recs[t.kind][t.vi].push(t); if (t.ob) { t.ob.t = t; t.hold = kinds[t.kind].vars[t.vi].hold; } }
 
   // Roots hold soil: many trees sit on their own small mound or ridge
   const mounds = new Map();
@@ -2587,6 +2601,9 @@ function generate() {
       if (yb > th * .8) continue;
       const by = t.y + yb;
       limbRecs[t.kind][vi][t.tile].push({ x: t.x, y: by, z: t.z, s: sc, ry: a, c: t.c });
+      { const hl = { x: t.x, y: by, z: t.z, sc, ca, sa, lv }, e = lv.ext * sc;       // for hands and heads: the limb's real shape
+        for (let i = Math.floor((t.x - e) / 8); i <= Math.floor((t.x + e) / 8); i++) for (let j = Math.floor((t.z - e) / 8); j <= Math.floor((t.z + e) / 8); j++) {
+          const key = i + "," + j; if (!limbHold.has(key)) limbHold.set(key, []); limbHold.get(key).push(hl); } }
       for (let i = 0; i + 1 < lv.pts.length; i++) {
         const p0 = lv.pts[i], p1 = lv.pts[i + 1]; if (p0.t >= .8) break;
         addLimbSeg({ x0: wx(p0), z0: wz(p0), y0: by + (p0.y + p0.r * .9) * sc, x1: wx(p1), z1: wz(p1), y1: by + (p1.y + p1.r * .9) * sc,
@@ -3983,7 +4000,8 @@ function bing() {
 /* ---------------- VR (WebXR): head and hands tracked, a two-handed rifle, lens scopes, wrist HUD ---------------- */
 const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gunOut: true, two: false, scoped: false, binos: false, zoom: 0, kick: 0,
   prev: {}, mark: null, markT: 0, wristT: 0, avatar: null, gun: null, gunKind: "", head: new THREE.Vector3(0, 1.6, 0), headQ: new THREE.Quaternion(), gp: new THREE.Vector3(), gq: new THREE.Quaternion(),
-  readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0] };
+  readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6 };
+const scopeFovs = () => ZOOM_FOV[vr.gunKind === "hunt" ? "hunt" : "pvp"].slice(1);      // the same zoom steps as the PC scope
 const XRV = { ok: false };
 renderer.xr.enabled = true;
 if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { XRV.ok = ok; if (ok) $("vrRow").style.display = ""; }).catch(() => {});
@@ -4085,6 +4103,7 @@ function vrTick(dt) {
   // where the head is in the play space, before this frame's movement
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
   const hl = [dx * cy - dz * sy, I.head.y - vr.oy, dx * sy + dz * cy];      // rotate by -yaw
+  vr.headLocalY = hl[1];
   vr.stand = Math.max(1.2, Math.max(vr.stand - dt * .01, hl[1]));            // standing height, learned as you stand up straight
   vr.crouchK += (Math.max(0, Math.min(1, (vr.stand - hl[1]) / (vr.stand * .35))) - vr.crouchK) * Math.min(1, dt * 8);
   P.crouch = vr.crouchK > .45 && gameMode !== "hike"; P.ck = 0;            // crouch for real
@@ -4116,9 +4135,9 @@ function vrTick(dt) {
     G.updateMatrixWorld(true);
     const fore = G.localToWorld(_v2.set(...S.fore));
     vr.two = !!off && off.grip > .5 && (vr.two || off.pos.distanceTo(fore) < .35);        // the off hand snaps to the front grip
-    const eye = G.localToWorld(new THREE.Vector3(...S.eye));
-    vr.scoped = vr.two && eye.distanceTo(I.head) < .17;
-    vr.zoom = Math.max(0, Math.min(S.fov.length - 1, vr.zoom));
+    const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
+    vr.scoped = vr.two && gf.dot(hf) > .8 && eye.distanceTo(I.head) < (vr.scoped ? .2 : .14);       // eye to the eyepiece: the whole view goes into the scope
+    vr.zoom = Math.max(0, Math.min(scopeFovs().length - 1, vr.zoom));
     fireHeld = main.trig > .6 && state === "play";
     if (edge("trig", main.trig) && !GUN.auto) fire();
     if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
@@ -4127,6 +4146,15 @@ function vrTick(dt) {
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(1, vr.zoom)); }
   else if (binos) binos.visible = false;
+  // full-view zoom: steadied view direction, magnification to match the PC zoom steps, a quick iris opening
+  const zoomOn = vr.scoped || vr.binos;
+  if (zoomOn) {
+    const f = vr.scoped ? scopeFovs()[vr.zoom] : [11, 7][vr.zoom] || 11; vr.zoomK = Math.tan(36 * Math.PI / 180) / Math.tan(f * Math.PI / 360);
+    if (!vr.zoomWas) { vr.zoomOpen = .2; vr.binoQ.copy(I.headQ); }
+    vr.zoomOpen = Math.min(1, vr.zoomOpen + dt * 6);
+    vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 6));                                      // binoculars: your head, smoothed
+  } else vr.zoomK = 1;
+  vr.zoomWas = zoomOn;
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
   input.glide = !!main && !!off && main.pos.distanceTo(off.pos) > 1.05 && main.pos.y > I.head.y - .65 && off.pos.y > I.head.y - .65;
   if (P.gliding && main && off) vr.pendTurn += ((set.hand === "right" ? off.pos.y - main.pos.y : main.pos.y - off.pos.y)) * dt * 1.4;
@@ -4135,6 +4163,13 @@ function vrTick(dt) {
 }
 function vrAfterMove(dt) {                                // carry the play space along with this frame's walking and turning
   const I = vr.I; if (!I) return;
+  { // your face stops at trunks, limbs and boulders: the world slides back instead of letting you see inside
+    const hy = P.y + vr.headLocalY;
+    if (vr.goodX !== undefined && headBlocked(P.x, hy, P.z) && !headBlocked(vr.goodX, hy, vr.goodZ)) {
+      if (!headBlocked(vr.goodX, hy, P.z)) P.x = vr.goodX; else if (!headBlocked(P.x, hy, vr.goodZ)) P.z = vr.goodZ; else { P.x = vr.goodX; P.z = vr.goodZ; }
+    }
+    vr.goodX = P.x; vr.goodZ = P.z;
+  }
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
   const hx = dx * cy - dz * sy, hz = dx * sy + dz * cy;                    // head in the play space
   vr.yaw += vr.pendTurn || 0;
@@ -4156,11 +4191,12 @@ function vrAfterMove(dt) {                                // carry the play spac
   if (vr.mark && (vr.markT -= dt) <= 0) vr.mark.visible = false;
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
   vrAvatar(dt);
+  vrHands();
 }
 function vrLens() {                                       // draw the lens picture right before the frame
   if (vr.scoped && vr.gun) { const S = GUNSPOT[vr.gunKind]; lensView(vr.gun.localToWorld(new THREE.Vector3(...S.eye)), vr.gun.quaternion, S.fov[vr.zoom], [vr.gun, vr.avatar && vr.avatar.group]); }
   else if (vr.binos && binos) lensView(binos.position, binos.quaternion, [9, 5][vr.zoom], [binos, vr.avatar && vr.avatar.group]);
-  if (vr.gun && vr.gun.userData.lens) vr.gun.userData.lens.visible = vr.scoped;
+  if (vr.gun && vr.gun.userData.lens) vr.gun.userData.lens.visible = false;
 }
 function vrFire() {
   if (state !== "play" || gameMode === "hike" || GUN.cool > 0 || P.gliding || !vr.gun || !vr.gun.visible) return;
@@ -4177,7 +4213,7 @@ function vrFire() {
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
 function vrAvatar(dt) {
   const I = vr.I; if (!I) return;
-  if (!vr.avatar) { const S = makeSoldier("green", 3); S.rig.visible = false; S.B.head.children.forEach(c => { if (!c.isBone) c.visible = false; }); /* your own head, hood and mask stay hidden from you */ const cap = new THREE.Mesh(new THREE.CircleGeometry(.07, 20).rotateX(-Math.PI / 2), S.body.material); cap.position.y = .062; S.B.head.add(cap); /* closes the collar you look down past */ scene.add(S.group, S.shadow); vr.avatar = S; S.yaw = P.yaw; }
+  if (!vr.avatar) { const S = makeSoldier("green", 3); S.rig.visible = false; S.B.head.children.forEach(c => { if (!c.isBone) c.visible = false; }); /* your own head, hood and mask stay hidden from you */ const cap = new THREE.Mesh(new THREE.CircleGeometry(.07, 20).rotateX(-Math.PI / 2), S.body.material); cap.position.y = .062; S.B.head.add(cap); /* closes the collar you look down past */ for (const sd of ["L", "R"]) S.B["hand" + sd].children.forEach(c => { if (!c.isBone) c.visible = false; }); /* your hands are drawn on their own, exactly on the controllers */ scene.add(S.group, S.shadow); vr.avatar = S; S.yaw = P.yaw; }
   const S = vr.avatar, f = _v1.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
   const sc = Math.max(.82, Math.min(1.15, vr.stand / 1.78));   // the avatar's eyes, not its neck, match your height S.group.scale.setScalar(sc);
   const nx = I.head.x - f.x * .19 * sc, nz = I.head.z - f.z * .19 * sc;   // eyes sit just in front of the neck
@@ -4188,63 +4224,93 @@ function vrAvatar(dt) {
   for (const [side, h] of [["R", I.hands.right], ["L", I.hands.left]]) {
     if (!h) continue;
     const isMain = (side === "R") === (set.hand === "right");
-    const target = (!isMain && vr.two && vr.gun && vr.gun.visible) ? vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].fore)) : h.pos.clone().add(_v2.set(0, 0, .06).applyQuaternion(h.q));
+    const hp = handPose(side === "R" ? "right" : "left", h), target = hp.pos.clone().add(_v2.set(side === "R" ? .012 : -.012, .075, .012).applyQuaternion(hp.q));   // the wrist
     const pole = new THREE.Vector3(side === "R" ? -.7 : .7, -1, -.2).applyAxisAngle(_UPv, S.yaw + Math.PI).normalize();
     ik2(S.B["upperArm" + side], S.B["foreArm" + side], target, pole, .3 * sc, .26 * sc, -1);
-    const hb = S.B["hand" + side]; hb.parent.getWorldQuaternion(_q1); hb.quaternion.copy(_q1.invert().multiply(h.q.clone().multiply(QX90))); hb.updateMatrixWorld(true);
+    const hb = S.B["hand" + side]; hb.quaternion.identity(); hb.scale.setScalar(.6); hb.updateMatrixWorld(true);
   }
 }
 /* ---- VR climbing (Pop: One style): hands pass through things; grip inside anything to hold on; your body hangs from that hand ---- */
 const CLIMB_G = 22;
-function climbableAt(p) {                                  // is this point inside something you can hold?
-  const g = H(p.x, p.z);
-  if (p.y < g + .04) return { kind: "ground", y: g };
-  const rk = rockTopAt(p.x, p.z); if (rk > g + .05 && p.y < rk + .03 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders and fallen logs
-  const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
-    for (const o of list) {
-      const d = Math.hypot(p.x - o.x, p.z - o.z), base = H(o.x, o.z);
-      if (o.tr !== undefined) {
-        if (d < o.tr + .06 && p.y > base - .3 && p.y < base + o.h) return { kind: "trunk", o };                             // the trunk
-        if (d < o.r * .85 && p.y > base + o.h * .3 && p.y < base + o.h * 1.02) return { kind: "branches", o };              // up in the branches
-      } else if (o.soft && d < o.r && p.y < base + 1.3) return { kind: "bush", o };
+const _hv = new THREE.Vector3(), _hd = new THREE.Vector3(), _hm = new THREE.Matrix4(), _he = new THREE.Euler(), _hq = new THREE.Quaternion(), _hs = new THREE.Vector3();
+function treeInv(t) {                                       // world -> this tree's own drawing space
+  if (!t._inv) {
+    _hq.setFromEuler(_he.set(t.tx || 0, t.ry, t.tz || 0, t.ord || "XYZ"));
+    t._inv = new THREE.Matrix4().compose(_hv.set(t.x, t.y, t.z), _hq, _hs.set(t.s * (t.sx || 1), t.s * (t.sy || 1), t.s * (t.sz || t.sx || 1))).invert();
+  }
+  return t._inv;
+}
+function treeHit(p, t, tolW, trunkOnly) {                  // "trunk", "branches" or null: is p inside what you can see of this tree?
+  const hd = t.hold; if (!hd) return null;
+  const l = _hv.copy(p).applyMatrix4(treeInv(t)), tl = tolW / (t.s * (t.sx || 1));
+  if (l.y > -1.3 && l.y < hd.th - .3) {
+    const f = (l.y + 1.3) / (hd.th + 1), r = hd.tr * (1 - .7 * f) * .95, c = hd.lean ? Math.pow(Math.max(0, l.y) / hd.th, 2) * hd.lean : 0;
+    if (Math.hypot(l.x - c, l.z) < r + tl) return "trunk";
+  }
+  if (trunkOnly) return null;
+  for (const c of hd.cards) {
+    if (l.y < c.y0 || l.y > c.y1) continue;
+    _hd.copy(l).sub(c.o); const u = _hd.dot(c.U) / c.uu; if (u < .02 || u > .97) continue;
+    const w = _hd.dot(c.W) / c.ww; if (Math.abs(w - .5) > .42 * (1 - .45 * u) + .05) continue;   // the leafy part of the card, narrowing to the tip
+    if (Math.abs(_hd.dot(c.N)) < tl * 1.4) return "branches";
+  }
+  return null;
+}
+function limbHit(p, tolW) {                                 // inside one of the big limbs (its real tapering tube)?
+  if (!limbHold) return null;
+  const l = limbHold.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8)); if (!l) return null;
+  for (const h of l) {
+    const dx = p.x - h.x, dz = p.z - h.z; if (dx * dx + dz * dz > (h.lv.ext * h.sc + .3) ** 2) continue;
+    const lx = (dx * h.ca - dz * h.sa) / h.sc, lz = (dx * h.sa + dz * h.ca) / h.sc, ly = (p.y - h.y) / h.sc, tl = tolW / h.sc;
+    for (const s of h.lv.segs) {
+      const vx = s.b.x - s.a.x, vy = s.b.y - s.a.y, vz = s.b.z - s.a.z, wx = lx - s.a.x, wy = ly - s.a.y, wz = lz - s.a.z;
+      const t = Math.max(0, Math.min(1, (wx * vx + wy * vy + wz * vz) / (vx * vx + vy * vy + vz * vz + 1e-9)));
+      const r = Math.max(.03, s.ra + (s.rb - s.ra) * t) + tl;
+      const ex = wx - vx * t, ey = wy - vy * t, ez = wz - vz * t;
+      if (ex * ex + ey * ey + ez * ez < r * r) return h;
     }
   }
   return null;
 }
+function climbableAt(p) {                                  // is this point inside something you can hold? (matches what you see)
+  const g = H(p.x, p.z);
+  if (p.y < g + .04) return { kind: "ground", y: g };
+  const rk = rockTopAt(p.x, p.z); if (rk > g + .05 && p.y < rk + .03 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders and fallen logs
+  if (limbHit(p, .04)) return { kind: "limb" };
+  const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    for (const o of list) {
+      const d = Math.hypot(p.x - o.x, p.z - o.z);
+      if (o.t && o.t.hold) { if (d > o.r + .6) continue; const k = treeHit(p, o.t, .05, false); if (k) return { kind: k, o }; }
+      else if (o.tr !== undefined) { if (d < o.tr + .06 && p.y > H(o.x, o.z) - .3 && p.y < H(o.x, o.z) + o.h) return { kind: "trunk", o }; }
+      else if (o.soft && d < o.r && p.y < H(o.x, o.z) + 1.3) return { kind: "bush", o };
+    }
+  }
+  return null;
+}
+function headBlocked(x, y, z) {                            // your face can't go inside trunks, limbs or boulders
+  _hd.set(x, y, z);
+  const rk = rockTopAt(x, z); if (rk > H(x, z) + .3 && y < rk + .08) return true;
+  if (limbHit(_hd, .1)) return true;
+  const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    for (const o of list) if (o.t && o.t.hold && Math.hypot(x - o.x, z - o.z) < o.tr + .5 && treeHit(_hd, o.t, .2, true)) return true;
+  }
+  return false;
+}
 let climbFx = null;
-function climbFxParts() {                                  // the blue x-ray outline: drawn through everything
-  if (climbFx) return climbFx;
-  const mat = new THREE.MeshBasicMaterial({ color: 0x4fb8ff, transparent: true, opacity: .45, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending, wireframe: true, fog: false });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.09, .008, 6, 24), new THREE.MeshBasicMaterial({ color: 0x7fd0ff, transparent: true, opacity: .9, depthTest: false, depthWrite: false, fog: false }));
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 14, 6, true).translate(0, .5, 0), mat);
-  const crown = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 8), mat.clone()); crown.material.opacity = .22;
-  const blob = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), mat.clone());
-  for (const m of [ring, trunk, crown, blob]) { m.renderOrder = 998; m.frustumCulled = false; m.visible = false; scene.add(m); }
-  const ringR = ring.clone(); ringR.material = ring.material.clone(); ringR.visible = false; scene.add(ringR);
-  return climbFx = { L: ring, R: ringR, trunk, crown, blob };
-}
-function showClimbFx(side, pos, hit, holding) {
-  const F = climbFxParts(), ring = F[side];
-  ring.visible = !!hit; if (!hit) return;
-  ring.position.copy(pos); ring.lookAt(camera.position); ring.material.opacity = holding ? 1 : .7; ring.scale.setScalar(holding ? .8 : 1);
-  if (hit.o && hit.kind === "trunk") { const o = hit.o, b = H(o.x, o.z); F.trunk.visible = true; F.trunk.position.set(o.x, b - .2, o.z); F.trunk.scale.set(o.tr + .05, o.h + .2, o.tr + .05); }
-  if (hit.o && hit.kind === "branches") { const o = hit.o, b = H(o.x, o.z); F.crown.visible = true; F.crown.position.set(o.x, b + o.h * .66, o.z); F.crown.scale.set(o.r * .85, o.h * .36, o.r * .85); }
-  if (hit.kind === "rock" || hit.kind === "bush" || hit.kind === "ground") { F.blob.visible = true; F.blob.position.copy(pos); F.blob.scale.setScalar(hit.kind === "ground" ? .35 : .55); }
-}
 function climbTick(dt, I) {                               // returns true while climbing or flying through the air, so normal walking is skipped
-  const F = climbFxParts(); F.trunk.visible = F.crown.visible = F.blob.visible = false;
   const gunHands = (gameMode === "hunt" || gameMode === "pvp") && vr.gunOut;          // the gun must be put away to climb
   const sides = { R: I.hands.right, L: I.hands.left };
   if (!vr.cl) vr.cl = { hold: null, anchor: new THREE.Vector3(), vel: new THREE.Vector3(), prevP: null, air: null, was: {} };
   const C = vr.cl;
   for (const side of ["L", "R"]) {
-    const h = sides[side]; if (!h) { showClimbFx(side, null, null); continue; }
+    const h = sides[side]; if (!h) { C.was[side + "in"] = false; continue; }
     const hit = gunHands || vr.binos ? null : climbableAt(h.pos), grip = h.grip > .5;
     const wasInside = C.was[side + "in"], wasGrip = C.was[side + "g"];
     C.was[side + "in"] = !!hit; C.was[side + "g"] = grip;
-    showClimbFx(side, h.pos, hit, C.hold === side);
     if (hit && grip && C.hold !== side && (!wasGrip || !wasInside)) {      // squeeze inside it, or arrive already squeezing: you catch
       C.hold = side; C.anchor.copy(h.pos); C.air = null; P.vy = 0; buzz(side, .5, 40);
     }
@@ -4272,8 +4338,8 @@ function climbTick(dt, I) {                               // returns true while 
     else P.vy -= CLIMB_G * dt;
     P.x = Math.max(-EDGE, Math.min(EDGE, P.x + C.air.vx * dt)); P.z = Math.max(-EDGE, Math.min(EDGE, P.z + C.air.vz * dt)); clampToMap(P);
     P.y += P.vy * dt;
-    const g = groundAt(P.x, P.z);
-    if (P.y <= g) { P.y = g; P.vy = 0; P.onGround = true; P.gliding = false; C.air = null; buzz("L", .3, 30); buzz("R", .3, 30); }
+    const g = Math.max(groundAt(P.x, P.z), rockAround(P.x, P.z, .3), limbGround(P.x, P.z, P.y));   // land on the ground, a boulder or a big limb
+    if (P.y <= g && P.vy <= 0) { P.y = g; P.vy = 0; P.onGround = true; P.gliding = false; C.air = null; buzz("L", .3, 30); buzz("R", .3, 30); }
     return true;
   }
   return false;
@@ -4282,6 +4348,100 @@ function buzz(side, strength, ms) {                       // a little controller
   for (const c of ctrl) if (c.src && c.src.gamepad && c.hand === (side === "L" ? "left" : "right")) {
     const a = c.src.gamepad.hapticActuators && c.src.gamepad.hapticActuators[0]; if (a && a.pulse) try { a.pulse(strength, ms); } catch (_) {}
   }
+}
+
+/* ---- your hands: gloves built in the controller's grip space (palm, four fingers and a thumb that close with grip and trigger) ---- */
+let vrHandsObj = null;
+function handPose(hand, h) {                               // where a hand is drawn: on the controller, or snapped to the rifle's front grip
+  const isMain = hand === set.hand;
+  if (!isMain && vr.two && vr.gun && vr.gun.visible) return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].fore)), q: h.q };
+  return { pos: h.pos, q: h.q };
+}
+function vrHandsParts() {
+  if (vrHandsObj) return vrHandsObj;
+  const mat = grade(new THREE.MeshLambertMaterial({ color: 0x2c3326 })), pad = grade(new THREE.MeshLambertMaterial({ color: 0x1b1e19 }));
+  const ghost = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(vec3(0.3, 0.72, 1.0) * (0.25 + 1.1 * r * r), 1.0); }" });
+  const seg = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8).translate(0, -len / 2, 0);   // one finger bone, hanging from its joint
+  const make = sgn => {
+    const g = new THREE.Group(), ghostParts = [];
+    const add = (parent, geo, m) => { const o = new THREE.Mesh(geo, m); parent.add(o); const gh = new THREE.Mesh(geo, ghost); gh.renderOrder = 997; gh.visible = false; o.add(gh); ghostParts.push(gh); return o; };
+    const palm = add(g, roundBox(.03, .092, .084, .011), mat); palm.position.set(.026 * sgn, .034, 0);              // back of the hand toward +X (right) / -X (left), wrist toward +Y
+    const cuff = add(g, new THREE.CylinderGeometry(.033, .036, .045, 12), pad); cuff.position.set(.02 * sgn, .095, 0);
+    const fingers = [];
+    [-.03, -.01, .01, .03].forEach((z, k) => {                                                                        // index (thumb side, -Z) to little finger
+      const L = [.044, .027, .021].map(v => v * (k === 3 ? .82 : k === 2 ? .96 : 1)), r = k === 3 ? .0082 : .0092;
+      const j0 = new THREE.Group(); j0.position.set(.03 * sgn, -.01, z); g.add(j0); add(j0, seg(r, L[0]), mat);
+      const j1 = new THREE.Group(); j1.position.y = -L[0]; j0.add(j1); add(j1, seg(r * .94, L[1]), mat);
+      const j2 = new THREE.Group(); j2.position.y = -L[1]; j1.add(j2); add(j2, seg(r * .88, L[2]), mat);
+      fingers.push([j0, j1, j2]);
+    });
+    const t0 = new THREE.Group(); t0.position.set(.018 * sgn, .045, -.036); g.add(t0); add(t0, seg(.011, .04), mat);   // thumb, from the heel of the hand
+    const t1 = new THREE.Group(); t1.position.y = -.04; t0.add(t1); add(t1, seg(.0095, .032), mat);
+    g.visible = false; scene.add(g);
+    return { g, fingers, thumb: [t0, t1], ghostParts, sgn };
+  };
+  return vrHandsObj = { L: make(-1), R: make(1) };
+}
+function poseHand(H, curl, idx, th) {                       // curl 0 = open flat, 1 = a fist round the grip; the index finger follows the trigger
+  H.fingers.forEach((f, k) => { const c = k === 0 ? idx : curl;
+    f[0].rotation.set(0, 0, -H.sgn * c * 1.5); f[1].rotation.set(0, 0, -H.sgn * c * 1.55); f[2].rotation.set(0, 0, -H.sgn * c * 1.0); });   // fingers close toward the palm
+  H.thumb[0].rotation.set(.85 - th * .25, 0, -H.sgn * (.3 + th * .6)); H.thumb[1].rotation.set(0, 0, -H.sgn * th * .7);
+}
+function vrHands() {
+  const I = vr.I; if (!I) return;
+  const HO = vrHandsParts(), C = vr.cl || { was: {}, hold: null };
+  for (const [side, hand] of [["R", "right"], ["L", "left"]]) {
+    const h = I.hands[hand], H = HO[side]; if (!h) { H.g.visible = false; continue; }
+    const p = handPose(hand, h), isMain = hand === set.hand, onGun = vr.gun && vr.gun.visible && (isMain || vr.two);
+    H.g.visible = true; H.g.position.copy(p.pos); H.g.quaternion.copy(p.q);
+    const g = onGun ? 1 : h.grip, t = h.trig || 0;
+    poseHand(H, .08 + .92 * g, onGun && isMain ? .35 + .45 * t : .08 + .92 * Math.max(g * .9, t), Math.max(g, t * .6));
+    const glow = !!(C.was[side + "in"] || C.hold === side);          // inside something you can hold: the hand shows through it in x-ray blue
+    for (const gp of H.ghostParts) gp.visible = glow;
+  }
+}
+// the scope and binocular view: the whole headset view zooms in, black round the lens (one mono view, so it stays comfortable)
+let zoomOv = null;
+function zoomOverlay() {
+  if (zoomOv) return zoomOv;
+  zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
+    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 } },
+    vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
+    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; varying vec2 vN; varying vec2 vC; varying vec2 vS;
+      void main(){
+        vec2 t = (vN - vC) / vS * uK;                     // the real direction, so the lens stays the same size at every zoom
+        float a;
+        if (uMode < 0.5) {
+          float r = length(t), R = 0.5 * uOpen;
+          a = max(smoothstep(R - 0.025, R + 0.004, r), smoothstep(R * 0.72, R, r) * 0.5);
+          float line = (abs(t.x) < 0.0022 || abs(t.y) < 0.0022) ? 1.0 : 0.0;
+          float post = ((abs(t.x) < 0.008 && abs(t.y) > 0.16) || (abs(t.y) < 0.008 && abs(t.x) > 0.16)) ? 1.0 : 0.0;
+          a = max(a, max(line, post) * 0.88 * step(r, R));
+        } else {
+          float r = min(length(t - vec2(-0.25, 0.0)), length(t - vec2(0.25, 0.0))), R = 0.4 * uOpen;
+          a = smoothstep(R - 0.07, R + 0.01, r);
+        }
+        gl_FragColor = vec4(0.0, 0.0, 0.0, a);
+      }` }));
+  zoomOv.frustumCulled = false; zoomOv.renderOrder = 10000; zoomOv.visible = false; scene.add(zoomOv);
+  return zoomOv;
+}
+const _zm = new THREE.Matrix4(), _zi = new THREE.Matrix4(), _zone = new THREE.Vector3(1, 1, 1);
+function vrZoomRender() {
+  const xr = renderer.xr, k = vr.zoomK, q = vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ;
+  const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
+  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette];
+  const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
+  camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
+  xr.cameraAutoUpdate = false; xr.updateCamera(camera);
+  const R = xr.getCamera(); _zm.compose(vr.head, q, _zone); _zi.copy(_zm).invert();
+  for (const c of R.cameras) { const e = c.projectionMatrix.elements; e[0] *= k; e[1] *= k; e[4] *= k; e[5] *= k; c.projectionMatrixInverse.copy(c.projectionMatrix).invert(); c.matrixWorld.copy(_zm); c.matrixWorldInverse.copy(_zi); }
+  R.matrixWorld.copy(_zm); R.matrixWorldInverse.copy(_zi);
+  renderer.render(scene, camera);
+  xr.cameraAutoUpdate = true;
+  hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false;
 }
 
 async function enterVR() {
@@ -4294,8 +4454,8 @@ async function enterVR() {
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true; vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
     try { renderer.xr.setFoveation(1); } catch (_) {}
     session.addEventListener("end", () => {
-      vr.on = false; vr.cl = null; vr.climbing = false; if (climbFx) for (const k of ["L", "R", "trunk", "crown", "blob"]) climbFx[k].visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
-      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark]) if (o) o.visible = false;
+      vr.on = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
+      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
     });
@@ -5705,12 +5865,13 @@ function loop(now) {
   fogLocal += (fogT - fogLocal) * Math.min(1, dt * .5);
   scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
-  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? .6 : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
+  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? .6 * Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     zoneFog();
   updateBirds(now);
   WIND.value = now / 1000;
   if (world) {
-    cullTiles(); updateGun(dt); if (vr.on && state === "play") vrLens(); renderer.render(scene, camera);
+    cullTiles(); updateGun(dt);
+    if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
   }
 }
