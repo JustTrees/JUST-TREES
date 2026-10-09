@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.12</title>
+<title>JUST TREES 1.2</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -79,6 +79,8 @@ body:not(.mode-hunt) #huntHud,body:not(.mode-hunt) #huntStats{display:none!impor
   font-weight:700;font-size:20px;color:var(--sun);text-shadow:0 1px 4px rgba(0,0,0,.9);white-space:nowrap}
 #binos{position:fixed;inset:0;width:100%;height:100%;z-index:3;pointer-events:none;overflow:visible}
 #intro.hidden,#modeMenu.hidden,#binos.hidden{display:none!important}
+#introVR{position:absolute;bottom:17vh;left:50%;transform:translateX(-50%);padding:14px 30px;border:2px solid #F2C14E;color:#F2C14E;border-radius:8px;font-weight:700;letter-spacing:.14em;font-size:17px;background:rgba(0,0,0,.45);cursor:pointer;z-index:2}
+#introVR.hidden{display:none!important}
 #scope{position:fixed;z-index:3;left:50%;top:50%;width:84vmin;height:84vmin;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;
   box-shadow:0 0 0 200vmax rgba(0,0,0,.94),inset 0 0 40px 12px rgba(0,0,0,.75)}
 #scope::before,#scope::after{content:"";position:absolute;background:rgba(0,0,0,.75)}
@@ -183,8 +185,10 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
         <div class="seg" role="group" aria-label="Handedness"><button data-hand="right">Right-handed</button><button data-hand="left">Left-handed</button></div>
         <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Fling strength (climbing)</span><span class="val" id="flingVal"></span></div>
         <input type="range" id="fling" min="1" max="12" step="0.5" aria-label="Fling strength">
+        <div class="fh" style="margin-top:12px"><span class="note" style="margin:0">Resolution</span>
+          <div class="seg" role="group" aria-label="VR resolution"><button data-vrres="smooth">Smooth</button><button data-vrres="balanced">Balanced</button><button data-vrres="sharp">Sharp</button></div></div>
         <button class="btn primary" id="vrBtn" style="margin-top:12px;width:100%">Enter VR</button>
-        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks (click it to sprint), trigger shows the map, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide the way they point.</div>
+        <div class="note">Gun hand: trigger fires, A takes the gun out or puts it away, B marks where you aim, stick snaps 30°. Off hand: stick walks (click it to sprint), trigger shows the map, hold Y for the menu, grip holds the gun's front grip. Raise the gun to your eye with both hands to scope; crouch for real. With empty hands: reach into anything (your hand glows blue) and squeeze grip to climb; both grips at your face for binoculars; spread your arms to glide the way they point.</div>
       </div>
       <div class="field" id="zoneCard">
         <div class="fh"><b>Zone</b><span class="val" id="zoneVal"></span></div>
@@ -237,6 +241,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
   <canvas id="introCv" width="480" height="270"></canvas>
   <div id="introTitle"><canvas id="titleCv" width="330" height="128"></canvas></div>
   <div id="introTap" class="pulse">TAP TO BEGIN &nbsp;·&nbsp; BEST WITH SOUND</div>
+  <div id="introVR" class="hidden" role="button">PLAY IN VR</div>
 </div>
 <div id="modeMenu" class="hidden" role="dialog" aria-label="Choose a mode">
   <div class="box">
@@ -286,7 +291,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.12";              // Just Trees 1.12
+const VERSION = "1.2";               // Just Trees 1.2
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -320,7 +325,8 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5 };
+const set = { lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp" };
+try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -375,6 +381,7 @@ document.querySelectorAll("[data-edge]").forEach(b => b.addEventListener("click"
 document.querySelectorAll("[data-zone]").forEach(b => b.addEventListener("click", () => { set.zone = b.dataset.zone; renderSetup(); }));
 document.querySelectorAll("[data-hand]").forEach(b => b.addEventListener("click", () => { set.hand = b.dataset.hand; renderSetup(); }));
 $("fling").addEventListener("input", () => { set.fling = +$("fling").value; renderSetup(); });
+document.querySelectorAll("[data-vrres]").forEach(b => b.addEventListener("click", () => { set.vrRes = b.dataset.vrres; try { localStorage.setItem("jt-vrres", set.vrRes); } catch (_) {} renderSetup(); }));
 
 const WEATHERS = [["random", "Random"], ["clear", "Clear"], ["rain", "Rain"], ["fog", "Fog"], ["snow", "Snow"], ["storm", "Storm"]];
 WEATHERS.forEach(([k, label]) => {
@@ -419,6 +426,7 @@ function renderSetup() {
   $("hourVal").textContent = hourText(set.hour);                       // follows the slider as you drag
   document.querySelectorAll("[data-zone]").forEach(b => b.setAttribute("aria-pressed", b.dataset.zone === set.zone));
   document.querySelectorAll("[data-hand]").forEach(b => b.setAttribute("aria-pressed", b.dataset.hand === set.hand));
+  document.querySelectorAll("[data-vrres]").forEach(b => b.setAttribute("aria-pressed", b.dataset.vrres === set.vrRes));
   $("fling").value = set.fling; $("flingVal").textContent = set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild";
   $("zoneVal").textContent = set.zone === "on" ? "On, 10:00 rounds" : "Off";
   const fogB = document.querySelector('#weathers button[data-w="fog"]');
@@ -697,6 +705,7 @@ function groundTest(list, r, base) {    // verify after placing; fix anything st
 /* Rain erosion: thousands of droplets run downhill, carving gullies and depositing silt,
    so slopes and valleys come out shaped like real ground */
 /* ---------------- World generation ---------------- */
+let terrainMesh = null;
 let fogBase = 300, zoomed = false, tiles = [], world = null, water = 0, iced = false, snowFx = null, obstacles = new Map(), seed = 1;
 const C = h => new THREE.Color(h);
 const LEAVES = {
@@ -2249,7 +2258,10 @@ function toggleMap(on) {
 
 /* ---------------- Flyover ---------------- */
 function startFly() {
-  if (vr.on) { fly = null; state = "play"; reveal(); drawMap($("miniMap")); return; }        // no flyover in VR: straight onto the ground
+  if (vr.on) {                                                  // in VR: a little model of the map turns in front of you, then you drop in
+    fly = null; reveal(); drawMap($("miniMap")); vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined;
+    vruiOpen("preview"); return;
+  }
   const ex = P.x, ez = P.z, ey = P.y + EYE, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
   let peak = water;
   for (let i = 0; i < 14; i++) for (let j = 0; j < 14; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 14, -HALF + (j + .5) * S / 14));
@@ -2434,7 +2446,7 @@ function generate() {
   };
   const NV = isTouch ? 3 : 5, BUSHV = 4, recs = {}, bushRecs = {};
   for (const k in kinds) {
-    kinds[k].mats = kinds[k].cols.map(cols => windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: .45, side: THREE.DoubleSide, vertexColors: true })));
+    kinds[k].mats = kinds[k].cols.map(cols => windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })));   // in a headset: soft, smooth leaf edges
     const v = [], pool = { full: [], fullOdd: [], pruned: [], prunedOdd: [] };
     const add = (pr, od, key) => { pool[key].push(v.length); v.push(treeVariant(k, pr, od)); };
     for (let i = 0; i < NV; i++) add(false, false, "full");
@@ -2657,7 +2669,7 @@ function generate() {
   geo.setAttribute("rocky", new THREE.BufferAttribute(rocky, 1));
   geo.computeVertexNormals();
   const litter = season === "fall" && (biome === "temperate" || biome === "boreal") ? 1 : season === "tropical" ? .35 : 0;
-  world.add(new THREE.Mesh(geo, groundMaterial(litter, biome === "tropical" ? "#7a6a3a" : "#b5642a", weather.wet)));
+  terrainMesh = new THREE.Mesh(geo, groundMaterial(litter, biome === "tropical" ? "#7a6a3a" : "#b5642a", weather.wet)); world.add(terrainMesh);
 
   // Borderlands (endless maps): the same terrain carries on past the square, coarser further out, with forest on it
   if (!edgeShape.island) {
@@ -3462,6 +3474,7 @@ $("intro").addEventListener("click", () => {
     initSound(); intro.stage = "scene"; intro.t0 = performance.now(); $("introTap").style.display = "none";
     paintIntro(0); requestAnimationFrame(() => { $("introCv").style.opacity = 1; }); introSounds(true);
     intro.raf = requestAnimationFrame(introLoop);
+    $("introVR").classList.add("hidden");
   } else if (intro.stage === "scene") introToTitle();
   else if (intro.stage === "title") { cancelAnimationFrame(intro.raf); $("intro").classList.add("hidden"); intro.stage = "done"; showModeMenu(); }
 });
@@ -3856,13 +3869,37 @@ function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.cal
   for (const A of beasts) { if (A.dead) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
     if (A.kind === "bird") { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
-    fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }
+    if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
 function fleeFrom(A, ox, oz, speed, secs, dist) {         // head directly away, bending round water and cliffs
   const base = Math.atan2(A.x - ox, A.z - oz);
   for (const da of [0, .4, -.4, .8, -.8, 1.2, -1.2, 1.7, -1.7]) for (const dd of [dist, dist * .6, dist * .35]) {
     const x = A.x + Math.sin(base + da) * dd, z = A.z + Math.cos(base + da) * dd;
     if (targetOk(A, x, z)) { A.target = [x, z]; A.mode = "walk"; A.want = speed; A.timer = secs + 4; A.home = [x, z]; A.fleeT = secs; A.steerT = 0; return; }
   }
+}
+// run to a different part of the map: far away from the danger, along a line that stays on dry, walkable ground
+function lineOk(A, x0, z0, x1, z1) {
+  const d = Math.hypot(x1 - x0, z1 - z0), n = Math.ceil(d / 8);
+  for (let i = 1; i <= n; i++) { const t = i / n; if (!targetOk(A, x0 + (x1 - x0) * t, z0 + (z1 - z0) * t)) return false; }
+  return true;
+}
+function fleeFar(A, ox, oz, speed, dMin, dMax) {
+  const base = Math.atan2(A.x - ox, A.z - oz);
+  for (const dd of [dMax, (dMin + dMax) / 2, dMin, dMin * .6, dMin * .35]) for (const da of [0, .35, -.35, .7, -.7, 1.05, -1.05, 1.5, -1.5, 2, -2]) {
+    const h = base + da + (Math.random() - .5) * .25, x = A.x + Math.sin(h) * dd, z = A.z + Math.cos(h) * dd;
+    if (!targetOk(A, x, z) || !lineOk(A, A.x, A.z, x, z)) continue;
+    A.target = [x, z]; A.home = [x, z]; A.mode = "walk"; A.want = speed; A.fleeT = Math.min(14, dd / speed * .6); A.timer = dd / (speed * .55) + 20; A.steerT = 0; A.trek = true; A.stuckN = 0;
+    return true;
+  }
+  return false;
+}
+// caught on something: find the nearest open ground and squeeze straight out to it
+function unstick(A) {
+  for (let r = 1; r <= 8; r++) for (let k = 0; k < 12; k++) {
+    const a = k / 12 * 6.283 + r * .7, x = A.x + Math.sin(a) * r, z = A.z + Math.cos(a) * r;
+    if (walkable(A, x, z) && walkable(A, x + Math.sin(a) * 1.5, z + Math.cos(a) * 1.5)) { A.ghost = [x, z]; A.ghostT = 1.6; A.steer = a; return true; }
+  }
+  return false;
 }
 function lureTarget(A) {                                  // a still hunter: drift closer, but keep a comfort distance that shrinks with time
   const comfort = lerp(80, 3, smooth(40, 300, sense.calm)), d = Math.hypot(A.x - P.x, A.z - P.z);
@@ -3887,7 +3924,9 @@ function updateAnimals(dt) {
     const pd = Math.hypot(A.x - P.x, A.z - P.z);
     if (sense.R > 0 && pd < sense.R) {                     // you're moving and close enough: ease away, or bolt if you're near
       const k = 1 - pd / sense.R, sp = k > .55 ? A.run : A.walk * 1.5;
-      if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k);
+      if (A.trek && pd > 25) {}                                                      // already leaving for somewhere else
+      else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, P.x, P.z, sp, 70, 160)) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
+      else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k);
     }
     if (!(A.fleeT > 0) && sense.calm > 40 && (A.lureT = (A.lureT || Math.random() * 6) - dt) <= 0) {
       A.lureT = 5 + Math.random() * 6;
@@ -3898,29 +3937,45 @@ function updateAnimals(dt) {
       if (t && Math.random() < .75) { A.mode = "walk"; A.target = t; A.want = Math.random() < .12 ? A.run * .7 : A.walk; A.timer = 25; A.steerT = 0; }
       else { A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = (A.hop ? 1 : 3) + Math.random() * (A.hop ? 3 : 8); }
     } else if (A.mode === "walk" && (A.timer <= 0 || Math.hypot(A.target[0] - A.x, A.target[1] - A.z) < 1.5)) {
-      A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = 3 + Math.random() * 9;
+      A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = 3 + Math.random() * 9; A.trek = false;   // arrived: settle down here
       if (A.kind !== "baboon" && A.kind !== "wolf" && Math.random() < .4) A.home = [A.x, A.z];        // wanders on across the map over time
     }
     if ((A.kind === "baboon" || A.kind === "wolf") && A.mode === "walk" && Math.random() < dt * .02) A.home = [A.home[0] + (Math.random() - .5) * 30, A.home[1] + (Math.random() - .5) * 30];   // the troop drifts
     let want = 0;
+    if (A.trek && !(A.fleeT > 0)) A.want = Math.max(A.walk * 1.8, A.run * .5);   // after the first sprint, a steady trot the rest of the way
+    // not getting anywhere while trying to walk? work free instead of shaking on the spot
+    A.chkT = (A.chkT || 0) + dt;
+    if (A.chkT > 1.2) {
+      const moved = A.chkP ? Math.hypot(A.x - A.chkP[0], A.z - A.chkP[1]) : 9; A.chkT = 0; A.chkP = [A.x, A.z];
+      if (A.mode === "walk" && A.want > .3 && moved < .35 && !(A.ghostT > 0)) {
+        A.stuckN = (A.stuckN || 0) + 1;
+        if (A.stuckN > 3 || !unstick(A)) { A.stuckN = 0; A.trek = false; A.mode = "idle"; A.timer = 1 + Math.random() * 2; }
+      } else if (moved > 1) A.stuckN = 0;
+    }
+    if (A.ghostT > 0) {                                      // squeezing out: straight for open ground, past whatever it was caught on
+      A.ghostT -= dt; const gx = A.ghost[0] - A.x, gz = A.ghost[1] - A.z, gd = Math.hypot(gx, gz);
+      if (gd < .25) A.ghostT = 0;
+      else { const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 6, Math.min(dt * 6, angDiff(h, A.yaw))); const st = Math.min(gd, Math.max(1.2, A.walk) * dt); A.x += gx / gd * st; A.z += gz / gd * st; A.speed = Math.max(A.walk * .6, A.speed * .9); }
+      if (A.ghostT <= 0) A.steerT = 0;
+    } else
     if (A.mode === "walk") {
       // look a few metres ahead and pick the clearest heading toward the goal
       if ((A.steerT -= dt) <= 0) {
-        A.steerT = .2; const goal = Math.atan2(A.target[0] - A.x, A.target[1] - A.z); let best = null;
-        for (let k = 0; k < 11 && best === null; k++) {
-          const h = goal + (k === 0 ? 0 : Math.ceil(k / 2) * (k % 2 ? 1 : -1) * .32 * A.side);
-          if (walkable(A, A.x + Math.sin(h) * .5, A.z + Math.cos(h) * .5) && walkable(A, A.x + Math.sin(h) * 1.3, A.z + Math.cos(h) * 1.3) && walkable(A, A.x + Math.sin(h) * 2.8, A.z + Math.cos(h) * 2.8)) best = h;
+        A.steerT = .2; const goal = Math.atan2(A.target[0] - A.x, A.target[1] - A.z); let best = null, part = null, partC = 0;
+        for (let k = 0; k < 15 && best === null; k++) {
+          const h = goal + (k === 0 ? 0 : Math.ceil(k / 2) * (k % 2 ? 1 : -1) * .3 * A.side);
+          const c = walkable(A, A.x + Math.sin(h) * .5, A.z + Math.cos(h) * .5) ? walkable(A, A.x + Math.sin(h) * 1.3, A.z + Math.cos(h) * 1.3) ? walkable(A, A.x + Math.sin(h) * 2.8, A.z + Math.cos(h) * 2.8) ? 3 : 2 : 1 : 0;
+          if (c === 3) best = h; else if (c > partC) { partC = c; part = h; }
         }
-        if (best === null) {                               // boxed in: turn the other way, and after a moment choose a new route
-          A.stuck += .2; A.steer = A.yaw + 1.6 * A.side;
-          if (A.stuck > .8) { A.stuck = 0; A.side = -A.side; if (A.fleeT > 0) fleeFrom(A, P.x, P.z, A.want, A.fleeT, 30); else { A.mode = "idle"; A.timer = .5; } }
-        } else { A.stuck = 0; A.steer = best; }
+        if (best !== null) { A.stuck = 0; A.steer = best; }
+        else if (part !== null) { A.steer = part; A.stuck += .2; if (A.stuck > 1.2) { A.stuck = 0; A.side = -A.side; } }   // tight spot: edge through the gap that is there
+        else { A.stuck = 0; A.side = -A.side; if (!unstick(A)) { A.mode = "idle"; A.timer = .8; } }                    // boxed in: squeeze out to open ground
       }
-      const dy = angDiff(A.steer, A.yaw), tr = A.fleeT > 0 ? 5 : 2.2;
+      const dy = angDiff(A.steer, A.yaw), tr = A.fleeT > 0 || A.trek ? 5 : 2.2;
       A.yaw += Math.max(-dt * tr, Math.min(dt * tr, dy)); want = A.want * Math.max(.25, Math.cos(dy));
     }
     A.speed += (want - A.speed) * Math.min(1, dt * 3);
-    if (A.speed > .02) {
+    if (A.speed > .02 && !(A.ghostT > 0)) {
       const nx = A.x + Math.sin(A.yaw) * A.speed * dt, nz = A.z + Math.cos(A.yaw) * A.speed * dt;
       if (walkable(A, nx, nz) || !walkable(A, A.x, A.z)) { A.x = nx; A.z = nz; }          // (already wedged? always allowed to walk out)
       else {                                                // brushing past a trunk: slide along it instead of stopping
@@ -4017,7 +4072,11 @@ const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gun
 const scopeFovs = () => ZOOM_FOV[vr.gunKind === "hunt" ? "hunt" : "pvp"].slice(1);      // the same zoom steps as the PC scope
 const XRV = { ok: false };
 renderer.xr.enabled = true;
-if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { XRV.ok = ok; if (ok) $("vrRow").style.display = ""; }).catch(() => {});
+if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { XRV.ok = ok; if (ok) { $("vrRow").style.display = ""; if (intro.stage !== "done") $("introVR").classList.remove("hidden"); } }).catch(() => {});
+$("introVR").addEventListener("click", e => {                 // a headset: the first tap goes straight into VR, where the intro and menus wrap around you
+  e.stopPropagation(); cancelAnimationFrame(intro.raf); intro.stage = "done"; $("intro").classList.add("hidden"); $("introVR").classList.add("hidden");
+  enterVR(true);
+});
 const ctrl = [0, 1].map(i => { const ray = renderer.xr.getController(i), grip = renderer.xr.getControllerGrip(i); scene.add(ray, grip);
   const c = { ray, grip, hand: "", src: null };
   ray.addEventListener("connected", e => { c.hand = e.data.handedness; c.src = e.data; }); ray.addEventListener("disconnected", () => { c.hand = ""; c.src = null; });
@@ -4116,6 +4175,12 @@ function vrTick(dt) {
   // where the head is in the play space, before this frame's movement
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
   const hl = [dx * cy - dz * sy, I.head.y - vr.oy, dx * sy + dz * cy];      // rotate by -yaw
+  if (vr.placeAt) {
+    vr.placeAt = false; vr.goodX = undefined;
+    const nh = new THREE.Vector3(P.x, P.y + hl[1], P.z), d = nh.clone().sub(I.head);
+    I.head.copy(nh); for (const k in I.hands) { I.hands[k].pos.add(d); I.hands[k].rayPos.add(d); }
+    const c0 = Math.cos(vr.yaw), s0 = Math.sin(vr.yaw); vr.ox = P.x - (hl[0] * c0 + hl[2] * s0); vr.oz = P.z - (-hl[0] * s0 + hl[2] * c0); vr.oy = P.y;
+  }
   vr.headLocalY = hl[1];
   vr.stand = Math.max(1.2, Math.max(vr.stand - dt * .01, hl[1]));            // standing height, learned as you stand up straight
   vr.crouchK += (Math.max(0, Math.min(1, (vr.stand - hl[1]) / (vr.stand * .35))) - vr.crouchK) * Math.min(1, dt * 8);
@@ -4185,6 +4250,7 @@ function vrTick(dt) {
   } else vr.glideDir = null;
   if (P.gliding && main && off) vr.pendTurn += ((set.hand === "right" ? off.pos.y - main.pos.y : main.pos.y - off.pos.y)) * dt * 1.4;
   vr.I = I; vr.main = main; vr.off = off;
+  if (off && off.b > .6) { vr.menuHold = (vr.menuHold || 0) + dt; if (vr.menuHold > .7) { vr.menuHold = -1e9; pause(); vruiOpen("pause"); return; } } else vr.menuHold = 0;
   vr.climbing = climbTick(dt, I);
 }
 function vrAfterMove(dt) {                                // carry the play space along with this frame's walking and turning
@@ -4476,22 +4542,316 @@ function vrZoomRender() {
   hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false;
 }
 
-async function enterVR() {
+/* ---- VR menus: the intro, the mode choice, the settings and the pause menu as curved panels around you.
+        Point with either controller and pull the trigger. Before each map, a little model of it turns in front of you. ---- */
+const VRUI = { on: false, stage: "", panels: {}, root: null, env: null, lasers: [], prev: {}, drag: null, fade: null, fadeV: 0, fadeGo: null, t: 0, dio: null, dioSpin: null };
+const UIC = { bg: "rgba(19,36,27,.95)", panel: "#1B3226", line: "#2D4A39", text: "#EAF2EC", dim: "#9DB3A5", sun: "#F2C14E", btn: "#24452e", on: "#3f7a4a", off: "rgba(255,255,255,.08)" };
+const VR_RES = { smooth: .8, balanced: .9, sharp: 1 };
+function uiRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+// one curved panel: a slice of a cylinder around you, with a canvas painted on the inside
+function uiPanel(name, W, H, radius, arcDeg, centerY, yawDeg = 0, src = null) {
+  const cv = src || document.createElement("canvas"); if (!src) { cv.width = W; cv.height = H; }
+  const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.wrapS = THREE.RepeatWrapping; tex.repeat.x = -1;   // seen from the inside
+  if (src) { tex.magFilter = THREE.NearestFilter; tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; }
+  const L = arcDeg * Math.PI / 180, height = radius * L * cv.height / cv.width;
+  const geo = new THREE.CylinderGeometry(radius, radius, height, 48, 1, true, Math.PI + yawDeg * Math.PI / 180 - L / 2, L);
+  const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, transparent: true, fog: false, toneMapped: false }));
+  mesh.position.y = centerY; mesh.renderOrder = 50; mesh.visible = false;
+  const P = { name, cv, g: cv.getContext("2d"), tex, mesh, W: cv.width, H: cv.height, widgets: [], hov: [], paint: null };
+  mesh.userData.panel = P; VRUI.root.add(mesh); VRUI.panels[name] = P;
+  return P;
+}
+function uiDraw(P) {
+  if (!P.paint) return;
+  const g = P.g; g.clearRect(0, 0, P.W, P.H); P.paint(g, P);
+  for (const w of P.widgets) {
+    if (w.hide && w.hide()) continue;
+    const hov = !!(P.hov && P.hov.includes(w)), dis = w.disabled && w.disabled();
+    if (w.kind === "slider") {
+      const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2;
+      g.fillStyle = "rgba(255,255,255,.14)"; uiRound(g, w.x, y - 7, w.w, 14, 7); g.fill();
+      g.fillStyle = UIC.sun; uiRound(g, w.x, y - 7, Math.max(14, w.w * v), 14, 7); g.fill();
+      g.beginPath(); g.arc(w.x + w.w * v, y, hov ? 24 : 20, 0, 6.283); g.fillStyle = "#fff"; g.fill();
+    } else {
+      const act = w.active && w.active();
+      g.fillStyle = dis ? "rgba(255,255,255,.05)" : w.primary ? (hov ? "#ffd772" : UIC.sun) : act ? UIC.on : hov ? "#33603f" : UIC.btn;
+      uiRound(g, w.x, w.y, w.w, w.h, 12); g.fill();
+      if (act && !w.primary) { g.strokeStyle = UIC.sun; g.lineWidth = 4; uiRound(g, w.x + 2, w.y + 2, w.w - 4, w.h - 4, 11); g.stroke(); }
+      if (hov && !dis) { g.strokeStyle = "rgba(255,255,255,.7)"; g.lineWidth = 3; uiRound(g, w.x + 1.5, w.y + 1.5, w.w - 3, w.h - 3, 11); g.stroke(); }
+      g.fillStyle = dis ? "rgba(234,242,236,.35)" : w.primary ? "#13241B" : UIC.text; g.textAlign = "center"; g.textBaseline = "middle";
+      if (w.sub) { g.font = "bold " + (w.fs || 46) + "px sans-serif"; g.fillText(w.label, w.x + w.w / 2, w.y + w.h * .36); g.font = "30px sans-serif"; g.fillStyle = dis ? "rgba(157,179,165,.5)" : UIC.dim; uiWrap(g, w.sub, w.x + w.w / 2, w.y + w.h * .68, w.w - 60, 36); }
+      else { g.font = "bold " + (w.fs || 34) + "px sans-serif"; g.fillText(w.label, w.x + w.w / 2, w.y + w.h / 2 + 1); }
+    }
+  }
+  P.tex.needsUpdate = true;
+}
+function uiWrap(g, text, cx, y, maxW, lh) {
+  const words = text.split(" "), lines = []; let cur = "";
+  for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  lines.push(cur); lines.forEach((l, i) => g.fillText(l, cx, y + i * lh));
+}
+const uiBtn = (P, x, y, w, h, label, on, extra = {}) => { const b = Object.assign({ kind: "btn", x, y, w, h, label, on }, extra); P.widgets.push(b); return b; };
+const uiSlider = (P, x, y, w, min, max, get, setv, step = 0) => { const s = { kind: "slider", x, y, w, h: 56, min, max, get, set: v => setv(step ? Math.round(v / step) * step : v) }; P.widgets.push(s); return s; };
+function uiLabel(g, x, y, label, value) {
+  g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 36px sans-serif"; g.fillStyle = UIC.text; g.fillText(label, x, y);
+  if (value) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(value, x + g.measureText(label).width + 0 + 24, y); }
+}
+function uiBg(g, P, title) {
+  g.fillStyle = UIC.bg; uiRound(g, 4, 4, P.W - 8, P.H - 8, 34); g.fill();
+  g.strokeStyle = UIC.line; g.lineWidth = 4; uiRound(g, 4, 4, P.W - 8, P.H - 8, 34); g.stroke();
+  if (title) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "bold 54px sans-serif"; g.fillStyle = UIC.text; g.fillText(title, P.W / 2, 92); }
+}
+function vruiParts() {
+  if (VRUI.root) return;
+  VRUI.root = new THREE.Group(); scene.add(VRUI.root); VRUI.root.visible = false;
+  // a quiet place to stand while the menus are up: a dusky forest-green dome and a mossy floor
+  const env = new THREE.Group(); VRUI.env = env; VRUI.root.add(env);
+  env.add(new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, fog: false, depthWrite: false,
+    vertexShader: "varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `varying vec3 vP; float h(vec3 p){ return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+      void main(){ vec3 d = normalize(vP); float y = d.y;
+        vec3 c = mix(vec3(0.10, 0.19, 0.13), vec3(0.03, 0.06, 0.07), smoothstep(-0.05, 0.7, y)); c = mix(c, vec3(0.05, 0.09, 0.06), smoothstep(0.0, -0.4, y));
+        vec3 q = floor(d * 140.0); float s = step(0.9965, h(q)) * smoothstep(0.1, 0.5, y); c += vec3(s * 0.8);
+        gl_FragColor = vec4(c, 1.0); }` })));
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(7, 48).rotateX(-Math.PI / 2), new THREE.ShaderMaterial({ transparent: true, fog: false, depthWrite: false,
+    vertexShader: "varying vec2 vP; void main(){ vP = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: "varying vec2 vP; void main(){ float r = length(vP) / 7.0; vec3 c = mix(vec3(0.16, 0.27, 0.15), vec3(0.08, 0.15, 0.09), r); gl_FragColor = vec4(c, smoothstep(1.0, 0.55, r)); }" }));
+  floor.position.y = .01; env.add(floor);
+  // lasers from each controller
+  for (let i = 0; i < 2; i++) {
+    const line = new THREE.Mesh(new THREE.CylinderGeometry(.0025, .0025, 1, 6).translate(0, -.5, 0).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: .75, fog: false, depthWrite: false }));
+    const dot = new THREE.Mesh(new THREE.SphereGeometry(.012, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, depthTest: false }));
+    line.renderOrder = dot.renderOrder = 60; line.visible = dot.visible = false; scene.add(line, dot); VRUI.lasers.push({ line, dot });
+  }
+  VRUI.fade = new THREE.Mesh(new THREE.SphereGeometry(.4, 16, 10), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false }));
+  VRUI.fade.renderOrder = 10001; VRUI.fade.visible = false; scene.add(VRUI.fade);
+
+  // ---- the intro: the same pixel forest you see on the flat screen, then the logo ----
+  uiPanel("intro", 0, 0, 2.4, 100, 1.55, 0, $("introCv"));
+  const T = uiPanel("title", 1600, 900, 2.4, 100, 1.55);
+  T.paint = g => {
+    const gr = g.createRadialGradient(800, 450, 60, 800, 450, 900); gr.addColorStop(0, "#3f7a4a"); gr.addColorStop(.7, "#244a2c"); gr.addColorStop(1, "#18321e");
+    g.fillStyle = gr; g.fillRect(0, 0, 1600, 900); g.imageSmoothingEnabled = false;
+    const tc = $("titleCv"), sc = Math.min(1200 / tc.width, 470 / tc.height); g.drawImage(tc, 800 - tc.width * sc / 2, 330 - tc.height * sc / 2, tc.width * sc, tc.height * sc);
+    g.textAlign = "center"; g.font = "bold 40px sans-serif"; g.fillStyle = "rgba(232,243,223," + (.55 + .35 * Math.sin(VRUI.t * 3)) + ")"; g.fillText("PULL THE TRIGGER TO CONTINUE", 800, 760);
+  };
+  // ---- choose your way ----
+  const M = uiPanel("mode", 1400, 900, 2.0, 74, 1.45);
+  M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
+  [["hike", "Hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
+   ["hunt", "Hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
+   ["pvp", "PvP · coming back soon", "Being rebuilt around VR, with climbing."]].forEach(([m, name, sub], i) =>
+    uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { setMode(m); renderSetup(); vruiOpen("setup"); }, { sub, fs: 54, disabled: () => m === "pvp" }));
+  // ---- settings ----
+  const S2 = uiPanel("setup", 2048, 1060, 2.1, 104, 1.38);
+  const lx = 70, rx = 1078, cw = 900;
+  S2.paint = (g, P) => {
+    uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode], lx + 360, 92);
+    const lat = set.lat * set.hemi;
+    uiLabel(g, lx, 180, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"} · ${BIOME_TEXT[biomeOf(lat)].split(":")[0]}`);
+    uiLabel(g, lx, 310, "Terrain", roughText(set.rough));
+    uiLabel(g, lx, 440, "Time of day", hourText(set.hour));
+    uiLabel(g, lx, 570, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal" : densMul().toFixed(1) + "x");
+    uiLabel(g, lx, 700, "Month", MONTH_FULL[set.month] + (seasonOf(lat, set.month) === "tropical" ? "" : " · " + seasonOf(lat, set.month)));
+    uiLabel(g, rx, 180, "Map size", { xs: "250 m", small: "400 m", medium: "560 m", large: "800 m", xl: "1.2 km", xxl: "1.6 km" }[set.size]);
+    uiLabel(g, rx, 310, "Edges"); uiLabel(g, rx, 440, "Weather");
+    uiLabel(g, rx, 570, "Hand"); uiLabel(g, rx + 470, 570, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
+    uiLabel(g, rx, 700, "Resolution", { smooth: "Smooth", balanced: "Balanced", sharp: "Sharp" }[set.vrRes]);
+    g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Resolution takes effect the next time you enter VR.", rx, 822);
+  };
+  uiSlider(S2, lx, 196, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
+  uiBtn(S2, lx + 690, 192, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
+  uiBtn(S2, lx + 800, 192, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
+  uiSlider(S2, lx, 326, cw, 0, 1, () => set.rough, v => { set.rough = v; }, .01);
+  uiSlider(S2, lx, 456, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
+  uiSlider(S2, lx, 586, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
+  MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 722 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
+  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 196, 140, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
+  uiBtn(S2, rx, 326, 440, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
+  uiBtn(S2, rx + 460, 326, 440, 62, "Endless trees", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
+  WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 456, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
+  uiBtn(S2, rx, 586, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right" });
+  uiBtn(S2, rx + 220, 586, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left" });
+  uiSlider(S2, rx + 470, 588, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5);
+  [["smooth", "Smooth"], ["balanced", "Balanced"], ["sharp", "Sharp"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 300, 716, 290, 62, l, () => { set.vrRes = k; saveVrRes(); }, { active: () => set.vrRes === k }));
+  uiBtn(S2, rx, 900, 300, 100, "Mode", () => vruiOpen("mode"));
+  uiBtn(S2, rx + 320, 900, 260, 100, "Randomize", () => { $("randomBtn").click(); });
+  uiBtn(S2, rx + 600, 900, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
+  uiBtn(S2, lx, 900, 420, 100, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); });
+  // ---- growing the world ----
+  const Ld = uiPanel("loading", 1200, 300, 2.0, 46, 1.5);
+  Ld.paint = (g, P) => { uiBg(g, P); g.textAlign = "center"; g.font = "bold 64px sans-serif"; g.fillStyle = UIC.text; g.fillText("Growing trees…", 600, 150); g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Generating a new world", 600, 220); };
+  // ---- the little map turning in front of you ----
+  const Pv = uiPanel("preview", 1600, 330, 2.2, 56, 2.05);
+  Pv.paint = (g, P) => {
+    uiBg(g, P); const [t1, t2] = mapSummary(); g.textAlign = "center"; g.font = "bold 52px sans-serif"; g.fillStyle = UIC.text; g.fillText(MODE_NAME[gameMode] + " · " + t1, 800, 90);
+    g.font = "34px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, t2, 800, 150, 1450, 42);
+    g.font = "bold 36px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Pull the trigger to drop in", 800, 290);
+  };
+  // ---- paused ----
+  const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
+  Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 145, 1000, 34); };
+  [["Resume", () => vruiResume(), true], ["New map, same settings", () => startNew()], ["Change settings", () => vruiOpen("setup")], ["Main menu", () => vruiOpen("mode")],
+   ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42 }));
+}
+function saveVrRes() { try { localStorage.setItem("jt-vrres", set.vrRes); } catch (_) {} }
+// open a menu stage: the menus are placed in front of wherever you are looking
+function vruiOpen(stage) {
+  vruiParts();
+  const I = vr.readInputs ? vr.readInputs() : null;
+  const inWorld = stage === "pause";
+  let hp = new THREE.Vector3(0, 0, 0), fy = 0;
+  if (I) {
+    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(I.headQ), yawW = Math.atan2(-f.x, -f.z);
+    if (inWorld) { hp.set(I.head.x, P.y, I.head.z); fy = yawW; }
+    else { const hl = vrHeadLocal(I); hp.set(hl[0], 0, hl[2]); fy = yawW - vr.yaw; }   // where your head is in the bare play space we are switching to
+  }
+  if (!inWorld && renderer.xr.isPresenting && vr.base) { renderer.xr.setReferenceSpace(vr.base); vr.ox = vr.oy = vr.oz = 0; vr.yaw = 0; }
+  if (world) world.visible = inWorld;
+  VRUI.env.visible = !inWorld;
+  VRUI.root.position.copy(hp); VRUI.root.rotation.set(0, fy, 0);
+  VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
+  for (const k in VRUI.panels) VRUI.panels[k].mesh.visible = false;
+  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"] }[stage] || [];
+  for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
+  if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
+  if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
+  if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
+  if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
+  if (stage !== "pause" && state !== "play") state = "vrmenu";
+}
+function vrHeadLocal(I) {                                        // the head in the bare play space (undoing our walking offset)
+  const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
+  return [dx * cy - dz * sy, I.head.y - vr.oy, dx * sy + dz * cy];
+}
+function vruiClose() {
+  if (!VRUI.root) return;
+  VRUI.on = false; VRUI.stage = ""; VRUI.root.visible = false; for (const L of VRUI.lasers) { L.line.visible = L.dot.visible = false; }
+  if (VRUI.dio) { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
+  if (world) world.visible = true; if (vr.avatar) vr.avatar.group.visible = true;
+}
+function vruiResume() { vruiClose(); $("pause").classList.add("hidden"); state = "play"; updateHud(true); }
+function vruiDropIn() {                                          // from the little map into the real one, through a quick fade
+  VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
+}
+// every frame while a menu is up
+function vruiTick(dt) {
+  VRUI.t += dt;
+  const I = vr.readInputs(); if (!I) return;
+  if (VRUI.fade) {                                             // fades: out to black, switch, back in
+    const want = VRUI.fadeGo ? 1 : 0; VRUI.fadeV += Math.sign(want - VRUI.fadeV) * Math.min(Math.abs(want - VRUI.fadeV), dt * 3.5);
+    VRUI.fade.visible = VRUI.fadeV > .001; VRUI.fade.material.opacity = VRUI.fadeV; VRUI.fade.position.copy(I.head);
+    if (VRUI.fadeGo && VRUI.fadeV >= 1) { const f = VRUI.fadeGo; VRUI.fadeGo = null; f(); }
+  }
+  if (!VRUI.on) return;
+  vr.I = I; vr.main = I.hands[set.hand] || null; vr.off = I.hands[set.hand === "right" ? "left" : "right"] || null;
+  vrHands();
+  const st = VRUI.stage;
+  if (st === "intro") {
+    const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
+    if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
+  } else if (st === "title") uiDraw(VRUI.panels.title);
+  if (VRUI.dio) VRUI.dio.children[0].rotation.y += dt * .22;
+  // point and click
+  const rc = vruiRay || (vruiRay = new THREE.Raycaster());
+  VRUI.root.updateMatrixWorld(true);
+  const meshes = []; for (const k in VRUI.panels) if (VRUI.panels[k].mesh.visible) meshes.push(VRUI.panels[k].mesh);
+  let clicked = false; const hovNow = new Map();
+  [["right", 0], ["left", 1]].forEach(([hand, li]) => {
+    const h = I.hands[hand], L = VRUI.lasers[li]; if (!h) { L.line.visible = L.dot.visible = false; return; }
+    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(h.rayQ); rc.set(h.rayPos, dir); rc.far = 8;
+    const hit = rc.intersectObjects(meshes, false)[0];
+    L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, hit ? hit.distance : 1.2);
+    L.dot.visible = !!hit; if (hit) L.dot.position.copy(hit.point);
+    let P = null, w = null, cx = 0, cy = 0;
+    if (hit) { P = hit.object.userData.panel; cx = (1 - hit.uv.x) * P.W; cy = (1 - hit.uv.y) * P.H; w = P.widgets.find(q => !(q.hide && q.hide()) && cx >= q.x - 6 && cx <= q.x + q.w + 6 && cy >= q.y - 10 && cy <= q.y + q.h + 10) || null; }
+    if (P && w) { if (!hovNow.has(P)) hovNow.set(P, []); hovNow.get(P).push(w); }
+    const pressed = edge("ui" + hand, h.trig);
+    if (VRUI.drag && VRUI.drag.hand === hand) {
+      if (h.trig < .4) VRUI.drag = null;
+      else if (P === VRUI.drag.P) { const s = VRUI.drag.w; s.set(Math.max(s.min, Math.min(s.max, s.min + (cx - s.x) / s.w * (s.max - s.min)))); renderSetup(); uiDraw(P); }
+    }
+    if (pressed && !clicked) {
+      clicked = true;
+      if (st === "intro") { introSounds(false); titlePaint(); vruiOpen("title"); return; }
+      if (st === "title") { vruiOpen("mode"); return; }
+      if (st === "preview") { vruiDropIn(); return; }
+      if (w && !(w.disabled && w.disabled())) {
+        buzz(hand === "right" ? "R" : "L", .3, 20);
+        if (w.kind === "slider") { VRUI.drag = { hand, P, w }; w.set(Math.max(w.min, Math.min(w.max, w.min + (cx - w.x) / w.w * (w.max - w.min)))); }
+        else w.on();
+        renderSetup(); if (VRUI.on && P.mesh.visible) uiDraw(P);
+      }
+    }
+  });
+  for (const k in VRUI.panels) {                                 // highlight whatever either laser is resting on
+    const Pn = VRUI.panels[k]; if (!Pn.mesh.visible) continue; const nh = hovNow.get(Pn) || [];
+    if (nh.length !== Pn.hov.length || nh.some((w, i) => w !== Pn.hov[i])) { Pn.hov = nh; uiDraw(Pn); }
+  }
+}
+let vruiRay = null;
+// a little model of the map: the land, water, every tree as a tiny cone, and a yellow pin where you'll start
+function buildDiorama() {
+  const outer = new THREE.Group(), spin = new THREE.Group(); outer.add(spin);
+  const size = 1.15, sc = size / S, ex = 1.6, N = Math.min(140, SEG), V1 = SEG + 1, step = S / SEG;
+  const geo = new THREE.PlaneGeometry(S, S, N, N); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3), tc = terrainMesh && terrainMesh.geometry.attributes.color;
+  const islandR = edgeShape.island;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i); let h = H(x, z); if (islandR && Math.hypot(x, z) > edgeR(x, z)) h = Math.min(h, water - 4);
+    pos.setY(i, (Math.max(h, water - 6) - water) * ex);
+    if (tc) { const k = Math.round((z + HALF) / step) * V1 + Math.round((x + HALF) / step); col[i * 3] = tc.getX(k); col[i * 3 + 1] = tc.getY(k); col[i * 3 + 2] = tc.getZ(k); }
+    else { col[i * 3] = .3; col[i * 3 + 1] = .5; col[i * 3 + 2] = .25; }
+  }
+  geo.computeVertexNormals();
+  const nr = geo.attributes.normal, Ld = new THREE.Vector3(-.5, .8, .35).normalize();
+  for (let i = 0; i < pos.count; i++) { const s = .5 + .55 * Math.max(0, nr.getX(i) * Ld.x + nr.getY(i) * Ld.y + nr.getZ(i) * Ld.z); col[i * 3] *= s; col[i * 3 + 1] *= s; col[i * 3 + 2] *= s; }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  spin.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, toneMapped: false })));
+  // the sides of the block, so it reads as a solid slice of land
+  const skirt = new THREE.Mesh(new THREE.BoxGeometry(S, 10 * ex, S).translate(0, -5 * ex - 6 * ex, 0), new THREE.MeshBasicMaterial({ color: 0x2a2219, fog: false }));
+  spin.add(skirt);
+  const lat = set.lat * set.hemi, b = biomeOf(lat), seas = seasonOf(lat, set.month);
+  const wm = new THREE.Mesh(new THREE.PlaneGeometry(S, S).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: iced ? 0xcfe6f0 : new THREE.Color(WATERC[b]), transparent: true, opacity: .82, fog: false, toneMapped: false }));
+  wm.position.y = .2; spin.add(wm);
+  const trees = []; for (const list of obstacles.values()) for (const o of list) if (o.t && o.h > 1) trees.push(o);
+  const n = Math.min(trees.length, 6000), cone = new THREE.ConeGeometry(1, 1, 5).translate(0, .5, 0);
+  const tm = new THREE.InstancedMesh(cone, new THREE.MeshBasicMaterial({ fog: false, toneMapped: false }), n), m4 = new THREE.Matrix4(), c = new THREE.Color();
+  const colOf = k => k === "fir" ? "#2c5233" : k === "palm" ? "#4a9a3a" : k === "bare" ? "#7a6a58" : seas === "fall" ? "#b0702a" : seas === "winter" ? "#7a6a58" : "#4f8a35";
+  for (let i = 0; i < n; i++) {
+    const o = trees[Math.floor(i * trees.length / n)], h = Math.max(2, o.h) * 2.4, r = Math.max(1, o.r) * 1.2;
+    m4.compose(new THREE.Vector3(o.x, (H(o.x, o.z) - water) * ex, o.z), new THREE.Quaternion(), new THREE.Vector3(r, h, r)); tm.setMatrixAt(i, m4);
+    tm.setColorAt(i, c.set(colOf(o.t.kind)).multiplyScalar(.85 + Math.random() * .3));
+  }
+  spin.add(tm);
+  const pin = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 10).rotateX(Math.PI).translate(0, 7, 0), new THREE.MeshBasicMaterial({ color: 0xf2c14e, fog: false }));
+  const ps = S / 560; pin.scale.setScalar(ps); pin.position.set(P.x, (H(P.x, P.z) - water) * ex + 16 * ps, P.z); spin.add(pin);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.8, .8, 16, 6).translate(0, 8, 0), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: .5, fog: false }));
+  beam.scale.setScalar(ps); beam.position.set(P.x, (H(P.x, P.z) - water) * ex, P.z); spin.add(beam);
+  outer.scale.setScalar(sc); outer.position.set(0, .95, -1.25);
+  return outer;
+}
+
+async function enterVR(menu) {
   if (!navigator.xr) return;
   initSound();
   try {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(isTouch ? .8 : .9);
+    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor({ smooth: .8, balanced: .9, sharp: 1 }[set.vrRes] || 1);
     await renderer.xr.setSession(session);
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true; vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
-    try { renderer.xr.setFoveation(1); } catch (_) {}
+    try { renderer.xr.setFoveation({ smooth: 1, balanced: .7, sharp: .4 }[set.vrRes] || .4); } catch (_) {}   // less edge blur when sharp
     session.addEventListener("end", () => {
+      const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
+      if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
       vr.on = false; VR_ON = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
       for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
     });
-    startNew();
+    if (menu === true) vruiOpen("intro"); else startNew();
   } catch (e) { flashHint("Couldn't start VR: " + (e && e.message ? e.message : e)); }
 }
 
@@ -5777,11 +6137,12 @@ $("menuMainBtn").addEventListener("click", () => {
 function startNew() {
   seed = 1 + Math.floor(Math.random() * 999999);
   $("loading").classList.remove("hidden");
+  if (vr.on) vruiOpen("loading");                               // in a headset: a "growing trees" panel while the world is built
   setTimeout(() => {
     generate();
     $("loading").classList.add("hidden"); $("setup").classList.add("hidden"); $("pause").classList.add("hidden");
     showHud(false); startFly();
-  }, 40);
+  }, vr.on ? 350 : 40);
 }
 /* ---- 30 second drone flyover before each round (tap to skip) ---- */
 let fly = null;
@@ -5867,6 +6228,7 @@ let last = performance.now(), infoT = 0, mapT = 0;
 function loop(now) {
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (state === "play" || state === "fly") { updatePrecip(dt, now); soundTick(dt); }
+  if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
   if (state === "play") {
     if (vr.on) vrTick(dt);
     if (!(vr.on && vr.climbing)) update(dt);
@@ -5907,10 +6269,10 @@ function loop(now) {
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     zoneFog();
   updateBirds(now);
-  WIND.value = now / 1000;
-  if (world) {
+  if (!vr.on) WIND.value = now / 1000;                 // the trees hold still in a headset (sway makes leaf edges shimmer)
+  if (world || (vr.on && VRUI.on)) {
     GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = vr.on ? 1.08 : .95;
-    cullTiles(); updateGun(dt);
+    if (world) { cullTiles(); updateGun(dt); }
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
   }
