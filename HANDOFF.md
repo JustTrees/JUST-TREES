@@ -29,7 +29,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **34**). **Don't log notes until he says to take notes.**, restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
 2. **Keep PC and phone exactly as they are** unless he says otherwise. Most new work is **VR only**; check before changing shared behaviour. Anything visual (tracers, fog, speed) gets a VR-only branch.
-3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → 1.21 → **1.22** (current). He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
+3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → **1.21** (live). 1.22 (the four-gun VR Hunting update below) caused glitches in the headset and was **rolled back**; it's kept in git history (commit d6c7a69). He wants to bring guns back in smaller steps. He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
 4. **After building:**
    - Run the tests (section 5).
    - Push `index.html` to the repo, which makes the game live on his link.
@@ -52,7 +52,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ---
 
-## 4. What exists now (v1.22)
+## 4. What exists now (v1.21 live; the 1.22 guns section below is rolled back, not live)
 
 ### World and generation (all modes)
 - **Settings:**
@@ -135,7 +135,7 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Render scale 0.8 and maximum foveation. He found Smooth looked best, so the resolution option was removed.
 - **Wrist HUD:** a small panel on the off-hand wrist showing info and score (and "+24 Pistol ammo" when you loot).
 
-### VR Hunting guns (1.22, notes 26–34; VR Hunting only, PC and phone unchanged)
+### VR Hunting guns (1.22, ROLLED BACK: not in the live game; notes 26–34, kept for reference)
 - **Gun wheel:** hold B (0.3 s) opens a wheel; point the gun-hand ray at a gun and let go. Tap B still marks; tap A still holsters/draws.
 - **Guns (`WEAP`, models in `GUNMODEL` plus the sniper):** sniper (5 rounds, bolt after every shot, the only scope), assault rifle (30, full auto ~8/s), SMG (32, full auto ~12/s, less accurate, 350 m reach), pistol (12, semi-auto, 250 m, two-handed grip optional). Damage numbers are for future PvP; in Hunting a hit is still a kill.
 - **Reload, one step at a time, off-hand grip only** (`reloadTick`, `arms[kind].phase`: 0 ready, 1 magazine out, 2 bolt due): the empty magazine pops out and hovers glowing yellow; a squeeze within 35 cm (`SNAP_R`) snaps the glove onto it, push it in along its slot; then the bolt / charging handle / slide glows, squeeze to snap onto it, pull back, let go. Only then can the off hand snap to the front grip. Gun-hand stick click drops the magazine early (its rounds go back to spare). Dry trigger clicks.
