@@ -348,3 +348,11 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Score while you're in it alone. A small flag on your screen points to it through trees and hills (plus distance), coloured by who holds it.
 - Placing: a switch on the host's preview "Place: My start | Capture zone" so the trigger doesn't do both.
 - Why it's on hold: players could just put their start right next to the zone. Needs a rule first (e.g. starts must be far from the zone, or random starts when a zone is on).
+
+## 1.43 — closing zone in VR PvP
+- Settings (PvP): Zone Off/On, Hold 15–120 s, Speed 1–5 (`ZONE_SPEEDS` = shrink seconds), synced to everyone (in `MP_SET`). Settings panel is now 1090 tall for this row.
+- `vrZonePlan`: stages = round / (hold + shrink), max `ZONE_STAGES_MAX` 5; first circle covers the map, each next circle smaller (down to `ZONE_FINAL`) and inside the last, on dry land, seeded so everyone gets the same. Timeline: hold, shrink, hold, shrink… then final.
+- Online, `zoneSeek` puts the zone where the shared round clock says (no drift between players, late joiners match). Offline it steps on its own.
+- Same look and sound as PC: green mist wall, green fog and muffled sound outside, damage ticks (VR: health only, shield doesn't help) after 2 s outside. Map (and wrist map) shows the live edge and the next circle dashed; the one after is hidden until that shrink finishes.
+- Respawns and late joiners start inside the zone (`zoneSpawnInside`). Headset bar shows "Zone in 0:45" / "Zone closing" / "Final zone" / "OUTSIDE ZONE".
+- Test: dev/test_zone.py; test_lobby checks everyone has the same zone at the same time.

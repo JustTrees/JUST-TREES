@@ -5,7 +5,7 @@ import os, sys, asyncio, json
 from playwright.async_api import async_playwright
 T = 'file://' + os.path.abspath(sys.argv[1])
 INIT = """() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setVR(true); D.setMode('pvp'); const T = D.THREE, V = D.vr; V.on = true;
-  Object.assign(D.set, { size: 'small', weather: 'clear', lat: 45, hour: 12, edges: 'endless', land: 'natural', roundMin: 7 });
+  Object.assign(D.set, { size: 'small', weather: 'clear', lat: 45, hour: 12, edges: 'endless', land: 'natural', roundMin: 7, zone: 'on', zoneHold: 30, zoneSpeed: 4 });
   D.MP.peerOpts = { host: '127.0.0.1', port: 9000, path: '/jt', secure: false };
   V.readInputs = () => ({ head: new T.Vector3(0, 1.7, 0), headQ: new T.Quaternion(), hands: {} });
   window.tick = setInterval(() => { try { D.vruiTick(.1); D.mpTick(.1); } catch (e) { console.error(String(e)); } }, 100); return 1; }"""
@@ -60,6 +60,10 @@ async def main():
         for pg in (A, B, C): await wait(pg, "() => D.state === 'play'", 15)
         out["allPlaying"] = [await pg.evaluate("() => D.state") for pg in (A, B, C)]
         out["roundClock"] = [round(await pg.evaluate("() => D.MP.roundLeft")) for pg in (A, B, C)]
+        zc = [await pg.evaluate("() => D.zone ? JSON.stringify(D.zone.circles.map(c => c.map(v => +v.toFixed(2)))) : 'none'") for pg in (A, B, C)]
+        out["sameZoneForAll"] = len(set(zc)) == 1 and zc[0] != 'none'
+        for pg in (A, B, C): await pg.evaluate("() => { D.MP.roundLeft = 7 * 60 - 100; D.updateZone(.01); return 1; }")
+        out["sameZoneSizeAt100s"] = len(set([await pg.evaluate("() => D.zone.r.toFixed(2) + D.zone.phase") for pg in (A, B, C)])) == 1
         out["guestsPistolOnly"] = await B.evaluate("() => JSON.stringify(D.vr.own)")
         bp2 = await B.evaluate("() => [D.P.x, D.P.z]"); out["bAtOwnPick"] = abs(bp2[0] - bp[0]) < .5 and abs(bp2[1] - bp[1]) < .5
         # a 4th player joins mid-game

@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.42";              // Just Trees 1.42
+const VERSION = "1.43";              // Just Trees 1.43
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
      the world ............ "Terrain", "generate()", "Trees", "Rocks", "Water", "weather", "lightning"
@@ -336,7 +336,9 @@ const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"]; 
 const TIER_ODDS = [.4, .68, .86, .96];                       // a gun on the map: 40% 1 star, then blue to 68%, purple to 86%, gold to 96%, red the rest
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
 const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [8, 20], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
-const PVP = { respawn: 4, bodyGone: 3, flags: 3 };           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
+const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
+const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
+const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -370,7 +372,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10 };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3 };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -3068,7 +3070,7 @@ function zoneR(Z, cx, cz, r, x, z, t) {
 }
 function startZone() {
   clearZoneMesh();
-  if (set.zone !== "on" || gameMode !== "pvp" || VR_ON) { zone = null; return; }
+  if (set.zone !== "on" || gameMode !== "pvp") { zone = null; return; }
   const rnd = mulberry32(seed * 7 + 99), r0 = edgeShape.island ? edgeShape.R0 * 1.2 : HALF * 1.45, rf = r0 * ZONE_FINAL;
   let fx = 0, fz = 0;                                                          // the final spot: near the middle, nudged a little each map, on dry land
   if (coin && rnd() < .25 && Math.hypot(coin.x, coin.z) < HALF * .3) { fx = coin.x; fz = coin.z; }
@@ -3076,12 +3078,53 @@ function startZone() {
     const a = rnd() * 6.283, d = Math.sqrt(rnd()) * HALF * .14, x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (H(x, z) > water + 1 || k === 59) { fx = x; fz = z; break; }
   }
-  const T = { wait: ZONE_WAIT, shrink: [ROUND_SEC - ZONE_WAIT], hold: [] }, circles = [[0, 0, r0], [fx, fz, rf]], round = ROUND_SEC;
+  const plan = VR_ON ? vrZonePlan(rnd, r0, rf) : null;        // in a headset: several stages, each a hold then a shrink, from the host's settings
+  const T = plan ? plan.T : { wait: ZONE_WAIT, shrink: [ROUND_SEC - ZONE_WAIT], hold: [] }, circles = plan ? plan.circles : [[0, 0, r0], [fx, fz, rf]], round = plan ? 1e9 : ROUND_SEC;
   let lo = 1e9, hi = -1e9;
   for (let i = 0; i < 20; i++) for (let j = 0; j < 20; j++) { const h = H(-HALF + (i + .5) * S / 20, -HALF + (j + .5) * S / 20); lo = Math.min(lo, h); hi = Math.max(hi, h); }
   zone = { circles, T, round, ended: false, stage: 0, phase: "wait", t: 0, wait: T.wait, cx: 0, cz: 0, r: r0, clock: 0, out: 0, dmgT: 0,
            waves: [.024 + rnd() * .02, .016 + rnd() * .014, .008 + rnd() * .007, rnd() * 6, rnd() * 6, rnd() * 6], yb: Math.min(lo, water) - 8, yt: hi + 70 };
+  zone.vr = !!plan;
   buildZoneMesh();
+}
+function vrZonePlan(rnd, r0, rf) {
+  const hold = set.zoneHold || 60, shrink = ZONE_SPEEDS[set.zoneSpeed || 3] || 60, round = (set.roundMin || 10) * 60;
+  const n = Math.max(1, Math.min(ZONE_STAGES_MAX, Math.floor(round / (hold + shrink))));   // as many stages as fit in the round
+  const circles = [[0, 0, r0]]; let cx = 0, cz = 0, r = r0;
+  for (let i = 1; i <= n; i++) {                               // each new circle sits inside the last one, on dry land
+    const nr = r0 * Math.pow(rf / r0, i / n); let nx = cx, nz = cz;
+    for (let k = 0; k < 80; k++) {
+      const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.max(0, Math.min(r, HALF * .9) - nr) * .8, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+      if (Math.abs(x) < EDGE * .8 && Math.abs(z) < EDGE * .8 && H(x, z) > water + 1) { nx = x; nz = z; break; }
+    }
+    circles.push([nx, nz, nr]); cx = nx; cz = nz; r = nr;
+  }
+  return { circles, T: { wait: hold, shrink: Array(n).fill(shrink), hold: Array(n - 1).fill(hold) } };
+}
+function zoneSeek(Z, el) {                                   // where the zone is at this many seconds into the round (online: everyone the same)
+  const C = Z.circles, n = C.length - 1, at = i => { Z.cx = C[i][0]; Z.cz = C[i][1]; Z.r = C[i][2]; };
+  Z.clock = el; let t = el;
+  if (t < Z.T.wait) { Z.phase = "wait"; Z.stage = 0; Z.t = t; at(0); return; }
+  t -= Z.T.wait;
+  for (let s = 0; s < n; s++) {
+    const sh = Z.T.shrink[s];
+    if (t < sh) { const k = t / sh, [ax, az, ar] = C[s], [bx, bz, br] = C[s + 1]; Z.phase = "shrink"; Z.stage = s; Z.t = t; Z.cx = ax + (bx - ax) * k; Z.cz = az + (bz - az) * k; Z.r = ar + (br - ar) * k; return; }
+    t -= sh;
+    if (s < n - 1) { const h = Z.T.hold[s]; if (t < h) { Z.phase = "hold"; Z.stage = s + 1; Z.t = t; at(s + 1); return; } t -= h; }
+  }
+  Z.phase = "final"; Z.stage = n; Z.t = t; at(n);
+}
+function zoneSpawnInside() {                                 // back in somewhere inside the zone
+  const Z = zone; if (!Z) return;
+  for (let k = 0; k < 200; k++) { const a = Math.random() * 6.283, d = Math.sqrt(Math.random()) * Z.r * .6, x = Z.cx + Math.cos(a) * d, z = Z.cz + Math.sin(a) * d; if (okSpot(x, z)) { P.x = x; P.z = z; P.y = groundAt(x, z); P.vy = 0; vr.placeAt = true; return; } }
+}
+function zoneStatus() {                                      // short text for the headset bar
+  const Z = zone; if (!Z) return "";
+  const m = s => Math.floor(s / 60) + ":" + String(Math.max(0, Math.floor(s % 60))).padStart(2, "0");
+  if (Z.phase === "wait") return "Zone in " + m(Z.T.wait - Z.t);
+  if (Z.phase === "hold") return "Zone in " + m(Z.T.hold[Z.stage - 1] - Z.t);
+  if (Z.phase === "shrink") return "Zone closing";
+  return "Final zone";
 }
 function zoneLabel() {
   if (!zone) return "";
@@ -3094,14 +3137,17 @@ function zoneLabel() {
 }
 function updateZone(dt) {
   if (!zone) return;
-  const Z = zone; Z.clock += dt; Z.t += dt;
-  const n = Z.circles.length;
-  if (Z.phase === "wait" && Z.t >= Z.wait) { Z.phase = "shrink"; Z.t = 0; }
-  else if (Z.phase === "hold" && Z.t >= Z.T.hold[Z.stage - 1]) { Z.phase = "shrink"; Z.t = 0; }
-  if (Z.phase === "shrink") {
-    const [ax, az, ar] = Z.circles[Z.stage], [bx, bz, br] = Z.circles[Z.stage + 1], k = Math.min(1, Z.t / Z.T.shrink[Z.stage]), e = k;   // steady, constant pace
-    Z.cx = ax + (bx - ax) * e; Z.cz = az + (bz - az) * e; Z.r = ar + (br - ar) * e;
-    if (k >= 1) { Z.stage++; Z.t = 0; Z.phase = Z.stage >= n - 1 ? "final" : "hold"; }
+  const Z = zone, n = Z.circles.length;
+  if (Z.vr && MP.code && MP.roundLeft > 0) zoneSeek(Z, (set.roundMin || 10) * 60 - MP.roundLeft);   // online: the zone follows the shared round clock
+  else {
+    Z.clock += dt; Z.t += dt;
+    if (Z.phase === "wait" && Z.t >= Z.wait) { Z.phase = "shrink"; Z.t = 0; }
+    else if (Z.phase === "hold" && Z.t >= Z.T.hold[Z.stage - 1]) { Z.phase = "shrink"; Z.t = 0; }
+    if (Z.phase === "shrink") {
+      const [ax, az, ar] = Z.circles[Z.stage], [bx, bz, br] = Z.circles[Z.stage + 1], k = Math.min(1, Z.t / Z.T.shrink[Z.stage]), e = k;   // steady, constant pace
+      Z.cx = ax + (bx - ax) * e; Z.cz = az + (bz - az) * e; Z.r = ar + (br - ar) * e;
+      if (k >= 1) { Z.stage++; Z.t = 0; Z.phase = Z.stage >= n - 1 ? "final" : "hold"; }
+    }
   }
   // outside? the further out, the thicker the mist
   const edge = zoneR(Z, Z.cx, Z.cz, Z.r, P.x, P.z, Z.clock), d = Math.hypot(P.x - Z.cx, P.z - Z.cz);
@@ -3109,12 +3155,12 @@ function updateZone(dt) {
   Z.out += ((outside ? Math.min(1, .45 + depth / 40) : 0) - Z.out) * Math.min(1, dt * 2.5);
   if (outside && state === "play") {
     Z.outT = (Z.outT || 0) + dt;                                              // a couple of seconds' grace before it stings
-    if (Z.outT > 2 && (Z.dmgT += dt) >= 1) { Z.dmgT = 0; const prog = Math.min(1, Z.clock / ROUND_SEC), dmg = 1 + Math.round(prog * 3); hurt(dmg); zoneCrunch(dmg); }
+    if (Z.outT > 2 && (Z.dmgT += dt) >= 1) { Z.dmgT = 0; const prog = Math.min(1, Z.clock / ROUND_SEC), dmg = 1 + Math.round(prog * 3); if (Z.vr) { MP.lastHitBy = null; mpTakeHit(dmg, false, true); } else hurt(dmg); zoneCrunch(dmg); }
   } else { Z.dmgT = 0; Z.outT = 0; }
   $("zoneFx").style.opacity = (Z.out * (.8 + .2 * Math.sin(Z.clock * 2.4))).toFixed(3);
   $("zoneInfo").textContent = zoneLabel();
   zoneSound(Z.out);
-  if (P.hp <= 0) zoneRespawn();
+  if (!Z.vr && P.hp <= 0) zoneRespawn();
   if (!Z.ended && Z.clock >= Z.round && state === "play") roundOver();
   if (zoneLine) {                                // follow the ground along the live edge
     const pa = zoneLine.geometry.attributes.position, LS = pa.count / 2 - 1;
@@ -4873,7 +4919,7 @@ function vruiParts() {
   uiBtn(MPP, 720, 420, 590, 150, "Choose the map", () => { renderSetup(); vruiOpen("setup"); }, { primary: true, sub: "Everyone sees it with you", fs: 48, hide: () => !(MP.host && MP.code) });
   uiBtn(MPP, 90, 780, 380, 90, "Back", () => { if (MP.joining) { MP.joining = false; return; } mpLeave(); vruiOpen("mode"); }, { fs: 38 });
   // ---- settings: every choice with the same little explanation the flat menu gives ----
-  const S2 = uiPanel("setup", 2048, 1000, 2.1, 104, 1.4);
+  const S2 = uiPanel("setup", 2048, 1090, 2.1, 104, 1.4);
   const lx = 70, rx = 1078, cw = 900;
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
@@ -4891,6 +4937,7 @@ function vruiParts() {
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
     if (gameMode === "pvp") uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
+    if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[MP.idx]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
@@ -4910,6 +4957,10 @@ function vruiParts() {
   uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
   uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"), { personal: true });
   uiSlider(S2, rx + 300, 884, 270, 5, 20, () => set.roundMin || 10, v => { set.roundMin = v; }, 1).hide = () => gameMode !== "pvp";   // PvP round length, 5 to 20 minutes
+  uiBtn(S2, 220, 1006, 130, 62, "Off", () => { set.zone = "off"; }, { active: () => set.zone !== "on", hide: () => gameMode !== "pvp" });   // PvP closing zone
+  uiBtn(S2, 360, 1006, 130, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
+  uiSlider(S2, 830, 1008, 330, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
+  uiSlider(S2, 1700, 1008, 250, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp";
   uiBtn(S2, rx + 300, 760, 280, 100, "Randomize", () => { $("randomBtn").click(); });
   uiBtn(S2, rx + 600, 760, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
   uiBtn(S2, rx + 600, 880, 300, 72, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 30, personal: true });
@@ -6503,11 +6554,12 @@ function pvpHud(I, dt) {
   if (!VHUD.init) { VHUD.p.copy(want); VHUD.q.copy(I.headQ); VHUD.init = true; }
   VHUD.p.lerp(want, 1 - Math.exp(-dt * 7)); VHUD.q.slerp(I.headQ, 1 - Math.exp(-dt * 7));
   VHUD.m.position.copy(VHUD.p); VHUD.m.quaternion.copy(VHUD.q); VHUD.m.rotateX(.32);
-  const key = [Math.ceil(MP.roundLeft || 0), Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.dead > 0].join("|"); if (key === VHUD.key) return; VHUD.key = key;
+  const zs = zoneStatus(), zout = !!(zone && zone.out > .2), key = [Math.ceil(MP.roundLeft || 0), Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.dead > 0, zs, zout].join("|"); if (key === VHUD.key) return; VHUD.key = key;
   const g = VHUD.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 512, 150);
   g.fillStyle = "rgba(8,12,10,.62)"; uiRound(g, 4, 4, 504, 142, 22); g.fill();
   g.textAlign = "center"; g.textBaseline = "middle"; g.font = "bold 44px sans-serif"; g.fillStyle = (MP.roundLeft || 0) < 60 ? "#ff7a5a" : "#f2f6ec"; g.fillText(clockText(MP.roundLeft || 0), 256, 38);
   g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills, 26, 38);
+  if (zs) { g.textAlign = "right"; g.font = "bold 24px sans-serif"; g.fillStyle = zout ? "#ff7a5a" : "#9dffc0"; g.fillText(zout ? "OUTSIDE ZONE" : zs, 486, 38); }
   const bar = (y, v, col, label) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, 26, y, 460, 26, 9); g.fill(); if (v > 0) { g.fillStyle = col; uiRound(g, 26, y, Math.max(18, 460 * v / 100), 26, 9); g.fill(); }
     g.fillStyle = "#fff"; g.font = "bold 22px sans-serif"; g.textAlign = "right"; g.fillText(label + " " + Math.round(v), 478, y + 14); g.textAlign = "left"; };
   bar(74, MP.sh, "#3f9bff", "Shield"); bar(108, MP.hp, MP.hp > 35 ? "#3fe060" : "#ff5a4a", "Health");
@@ -6576,7 +6628,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land", "roundMin"];
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land", "roundMin", "zone", "zoneHold", "zoneSpeed"];
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host && gameMode === "pvp";
@@ -6776,6 +6828,7 @@ function mpGuestStart(o) {
     let best = null; const want = Math.min(160, HALF * .55);
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
+    if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
     if (vr.on && VRUI.root) vruiDropIn(); else { vr.placeAt = true; state = "play"; }
   }, vr.on ? 350 : 10);
@@ -6897,9 +6950,9 @@ function mpHitTest(from, dir, maxT) {                       // the nearest playe
   for (const L of MP.links.values()) { if (!L.open || L.bad) continue; const h = mpHitOne(L.R, from, dir, maxT); if (h && (!best || h.t < best.t)) { best = h; best.L = L; } }
   return best;
 }
-function mpTakeHit(d, head) {
+function mpTakeHit(d, head, noShield) {
   if (MP.dead > 0 || state !== "play") return;
-  const s = Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
+  const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
   if (MP.hp <= 0) {
     MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy });
@@ -6935,7 +6988,7 @@ function mpTick(dt) {                                       // (also runs offlin
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); }
   if (MP.dead > 0 && state === "play") {                    // down: the view holds still where you fell and goes red, then you're back in somewhere else
     MP.dead -= dt; MP.hurt = Math.max(MP.hurt, .9);
-    if (MP.dead <= 0) { MP.dead = 0; uwRespawn(); MP.hp = 100; MP.sh = 0; MP.deathPos = null; MP.wake = .5; MP.hurt = 0; }
+    if (MP.dead <= 0) { MP.dead = 0; uwRespawn(); if (zone && zone.vr) zoneSpawnInside(); MP.hp = 100; MP.sh = 0; MP.deathPos = null; MP.wake = .5; MP.hurt = 0; }
   }
   const hm = mpHurtMesh(); MP.hurt = Math.max(0, MP.hurt - dt * 1.6); hm.material.opacity = MP.hurt * .45; hm.visible = MP.hurt > .01 && state === "play"; if (vr.I) hm.position.copy(vr.I.head);
   if (MP.dead > 0 && MP.dead < .5) hm.material.opacity = .4 + .57 * (1 - MP.dead / .5);      // a quick fade out just before you respawn
