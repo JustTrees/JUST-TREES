@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.34";              // Just Trees 1.34
+const VERSION = "1.35";              // Just Trees 1.35
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -6471,14 +6471,22 @@ function mpLeave() {
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
   MP.peer = MP.conn = MP.call = null; MP.on = false; MP.code = ""; MP.joining = false; MP.entry = ""; mpRemoteDrop();
 }
-async function mpRelay() {                                  // time-limited relay login, made the standard way (HMAC of the time with the shared secret)
-  if (MP.relay !== undefined) return MP.relay;
+const MP_ICE_URL = "";                                      // our Cloudflare helper (gives reliable relay logins); empty = use the free relay below
+async function mpRelay() {                                  // relay logins: ours from Cloudflare first, the free Open Relay as a backup
+  if (MP.relay !== undefined && (!MP.relayAt || Date.now() - MP.relayAt < 3 * 3600e3)) return MP.relay;
+  if (MP_ICE_URL) {
+    try {
+      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 5000);
+      const r = await fetch(MP_ICE_URL.replace(/\/$/, "") + "/ice-servers", { signal: ctl.signal }); clearTimeout(to);
+      if (r.ok) { const j = await r.json(); if (j.iceServers && j.iceServers.length) { MP.relay = j.iceServers; MP.relayAt = Date.now(); MP.relayFrom = "cloudflare"; return MP.relay; } }
+    } catch (e) {}
+  }
   try {
     const user = Math.floor(Date.now() / 1000 + 6 * 3600) + ":justtrees", enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode("openrelayprojectsecret"), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
     const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(user))); let bin = ""; for (const b of sig) bin += String.fromCharCode(b);
     const h = "staticauth.openrelay.metered.ca";
-    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }];
+    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }]; MP.relayAt = Date.now(); MP.relayFrom = "openrelay";
   } catch (e) { MP.relay = []; }
   return MP.relay;
 }
