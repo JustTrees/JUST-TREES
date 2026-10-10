@@ -296,3 +296,9 @@ Read this first. It carries over the project, the person, the way we work, and e
 - VR guns fire real bullets (`makeBullet`/`bulletStep`, stepped in the tracer loop). Speeds in `WEAP.spd`: sniper 850, AR 715, SMG 400, pistol 360 m/s. Gravity `BULLET_G`, sights zeroed at `BULLET_ZERO` = 100 m. Hits count when the bullet arrives (animals, bots, online player via `mpHitTest` per frame segment). Online "f" message now sends origin + velocity; the other side flies a show-only bullet.
 - Steady fire rate: `vr.cool` keeps leftover time while the trigger is held. No recoil (`vr.kick = 0`) and no spread in VR for now (`WEAP.kick/spread` still there to bring back).
 - Test: dev/test_bullets.py. test_mp frames now call `updateGun`.
+
+## 1.38
+- VR grenades (Hunting + VR PvP). Wheel now has 5 slices (`WHEEL` + `WSTEP`), 5th = Grenade. `vr.nadeMode` / `vr.nades` (max `NADE.MAX` 10, start 0). Holding one shows a dotted arc + orange 7 m blast ring (`nadeTickArc`); trigger throws (`vrThrowNade`). Lands, 0.9 s fuse, boom (`nadeBoom`): kills animals within 7 m, damages bots, online sends a "hit" scaled by distance. Tap A goes back to the gun.
+- Loot: green-banded grenade boxes (`spawnNadeLoot`, seeded), +2 each, left alone when you have 10. Online sync: "nade" (box taken) and "g" (throw, the other side flies a show-only grenade).
+- PC already had its own `throwNade`/`clearNades` — the VR ones are named `vrThrowNade`/`vrClearNades` on purpose.
+- Test: dev/test_nades.py.

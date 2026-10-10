@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.37";              // Just Trees 1.37
+const VERSION = "1.38";              // Just Trees 1.38
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4434,7 +4434,7 @@ function vrTick(dt) {
   if (main && huntV && edge("bmark", main.b)) markFromHand(main);                 // Hunting: tap B marks; A is tap for the gun, hold for the wheel (in wheelTick)
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
   vr.cool = (vr.cool || 0) - dt; if (!main || main.trig <= .6) vr.cool = Math.max(0, vr.cool);   // held trigger: keep the leftover time so shots stay on an even beat
-  if (huntV) { lootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
+  if (huntV) { lootTick(I); nadeLootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
   const gunOn = canGun && vr.gunOut && !!main;
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
@@ -4476,6 +4476,9 @@ function vrTick(dt) {
       if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
     }
   } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (vr.cross) vr.cross.visible = false; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
+  if (huntV && vr.nadeMode && main && state === "play" && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
+    nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
+  } else nadeHide();
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(1, vr.zoom)); }
@@ -6170,10 +6173,11 @@ const WEAP = {
   ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
   smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
   pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
-const WHEEL = ["hunt", "ar", "smg", "pistol"];          // top, right, bottom, left
+const WHEEL = ["hunt", "ar", "smg", "pistol", "gren"];  // five slices, clockwise from the top
+const WSTEP = Math.PI * 2 / 5;
 const AMMO_CAP = 300;
 const arms = {};
-function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0; }
+function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0; }
 vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
 resetArms();
 // the other three guns, built from code like the sniper (each has a "mag" and a "charge" part for reloading)
@@ -6300,13 +6304,13 @@ function vrWheel() {
 function drawWheel(sel) {
   const m = vrWheel(), cv = m.userData.cv, g = cv.getContext("2d"); g.clearRect(0, 0, 512, 512);
   WHEEL.forEach((k, i) => {
-    const a0 = -Math.PI / 2 + (i - .5) * Math.PI / 2, a1 = a0 + Math.PI / 2, on = i === sel, cur = k === vr.weapon;
+    const a0 = -Math.PI / 2 + (i - .5) * WSTEP, a1 = a0 + WSTEP, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === vr.weapon && !vr.nadeMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
     g.fillStyle = on ? "rgba(255,214,90,.92)" : "rgba(14,20,15,.82)"; g.fill();
-    g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? WEAP[k].col : "rgba(255,255,255,.25)"; g.stroke();
+    g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
     const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165, A = arms[k];
-    g.textAlign = "center"; g.fillStyle = on ? "#1a1a12" : "#eef3e6"; g.font = "bold 40px sans-serif"; g.fillText(WEAP[k].name, cx, cy);
-    g.font = "30px sans-serif"; g.fillStyle = on ? "#3a3420" : WEAP[k].col; g.fillText(A.mag + " | " + A.res, cx, cy + 40);
+    g.textAlign = "center"; g.fillStyle = on ? "#1a1a12" : "#eef3e6"; g.font = "bold 36px sans-serif"; g.fillText(Wk.name, cx, cy);
+    g.font = "30px sans-serif"; g.fillStyle = on ? "#3a3420" : Wk.col; g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : A.mag + " | " + A.res, cx, cy + 40);
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -6326,7 +6330,7 @@ function wheelTick(dt, main, I) {
   } else if (W.t > 0) {
     const picked = W.open && W.sel >= 0; if (picked) pickGun(WHEEL[W.sel]);
     if (W.open) { W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
-    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else vr.gunOut = !vr.gunOut; }   // a quick tap with nothing picked: gun in or out
+    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else if (vr.nadeMode) { vr.nadeMode = false; vr.gunOut = true; } else vr.gunOut = !vr.gunOut; }   // tap with a grenade in hand: back to the gun   // a quick tap with nothing picked: gun in or out
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun
@@ -6335,12 +6339,14 @@ function wheelTick(dt, main, I) {
     if (Math.abs(den) > 1e-3) {
       const t = _wp.copy(m.position).sub(main.rayPos).dot(_wn) / den;
       if (t > 0) { const lp = m.worldToLocal(_wp.copy(main.rayPos).addScaledVector(_wd, t)); const r = Math.hypot(lp.x, lp.y);
-        sel = r < .025 ? -1 : Math.abs(lp.y) >= Math.abs(lp.x) ? (lp.y > 0 ? 0 : 2) : (lp.x > 0 ? 1 : 3); }
+        sel = r < .025 ? -1 : ((Math.round(Math.atan2(lp.x, lp.y) / WSTEP) % 5) + 5) % 5; }
     }
     if (sel !== W.sel) { W.sel = sel; drawWheel(sel); if (sel >= 0) buzz(set.hand === "right" ? "R" : "L", .15, 12); }
   }
 }
 function pickGun(k) {
+  if (k === "gren") { vr.nadeMode = true; vr.gunOut = false; gunFoley(SFX.swap); return; }
+  vr.nadeMode = false;
   if (k !== vr.weapon) { vr.weapon = k; vr.gunInit = false; vr.rl.grab = null; vr.cool = Math.max(vr.cool, .25); gunFoley(SFX.swap); }
   vr.gunOut = true;
 }
@@ -6406,11 +6412,168 @@ function reloadTick(dt, G, off) {
   glowParts(U.charge, A.phase === 2 ? pulse : 0);
   if (U.counter) drawCounter(U.counter, A);
 }
+/* ---- grenades (VR Hunting / PvP): a fifth slot on the wheel, up to 10, picked up from grenade boxes; aim shows the arc, trigger throws ---- */
+const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };
+const NADES = [], BOOMS = [];
+let nadeLoot = [], nadeLootMesh = null, nadeArc = null;
+function nadeModel() {
+  const g = new THREE.Group(), olive = grade(new THREE.MeshLambertMaterial({ color: 0x4b5a32 })), metal = new THREE.MeshLambertMaterial({ color: 0x9a9a92 });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(.036, 14, 10), olive); body.scale.set(1, 1.2, 1); g.add(body);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.013, .016, .022, 10), metal); cap.position.y = .048; g.add(cap);
+  const spoon = new THREE.Mesh(new THREE.BoxGeometry(.012, .07, .006), metal); spoon.position.set(0, .02, .038); spoon.rotation.x = -.15; g.add(spoon);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.012, .0025, 6, 14), metal); ring.position.set(.018, .055, 0); ring.rotation.y = Math.PI / 2; g.add(ring);
+  return g;
+}
+function nadeArcObj() {                                     // the dotted arc and the ring where it lands
+  if (nadeArc) return nadeArc;
+  const dots = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 6, 4), new THREE.MeshBasicMaterial({ color: 0xfff1a0, transparent: true, opacity: .85, depthWrite: false, fog: false, toneMapped: false }), 60);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: .55, depthTest: false, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(NADE.R - .18, NADE.R, 56), ringMat), dot = new THREE.Mesh(new THREE.RingGeometry(.18, .32, 24), ringMat);
+  ring.rotation.x = dot.rotation.x = -Math.PI / 2; const land = new THREE.Group(); land.add(ring, dot); land.renderOrder = 997;
+  const held = nadeModel(), cv = document.createElement("canvas"); cv.width = 128; cv.height = 64;
+  const label = new THREE.Mesh(new THREE.PlaneGeometry(.06, .03), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+  label.userData = { cv, key: "" };
+  for (const o of [dots, land, held, label]) { o.frustumCulled = false; o.visible = false; scene.add(o); }
+  dots.renderOrder = 997; return nadeArc = { dots, land, held, label };
+}
+function nadeStop(p) {                                      // what a flying grenade hits here: "ground", "tree" or null
+  if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) return "out";
+  const g = H(p.x, p.z);
+  if (p.y <= g + .04 || p.y <= rockTopAt(p.x, p.z) + .04 || (!iced && p.y <= water && g < water)) return "ground";
+  const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
+  if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return "tree";
+  return null;
+}
+function nadeLaunch(main) {                                 // from the hand, along where it points, tipped up a little for a nice lob
+  const d = new THREE.Vector3(0, 0, -1).applyQuaternion(main.rayQ); d.y += .25; d.normalize();
+  return [main.pos.clone().addScaledVector(d, .08), d.multiplyScalar(NADE.V)];
+}
+function nadeTickArc(main, head) {
+  const A = nadeArcObj(), show = vr.nades > 0;
+  A.held.visible = show; A.dots.visible = A.land.visible = show; A.label.visible = !!main;
+  if (!main) { A.held.visible = A.dots.visible = A.land.visible = false; return; }
+  A.held.position.copy(main.pos).addScaledVector(_v1.set(0, 0, -1).applyQuaternion(main.rayQ), .05); A.held.quaternion.copy(main.rayQ);
+  A.label.position.copy(main.pos).add(_v1.set(0, .13, 0)); A.label.lookAt(head);
+  const key = vr.nades + ""; if (A.label.userData.key !== key) { A.label.userData.key = key; const g = A.label.userData.cv.getContext("2d"); g.clearRect(0, 0, 128, 64);
+    g.fillStyle = "rgba(10,14,11,.85)"; g.fillRect(4, 4, 120, 56); g.textAlign = "center"; g.font = "bold 38px sans-serif"; g.fillStyle = vr.nades ? "#9be05a" : "#ff6a5a"; g.fillText(vr.nades + " / " + NADE.MAX, 64, 46); A.label.material.map.needsUpdate = true; }
+  if (!show) return;
+  const [p, v] = nadeLaunch(main), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+  let n = 0, hit = null; const step = .02;
+  for (let i = 0; i < 400 && !hit; i++) {
+    p.addScaledVector(v, step); v.y -= BULLET_G * step; hit = nadeStop(p);
+    if (i % 4 === 3 && n < 60) { const s = .01 + p.distanceTo(head) * .0025; m4.compose(p, q, sc.set(s, s, s)); A.dots.setMatrixAt(n++, m4); }
+  }
+  A.dots.count = n; A.dots.instanceMatrix.needsUpdate = true;
+  A.land.visible = hit === "ground" || hit === "tree"; if (A.land.visible) A.land.position.set(p.x, Math.max(groundAt(p.x, p.z), iced ? -1e9 : water) + .08, p.z);
+}
+function nadeHide() { if (nadeArc) for (const o of [nadeArc.dots, nadeArc.land, nadeArc.held, nadeArc.label]) o.visible = false; }
+function vrThrowNade(main) {
+  if (vr.nades <= 0) { gunFoley(SFX.dry); return; }
+  vr.nades--; const [p, v] = nadeLaunch(main);
+  makeNade(p, v, false); gunFoley(SFX.swap); buzz(set.hand === "right" ? "R" : "L", .4, 30);
+  if (gameMode === "pvp" && MP.on) mpSend({ t: "g", o: [p.x, p.y, p.z], v: [v.x, v.y, v.z] });
+}
+function makeNade(p, v, remote) {
+  const m = nadeModel(); m.position.copy(p); scene.add(m);
+  NADES.push({ p: p.clone(), v: v.clone(), m, remote, fuse: -1, t: 0, spin: new THREE.Vector3(Math.random() * 9, Math.random() * 9, 0) });
+}
+function nadeTick(dt) {
+  for (let i = NADES.length - 1; i >= 0; i--) {
+    const N = NADES[i]; N.t += dt;
+    if (N.fuse < 0) {
+      for (let s = 0, n = Math.ceil(dt / .02); s < n; s++) {
+        const h = dt / n; N.p.addScaledVector(N.v, h); N.v.y -= BULLET_G * h;
+        const hit = nadeStop(N.p);
+        if (hit === "tree") { N.v.x = N.v.z = 0; }          // bounced off a trunk: drops straight down
+        else if (hit) { if (hit === "ground") N.p.y = Math.max(groundAt(N.p.x, N.p.z), iced ? -1e9 : water, rockTopAt(N.p.x, N.p.z)) + .04; N.fuse = NADE.FUSE; break; }
+      }
+      N.m.rotation.x += N.spin.x * dt; N.m.rotation.y += N.spin.y * dt;
+      if (N.t > 8) N.fuse = 0;
+    } else N.fuse -= dt;
+    N.m.position.copy(N.p);
+    if (N.fuse !== -1 && N.fuse <= 0) { nadeBoom(N.p, N.remote); scene.remove(N.m); NADES.splice(i, 1); }
+  }
+  for (let i = BOOMS.length - 1; i >= 0; i--) {             // the flash swells and fades
+    const B = BOOMS[i]; B.t += dt; const k = B.t / .45;
+    B.m.scale.setScalar(.6 + 4.4 * Math.min(1, k * 1.6)); B.m.material.opacity = Math.max(0, .9 * (1 - k));
+    if (k >= 1) { scene.remove(B.m); B.m.material.dispose(); BOOMS.splice(i, 1); }
+  }
+}
+let _boomGeo = null;
+function nadeBoom(p, remote) {
+  const m = new THREE.Mesh(_boomGeo || (_boomGeo = new THREE.SphereGeometry(1, 16, 12)), new THREE.MeshBasicMaterial({ color: 0xffb04a, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+  m.position.copy(p).add(_v1.set(0, .5, 0)); m.frustumCulled = false; scene.add(m); BOOMS.push({ m, t: 0 });
+  const wet = !iced && groundAt(p.x, p.z) < water && p.y <= water + .1;
+  for (let k = 0; k < 3; k++) addPuff(p.clone().add(_v1.set((Math.random() - .5) * 2, 0, (Math.random() - .5) * 2)), wet ? "water" : "ground");
+  const d = camera.position.distanceTo(p); setTimeout(() => boomSound(d), d / 343 * 1000);
+  if (d < 25) { const s = 1 - d / 25; buzz("L", .4 + .6 * s, 120); buzz("R", .4 + .6 * s, 120); }
+  if (remote) return;                                       // only the thrower's game counts what it hits
+  scatterBeasts(p); alertBots();
+  for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) killAnimal(A, camera.position.distanceTo(p));
+  for (const S of squad) if (!S.dead) { const sd = S.group.position.distanceTo(p); if (sd < NADE.R) for (let n = sd < 3 ? 3 : sd < 5 ? 2 : 1; n-- > 0;) damageBot(S, false); }
+  if (gameMode === "pvp" && MP.on && MP.R && MP.R.alive) {
+    const R = MP.R, rd = Math.min(R.head.distanceTo(p), new THREE.Vector3(R.head.x, R.feet + .3, R.head.z).distanceTo(p));
+    if (rd < NADE.R) { mpSend({ t: "hit", d: Math.max(10, Math.round(120 * (1 - rd / NADE.R))), hd: false }); hitTick(); }
+  }
+}
+function boomSound(d) {
+  if (!SND.ctx || !SND.on) return;
+  const c = SND.ctx, t = c.currentTime, vol = 1.1 / (1 + d / 35), cut = 300 + 2400 / (1 + d / 30);
+  const s = c.createBufferSource(); s.buffer = SND.noise; s.loop = true; const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = cut;
+  const g = c.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + 1.6);
+  s.connect(lp).connect(g).connect(SND.master); s.start(t); s.stop(t + 1.7);
+  const o = c.createOscillator(), og = c.createGain(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(28, t + .5);
+  og.gain.setValueAtTime(vol * .9, t); og.gain.exponentialRampToValueAtTime(.001, t + .6); o.connect(og).connect(SND.master); o.start(t); o.stop(t + .65);
+}
+function vrClearNades() {
+  for (const N of NADES) scene.remove(N.m); NADES.length = 0;
+  for (const B of BOOMS) scene.remove(B.m); BOOMS.length = 0;
+  if (nadeLootMesh) { for (const o of [nadeLootMesh.body, nadeLootMesh.band]) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } }
+  nadeLootMesh = null; nadeLoot = []; nadeHide();
+}
+function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
+  const R = mulberry32(seed * 91 + 7), n = Math.round(6 + HALF / 22), spots = [];
+  for (let i = 0; i < n; i++) {
+    let s = null;
+    for (let k = 0; k < 200 && !s; k++) {
+      let x, z;
+      if (i < 1) { const a = R() * 6.283, d = 12 + R() * 25; x = P.x + Math.cos(a) * d; z = P.z + Math.sin(a) * d; }
+      else { x = (R() * 2 - 1) * (EDGE - 10); z = (R() * 2 - 1) * (EDGE - 10); }
+      if (okSpot(x, z)) s = [x, z];
+    }
+    if (s) spots.push(s);
+  }
+  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(.26, .14, .2), grade(new THREE.MeshLambertMaterial({ color: 0x55603c })), spots.length);
+  const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.266, .045, .206), new THREE.MeshBasicMaterial({ color: 0x9be05a }), spots.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+  spots.forEach(([x, z], i) => {
+    const y = H(x, z) + .07; q.setFromAxisAngle(_UPv, R() * 6.283);
+    m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .035, z), q, one); band.setMatrixAt(i, m4);
+    nadeLoot.push({ x, y, z, got: false });
+  });
+  body.frustumCulled = band.frustumCulled = false; scene.add(body, band); nadeLootMesh = { body, band };
+}
+function nadeLootTake(i) {
+  const c = nadeLoot[i]; if (!c) return; c.got = true;
+  const z0 = new THREE.Matrix4().makeScale(0, 0, 0); nadeLootMesh.body.setMatrixAt(i, z0); nadeLootMesh.band.setMatrixAt(i, z0); nadeLootMesh.body.instanceMatrix.needsUpdate = nadeLootMesh.band.instanceMatrix.needsUpdate = true;
+}
+function nadeLootTick(I) {
+  if (!nadeLootMesh) return;
+  const hs = [I.hands.left, I.hands.right].filter(Boolean);
+  for (let i = 0; i < nadeLoot.length; i++) {
+    const c = nadeLoot[i]; if (c.got) continue;
+    const dx = c.x - P.x, dz = c.z - P.z; if (dx * dx + dz * dz > 9) continue;
+    const near = (dx * dx + dz * dz < 1.44 && Math.abs(c.y - P.y) < 2) || hs.some(h => (h.pos.x - c.x) ** 2 + (h.pos.y - c.y) ** 2 + (h.pos.z - c.z) ** 2 < .12);
+    if (!near || vr.nades >= NADE.MAX) continue;            // already carrying 10: leave it
+    const got = Math.min(NADE.GIVE, NADE.MAX - vr.nades); vr.nades += got; nadeLootTake(i); if (MP.on) mpSend({ t: "nade", i });
+    gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + (got === 1 ? " grenade" : " grenades"); vr.lootT = 2.5; vr.wristT = 0;
+  }
+}
 // ammo cans lying about the map, one kind for each gun
 let ammoCans = [], canMesh = null;
 function clearAmmo() {
   if (canMesh) { scene.remove(canMesh.body, canMesh.band); canMesh.body.geometry.dispose(); canMesh.band.geometry.dispose(); canMesh.body.material.dispose(); canMesh.band.material.dispose(); }
-  canMesh = null; ammoCans = [];
+  canMesh = null; ammoCans = []; vrClearNades();
 }
 function spawnAmmo() {
   clearAmmo(); const R = mulberry32(seed * 91 + 5);           // seeded: both players get the same cans
@@ -6429,11 +6592,12 @@ function spawnAmmo() {
   const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.326, .05, .156), new THREE.MeshBasicMaterial({ color: 0xffffff }), spots.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
   spots.forEach(([x, z], i) => {
-    const kind = WHEEL[i % 4], y = H(x, z) + .09; q.setFromAxisAngle(_UPv, R() * 6.283);
+    const kind = WHEEL[i % 4], y = H(x, z) + .09;   // (the 5th slice, grenades, has its own boxes) q.setFromAxisAngle(_UPv, R() * 6.283);
     m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .03, z), q, one); band.setMatrixAt(i, m4);
     band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
   });
   body.frustumCulled = band.frustumCulled = false; scene.add(body, band); canMesh = { body, band };
+  spawnNadeLoot();
 }
 function lootTick(I) {
   if (!canMesh || !ammoCans.length) return;
@@ -6576,6 +6740,8 @@ function mpRecv(o) {
   if (o.t === "hit") { mpTakeHit(o.d, o.hd); return; }
   if (o.t === "die") { MP.kills++; bing(); vr.wristT = 0; return; }
   if (o.t === "can") { mpTakeCan(o.i, true); return; }
+  if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
+  if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpStatus("That game is already full"); return; }
   if (o.t === "bye") { try { MP.conn.close(); } catch (e) {} return; }
 }
@@ -6985,6 +7151,7 @@ function updateGun(dt) {
   gunHemi.color.copy(hemi.color); gunHemi.groundColor.copy(hemi.groundColor); gunHemi.intensity = hemi.intensity + .15;
   gunSun.color.copy(sunL.color); gunSun.intensity = sunL.intensity * .8;
   const place = (m, a, b, w) => { m.position.lerpVectors(a, b, .5); m.lookAt(b); m.scale.set(w, w, Math.max(.05, a.distanceTo(b))); };
+  nadeTick(dt);
   for (let i = tracers.length - 1; i >= 0; i--) {             // glowing yellow tracer with a short fading trail
     const t = tracers[i];
     if (t.live) { if (bulletStep(t, dt)) t.live = false; continue; }
