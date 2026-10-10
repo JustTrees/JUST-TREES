@@ -316,4 +316,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Gun loot (PvP): guns start greyed out on the wheel; picking one up unlocks it and you carry all of them. No dropping or swapping. Finding a higher tier of a gun you have upgrades it (lower/equal tier: just ammo).
 - Tiers low to high: normal = 1 star, blue = 2, purple = 3, gold = 4, red = 5 (top). Tier raises magazine size, fire rate and damage.
 - The wheel keeps each gun's own colour; the tier shows only as stars under the gun's name, in the tier's colour (2 star = 2 blue stars, gold = 4 gold stars, normal = 1 white/grey star). The gun lying on the ground glows in its tier colour so you can tell before grabbing.
-- Open questions: does everyone start with the pistol unlocked (normal tier)? Does a dead player keep their unlocked guns/tiers or go back to the start? Hunting keeps all guns as now.
+- Dying (PvP): you lose your loot. Everything you carried (unlocked guns at their tier, spare ammo, grenades) scatters on the ground around where you died, for anyone to grab.
+- Death, seen by others: your avatar falls/collapses, then disappears within 3 seconds.
+- Death, seen by you: your view does NOT fall; it stays frozen where you died while the screen goes a bit red, then you respawn.
+- Open question: after respawning, do you start again with a 1-star pistol (suggested), or with nothing? Hunting keeps all guns as now.
