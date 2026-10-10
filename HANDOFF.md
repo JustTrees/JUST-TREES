@@ -331,3 +331,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Round length `set.roundMin` 5–20 (slider on settings in PvP, synced). `MP.roundLeft` starts at drop-in; at 0 → `mpRoundOver` → "over" panel with everyone's kills/deaths ("s" messages now carry k/dd). Host: New map / Settings; others wait; Leave for all.
 - `mpTick` now also runs offline in VR PvP (for dying/respawning).
 - Tests: dev/test_pvploot.py; test_mp and test_lobby extended (falling body, spilled loot, round clock, round over → next map).
+
+## 1.41
+- Gun drops: no more beam or boxy glow. `gunGlow` spreads ~220 soft dots over the gun's surface (cached per gun kind) in `NEON_COL` (saturated star colours), size .3 / opacity .36: a neon glow ~10 cm round the gun's outline. Gun + glow shown within 120 m.
