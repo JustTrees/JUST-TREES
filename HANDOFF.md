@@ -308,3 +308,9 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Online now holds up to 8 (`MP_MAX`): everyone connects to everyone. `MP.links` (Map peerId → link with conn, call, R avatar, rx, idx colour, spawn). Host hands out colours (`MP_COL`/`MP_COLN`, host = 0 Yellow) and introduces newcomers (`welcome` with peer list → `mpMeet`). Hits go only to the player hit (`mpHitTest` returns `.L`); "die" carries `by` so only the killer counts it. `MP.R`/`MP.conn`/`MP.call` are getters for the first link (kept for old tests).
 - Shared lobby: the others mirror the host's settings panel (`ui`/`set` messages, `mpHostSetSync` from `renderSetup`, `mpHostStage` from `vruiOpen`) and can only change Hand/Fling (`mpLocked`, `personal` widgets). Host Start → `gen` → everyone grows the same map and sees the same preview; each player starts with a random spot already picked (`mpRandomSpawn`), pick on the diorama sends `spawn` to the host. Host "Play this map" → `reveal` with everyone's spots → coloured flags on everyone's diorama for 3 s (`mpRevealStart`) → `mpRevealEnd` drops each in at their own flag. Joining mid-game still uses `start` (spawn away from everyone). Main menu = leave.
 - Tests: dev/test_lobby.py (3 players + a late 4th), test_mp, test_mp_fail still pass.
+
+## Notes from Ron (Oct 10, not built yet)
+- PvP: health + shield bars (small low HUD in view + wrist), kill counter.
+- Much more loot everywhere (ammo cans ~2-3x, grenade boxes ~2x).
+- Floating health and shield pickups hovering around the map (seeded, synced, respawn ~40 s). Shield soaks damage first; start each life with 0 shield.
+- Lootable guns with star ratings that change power. Plan idea: start with pistol only; find the other guns on the map at 1-5 stars (damage/reload/spread scale with stars); one gun per slot, swap by grabbing; drop your old one. Grenades stay as they are. Keep Hunting as-is (all guns), PvP only.
