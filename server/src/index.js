@@ -33,6 +33,11 @@ export default {
         return new Response(JSON.stringify({ error: String(e && e.message || e) }), { status: 502, headers: { ...cors(origin), "Content-Type": "application/json" } });
       }
     }
+    if (url.pathname === "/check") {                         // a safe self-test: says whether the relay logins work, never shows them
+      const has = { TURN_KEY_ID: !!env.TURN_KEY_ID, TURN_KEY_API_TOKEN: !!env.TURN_KEY_API_TOKEN };
+      try { const s = await turnLogins(env); return new Response(JSON.stringify({ secretsSet: has, relayWorks: true, servers: s.length, kinds: [...new Set(s.flatMap(x => [].concat(x.urls)).map(u => u.split(":")[0]))] }), { headers: { "Content-Type": "application/json" } }); }
+      catch (e) { return new Response(JSON.stringify({ secretsSet: has, relayWorks: false, problem: String(e && e.message || e) }), { headers: { "Content-Type": "application/json" } }); }
+    }
     return new Response("Just Trees online helper is running.", { headers: { "Content-Type": "text/plain" } });
   },
 };
