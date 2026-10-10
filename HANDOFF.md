@@ -309,8 +309,10 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Shared lobby: the others mirror the host's settings panel (`ui`/`set` messages, `mpHostSetSync` from `renderSetup`, `mpHostStage` from `vruiOpen`) and can only change Hand/Fling (`mpLocked`, `personal` widgets). Host Start → `gen` → everyone grows the same map and sees the same preview; each player starts with a random spot already picked (`mpRandomSpawn`), pick on the diorama sends `spawn` to the host. Host "Play this map" → `reveal` with everyone's spots → coloured flags on everyone's diorama for 3 s (`mpRevealStart`) → `mpRevealEnd` drops each in at their own flag. Joining mid-game still uses `start` (spawn away from everyone). Main menu = leave.
 - Tests: dev/test_lobby.py (3 players + a late 4th), test_mp, test_mp_fail still pass.
 
-## Notes from Ron (Oct 10, not built yet)
+## Notes from Ron (Oct 10, not built yet) — updated
 - PvP: health + shield bars (small low HUD in view + wrist), kill counter.
 - Much more loot everywhere (ammo cans ~2-3x, grenade boxes ~2x).
-- Floating health and shield pickups hovering around the map (seeded, synced, respawn ~40 s). Shield soaks damage first; start each life with 0 shield.
-- Lootable guns with star ratings that change power. Plan idea: start with pistol only; find the other guns on the map at 1-5 stars (damage/reload/spread scale with stars); one gun per slot, swap by grabbing; drop your old one. Grenades stay as they are. Keep Hunting as-is (all guns), PvP only.
+- Floating pickups, instant effect when grabbed: GREEN floating cross = health, BLUE floating cross = shield. Seeded, synced, respawn ~40 s. Shield soaks damage first; each life starts with 0 shield.
+- Gun loot (PvP): guns start greyed out on the wheel; picking one up unlocks it and you carry all of them. No dropping or swapping. Finding a higher tier of a gun you have upgrades it (lower/equal tier: just ammo).
+- Tiers by colour, low to high: normal (grey/white), blue, purple, gold, red (top). Tier raises magazine size, fire rate and damage. The gun on the ground and its wheel slice show the tier colour.
+- Open questions: does everyone start with the pistol unlocked (normal tier)? Does a dead player keep their unlocked guns/tiers or go back to the start? Hunting keeps all guns as now.
