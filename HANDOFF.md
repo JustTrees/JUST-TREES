@@ -356,3 +356,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Same look and sound as PC: green mist wall, green fog and muffled sound outside, damage ticks (VR: health only, shield doesn't help) after 2 s outside. Map (and wrist map) shows the live edge and the next circle dashed; the one after is hidden until that shrink finishes.
 - Respawns and late joiners start inside the zone (`zoneSpawnInside`). Headset bar shows "Zone in 0:45" / "Zone closing" / "Final zone" / "OUTSIDE ZONE".
 - Test: dev/test_zone.py; test_lobby checks everyone has the same zone at the same time.
+
+## 1.44
+- Zone edge speed cap: `ZONE_EDGE_MAX` = 11 m/s (sprint is 12.5). `vrZonePlan` stretches any shrink whose edge would move faster (big maps); if the stages then don't fit the round it uses one fewer stage. Medium at speed 5 stays ~5 m/s; XXL now tops out at 11.

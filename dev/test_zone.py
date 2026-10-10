@@ -22,6 +22,11 @@ async def main():
           D.P.x = ox; D.P.z = oz; D.P.y = D.groundAt(ox, oz); D.MP.hp = 100; D.MP.sh = 50; Z.vr = true;
           for (let i = 0; i < 300; i++) D.updateZone(1 / 60);
           out.afterOutside5s = [D.MP.hp, D.MP.sh]; out.fogTinted = Z.out > .3;
+          // biggest map, fastest speed: the edge never moves faster than a sprint
+          out.edgeMaxMs = {};
+          for (const size of ['medium', 'xxl']) { Object.assign(D.set, { size, roundMin: 20, zoneHold: 15, zoneSpeed: 5 }); D.generate(); const Z2 = D.zone, C2 = Z2.circles; let mx = 0;
+            for (let i = 1; i < C2.length; i++) mx = Math.max(mx, ((C2[i - 1][2] - C2[i][2]) + Math.hypot(C2[i][0] - C2[i - 1][0], C2[i][1] - C2[i - 1][1])) / Z2.T.shrink[i - 1]);
+            out.edgeMaxMs[size] = +mx.toFixed(1); out['stages_' + size] = C2.length - 1; }
           D.drawMap(document.getElementById('miniMap')); window._map = document.getElementById('miniMap').toDataURL('image/png');
           return out; }""")
         d = await pg.evaluate("() => window._map"); open(SHOT, 'wb').write(base64.b64decode(d.split(',')[1]))

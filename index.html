@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.43";              // Just Trees 1.43
+const VERSION = "1.44";              // Just Trees 1.44
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
      the world ............ "Terrain", "generate()", "Trees", "Rocks", "Water", "weather", "lightning"
@@ -338,7 +338,8 @@ const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + hea
 const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [8, 20], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
-const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
+const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
+const ZONE_EDGE_MAX = 11;                                  // VR zone: the edge never moves faster than this (m/s), a bit under sprinting (12.5), so you can always outrun it           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -3089,17 +3090,21 @@ function startZone() {
 }
 function vrZonePlan(rnd, r0, rf) {
   const hold = set.zoneHold || 60, shrink = ZONE_SPEEDS[set.zoneSpeed || 3] || 60, round = (set.roundMin || 10) * 60;
-  const n = Math.max(1, Math.min(ZONE_STAGES_MAX, Math.floor(round / (hold + shrink))));   // as many stages as fit in the round
-  const circles = [[0, 0, r0]]; let cx = 0, cz = 0, r = r0;
-  for (let i = 1; i <= n; i++) {                               // each new circle sits inside the last one, on dry land
-    const nr = r0 * Math.pow(rf / r0, i / n); let nx = cx, nz = cz;
-    for (let k = 0; k < 80; k++) {
-      const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.max(0, Math.min(r, HALF * .9) - nr) * .8, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
-      if (Math.abs(x) < EDGE * .8 && Math.abs(z) < EDGE * .8 && H(x, z) > water + 1) { nx = x; nz = z; break; }
+  const seed0 = rnd();                                         // same circles for everyone, however many tries it takes
+  for (let n = Math.max(1, Math.min(ZONE_STAGES_MAX, Math.floor(round / (hold + shrink)))); ; n--) {   // as many stages as fit in the round
+    const r2 = mulberry32(Math.floor(seed0 * 1e9) + n), circles = [[0, 0, r0]], times = []; let cx = 0, cz = 0, r = r0;
+    for (let i = 1; i <= n; i++) {                             // each new circle sits inside the last one, on dry land
+      const nr = r0 * Math.pow(rf / r0, i / n); let nx = cx, nz = cz;
+      for (let k = 0; k < 80; k++) {
+        const a = r2() * 6.283, d = Math.sqrt(r2()) * Math.max(0, Math.min(r, HALF * .9) - nr) * .8, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
+        if (Math.abs(x) < EDGE * .8 && Math.abs(z) < EDGE * .8 && H(x, z) > water + 1) { nx = x; nz = z; break; }
+      }
+      times.push(Math.max(shrink, ((r - nr) + Math.hypot(nx - cx, nz - cz)) / ZONE_EDGE_MAX));   // big maps: slow it so the edge never outruns a sprint
+      circles.push([nx, nz, nr]); cx = nx; cz = nz; r = nr;
     }
-    circles.push([nx, nz, nr]); cx = nx; cz = nz; r = nr;
+    const total = hold * n + times.reduce((a, b) => a + b, 0);
+    if (total <= round || n === 1) return { circles, T: { wait: hold, shrink: times, hold: Array(n - 1).fill(hold) } };
   }
-  return { circles, T: { wait: hold, shrink: Array(n).fill(shrink), hold: Array(n - 1).fill(hold) } };
 }
 function zoneSeek(Z, el) {                                   // where the zone is at this many seconds into the round (online: everyone the same)
   const C = Z.circles, n = C.length - 1, at = i => { Z.cx = C[i][0]; Z.cz = C[i][1]; Z.r = C[i][2]; };
