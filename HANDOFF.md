@@ -376,3 +376,8 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.47
 - `zoneSpawnInside`: respawns (death, drowning, late join) go inside the circle the zone is heading to, at least `ZONE_SAFE` 15 m (or a quarter of its radius) in from its edge; falls back to looser rings, then any dry ground. Test: 344 respawns across a whole round, closest 15.3 m inside the next edge, none outside the current zone.
+
+## 1.48
+- Guns: `LOOT.gun` [24, 5] (small ~64, medium ~80, XXL ~184 guns per map, before only 18–48); `TIER_ODDS` [.5, .78, .92, .98] = 50% 1★, 28% 2★, 14% 3★, 6% 4★, 2% 5★.
+- Overhangs: `rockLow` grid (underside of rocks, filled in `stampSolid`). `rockTopAt(x, z, y, head)` / `rockAround(…, y, head)`: a rock with a real gap under it doesn't count while you're under it. Used for walking (head 1.6), standing/landing, climbing, head blocking, bullets and grenades. Test: dev/test_overhang.py.
+- Dramatic features are now a generator (`makeFeature`): SHAPE (paths: winding, fork Y, cross X, zigzag, horseshoe, twin, star; blobs: round, long, lobed, crescent, ring, cluster) × ACT (paths: crevasse, canyon, rift valley, ridge wall, cliff; blobs: mesa, butte, terraced hill, crater lake, sinkhole, volcano), random sizes; raised blobs sometimes split by a crevasse. Name built from the parts ("Forked crevasse", "Ring mesa", "Split triple terraced hills"…). Low ground is lifted into tableland before a cut so cuts read instead of flooding. FEAT keeps {type, shape, name, x, z, R, mask, apply}.

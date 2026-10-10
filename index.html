@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.47</title>
+<title>JUST TREES 1.48</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.47";              // Just Trees 1.47
+const VERSION = "1.48";              // Just Trees 1.48
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -334,9 +334,9 @@ const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };  // grenades: most you
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
-const TIER_ODDS = [.4, .68, .86, .96];                       // a gun on the map: 40% 1 star, then blue to 68%, purple to 86%, gold to 96%, red the rest
+const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
-const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [8, 20], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
+const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [24, 5], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
@@ -1418,16 +1418,19 @@ function limbGround(x, z, feet) {
 }
 
 /* ---------------- Solid rocks: every rock's real shape is traced onto a 1 m height grid ---------------- */
-let rockGrid = null, rockN = 0;
-function rockTopAt(x, z) {
+let rockGrid = null, rockLow = null, rockN = 0;
+function rockTopAt(x, z, y, head) {                          // the top of the rock here; with a height: a rock with a gap under it (an overhang) doesn't count while you're under it
   if (!rockGrid) return -1e9;
   const i = Math.floor(x + HALF), j = Math.floor(z + HALF);
   if (i < 0 || j < 0 || i >= rockN || j >= rockN) return -1e9;
-  return rockGrid[j * rockN + i];
+  const k = j * rockN + i, top = rockGrid[k];
+  if (y === undefined || top < -1e8) return top;
+  const low = rockLow[k], hd = head || 0;
+  return low > y + hd + .4 && low > H(x, z) + Math.max(hd, 0) + .5 ? -1e9 : top;
 }
-function rockAround(x, z, r) {
-  let m = rockTopAt(x, z);
-  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832; m = Math.max(m, rockTopAt(x + Math.cos(a) * r, z + Math.sin(a) * r)); }
+function rockAround(x, z, r, y, head) {
+  let m = rockTopAt(x, z, y, head);
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832; m = Math.max(m, rockTopAt(x + Math.cos(a) * r, z + Math.sin(a) * r, y, head)); }
   return m;
 }
 function instMatrix(t, out) {
@@ -1438,7 +1441,7 @@ function stampSolid(geo, list) {
   if (!rockGrid || !list.length) return;
   const pos = geo.attributes.position, idx = geo.index, nTri = (idx ? idx.count : pos.count) / 3;
   const m = new THREE.Matrix4(), A = new THREE.Vector3(), B = new THREE.Vector3(), Cv = new THREE.Vector3();
-  const put = (x, z, y) => { const i = Math.floor(x + HALF), j = Math.floor(z + HALF); if (i >= 0 && j >= 0 && i < rockN && j < rockN) { const k = j * rockN + i; if (y > rockGrid[k]) rockGrid[k] = y; } };
+  const put = (x, z, y) => { const i = Math.floor(x + HALF), j = Math.floor(z + HALF); if (i >= 0 && j >= 0 && i < rockN && j < rockN) { const k = j * rockN + i; if (y > rockGrid[k]) rockGrid[k] = y; if (y < rockLow[k]) rockLow[k] = y; } };
   for (const t of list) {
     instMatrix(t, m);
     for (let f = 0; f < nTri; f++) {
@@ -1753,54 +1756,119 @@ function erode(map, N, drops, rand) {
 /* Binary min-heap used to fill pits so water can always find a way downhill */
 // Rivers: route rain over the eroded ground, find where lots of water gathers, carve channels there
 let FEAT = null;
-// Dramatic landscape: a crater lake, a mesa, a canyon or a great cliff, sized to the map. Big and scenic, never wild.
+// Dramatic landscape: a feature generator. Every map builds its own landform from two choices, each with its own random sizes:
+//  a SHAPE — paths that wind, fork into a Y, cross in an X, zigzag, bend into a horseshoe, run side by side or burst out like a star;
+//            or a blob that is round, long, lobed, a crescent, a ring or a little cluster;
+//  and what the land DOES there — along paths: a crevasse, canyon, rift valley, ridge wall or cliff; on blobs: a mesa, butte, terraced hill,
+//            crater lake, sinkhole or volcano. Raised blobs are sometimes split by a crevasse. Sized to the map, eroded like everything else.
 function makeFeature(r, base, wGuess) {
-  const types = ["crater", "mesa", "canyon", "cliff"], type = types[Math.floor(r() * types.length)];
-  const R = Math.max(40, Math.min(150, HALF * .26)), reachR = type === "cliff" ? R * 2.4 : type === "canyon" ? R * 1.9 : R * 1.9;
+  const pick = a => a[Math.floor(r() * a.length)], sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const R = Math.max(40, Math.min(150, HALF * .26)) * (.8 + r() * .45), reach = R * 2.2;
   let cx = 0, cz = 0, ok = false;
   for (let t = 0; t < 60 && !ok; t++) {
-    const a = r() * 6.283, d = r() * HALF * .5; cx = Math.cos(a) * d; cz = Math.sin(a) * d;
-    ok = Math.max(Math.abs(cx), Math.abs(cz)) + reachR < EDGE - 10 && (!edgeShape.island || Math.hypot(cx, cz) + reachR < edgeShape.R0 * .84 - 40);
+    const a = r() * 6.283, d = r() * HALF * .45; cx = Math.cos(a) * d; cz = Math.sin(a) * d;
+    ok = Math.max(Math.abs(cx), Math.abs(cz)) + reach < EDGE - 10 && (!edgeShape.island || Math.hypot(cx, cz) + reach < edgeShape.R0 * .84 - 40);
   }
   if (!ok) { cx = 0; cz = 0; }
-  const ph = [r() * 6.28, r() * 6.28, r() * 6.28], wob = a => .55 * Math.sin(a * 2 + ph[0]) + .3 * Math.sin(a * 3 + ph[1]) + .15 * Math.sin(a * 5 + ph[2]);   // irregular, natural outlines
   let h0 = 0; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; h0 += base(cx + Math.cos(a) * R * .5, cz + Math.sin(a) * R * .5); } h0 /= 12;
-  const dir = r() * 6.283, ca = Math.cos(dir), sa = Math.sin(dir), loc = (x, z) => { const dx = x - cx, dz = z - cz; return [dx * ca + dz * sa, -dx * sa + dz * ca]; };
-  const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-  if (type === "crater") {                   // a ring of high rim round a deep blue lake
-    const rimH = 14 + R * .14, floor = wGuess - (4 + R * .04);
-    return { type, name: "Crater lake", x: cx, z: cz, R,
-      mask: (x, z) => { const t = Math.hypot(x - cx, z - cz) / R; return sm(1.9, 1.35, t); },
-      apply: (x, z, h) => { const d = Math.hypot(x - cx, z - cz), rr = R * (1 + .12 * wob(Math.atan2(z - cz, x - cx))), t = d / rr;
-        const ring = rimH * Math.exp(-Math.pow((t - 1) / (t < 1 ? .2 : .42), 2)), dig = t < 1 ? sm(1.02, .58, t) : 0;
-        return (h + ring) * (1 - dig) + Math.min(floor, h) * dig; } };
+  const dir = r() * 6.283, ph = [r() * 6.28, r() * 6.28, r() * 6.28, r() * 6.28];
+  const box = (x, z, m) => Math.abs(x - cx) > m || Math.abs(z - cz) > m;
+  // ---- paths: lists of points, each end either free (it fades out) or joined to the others
+  const walk = (x, z, head, len, curl, sharp) => {
+    const pts = [[x, z]], n = 14, st = len / n, ph2 = r() * 6.28;
+    for (let i = 1; i <= n; i++) {
+      head += sharp ? (i % Math.ceil(n / 4) === 0 ? (i / Math.ceil(n / 4) % 2 ? 1 : -1) * (1.1 + r() * .5) : 0) : curl * Math.sin(i * .55 + ph2) * .22 + (r() - .5) * .12;
+      x += Math.cos(head) * st; z += Math.sin(head) * st; pts.push([x, z]);
+    }
+    return pts;
+  };
+  const segsOf = (branches) => {                               // flatten into segments that know how far along their branch they are
+    const out = [];
+    for (const b of branches) {
+      let tot = 0; for (let i = 1; i < b.pts.length; i++) tot += Math.hypot(b.pts[i][0] - b.pts[i - 1][0], b.pts[i][1] - b.pts[i - 1][1]);
+      let s = 0;
+      for (let i = 1; i < b.pts.length; i++) { const [ax, az] = b.pts[i - 1], [bx, bz] = b.pts[i], l = Math.hypot(bx - ax, bz - az); out.push([ax, az, bx, bz, s / tot, (s + l) / tot, b.fs, b.fe]); s += l; }
+    }
+    return out;
+  };
+  const near = (segs, x, z) => {                               // distance to the nearest path, a fade near free ends, and which side you're on
+    let bd = 1e9, bf = 0, side = 1;
+    for (const [ax, az, bx, bz, t0, t1, fs, fe] of segs) {
+      const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1, k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
+      const px = ax + vx * k - x, pz = az + vz * k - z, d = Math.hypot(px, pz);
+      if (d < bd) { bd = d; const t = t0 + (t1 - t0) * k; bf = (fs ? sm(0, .18, t) : 1) * (fe ? sm(1, .82, t) : 1); side = (vx * (z - az) - vz * (x - ax)) >= 0 ? 1 : -1; }
+    }
+    return [bd, bf, side];
+  };
+  if (r() < .5) {
+    const shape = pick(["winding", "fork", "cross", "zigzag", "horseshoe", "twin", "star"]);
+    const single = shape === "winding" || shape === "zigzag" || shape === "horseshoe";
+    const act = pick(single ? ["crevasse", "canyon", "rift", "wall", "cliff", "cliff"] : ["crevasse", "canyon", "rift", "wall"]);
+    const L = R * (shape === "star" ? .95 : 1.25), br = [];
+    if (shape === "winding") br.push({ pts: walk(cx - Math.cos(dir) * L, cz - Math.sin(dir) * L, dir, L * 2, 1, false), fs: 1, fe: 1 });
+    else if (shape === "zigzag") br.push({ pts: walk(cx - Math.cos(dir) * L, cz - Math.sin(dir) * L, dir, L * 2, 0, true), fs: 1, fe: 1 });
+    else if (shape === "horseshoe") { const pts = [], span = 3.6 + r() * 1.2, rr = R * .95; for (let i = 0; i <= 18; i++) { const a = dir - span / 2 + span * i / 18; pts.push([cx + Math.cos(a) * rr * (1 + .1 * Math.sin(i + ph[0])), cz + Math.sin(a) * rr * (1 + .1 * Math.sin(i + ph[0]))]); } br.push({ pts, fs: 1, fe: 1 }); }
+    else if (shape === "twin") { const ox = -Math.sin(dir) * R * .5, oz = Math.cos(dir) * R * .5; for (const s of [1, -1]) br.push({ pts: walk(cx + ox * s - Math.cos(dir) * L, cz + oz * s - Math.sin(dir) * L, dir + (r() - .5) * .3, L * 2, 1, false), fs: 1, fe: 1 }); }
+    else { const n = shape === "fork" ? 3 : shape === "cross" ? 4 : 5 + Math.floor(r() * 2); for (let i = 0; i < n; i++) br.push({ pts: walk(cx, cz, dir + i / n * 6.283 + (r() - .5) * .5, L * (.65 + r() * .45), .7, false), fs: 0, fe: 1 }); }
+    const segs = segsOf(br);
+    const P = act === "crevasse" ? { w: 2.5 + r() * 3, D: 18 + r() * 14, soft: 2.5, rim: 3, rimW: 22 }
+            : act === "canyon" ? { w: 7 + r() * 8, D: 22 + r() * 14, soft: 9, rim: 10 + r() * 8, rimW: R * .55 }
+            : act === "rift" ? { w: 22 + r() * 14, D: 18 + r() * 10, soft: 16, rim: 8 + r() * 6, rimW: 34 }
+            : act === "wall" ? { w: 6 + r() * 7, H: 26 + r() * 16, soft: 9 }
+            : { H: 18 + r() * 16 };                                // cliff
+    const spread = act === "cliff" ? R * 1.8 : act === "wall" ? P.w + P.soft + 25 : P.w + P.soft + P.rimW + 20;
+    const words = { winding: "Winding", fork: "Forked", cross: "Crossed", zigzag: "Zigzag", horseshoe: "Horseshoe", twin: "Twin", star: "Star" };
+    const nouns = { crevasse: "crevasse", canyon: "canyon", rift: "rift valley", wall: "ridge wall", cliff: "cliff" }, plural = shape === "twin" ? (act === "rift" ? "rift valleys" : nouns[act] + "s") : nouns[act];
+    return { type: act, shape, name: words[shape] + " " + plural, x: cx, z: cz, R,
+      mask: (x, z) => { if (box(x, z, reach + spread)) return 0; const [d, f] = near(segs, x, z); return sm(spread, spread * .7, d) * f; },
+      apply: (x, z, h) => {
+        if (box(x, z, reach + spread)) return h;
+        const [d, f, side] = near(segs, x, z); if (f <= 0) return h;
+        if (act === "cliff") { const sd = d * side; return h + P.H * sm(-7, 7, sd) * sm(R * 1.7, R * .9, sd) * f; }
+        if (act === "wall") return h + P.H * sm(P.w + P.soft, P.w, d) * f;
+        const lift = Math.min(45, Math.max(P.rim, wGuess + 3 + P.D - h)), up = h + lift * sm(P.w + P.rimW, P.w + P.soft, d) * f, cut = sm(P.w + P.soft, P.w, d) * f;   // low ground is raised into a tableland first, so the cut has room
+        return cut > 0 ? Math.max(up - P.D * cut, Math.min(up, wGuess + 2.5)) : up;     // the floor stays just above the water, so the shape reads instead of flooding
+      } };
   }
-  if (type === "mesa") {                     // a flat-topped, steep-walled tabletop with a skirt of scree
-    const top = h0 + 22 + R * .15;
-    return { type, name: "Mesa", x: cx, z: cz, R,
-      mask: (x, z) => sm(R * 1.75, R * 1.25, Math.hypot(x - cx, z - cz)),
-      apply: (x, z, h) => { const d = Math.hypot(x - cx, z - cz), rr = R * .85 * (1 + .15 * wob(Math.atan2(z - cz, x - cx)));
-        const wall = sm(rr + R * .22, rr, d), skirt = sm(rr + R * .7, rr + R * .15, d);
-        const lift = (top - h0) * .22 * skirt;
-        return Math.max(h + lift, (h + lift) * (1 - wall) + (top + (h - h0) * .25) * wall); } };
-  }
-  if (type === "canyon") {                   // a winding gorge cut down through a raised tableland
-    const L = R * 1.4, plat = 12 + R * .1, w = 7 + R * .06, D = plat + 10 + R * .08;
-    const lat = u => R * .25 * Math.sin(u / R * 1.3 + ph[0]) + R * .1 * Math.sin(u / R * 2.9 + ph[1]);
-    return { type, name: "Canyon", x: cx, z: cz, R,
-      mask: (x, z) => { const [u, v] = loc(x, z); return sm(L + R * .6, L, Math.abs(u)) * sm(R * 1.25, R * .8, Math.abs(v - lat(u))); },
-      apply: (x, z, h) => { const [u, v] = loc(x, z), dv = Math.abs(v - lat(u)), along = sm(L + R * .5, L - R * .1, Math.abs(u));
-        const raise = plat * sm(R * 1.15, R * .55, dv) * along, cut = sm(w + 7 + R * .05, w, dv) * sm(L + R * .3, L - R * .2, Math.abs(u));
-        return h + raise - cut * D * (.75 + .25 * along); } };
-  }
-  // a great cliff: a long, curving escarpment with high tableland on one side and the valley below
-  const L = R * 2.1, Hs = 20 + R * .15;
-  const bend = u => R * .3 * Math.sin(u / R * .9 + ph[0]) + R * .12 * Math.sin(u / R * 2.2 + ph[1]);
-  return { type, name: "Great cliff", x: cx, z: cz, R,
-    mask: (x, z) => { const [u, v] = loc(x, z); return sm(L + R * .4, L * .8, Math.abs(u)) * sm(R * 1.8, R * 1.1, Math.abs(v - bend(u))); },
-    apply: (x, z, h) => { const [u, v] = loc(x, z), vv = v - bend(u);
-      const step = sm(-R * .1, R * .1, vv), fadeU = sm(L, L * .55, Math.abs(u)), back = sm(R * 1.7, R * .9, vv);
-      return h + Hs * step * fadeU * back; } };
+  // ---- blobs: a signed distance (negative inside) from a shape
+  const shape = pick(["round", "oval", "lobed", "crescent", "ring", "cluster"]), wob = a => .55 * Math.sin(a * 2 + ph[0]) + .3 * Math.sin(a * 3 + ph[1]) + .15 * Math.sin(a * 5 + ph[2]);
+  const act = pick(shape === "ring" ? ["mesa", "crater", "terrace"] : ["mesa", "butte", "terrace", "crater", "sink", "volcano"]);
+  const S0 = act === "butte" ? .62 : act === "volcano" ? 1 : .85, lobes = 3 + Math.floor(r() * 4), aspect = 1.5 + r() * .8;
+  const nSub = 2 + Math.floor(r() * 2), subs = shape === "cluster" ? Array.from({ length: nSub }, (_, i) => { const a = dir + i / nSub * 6.283; return [cx + Math.cos(a) * R * .6, cz + Math.sin(a) * R * .6, .5 + r() * .2]; }) : [[cx, cz, 1]];
+  const sdf = (x, z) => {
+    let best = 1e9;
+    for (const [sx, sz, sc] of subs) {
+      const dx = x - sx, dz = z - sz, a = Math.atan2(dz, dx), d = Math.hypot(dx, dz), base0 = R * S0 * sc;
+      let rad = base0 * (1 + .12 * wob(a));
+      if (shape === "oval") { const u = Math.cos(a - dir), v = Math.sin(a - dir); rad = base0 * aspect / Math.sqrt(u * u + v * v * aspect * aspect) * (1 + .06 * wob(a)); }
+      if (shape === "lobed") rad = base0 * (1 + .28 * Math.cos(lobes * (a - ph[3])) + .06 * wob(a));
+      let s = d - rad;
+      if (shape === "crescent") { const ox = sx + Math.cos(dir) * base0 * .55, oz = sz + Math.sin(dir) * base0 * .55; s = Math.max(s, base0 * .8 - Math.hypot(x - ox, z - oz)); }
+      if (shape === "ring") s = Math.max(s, base0 * .5 - d);
+      best = Math.min(best, s);
+    }
+    return best;
+  };
+  const top = h0 + (act === "butte" ? 34 + r() * 16 : act === "volcano" ? 40 + r() * 30 : 20 + r() * 16) + R * .1, steps = 3 + Math.floor(r() * 3);
+  const floor = wGuess - (4 + R * .04), sinkD = 22 + r() * 14, rimH = 12 + R * .12, wallW = R * (act === "butte" ? .12 : .2);
+  const split = (act === "mesa" || act === "butte" || act === "terrace") && r() < .4 ? segsOf([{ pts: walk(cx - Math.cos(dir + 1.3) * R * 1.3, cz - Math.sin(dir + 1.3) * R * 1.3, dir + 1.3, R * 2.6, 1, false), fs: 1, fe: 1 }]) : null;
+  const ext = R * 2;
+  const words = { round: "", oval: "Long ", lobed: "Lobed ", crescent: "Crescent ", ring: "Ring ", cluster: subs.length === 2 ? "Twin " : "Triple " };
+  const nouns = { mesa: "mesa", butte: "butte", terrace: "terraced hill", crater: "crater lake", sink: "sinkhole", volcano: "volcano" };
+  let name = words[shape] + nouns[act] + (shape === "cluster" ? "s" : ""); if (split) name = "Split " + name.toLowerCase(); name = name[0].toUpperCase() + name.slice(1);
+  return { type: act, shape, name, x: cx, z: cz, R,
+    mask: (x, z) => { if (box(x, z, ext + R)) return 0; return sm(R * .75, R * .45, sdf(x, z)); },
+    apply: (x, z, h) => {
+      if (box(x, z, ext + R)) return h;
+      const sd = sdf(x, z); let o = h;
+      if (act === "mesa" || act === "butte") { const wall = sm(wallW, 0, sd), lift = (top - h0) * .22 * sm(R * .6, wallW * .5, sd); o = Math.max(h + lift, (h + lift) * (1 - wall) + (top + (h - h0) * .25) * wall); }
+      else if (act === "terrace") { const t = (top - h0) * sm(R * .5, -R * .55, sd), step = (top - h0) / steps, q = Math.floor(t / step), fr = t / step - q; o = Math.max(h, h0 + (q + sm(.7, 1, fr)) * step + (h - h0) * .2); }
+      else if (act === "crater") { const ring = rimH * Math.exp(-Math.pow(sd / (sd < 0 ? R * .18 : R * .38), 2)), dig = sm(-R * .02, -R * .35, sd); o = (h + ring) * (1 - dig) + Math.min(floor, h) * dig; }
+      else if (act === "sink") { const dig = sm(R * .04, -R * .12, sd); o = h * (1 - dig) + (Math.min(h, h0) - sinkD) * dig; }
+      else { const k = sm(R * .9, -R * .7, sd), cone = (top - h0) * Math.pow(k, 1.5), crater = sm(-R * .62, -R * .8, sd) * (top - h0) * .28; o = h + cone - crater; }   // volcano with a crater on top
+      if (split) { const [d, f] = near(split, x, z), c = 26 * sm(6, 3, d) * f * sm(R * .4, -R * .2, sd); if (c > 0) o = Math.max(o - c, Math.min(o, wGuess + 2.5)); }
+      return o;
+    } };
 }
 function bakeAndErode(Hf, rand, waterGuess) {
   const G = 2, N = S / G + 1, SC = 25, map = new Float32Array(N * N);
@@ -2749,7 +2817,7 @@ function generate() {
   }
 
   const addObstacleSoft = (x, z, r) => addObstacle(x, z, r, true);
-  rockN = Math.ceil(S) + 1; rockGrid = new Float32Array(rockN * rockN).fill(-1e9);
+  rockN = Math.ceil(S) + 1; rockGrid = new Float32Array(rockN * rockN).fill(-1e9); rockLow = new Float32Array(rockN * rockN).fill(1e9);
   // Rocks
   const RG = { ...rockGeos(), ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
   const tone = { tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[biome];
@@ -4568,7 +4636,7 @@ function limbHit(p, tolW) {                                 // inside one of the
 function climbableAt(p) {                                  // is this point inside something you can hold? (matches what you see)
   const g = H(p.x, p.z);
   if (p.y < g + .04) return { kind: "ground", y: g };
-  const rk = rockAround(p.x, p.z, .15); if (rk > g + .05 && p.y < rk + .05 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders, cliffs and fallen logs
+  const rk = rockAround(p.x, p.z, .15, p.y, 0); if (rk > g + .05 && p.y < rk + .05 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders, cliffs and fallen logs
   if (H(p.x + .12, p.z) > p.y || H(p.x - .12, p.z) > p.y || H(p.x, p.z + .12) > p.y || H(p.x, p.z - .12) > p.y) return { kind: "ground", y: g };   // a steep face of the mountain
   if (limbHit(p, .04)) return { kind: "limb" };
   const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
@@ -4586,7 +4654,7 @@ function climbableAt(p) {                                  // is this point insi
 function headBlocked(x, y, z) {                            // your face can't go inside trunks, limbs or boulders
   _hd.set(x, y, z);
   if (y < H(x, z) + .12) return true;                                         // inside the mountain itself
-  { let n = 0; for (const [a, c] of [[0, 0], [.35, 0], [-.35, 0], [0, .35], [0, -.35]]) { const rk = rockTopAt(x + a, z + c); if (rk > H(x + a, z + c) + .3 && y < rk - .05) n++; }
+  { let n = 0; for (const [a, c] of [[0, 0], [.35, 0], [-.35, 0], [0, .35], [0, -.35]]) { const rk = rockTopAt(x + a, z + c, y, 0); if (rk > H(x + a, z + c) + .3 && y < rk - .05) n++; }
     if (n >= 4) return true; }                                                // well inside a rock (right up against its face is fine, so you can climb it)
   if (limbHit(_hd, .1)) return true;
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
@@ -4642,7 +4710,7 @@ function climbTick(dt, I) {                               // returns true while 
     else P.vy -= CLIMB_G * dt;
     P.x = Math.max(-EDGE, Math.min(EDGE, P.x + C.air.vx * dt)); P.z = Math.max(-EDGE, Math.min(EDGE, P.z + C.air.vz * dt)); clampToMap(P);
     P.y += P.vy * dt;
-    const g = Math.max(groundAt(P.x, P.z), rockAround(P.x, P.z, .3), limbGround(P.x, P.z, P.y));   // land on the ground, a boulder or a big limb
+    const g = Math.max(groundAt(P.x, P.z), rockAround(P.x, P.z, .3, P.y, 0), limbGround(P.x, P.z, P.y));   // land on the ground, a boulder or a big limb
     if (P.y <= g && P.vy <= 0) { P.y = g; P.vy = 0; P.onGround = true; P.gliding = false; C.air = null; buzz("L", .3, 30); buzz("R", .3, 30); }
     return true;
   }
@@ -5262,7 +5330,7 @@ function update(dt) {
     const tryMove = (nx, nz) => {
       const mx2 = nx - P.x, mz2 = nz - P.z, ml = Math.hypot(mx2, mz2) + 1e-6, lx = mx2 / ml, lz = mz2 / ml;
       // rocks and logs are solid; low ones you can step onto, and you can jump onto taller ones
-      const rk = rockAround(nx, nz, .32);
+      const rk = rockAround(nx, nz, .32, P.y, 1.6);           // (walk under an overhang if there is room for you)
       if (rk > P.y + (P.onGround || P.climb ? CLIMB : .6)) return false;
       // slope is measured over a meter ahead, so small kinks and bumps never stop you
       const g0 = groundAt(P.x, P.z), grade = groundAt(P.x + lx, P.z + lz) - g0;
@@ -5293,7 +5361,7 @@ function update(dt) {
     moved = speed;
   }
   // vertical
-  const terr = groundAt(P.x, P.z), rkH = rockAround(P.x, P.z, .3);
+  const terr = groundAt(P.x, P.z), rkH = rockAround(P.x, P.z, .3, P.y, 0);
   const gnd = Math.max(terr, rkH, limbGround(P.x, P.z, P.y));   // rocks, logs and tree limbs can be stood on
   if (rkH > terr + .05 && gnd - P.y > .3 && (P.onGround || P.climb)) {     // stepping up onto a rock, log or ledge: rise smoothly
     P.climb = true; P.y = Math.min(gnd, P.y + 4.5 * dt); P.vy = 0; P.onGround = true;
@@ -6310,7 +6378,7 @@ function nadeArcObj() {                                     // the dotted arc an
 function nadeStop(p) {                                      // what a flying grenade hits here: "ground", "tree" or null
   if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) return "out";
   const g = H(p.x, p.z);
-  if (p.y <= g + .04 || p.y <= rockTopAt(p.x, p.z) + .04 || (!iced && p.y <= water && g < water)) return "ground";
+  if (p.y <= g + .04 || p.y <= rockTopAt(p.x, p.z, p.y, -.4) + .04 || (!iced && p.y <= water && g < water)) return "ground";
   const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
   if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return "tree";
   return null;
@@ -7335,7 +7403,7 @@ function castShot(o, dir, maxD, cs) {                      // cs: a flying bulle
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
     if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; if (cs) cs.wet = wet; }   // in a headset a bullet goes about 1.5 m into water before stopping
-    if (p.y <= rockTopAt(p.x, p.z)) return { p, kind: "rock" };
+    if (p.y <= rockTopAt(p.x, p.z, p.y, -.4)) return { p, kind: "rock" };   // bullets pass under overhangs
     const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
     if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return { p, kind: "wood" };
   }
