@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.33";              // Just Trees 1.33
+const VERSION = "1.34";              // Just Trees 1.34
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -6462,7 +6462,7 @@ const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "den
 function mpStatus(s) { MP.status = s; vr.wristT = 0; if (VRUI.panels && VRUI.panels.mp && VRUI.panels.mp.mesh.visible) uiDraw(VRUI.panels.mp); }
 async function mpMic() {
   if (MP.mic !== null) return MP.mic;
-  try { MP.mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); } catch (e) { MP.mic = false; }
+  try { MP.mic = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }), new Promise((_, no) => setTimeout(() => no("timeout"), 12000))]); } catch (e) { MP.mic = false; }
   return MP.mic;
 }
 function mpLeave() {
@@ -6471,30 +6471,54 @@ function mpLeave() {
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
   MP.peer = MP.conn = MP.call = null; MP.on = false; MP.code = ""; MP.joining = false; MP.entry = ""; mpRemoteDrop();
 }
+async function mpRelay() {                                  // time-limited relay login, made the standard way (HMAC of the time with the shared secret)
+  if (MP.relay !== undefined) return MP.relay;
+  try {
+    const user = Math.floor(Date.now() / 1000 + 6 * 3600) + ":justtrees", enc = new TextEncoder();
+    const key = await crypto.subtle.importKey("raw", enc.encode("openrelayprojectsecret"), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+    const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(user))); let bin = ""; for (const b of sig) bin += String.fromCharCode(b);
+    const h = "staticauth.openrelay.metered.ca";
+    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }];
+  } catch (e) { MP.relay = []; }
+  return MP.relay;
+}
 function mpNewPeer(id) { if (typeof Peer === "undefined") { mpStatus("Online play isn't available in this browser"); return null; }
-  return new Peer(id, Object.assign({ config: { iceServers: MP_ICE }, debug: 0 }, MP.peerOpts)); }
-function mpHost() {
-  mpLeave(); MP.host = true; MP.code = String(1000 + Math.floor(Math.random() * 9000)); mpStatus("Opening a game…");
+  return new Peer(id, Object.assign({ config: { iceServers: MP_ICE.concat(MP.relay || []) }, debug: 0 }, MP.peerOpts)); }
+function mpFail(msg) {                                      // give up on this try, say why, and show the Host / Join buttons again
+  const wasHost = MP.host; mpLeave(); MP.host = wasHost; mpStatus(msg);
+}
+async function mpHost() {
+  mpLeave(); MP.host = true; MP.code = String(1000 + Math.floor(Math.random() * 9000)); mpStatus("Opening a game…"); await mpRelay();
   const peer = mpNewPeer(MP_PREFIX + MP.code); if (!peer) return; MP.peer = peer;
   peer.on("open", () => mpStatus("Waiting for a friend to join with code " + MP.code));
-  peer.on("error", e => { if (e.type === "unavailable-id") mpHost(); else mpStatus("Connection problem (" + e.type + ")"); });
+  peer.on("disconnected", () => { if (MP.peer === peer && !peer.destroyed) setTimeout(() => { try { if (MP.peer === peer && !peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });   // keep the code alive while you wait
+  peer.on("error", e => { if (MP.peer !== peer) return; if (e.type === "unavailable-id") mpHost(); else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") mpFail("Can't reach the online service right now. Check your internet and try again."); else if (!MP.on) mpStatus("Connection problem (" + e.type + ")"); });
   peer.on("connection", c => { if (MP.conn && MP.conn.open) { c.on("open", () => { c.send({ t: "full" }); setTimeout(() => c.close(), 300); }); return; } mpWire(c); });
   peer.on("call", async call => { const m = await mpMic(); call.answer(m || undefined); mpCall(call); });
   mpMic();
 }
-function mpJoin(code) {
-  mpLeave(); MP.host = false; MP.code = code; mpStatus("Connecting to game " + code + "…");
+async function mpJoin(code) {
+  mpLeave(); MP.host = false; MP.code = code; mpStatus("Connecting to game " + code + "…"); await mpRelay();
   const peer = mpNewPeer(undefined); if (!peer) return; MP.peer = peer;
+  setTimeout(() => { if (MP.peer === peer && !MP.on) mpFail("Couldn't connect to game " + code + ". Check the code with your friend and try again."); }, 25000);
   peer.on("open", async () => {
     mpWire(peer.connect(MP_PREFIX + code, { reliable: true, serialization: "json" }));
     const m = await mpMic(); if (m && MP.peer === peer) mpCall(peer.call(MP_PREFIX + code, m));
   });
-  peer.on("error", e => mpStatus(e.type === "peer-unavailable" ? "No game found with code " + code : "Connection problem (" + e.type + ")"));
+  peer.on("error", e => { if (MP.peer !== peer) return;
+    if (e.type === "peer-unavailable") mpFail("No game found with code " + code + ". Check the code with your friend.");
+    else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") mpFail("Can't reach the online service right now. Check your internet and try again.");
+    else if (!MP.on) mpStatus("Connection problem (" + e.type + ")"); });
   peer.on("call", async call => { const m = await mpMic(); call.answer(m || undefined); mpCall(call); });
 }
 function mpWire(c) {
-  MP.conn = c;
+  MP.conn = c; MP.lastRx = performance.now();
+  const stuck = setTimeout(() => { if (MP.conn === c && !c.open) { try { c.close(); } catch (e) {} if (MP.host) { MP.conn = null; mpStatus("A friend tried to join but your networks couldn't connect. Waiting with code " + MP.code); } else mpFail("Found the game, but your networks couldn't connect. Try again, or try a different Wi-Fi."); } }, 20000);
+  const watchIce = () => { const pc = c.peerConnection; if (!pc) return setTimeout(watchIce, 300);
+    pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && MP.conn === c) { try { c.close(); } catch (e) {} } }); };
+  watchIce();
   c.on("open", () => {
+    clearTimeout(stuck); MP.lastRx = performance.now();
     MP.on = true; MP.kills = MP.deaths = 0; mpSend({ t: "hi", v: VERSION });
     mpStatus(MP.host ? "Your friend joined! Choose the map." : "Joined! The host is choosing the map…");
     if (MP.host && state === "play" && gameMode === "pvp") mpSendStart();                 // a friend joining a game that's already going
@@ -6519,6 +6543,7 @@ function mpVoice(stream) {                                  // the other player'
 }
 function mpSend(o) { if (MP.conn && MP.conn.open) try { MP.conn.send(o); } catch (e) {} }
 function mpSendStart() {                                    // the host tells the friend which map to build
+  if (MP.friendV && MP.friendV !== VERSION) { mpStatus("Can't start: different versions. Both refresh the page."); return; }
   const s = {}; for (const k of MP_SET) s[k] = set[k];
   mpSend({ t: "start", seed, set: s, hx: P.x, hz: P.z }); MP.hp = 100; MP.dead = 0; mpCansReset();
 }
@@ -6538,7 +6563,10 @@ function mpGuestStart(o) {
 }
 function mpRecv(o) {
   if (!o || !o.t) return;
-  if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
+  MP.lastRx = performance.now();
+  if (o.t === "ping") return;
+  if (o.t === "hi") { MP.friendV = o.v; if (o.v !== VERSION) mpStatus("Your friend has version " + o.v + " and you have " + VERSION + ". Both refresh the page, then try again."); return; }
+  if (o.t === "start") { if (!MP.host && (!MP.friendV || MP.friendV === VERSION)) mpGuestStart(o); return; }
   if (o.t === "s") { MP.rx.push(Object.assign(o, { at: performance.now() })); if (MP.rx.length > 40) MP.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
   if (o.t === "hit") { mpTakeHit(o.d, o.hd); return; }
@@ -6636,6 +6664,10 @@ function mpTakeCan(i, fromNet) {                            // an ammo can someo
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {
   if (!MP.peer) return;
+  if (MP.on) {                                              // a small heartbeat; if your friend goes silent for 12 seconds, the link is gone
+    if ((MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }
+    if (performance.now() - MP.lastRx > 12000) { const c = MP.conn; MP.conn = null; MP.on = false; mpRemoteDrop(); try { c && c.close(); } catch (e) {} mpStatus(MP.host ? "Lost the connection to your friend. Waiting with code " + MP.code : "Lost the connection to the host."); if (!MP.host) { const p = MP.peer; MP.peer = null; try { p.destroy(); } catch (e) {} MP.code = ""; } }
+  }
   const playing = state === "play" && gameMode === "pvp";
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
     MP.sendT = .05; const I = vr.I, L = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;
