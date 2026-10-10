@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.38";              // Just Trees 1.38
+const VERSION = "1.39";              // Just Trees 1.39
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -427,6 +427,7 @@ $("randomBtn").addEventListener("click", () => {
   renderSetup();
 });
 function renderSetup() {
+  try { mpHostSetSync(); } catch (e) {}                      // online host: everyone sees the settings change
   densEl.value = Math.round(set.density * 100);
   $("densVal").textContent = Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees";
   $("ver").textContent = "v" + VERSION;
@@ -4379,7 +4380,7 @@ function drawWrist() {
     g.fillStyle = MP.hp > 35 ? "#5fd068" : "#ff6a5a"; g.fillRect(16, 16, 2.2 * MP.hp, 12); g.fillStyle = "#e8f0dc"; g.fillText("Health " + Math.round(MP.hp), 16, 52);
     g.font = "16px sans-serif"; g.fillText(MP.kills + " kills · " + MP.deaths + " deaths", 16, 78);
     g.fillStyle = vr.lootT > 0 ? "#ffd65a" : "#b8c4ad";
-    g.fillText(vr.lootT > 0 ? vr.lootMsg : MP.on ? (MP.R && MP.R.cur ? "Friend · " + Math.round(MP.R.cur.hp) + " health" : "Friend connected") : MP.code ? "Code " + MP.code + " · waiting" : "Offline", 16, 104);
+    g.fillText(vr.lootT > 0 ? vr.lootMsg : MP.on ? mpCount() + " players · you're " + MP_COLN[MP.idx] : MP.code ? "Code " + MP.code + " · waiting" : "Offline", 16, 104);
   } else if (gameMode === "pvp") {
     g.fillStyle = "#4aa8ff"; g.fillRect(16, 18, 2.2 * P.sh, 14); g.fillStyle = "#5fd068"; g.fillRect(16, 40, 2.2 * P.hp, 14);
     g.fillStyle = "#ffcf9a"; g.fillText($("botInfo").textContent || "", 16, 82); g.fillStyle = "#9dffc0"; g.font = "16px sans-serif"; g.fillText(($("zoneInfo").textContent || "").slice(0, 26), 16, 108);
@@ -4972,7 +4973,7 @@ function uiDraw(P) {
   const g = P.g; g.clearRect(0, 0, P.W, P.H); P.paint(g, P);
   for (const w of P.widgets) {
     if (w.hide && w.hide()) continue;
-    const hov = !!(P.hov && P.hov.includes(w)), dis = w.disabled && w.disabled();
+    const hov = !!(P.hov && P.hov.includes(w)), dis = (w.disabled && w.disabled()) || mpLocked(P, w);
     if (w.kind === "slider") {
       const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2;
       g.fillStyle = "rgba(0,0,0,.25)"; uiRound(g, w.x, y - 7, w.w, 14, 7); g.fill();
@@ -4996,6 +4997,7 @@ function uiWrap(g, text, cx, y, maxW, lh) {
   for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
   lines.push(cur); lines.forEach((l, i) => g.fillText(l, cx, y + i * lh));
 }
+function mpLocked(P, w) { return mpGuest() && (P.name === "setup" || P.name === "pause") && !w.personal; }   // online: only the host changes the map
 const uiBtn = (P, x, y, w, h, label, on, extra = {}) => { const b = Object.assign({ kind: "btn", x, y, w, h, label, on }, extra); P.widgets.push(b); return b; };
 const uiSlider = (P, x, y, w, min, max, get, setv, step = 0) => { const s = { kind: "slider", x, y, w, h: 56, min, max, get, set: v => setv(step ? Math.round(v / step) * step : v) }; P.widgets.push(s); return s; };
 function uiLabel(g, x, y, label, value) {
@@ -5046,18 +5048,18 @@ function vruiParts() {
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
   [["hike", "Hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
    ["hunt", "Hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
-   ["pvp", "PvP · 1v1 online", "Play a friend in VR: same guns, climbing and gliding. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
+   ["pvp", "PvP · online", "Play up to 7 friends in VR: same guns, climbing and gliding. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
     uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { setMode(m); renderSetup(); vruiOpen(m === "pvp" ? "mp" : "setup"); }, { sub, fs: 54 }));
   // ---- online PvP: host a game (you get a code) or join one (type the code) ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
-    uiBg(g, P, "PVP · 1V1 ONLINE"); g.textAlign = "center";
+    uiBg(g, P, "PVP · ONLINE"); g.textAlign = "center";
     let y = 200;
     if (MP.joining) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Type the 4-digit code", 700, 150); g.font = "bold 96px sans-serif"; g.fillStyle = UIC.sun; g.fillText((MP.entry + "____").slice(0, 4).split("").join(" "), 700, 262); y = 320; }
     else if (MP.code && MP.host) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Your game code", 700, 150); g.font = "bold 120px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MP.code.split("").join(" "), 700, 280); y = 345; }
     else if (MP.code) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Game " + MP.code, 700, 150); y = 210; }
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim;
-    uiWrap(g, MP.joining ? "" : MP.status || "Same guns, climbing and gliding as Hunting, against a friend. One of you hosts, the other joins with the code.", 700, y, 1200, 42);
+    uiWrap(g, MP.joining ? "" : MP.status || "Same guns, climbing and gliding as Hunting, against up to 7 friends. One of you hosts, the others join with the code.", 700, y, 1200, 42);
     if (MP.mic === false && MP.code) { g.font = "28px sans-serif"; g.fillStyle = "rgba(255,255,255,.55)"; g.fillText("Voice chat is off (no microphone allowed)", 700, y + 95); }
   };
   uiBtn(MPP, 90, 420, 590, 150, "Host a game", () => { mpHost(); }, { sub: "You get a code to share", fs: 50, hide: () => MP.joining || !!MP.code });
@@ -5065,7 +5067,7 @@ function vruiParts() {
   [1, 2, 3, 4, 5, 6, 7, 8, 9, "Del", 0, "Join"].forEach((k, i) => uiBtn(MPP, 520 + (i % 3) * 190, 340 + Math.floor(i / 3) * 110, 180, 100, String(k), () => {
       if (k === "Del") MP.entry = MP.entry.slice(0, -1); else if (k === "Join") { if (MP.entry.length === 4) { MP.joining = false; mpJoin(MP.entry); } } else if (MP.entry.length < 4) MP.entry += k;
     }, { fs: 46, primary: k === "Join", hide: () => !MP.joining, disabled: () => k === "Join" && MP.entry.length < 4 }));
-  uiBtn(MPP, 720, 420, 590, 150, "Choose the map", () => { renderSetup(); vruiOpen("setup"); }, { primary: true, sub: "Then Play sends it to your friend", fs: 48, hide: () => !(MP.host && MP.code) });
+  uiBtn(MPP, 720, 420, 590, 150, "Choose the map", () => { renderSetup(); vruiOpen("setup"); }, { primary: true, sub: "Everyone sees it with you", fs: 48, hide: () => !(MP.host && MP.code) });
   uiBtn(MPP, 90, 780, 380, 90, "Back", () => { if (MP.joining) { MP.joining = false; return; } mpLeave(); vruiOpen("mode"); }, { fs: 38 });
   // ---- settings: every choice with the same little explanation the flat menu gives ----
   const S2 = uiPanel("setup", 2048, 1000, 2.1, 104, 1.4);
@@ -5085,6 +5087,7 @@ function vruiParts() {
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
+    if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[MP.idx]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
@@ -5098,13 +5101,13 @@ function vruiParts() {
   uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
-  uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right" });
-  uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left" });
-  uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5);
-  uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"));
+  uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true });
+  uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left", personal: true });
+  uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
+  uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"), { personal: true });
   uiBtn(S2, rx + 300, 760, 280, 100, "Randomize", () => { $("randomBtn").click(); });
   uiBtn(S2, rx + 600, 760, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
-  uiBtn(S2, rx + 600, 880, 300, 72, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 30 });
+  uiBtn(S2, rx + 600, 880, 300, 72, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 30, personal: true });
   // ---- growing the world ----
   const Ld = uiPanel("loading", 1200, 300, 2.0, 46, 1.5);
   Ld.paint = (g, P) => { uiBg(g, P); g.textAlign = "center"; g.font = "bold 64px sans-serif"; g.fillStyle = UIC.text; g.fillText("Growing trees…", 600, 150); g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Generating a new world", 600, 220); };
@@ -5113,21 +5116,28 @@ function vruiParts() {
   Pv.paint = (g, P) => {
     uiBg(g, P); const [t1, t2] = mapSummary(); g.textAlign = "center"; g.font = "bold 52px sans-serif"; g.fillStyle = UIC.text; g.fillText(MODE_NAME[gameMode] + " · " + t1, 800, 90);
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, t2, 800, 150, 1450, 42);
-    g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Point at the map and pull the trigger to choose where you start", 800, 262);
+    g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun;
+    if (MP.revealT > 0) { g.fillStyle = "#fff"; g.font = "bold 40px sans-serif"; g.fillText("Everyone's starting spots · get ready…", 800, 262); }
+    else if (MP.code && gameMode === "pvp") {
+      g.fillStyle = MP_COL[MP.idx]; g.fillText("You're " + MP_COLN[MP.idx] + " · point at the map to choose where you start", 800, 262);
+      if (!MP.host) { g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("The host picks the map and presses Play · tell them if you like it", 800, 345); }
+    } else g.fillText("Point at the map and pull the trigger to choose where you start", 800, 262);
   };
-  uiBtn(Pv, 90, 290, 470, 100, "New map", () => startNew(), { fs: 42 });                      // throw this one away and grow another, same settings
-  uiBtn(Pv, 580, 290, 440, 100, "Settings", () => vruiOpen("setup"), { fs: 38 });
-  uiBtn(Pv, 1040, 290, 470, 100, "Play this map", () => vruiDropIn(), { primary: true, fs: 42 });
+  const pvHide = () => mpGuest() || MP.revealT > 0;            // online: only the host has these
+  uiBtn(Pv, 90, 290, 470, 100, "New map", () => startNew(), { fs: 42, hide: pvHide });                      // throw this one away and grow another, same settings
+  uiBtn(Pv, 580, 290, 440, 100, "Settings", () => vruiOpen("setup"), { fs: 38, hide: pvHide });
+  uiBtn(Pv, 1040, 290, 470, 100, "Play this map", () => vruiDropIn(), { primary: true, fs: 42, hide: pvHide });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 145, 1000, 34); };
   [["Resume", () => vruiResume(), true], ["New map, same settings", () => startNew()], ["Change settings", () => vruiOpen("setup")], ["Main menu", () => vruiOpen("mode")],
-   ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42 }));
+   ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42, personal: i === 0 || i >= 3 }));
 }
 function saveVrRes() { try { localStorage.setItem("jt-vrres", set.vrRes); } catch (_) {} }
 // open a menu stage: the menus are placed in front of wherever you are looking
 function vruiOpen(stage) {
   vruiParts();
+  if (stage === "mode" && MP.code) mpLeave();                    // back to the main menu leaves an online game
   const I = vr.readInputs ? vr.readInputs() : null;
   const inWorld = stage === "pause";
   let hp = new THREE.Vector3(0, 0, 0), fy = 0;
@@ -5150,6 +5160,7 @@ function vruiOpen(stage) {
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
   if (stage !== "pause" && state !== "play") state = "vrmenu";
+  mpHostStage(stage);
 }
 function vrHeadLocal(I) {                                        // the head in the bare play space (undoing our walking offset)
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
@@ -5163,7 +5174,8 @@ function vruiClose() {
 }
 function vruiResume() { vruiClose(); $("pause").classList.add("hidden"); state = "play"; updateHud(true); }
 function vruiDropIn() {                                          // from the little map into the real one, through a quick fade
-  if (MP.on && MP.host && gameMode === "pvp" && VRUI.stage === "preview") mpSendStart();   // the host's Play sends your friend the same map
+  if (MP.on && MP.host && gameMode === "pvp" && VRUI.stage === "preview") { mpHostPlay(); return; }   // online: everyone's flags show, then everyone drops in
+  if (mpGuest() && VRUI.stage === "preview" && !MP.revealT) return;
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
 // every frame while a menu is up
@@ -5215,7 +5227,7 @@ function vruiTick(dt) {
       clicked = true;
       if (st === "intro") { introSounds(false); titlePaint(); vruiOpen("title"); return; }
       if (st === "title") { vruiOpen("mode"); return; }
-      if (w && !(w.disabled && w.disabled())) {
+      if (w && !(w.disabled && w.disabled()) && !mpLocked(P, w)) {
         buzz(hand === "right" ? "R" : "L", .3, 20);
         if (w.kind === "slider") { VRUI.drag = { hand, P, w }; w.set(Math.max(w.min, Math.min(w.max, w.min + (cx - w.x) / w.w * (w.max - w.min)))); }
         else w.on();
@@ -5230,6 +5242,7 @@ function vruiTick(dt) {
 }
 let vruiRay = null;
 function pickSpawn(p) {                                     // the nearest good spot to where you pointed: dry, not too steep, inside the map
+  if (MP.revealT > 0) return;
   let best = null;
   for (let r = 0; r <= 80 && !best; r += 4) for (let k = 0; k < (r ? 16 : 1) && !best; k++) {
     const a = k / 16 * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
@@ -5239,6 +5252,7 @@ function pickSpawn(p) {                                     // the nearest good 
   P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z);
   const U = VRUI.dio.userData, gy = (H(P.x, P.z) - water) * U.ex;
   U.pin.position.set(P.x, gy + 16 * U.ps, P.z); U.beam.position.set(P.x, gy, P.z);
+  if (mpGuest() && MP.on) mpSendHost({ t: "spawn", x: P.x, z: P.z });   // the host keeps everyone's choice for the reveal
 }
 // a little model of the map: the land, water, every tree as a tiny cone, and a yellow pin where you'll start
 function buildDiorama() {
@@ -5274,9 +5288,10 @@ function buildDiorama() {
     tm.setColorAt(i, c.set(colOf(o.t.kind)).multiplyScalar(.85 + Math.random() * .3));
   }
   spin.add(tm);
-  const pin = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 10).rotateX(Math.PI).translate(0, 7, 0), new THREE.MeshBasicMaterial({ color: 0xf2c14e, fog: false }));
+  const myCol = MP.code && gameMode === "pvp" ? MP_COL[MP.idx] : 0xf2c14e;          // online: your pin is in your colour
+  const pin = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 10).rotateX(Math.PI).translate(0, 7, 0), new THREE.MeshBasicMaterial({ color: myCol, fog: false }));
   const ps = S / 560; pin.scale.setScalar(ps); pin.position.set(P.x, (H(P.x, P.z) - water) * ex + 16 * ps, P.z); spin.add(pin);
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.8, .8, 16, 6).translate(0, 8, 0), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: .5, fog: false }));
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.8, .8, 16, 6).translate(0, 8, 0), new THREE.MeshBasicMaterial({ color: myCol, transparent: true, opacity: .5, fog: false }));
   beam.scale.setScalar(ps); beam.position.set(P.x, (H(P.x, P.z) - water) * ex, P.z); spin.add(beam);
   outer.scale.setScalar(sc); outer.position.set(0, .95, -1.25);
   outer.userData = { spin, terrain: spin.children[0], pin, beam, ex, ps };
@@ -6511,9 +6526,10 @@ function nadeBoom(p, remote) {
   scatterBeasts(p); alertBots();
   for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) killAnimal(A, camera.position.distanceTo(p));
   for (const S of squad) if (!S.dead) { const sd = S.group.position.distanceTo(p); if (sd < NADE.R) for (let n = sd < 3 ? 3 : sd < 5 ? 2 : 1; n-- > 0;) damageBot(S, false); }
-  if (gameMode === "pvp" && MP.on && MP.R && MP.R.alive) {
-    const R = MP.R, rd = Math.min(R.head.distanceTo(p), new THREE.Vector3(R.head.x, R.feet + .3, R.head.z).distanceTo(p));
-    if (rd < NADE.R) { mpSend({ t: "hit", d: Math.max(10, Math.round(120 * (1 - rd / NADE.R))), hd: false }); hitTick(); }
+  if (gameMode === "pvp" && MP.on) for (const L of MP.links.values()) {
+    const R = L.R; if (!L.open || L.bad || !R || !R.alive) continue;
+    const rd = Math.min(R.head.distanceTo(p), new THREE.Vector3(R.head.x, R.feet + .3, R.head.z).distanceTo(p));
+    if (rd < NADE.R) { mpSendTo(L, { t: "hit", d: Math.max(10, Math.round(120 * (1 - rd / NADE.R))), hd: false }); hitTick(); }
   }
 }
 function boomSound(d) {
@@ -6613,40 +6629,48 @@ function lootTick(I) {
     gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + " " + WEAP[c.kind].name + " ammo"; vr.lootT = 2.5; vr.wristT = 0;
   }
 }
-/* ---------------- Multiplayer (VR PvP, 1v1): join by a 4-digit code; both build the same map from its number;
-        you see each other's body, hands and gun; shots, hits, health and respawns; shared ammo cans; voice from the other player's head ---------------- */
-const MP = { on: false, host: false, code: "", entry: "", joining: false, peer: null, conn: null, status: "", R: null, rx: [], sendT: 0,
-  hp: 100, dead: 0, kills: 0, deaths: 0, mic: null, call: null, panner: null, audioEl: null, hurtM: null, hurt: 0, peerOpts: {}, startT: 0 };
+/* ---------------- Multiplayer (VR PvP, up to 8 players): join by a 4-digit code; everyone builds the same map from its number and
+        everyone connects straight to everyone else (peer to peer). Before a round the others see the host's settings and the same map preview,
+        each picks their own start, then everyone's flags show in their colours for 3 seconds and you all drop in. ---------------- */
+const MP_MAX = 8, MP_COL = ["#f2c14e", "#e8504a", "#4f9bff", "#55d16a", "#b56cff", "#ff9a3c", "#3fd8d0", "#ff74c4"], MP_COLN = ["Yellow", "Red", "Blue", "Green", "Purple", "Orange", "Teal", "Pink"];
+const MP = { on: false, host: false, code: "", entry: "", joining: false, peer: null, links: new Map(), status: "", sendT: 0, idx: 0,
+  hp: 100, dead: 0, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, startT: 0, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
+Object.defineProperties(MP, {                               // the first other player and their line (handy shortcuts)
+  R: { get() { for (const L of MP.links.values()) if (L.R) return L.R; return null; } },
+  conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
+  call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
 const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land"];
+const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
+const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
+const mpGuest = () => !!MP.code && !MP.host && gameMode === "pvp";
+function mpOnUpdate() { MP.on = mpOpen().length > 0; }
 function mpStatus(s) { MP.status = s; vr.wristT = 0; if (VRUI.panels && VRUI.panels.mp && VRUI.panels.mp.mesh.visible) uiDraw(VRUI.panels.mp); }
+const mpWaitText = () => mpCount() > 1 ? mpCount() + " players in the game (up to " + MP_MAX + ")." : "Waiting for friends to join with code " + MP.code;
 async function mpMic() {
   if (MP.mic !== null) return MP.mic;
   try { MP.mic = await Promise.race([navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }), new Promise((_, no) => setTimeout(() => no("timeout"), 12000))]); } catch (e) { MP.mic = false; }
   return MP.mic;
 }
-function mpLeave() {
-  try { if (MP.conn) { mpSend({ t: "bye" }); MP.conn.close(); } } catch (e) {}
-  try { if (MP.call) MP.call.close(); } catch (e) {}
-  try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
-  MP.peer = MP.conn = MP.call = null; MP.on = false; MP.code = ""; MP.joining = false; MP.entry = ""; mpRemoteDrop();
+function mpDropLink(L) {
+  try { if (L.conn) L.conn.close(); } catch (e) {} try { if (L.call) L.call.close(); } catch (e) {}
+  mpRemoteDrop(L); try { if (L.vsrc) L.vsrc.disconnect(); } catch (e) {} if (L.audioEl) L.audioEl.srcObject = null;
+  if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
 }
-const MP_ICE_URL = "";                                      // our Cloudflare helper (gives reliable relay logins); empty = use the free relay below
-async function mpRelay() {                                  // relay logins: ours from Cloudflare first, the free Open Relay as a backup
+function mpLeave() {
+  mpSend({ t: "bye" });
+  for (const L of [...MP.links.values()]) mpDropLink(L);
+  try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
+  MP.peer = null; MP.links.clear(); MP.on = false; MP.code = ""; MP.joining = false; MP.entry = ""; MP.idx = 0; MP.revealT = 0; MP.reveal = MP.pendingReveal = null; MP.lastSet = "";
+}
+async function mpRelay() {                                  // relay logins for players whose networks block a direct line: the free Open Relay
   if (MP.relay !== undefined && (!MP.relayAt || Date.now() - MP.relayAt < 3 * 3600e3)) return MP.relay;
-  if (MP_ICE_URL) {
-    try {
-      const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 5000);
-      const r = await fetch(MP_ICE_URL.replace(/\/$/, "") + "/ice-servers", { signal: ctl.signal }); clearTimeout(to);
-      if (r.ok) { const j = await r.json(); if (j.iceServers && j.iceServers.length) { MP.relay = j.iceServers; MP.relayAt = Date.now(); MP.relayFrom = "cloudflare"; return MP.relay; } }
-    } catch (e) {}
-  }
   try {
     const user = Math.floor(Date.now() / 1000 + 6 * 3600) + ":justtrees", enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode("openrelayprojectsecret"), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
     const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(user))); let bin = ""; for (const b of sig) bin += String.fromCharCode(b);
     const h = "staticauth.openrelay.metered.ca";
-    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }]; MP.relayAt = Date.now(); MP.relayFrom = "openrelay";
+    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }]; MP.relayAt = Date.now();
   } catch (e) { MP.relay = []; }
   return MP.relay;
 }
@@ -6655,14 +6679,18 @@ function mpNewPeer(id) { if (typeof Peer === "undefined") { mpStatus("Online pla
 function mpFail(msg) {                                      // give up on this try, say why, and show the Host / Join buttons again
   const wasHost = MP.host; mpLeave(); MP.host = wasHost; mpStatus(msg);
 }
+async function mpAnswer(call) { const m = await mpMic(); try { call.answer(m || undefined); } catch (e) {} mpCall(call); }
 async function mpHost() {
-  mpLeave(); MP.host = true; MP.code = String(1000 + Math.floor(Math.random() * 9000)); mpStatus("Opening a game…"); await mpRelay();
-  const peer = mpNewPeer(MP_PREFIX + MP.code); if (!peer) return; MP.peer = peer;
-  peer.on("open", () => mpStatus("Waiting for a friend to join with code " + MP.code));
+  mpLeave(); MP.host = true; MP.idx = 0; MP.code = String(1000 + Math.floor(Math.random() * 9000)); mpStatus("Opening a game…"); await mpRelay();
+  const peer = mpNewPeer(mpHostId()); if (!peer) return; MP.peer = peer;
+  peer.on("open", () => mpStatus(mpWaitText()));
   peer.on("disconnected", () => { if (MP.peer === peer && !peer.destroyed) setTimeout(() => { try { if (MP.peer === peer && !peer.destroyed) peer.reconnect(); } catch (e) {} }, 1500); });   // keep the code alive while you wait
   peer.on("error", e => { if (MP.peer !== peer) return; if (e.type === "unavailable-id") mpHost(); else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") mpFail("Can't reach the online service right now. Check your internet and try again."); else if (!MP.on) mpStatus("Connection problem (" + e.type + ")"); });
-  peer.on("connection", c => { if (MP.conn && MP.conn.open) { c.on("open", () => { c.send({ t: "full" }); setTimeout(() => c.close(), 300); }); return; } mpWire(c); });
-  peer.on("call", async call => { const m = await mpMic(); call.answer(m || undefined); mpCall(call); });
+  peer.on("connection", c => {
+    if (mpOpen().length >= MP_MAX - 1 && !MP.links.has(c.peer)) { c.on("open", () => { c.send({ t: "full" }); setTimeout(() => c.close(), 300); }); return; }
+    mpWire(c, false);
+  });
+  peer.on("call", mpAnswer);
   mpMic();
 }
 async function mpJoin(code) {
@@ -6670,91 +6698,198 @@ async function mpJoin(code) {
   const peer = mpNewPeer(undefined); if (!peer) return; MP.peer = peer;
   setTimeout(() => { if (MP.peer === peer && !MP.on) mpFail("Couldn't connect to game " + code + ". Check the code with your friend and try again."); }, 25000);
   peer.on("open", async () => {
-    mpWire(peer.connect(MP_PREFIX + code, { reliable: true, serialization: "json" }));
-    const m = await mpMic(); if (m && MP.peer === peer) mpCall(peer.call(MP_PREFIX + code, m));
+    mpWire(peer.connect(mpHostId(), { reliable: true, serialization: "json" }), true);
+    const m = await mpMic(); if (m && MP.peer === peer) mpCall(peer.call(mpHostId(), m));
   });
+  peer.on("connection", c => mpWire(c, false));                 // the other players connect to you too
   peer.on("error", e => { if (MP.peer !== peer) return;
-    if (e.type === "peer-unavailable") mpFail("No game found with code " + code + ". Check the code with your friend.");
-    else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") mpFail("Can't reach the online service right now. Check your internet and try again.");
+    if (e.type === "peer-unavailable") { if (!MP.on) mpFail("No game found with code " + code + ". Check the code with your friend."); }
+    else if (e.type === "network" || e.type === "server-error" || e.type === "socket-error") { if (!MP.on) mpFail("Can't reach the online service right now. Check your internet and try again."); }
     else if (!MP.on) mpStatus("Connection problem (" + e.type + ")"); });
-  peer.on("call", async call => { const m = await mpMic(); call.answer(m || undefined); mpCall(call); });
+  peer.on("call", mpAnswer);
 }
-function mpWire(c) {
-  MP.conn = c; MP.lastRx = performance.now();
-  const stuck = setTimeout(() => { if (MP.conn === c && !c.open) { try { c.close(); } catch (e) {} if (MP.host) { MP.conn = null; mpStatus("A friend tried to join but your networks couldn't connect. Waiting with code " + MP.code); } else mpFail("Found the game, but your networks couldn't connect. Try again, or try a different Wi-Fi."); } }, 20000);
+async function mpMeet(id) {                                 // a newcomer dials each player already in the game
+  if (!MP.peer || id === mpMyId() || (MP.links.get(id) && MP.links.get(id).conn)) return;
+  mpWire(MP.peer.connect(id, { reliable: true, serialization: "json" }), true);
+  const m = await mpMic(); if (m && MP.peer) mpCall(MP.peer.call(id, m));
+}
+function mpLink(id) {
+  let L = MP.links.get(id);
+  if (!L) { L = { id, conn: null, call: null, open: false, bad: false, rx: [], R: null, idx: -1, lastRx: performance.now(), v: null, spawn: null }; MP.links.set(id, L); }
+  return L;
+}
+function mpWire(c, out) {
+  const id = c.peer, ex = MP.links.get(id);
+  if (ex && ex.conn && ex.conn !== c) {                     // both ends dialled at once: keep just one line (the same choice on both sides)
+    const keepNew = !ex.conn.open && !out && mpMyId() > id;
+    if (!keepNew) { try { c.close(); } catch (e) {} return; }
+    const old = ex.conn; ex.conn = null; try { old.close(); } catch (e) {}
+  }
+  const L = mpLink(id); L.conn = c; L.lastRx = performance.now();
+  const stuck = setTimeout(() => { if (L.conn !== c || c.open) return; try { c.close(); } catch (e) {} if (MP.links.get(id) === L && !L.open) MP.links.delete(id);
+    if (!MP.host && id === mpHostId()) mpFail("Found the game, but your networks couldn't connect. Try again, or try a different Wi-Fi.");
+    else if (MP.host) mpStatus("A friend tried to join but your networks couldn't connect. " + mpWaitText()); }, 20000);
   const watchIce = () => { const pc = c.peerConnection; if (!pc) return setTimeout(watchIce, 300);
-    pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && MP.conn === c) { try { c.close(); } catch (e) {} } }); };
+    pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && L.conn === c) { try { c.close(); } catch (e) {} } }); };
   watchIce();
-  c.on("open", () => {
-    clearTimeout(stuck); MP.lastRx = performance.now();
-    MP.on = true; MP.kills = MP.deaths = 0; mpSend({ t: "hi", v: VERSION });
-    mpStatus(MP.host ? "Your friend joined! Choose the map." : "Joined! The host is choosing the map…");
-    if (MP.host && state === "play" && gameMode === "pvp") mpSendStart();                 // a friend joining a game that's already going
-  });
-  c.on("data", mpRecv);
-  c.on("close", () => { if (MP.conn === c) { MP.conn = null; MP.on = false; mpRemoteDrop(); mpStatus(MP.host ? "Your friend left. Waiting with code " + MP.code : "The host left the game"); } });
+  c.on("open", () => { clearTimeout(stuck); L.lastRx = performance.now(); L.open = true; mpOnUpdate(); if (!MP.host && id === mpHostId()) { MP.kills = MP.deaths = 0; }
+    try { c.send({ t: "hi", v: VERSION, idx: MP.idx }); } catch (e) {} });
+  c.on("data", o => mpRecv(o, L));
+  c.on("close", () => { if (L.conn === c) mpLinkGone(L, false); });
   c.on("error", () => {});
 }
-function mpCall(call) {
-  if (!call) return; MP.call = call;
-  call.on("stream", s => mpVoice(s));
+function mpLinkGone(L, lost) {
+  const wasHost = !MP.host && L.id === mpHostId(); mpDropLink(L);
+  if (wasHost) {
+    if (state === "play" && gameMode === "pvp" && MP.on) { mpStatus("The host left. You can keep playing with the others."); return; }
+    mpFail(lost ? "Lost the connection to the host." : "The host left the game"); if (VRUI.on && VRUI.stage !== "mp" && VRUI.stage !== "mode") vruiOpen("mp"); return;
+  }
+  mpStatus((lost ? "Lost the connection to a player. " : "A player left. ") + (MP.host ? mpWaitText() : mpCount() + " in the game."));
 }
-function mpVoice(stream) {                                  // the other player's voice comes from their head
+function mpCall(call) {
+  if (!call) return; const L = mpLink(call.peer);
+  if (L.call && L.call !== call) { try { L.call.close(); } catch (e) {} }
+  L.call = call; call.on("stream", s => mpVoice(L, s));
+}
+function mpVoice(L, stream) {                               // each player's voice comes from their head
   if (!SND.ctx) initSound(); if (!SND.ctx) return;
   try {
-    if (!MP.audioEl) { MP.audioEl = new Audio(); MP.audioEl.muted = true; }                 // browsers only feed remote audio into Web Audio once it's attached to an element
-    MP.audioEl.srcObject = stream; MP.audioEl.play().catch(() => {});
+    if (!L.audioEl) { L.audioEl = new Audio(); L.audioEl.muted = true; }                   // browsers only feed remote audio into Web Audio once it's attached to an element
+    L.audioEl.srcObject = stream; L.audioEl.play().catch(() => {});
+    if (L.vsrc) try { L.vsrc.disconnect(); } catch (e) {}
     const src = SND.ctx.createMediaStreamSource(stream), p = SND.ctx.createPanner(), g = SND.ctx.createGain();
     p.panningModel = "HRTF"; p.distanceModel = "inverse"; p.refDistance = 2; p.maxDistance = 120; p.rolloffFactor = 1.1; g.gain.value = 1.6;
-    src.connect(p); p.connect(g); g.connect(SND.master); MP.panner = p;
+    src.connect(p); p.connect(g); g.connect(SND.master); L.vsrc = src; L.panner = p;
   } catch (e) {}
 }
-function mpSend(o) { if (MP.conn && MP.conn.open) try { MP.conn.send(o); } catch (e) {} }
-function mpSendStart() {                                    // the host tells the friend which map to build
-  if (MP.friendV && MP.friendV !== VERSION) { mpStatus("Can't start: different versions. Both refresh the page."); return; }
-  const s = {}; for (const k of MP_SET) s[k] = set[k];
-  mpSend({ t: "start", seed, set: s, hx: P.x, hz: P.z }); MP.hp = 100; MP.dead = 0; mpCansReset();
+function mpSendTo(L, o) { if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
+function mpSend(o) { for (const L of MP.links.values()) mpSendTo(L, o); }
+function mpSendHost(o) { mpSendTo(MP.links.get(mpHostId()), o); }
+function mpSet() { const s = {}; for (const k of MP_SET) s[k] = set[k]; return s; }
+function mpApplySet(s) {
+  for (const k of MP_SET) if (s && k in s) set[k] = s[k];
+  if (gameMode !== "pvp") setMode("pvp");
+  renderSetup(); if (VRUI.panels && VRUI.panels.setup && VRUI.panels.setup.mesh.visible) uiDraw(VRUI.panels.setup);
+}
+// ---- the host's side of the lobby: whatever the host sees, everyone sees
+function mpHostSetSync() {                                  // a setting changed: send it (only when it really changed)
+  if (!(MP.host && MP.on && gameMode === "pvp")) return;
+  const j = JSON.stringify(mpSet()); if (j === MP.lastSet) return; MP.lastSet = j; mpSend({ t: "set", set: mpSet() });
+}
+function mpHostStage(stage) { if (MP.host && MP.on && gameMode === "pvp" && stage === "setup") { MP.lastSet = JSON.stringify(mpSet()); mpSend({ t: "ui", st: "setup", set: mpSet() }); } }
+function mpHostGen() { if (MP.host && MP.on && gameMode === "pvp") { for (const L of MP.links.values()) L.spawn = null; mpSend({ t: "gen", seed, set: mpSet() }); } }
+function mpSyncTo(L) {                                      // someone joins late: show them where the host is
+  if (gameMode !== "pvp") return;
+  if (state === "play") return mpSendStartTo(L);
+  const st = VRUI.stage;
+  if (st === "setup") mpSendTo(L, { t: "ui", st: "setup", set: mpSet() });
+  else if (st === "preview" || st === "loading") mpSendTo(L, { t: "gen", seed, set: mpSet() });
+}
+function mpHostPlay() {                                     // the host's "Play this map": everyone's flags show, then everyone drops in
+  if (MP.revealT > 0) return;
+  const list = [{ id: mpMyId(), c: MP.idx, x: P.x, z: P.z }];
+  for (const L of mpOpen()) list.push({ id: L.id, c: L.idx, x: L.spawn ? L.spawn[0] : null, z: L.spawn ? L.spawn[1] : null });
+  mpSend({ t: "reveal", list }); mpRevealStart(list);
+}
+// ---- the others' side
+function mpGuestUi(o) { mpApplySet(o.set); MP.revealT = 0; MP.pendingReveal = null; if (vr.on) vruiOpen("setup"); }
+function mpGuestGen(o) {
+  mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true;
+  $("loading").classList.remove("hidden"); if (vr.on) vruiOpen("loading");
+  setTimeout(() => {
+    generate(); MP.genBusy = false;
+    $("loading").classList.add("hidden"); $("setup").classList.add("hidden"); $("pause").classList.add("hidden");
+    mpRandomSpawn(); showHud(false);
+    if (vr.on) startFly(); else { reveal(); drawMap($("miniMap")); }
+    if (MP.pendingReveal) { const l = MP.pendingReveal; MP.pendingReveal = null; mpRevealStart(l); }
+  }, vr.on ? 350 : 40);
+}
+function mpRandomSpawn() {                                  // your own random start is already picked; point at the little map to change it
+  for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z)) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } }
+  mpSendHost({ t: "spawn", x: P.x, z: P.z });
+}
+function mpRevealStart(list) {                              // everyone's flags pop up in their colours for 3 seconds
+  MP.reveal = list; MP.revealT = 3;
+  if (VRUI.dio) {
+    const U = VRUI.dio.userData;
+    for (const e of list) {
+      if (e.id === mpMyId() || e.x == null) continue;
+      const col = MP_COL[e.c] || "#ffffff", gy = (H(e.x, e.z) - water) * U.ex;
+      const pin = U.pin.clone(); pin.material = new THREE.MeshBasicMaterial({ color: col, fog: false }); pin.position.set(e.x, gy + 16 * U.ps, e.z);
+      const beam = U.beam.clone(); beam.material = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .5, fog: false }); beam.position.set(e.x, gy, e.z);
+      U.spin.add(pin, beam);
+    }
+  }
+  if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
+}
+function mpRevealEnd() {                                    // into the real map, each at your own flag
+  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.dead = 0; mpCansReset();
+  VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
+}
+function mpSendStart() { for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.dead = 0; mpCansReset(); }
+function mpSendStartTo(L) {                                 // straight into a game that's already going
+  const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
+  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others });
 }
 function mpGuestStart(o) {
-  for (const k of MP_SET) if (k in o.set) set[k] = o.set[k];
-  setMode("pvp"); seed = o.seed; MP.hp = 100; MP.dead = 0; mpRemoteDrop();
+  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
     generate(); mpCansReset(); reveal(); drawMap($("miniMap"));
-    // start somewhere away from the host
+    const far = o.others || [[o.hx, o.hz]];                   // start somewhere away from everyone
     let best = null; const want = Math.min(160, HALF * .55);
-    for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.hypot(x - o.hx, z - o.hz); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
+    for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
     if (vr.on && VRUI.root) vruiDropIn(); else { vr.placeAt = true; state = "play"; }
   }, vr.on ? 350 : 10);
 }
-function mpRecv(o) {
+function mpRecv(o, L) {
   if (!o || !o.t) return;
-  MP.lastRx = performance.now();
+  L.lastRx = performance.now();
   if (o.t === "ping") return;
-  if (o.t === "hi") { MP.friendV = o.v; if (o.v !== VERSION) mpStatus("Your friend has version " + o.v + " and you have " + VERSION + ". Both refresh the page, then try again."); return; }
-  if (o.t === "start") { if (!MP.host && (!MP.friendV || MP.friendV === VERSION)) mpGuestStart(o); return; }
-  if (o.t === "s") { MP.rx.push(Object.assign(o, { at: performance.now() })); if (MP.rx.length > 40) MP.rx.shift(); return; }
+  if (o.t === "hi") {
+    L.v = o.v; if (typeof o.idx === "number") L.idx = o.idx;
+    if (o.v !== VERSION) { L.bad = true; mpOnUpdate(); mpStatus("A friend has version " + o.v + " and you have " + VERSION + ". Both refresh the page, then try again."); return; }
+    if (MP.host) {                                          // a new player: give them a colour, introduce the others, show them where we are
+      if (L.idx < 1) { const used = new Set([...MP.links.values()].filter(q => q !== L).map(q => q.idx)); let k = 1; while (used.has(k) && k < MP_MAX - 1) k++; L.idx = k; }
+      mpSendTo(L, { t: "welcome", idx: L.idx, peers: mpOpen().filter(q => q !== L).map(q => q.id) });
+      mpStatus(mpWaitText() + (state === "play" ? "" : " Choose the map."));
+      mpSyncTo(L);
+    }
+    return;
+  }
+  if (L.bad) return;
+  if (o.t === "welcome") { MP.idx = o.idx; for (const id of o.peers || []) mpMeet(id); mpStatus("Joined! You're " + MP_COLN[MP.idx] + ". The host is choosing the map…"); return; }
+  if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
+  if (o.t === "set") { if (!MP.host) mpApplySet(o.set); return; }
+  if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
+  if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
+  if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
+  if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
+  if (o.t === "s") { L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
-  if (o.t === "hit") { mpTakeHit(o.d, o.hd); return; }
-  if (o.t === "die") { MP.kills++; bing(); vr.wristT = 0; return; }
+  if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
+  if (o.t === "die") { if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; } return; }
   if (o.t === "can") { mpTakeCan(o.i, true); return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
-  if (o.t === "full") { mpStatus("That game is already full"); return; }
-  if (o.t === "bye") { try { MP.conn.close(); } catch (e) {} return; }
+  if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
+  if (o.t === "bye") { try { L.conn.close(); } catch (e) {} return; }
 }
-// ---- the other player: a soldier in brown camo, posed from their head and hands, holding their gun
+// ---- the other players: soldiers in brown camo, posed from their head and hands, holding their gun
 function mpRemoteMake() {
   const S = makeSoldier("brown", 7); S.rig.visible = false; scene.add(S.group, S.shadow);
   return { S, guns: {}, cur: null, head: new THREE.Vector3(), feet: 0, alive: true };
 }
-function mpRemoteDrop() { if (MP.R) { scene.remove(MP.R.S.group, MP.R.S.shadow); for (const k in MP.R.guns) scene.remove(MP.R.guns[k]); disposeSoldier(MP.R.S); MP.R = null; } MP.rx = []; }
+function mpRemoteDrop(L) {
+  if (!L) { for (const q of MP.links.values()) mpRemoteDrop(q); return; }
+  if (L.R) { scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); L.R = null; } L.rx = [];
+}
 const _mpA = new THREE.Vector3(), _mpB = new THREE.Vector3(), _mpQ = new THREE.Quaternion(), _mpQ2 = new THREE.Quaternion();
 const lerp7 = (a, b, k, out) => { _mpA.set(a[0], a[1], a[2]).lerp(_mpB.set(b[0], b[1], b[2]), k); _mpQ.set(a[3], a[4], a[5], a[6]).slerp(_mpQ2.set(b[3], b[4], b[5], b[6]), k); out.p.copy(_mpA); out.q.copy(_mpQ); return out; };
-function mpSample() {                                       // where they were 110 ms ago, smoothed between updates
-  const rx = MP.rx; if (!rx.length) return null;
+function mpSample(L) {                                      // where they were 110 ms ago, smoothed between updates
+  const rx = L.rx; if (!rx.length) return null;
   const t = performance.now() - 110; let a = rx[0], b = rx[0];
   for (let i = 0; i < rx.length; i++) { if (rx[i].at <= t) a = rx[i]; if (rx[i].at >= t) { b = rx[i]; break; } b = rx[i]; }
   const k = b.at > a.at ? Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at))) : 1;
@@ -6768,10 +6903,10 @@ function mpRemoteGun(R, k) {
   if (R.guns[k]) return R.guns[k];
   const m = (k === "hunt" ? sniper : GUNMODEL[k] || sniper).clone(true); m.visible = true; const g = new THREE.Group(); g.add(m); scene.add(g); return R.guns[k] = g;
 }
-function mpRemoteTick(dt) {
-  const s = mpSample(); if (!s) return;
-  if (!MP.R) MP.R = mpRemoteMake();
-  const R = MP.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
+function mpRemoteTick(L, dt) {
+  const s = mpSample(L); if (!s) return;
+  if (!L.R) L.R = mpRemoteMake();
+  const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
   S.group.visible = S.shadow.visible = s.alive && state === "play";
   for (const k in R.guns) R.guns[k].visible = false;
   if (!S.group.visible) return;
@@ -6792,13 +6927,13 @@ function mpRemoteTick(dt) {
   }
   if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); }
 }
-function mpRemoteShot(o) {                                  // their tracer and their gunshot
+function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
   makeBullet(from, new THREE.Vector3(...o.v), { reach: 2400, remote: true });
   if (camera.position.distanceTo(from) < 700) gunshot(o.k);
 }
-function mpHitTest(from, dir, maxT) {                       // did my shot hit them? (head counts double)
-  const R = MP.R; if (!R || !R.cur || !R.alive) return null;
+function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
+  if (!R || !R.cur || !R.alive) return null;
   const hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04, 0)), oc = new THREE.Vector3().subVectors(from, hc);
   const bq = oc.dot(dir), cq = oc.lengthSq() - .15 * .15, disc = bq * bq - cq;
   let best = null;
@@ -6814,10 +6949,15 @@ function mpHitTest(from, dir, maxT) {                       // did my shot hit t
   }
   return best;
 }
+function mpHitTest(from, dir, maxT) {                       // the nearest player my shot hits, if any
+  let best = null;
+  for (const L of MP.links.values()) { if (!L.open || L.bad) continue; const h = mpHitOne(L.R, from, dir, maxT); if (h && (!best || h.t < best.t)) { best = h; best.L = L; } }
+  return best;
+}
 function mpTakeHit(d, head) {
   if (MP.dead > 0 || state !== "play") return;
   MP.hp = Math.max(0, MP.hp - d); MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
-  if (MP.hp <= 0) { MP.dead = 5; MP.deaths++; mpSend({ t: "die" }); }
+  if (MP.hp <= 0) { MP.dead = 5; MP.deaths++; mpSend({ t: "die", by: MP.lastHitBy }); }
 }
 function mpHurtMesh() {
   if (MP.hurtM) return MP.hurtM;
@@ -6825,33 +6965,38 @@ function mpHurtMesh() {
   MP.hurtM.renderOrder = 999; MP.hurtM.frustumCulled = false; scene.add(MP.hurtM); return MP.hurtM;
 }
 function mpCansReset() { MP.cansTaken = new Set(); }
-function mpTakeCan(i, fromNet) {                            // an ammo can someone picked up disappears for both of you
+function mpTakeCan(i, fromNet) {                            // an ammo can someone picked up disappears for everyone
   const c = ammoCans[i]; if (!c || c.got) return; c.got = true;
   if (canMesh) { const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true; }
 }
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {
   if (!MP.peer) return;
-  if (MP.on) {                                              // a small heartbeat; if your friend goes silent for 12 seconds, the link is gone
-    if ((MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }
-    if (performance.now() - MP.lastRx > 12000) { const c = MP.conn; MP.conn = null; MP.on = false; mpRemoteDrop(); try { c && c.close(); } catch (e) {} mpStatus(MP.host ? "Lost the connection to your friend. Waiting with code " + MP.code : "Lost the connection to the host."); if (!MP.host) { const p = MP.peer; MP.peer = null; try { p.destroy(); } catch (e) {} MP.code = ""; } }
+  const now = performance.now();
+  if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 12 seconds is gone
+  for (const L of [...MP.links.values()]) {
+    if (L.open && now - L.lastRx > 12000) mpLinkGone(L, true);
+    else if (!L.open && now - L.lastRx > 30000) mpDropLink(L);
   }
+  if (MP.revealT > 0 && (MP.revealT -= dt) <= 0) mpRevealEnd();
   const playing = state === "play" && gameMode === "pvp";
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
-    MP.sendT = .05; const I = vr.I, L = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;
-    mpSend({ t: "s", h: pose7(I.head, I.headQ), l: L ? pose7(L.pos, L.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
+    MP.sendT = .05; const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;
+    mpSend({ t: "s", h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp });
   }
-  if (MP.on) mpRemoteTick(dt); else if (MP.R) mpRemoteDrop();
+  for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); }
   if (MP.dead > 0 && state === "play") {                    // down: a dark screen, then back in somewhere else
     MP.dead -= dt; if (UW.mesh) { UW.mesh.visible = true; UW.mesh.material.uniforms.uBlack.value = Math.max(UW.mesh.material.uniforms.uBlack.value, .88); }
     if (MP.dead <= 0) { MP.dead = 0; uwRespawn(); MP.hp = 100; if (UW.mesh) UW.mesh.material.uniforms.uBlack.value = 0; }
   }
   const hm = mpHurtMesh(); MP.hurt = Math.max(0, MP.hurt - dt * 1.6); hm.material.opacity = MP.hurt * .45; hm.visible = MP.hurt > .01 && state === "play"; if (vr.I) hm.position.copy(vr.I.head);
-  if (SND.ctx && vr.I) {                                    // voice: you hear them from where their head is
+  if (SND.ctx && vr.I) {                                    // voice: in the game you hear each player from where their head is; in the menus, plainly
     const l = SND.ctx.listener, h = vr.I.head, f = _mpA.set(0, 0, -1).applyQuaternion(vr.I.headQ), u = _mpB.set(0, 1, 0).applyQuaternion(vr.I.headQ);
     if (l.positionX) { l.positionX.value = h.x; l.positionY.value = h.y; l.positionZ.value = h.z; l.forwardX.value = f.x; l.forwardY.value = f.y; l.forwardZ.value = f.z; l.upX.value = u.x; l.upY.value = u.y; l.upZ.value = u.z; }
-    if (MP.panner && MP.R && MP.panner.positionX) { MP.panner.positionX.value = MP.R.head.x; MP.panner.positionY.value = MP.R.head.y; MP.panner.positionZ.value = MP.R.head.z; }
+    for (const L of MP.links.values()) if (L.panner && L.panner.positionX) {
+      const at = playing && L.R && L.R.alive ? L.R.head : h; L.panner.positionX.value = at.x; L.panner.positionY.value = at.y + (at === h ? .01 : 0); L.panner.positionZ.value = at.z;
+    }
   }
 }
 const MUZZLE = new THREE.Vector3(0, .012, -.71);
@@ -7064,7 +7209,7 @@ function bulletStep(t, dt) {                                // move one frame al
   let h = castShot(a, d, seg, t.cs), end = h.kind ? h.p : null;
   if (t.online && MP.on) {                                  // online: did it reach them? (they take the damage; head shots double)
     const rh = mpHitTest(a, d, end ? a.distanceTo(end) : seg);
-    if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSend({ t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
+    if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
   }
   const pos = end || b, out = !end && (Math.abs(b.x) > HALF || Math.abs(b.z) > HALF);
   t.gone += a.distanceTo(pos); a.copy(pos);
@@ -7328,6 +7473,7 @@ $("menuMainBtn").addEventListener("click", () => {
 });
 function startNew() {
   seed = 1 + Math.floor(Math.random() * 999999);
+  mpHostGen();                                                   // online host: everyone grows the same map
   $("loading").classList.remove("hidden");
   if (vr.on) vruiOpen("loading");                               // in a headset: a "growing trees" panel while the world is built
   setTimeout(() => {
