@@ -70,6 +70,13 @@ async def main():
           const bk2 = new T.Vector3(0, 0, .009); for (let i = 0; i < 10; i++) { L.Lh.add(bk2); frames(1); } pad.L.grip = 0; frames(3); out.phaseAfterBolt = A().phase;
           L.Lh.copy(foreL()); frames(3); pad.L.grip = 1; frames(5); out.scopedRegrip = V.scoped; pad.L.grip = 0;
           L.head.set(0, 1.7, 0); qs.head.identity(); L.R.set(.2, 1.35, -.35); L.Lh.set(-.25, 1.2, -.3); frames(40); out.scopedHandsDown = V.scoped;
+          // hands close together (controllers almost touching) still snap the front hand on and bring up the scope
+          { A().phase = 0; A().mag = 3; L.R.set(.0, 1.45, -.3); qs.R.identity(); qs.head.identity(); frames(40);
+            const Ss = D.GUNSPOT.hunt; L.head.copy(L.R.clone().add(new T.Vector3(Ss.eye[0] - Ss.grip[0], Ss.eye[1] - Ss.grip[1], Ss.eye[2] - Ss.grip[2]))).add(new T.Vector3(0, .03, .08));
+            L.Lh.copy(L.R.clone().add(new T.Vector3(-.03, .02, -.08))); frames(3); pad.L.grip = 1; frames(5);
+            out.closeHandsSnap = V.two; out.closeHandsScope = V.scoped; out.closeHandsGap = +(L.Lh.distanceTo(L.R) * 100).toFixed(0) + ' cm';
+            pad.L.grip = 0; frames(3); L.Lh.set(-.6, 1.0, .2); frames(3); pad.L.grip = 1; frames(3); out.farHandNoSnap = !V.two; pad.L.grip = 0;
+            L.head.set(0, 1.7, 0); L.R.set(.2, 1.35, -.35); L.Lh.set(-.25, 1.2, -.3); frames(40); }
           // 4. tap B: mark
           pad.R.b = 1; frames(5); pad.R.b = 0; frames(2); out.tapMark = !!(V.mark && V.mark.visible); out.wheelAfterTap = !!(V.wheelM && V.wheelM.visible);
           // 5. hold B: wheel; point right (assault rifle), let go

@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.24";              // Just Trees 1.24
+const VERSION = "1.25";              // Just Trees 1.25
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4172,6 +4172,11 @@ function xrInputs() {                                   // head from the two eye
 vr.readInputs = xrInputs;
 const _gyq = new THREE.Quaternion(), _gyqi = new THREE.Quaternion(), _ghL = new THREE.Vector3(), _ghQ = new THREE.Quaternion(), _gO = new THREE.Vector3();
 vr.gpL = new THREE.Vector3(); vr.gqL = new THREE.Quaternion();
+const _gl1 = new THREE.Vector3(), _gl2 = new THREE.Vector3();
+function nearGunLine(p, a, b) {                             // how far p is from the line between the trigger hand and the front grip (a little past each end too)
+  _gl1.copy(b).sub(a); const L2 = _gl1.lengthSq() || 1e-6, t = Math.max(-.15, Math.min(1.1, _gl2.copy(p).sub(a).dot(_gl1) / L2));
+  return _gl2.copy(a).addScaledVector(_gl1, t).distanceTo(p);
+}
 function edge(key, v) { const was = vr.prev[key] || 0; vr.prev[key] = v; return v > .6 && was <= .6; }
 // the rifle you hold: a copy of this mode's rifle, placed in the world at your hand
 const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .07 },
@@ -4317,7 +4322,7 @@ function vrTick(dt) {
     G.updateMatrixWorld(true);
     if (huntV) reloadTick(dt, G, off);
     const fore = G.localToWorld(_v2.set(...S.fore));
-    vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && off.pos.distanceTo(fore) < (S.snap || .35)));        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
+    vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && (S.snap ? off.pos.distanceTo(fore) < S.snap : nearGunLine(off.pos, G.localToWorld(_v1.set(...S.grip)), fore) < .17)));   // squeeze anywhere along the gun, even right next to the trigger hand        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
     const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
     vr.scoped = !!S.fov && vr.two && (huntV ? gf.dot(hf) > .55 && eye.distanceTo(I.head) < (vr.scoped ? .36 : .3)          // Hunting: two hands on the sniper anywhere near your face = scope
                                             : gf.dot(hf) > .8 && eye.distanceTo(I.head) < (vr.scoped ? .2 : .14));          // eye to the eyepiece: the whole view goes into the scope
