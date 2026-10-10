@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.28";              // Just Trees 1.28
+const VERSION = "1.29";              // Just Trees 1.29
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4326,7 +4326,7 @@ function vrTick(dt) {
     const hL = _ghL.copy(main.pos).sub(_gO.set(vr.ox, vr.oy, vr.oz)).applyQuaternion(yqi), hQ = _ghQ.copy(yqi).multiply(main.rayQ);
     if (!vr.gunInit) { vr.gqL.copy(hQ); vr.gpL.copy(hL); vr.gunInit = true; }
     const ang = 2 * Math.acos(Math.min(1, Math.abs(vr.gqL.dot(hQ)))), gd = vr.gpL.distanceTo(hL);
-    const rq = vr.scoped ? 2.2 + ang * 30 : 4.5 + ang * 55, rp = vr.scoped ? 3.5 + gd * 50 : 7 + gd * 90;
+    const rq = vr.scoped ? 1.0 + ang * 14 : 2.4 + ang * 30, rp = vr.scoped ? 2.0 + gd * 28 : 4.5 + gd * 55;   // heavy damping
     vr.gqL.slerp(hQ, 1 - Math.exp(-dt * rq)); vr.gpL.lerp(hL, 1 - Math.exp(-dt * rp));
     vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
@@ -4367,7 +4367,7 @@ function vrTick(dt) {
     const f = vr.scoped ? scopeFovs()[vr.zoom] : [11, 7][vr.zoom] || 11; vr.zoomK = Math.tan(36 * Math.PI / 180) / Math.tan(f * Math.PI / 360);
     if (!vr.zoomWas) { vr.zoomOpen = .2; vr.binoQ.copy(I.headQ); }
     vr.zoomOpen = Math.min(1, vr.zoomOpen + dt * 6);
-    vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 6));                                      // binoculars: your head, smoothed
+    vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 3));                                      // binoculars: your head, smoothed
   } else vr.zoomK = 1;
   vr.zoomWas = zoomOn;
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
@@ -4719,11 +4719,12 @@ let zoomOv = null;
 function zoomOverlay() {
   if (zoomOv) return zoomOv;
   zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
-    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 } },
+    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 } },
     vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
-    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; varying vec2 vN; varying vec2 vC; varying vec2 vS;
+    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; varying vec2 vN; varying vec2 vC; varying vec2 vS;
       void main(){
         vec2 t = (vN - vC) / vS * uK;                     // the real direction, so the lens stays the same size at every zoom
+        float cr = cos(uRoll), sr = sin(uRoll); t = vec2(cr * t.x - sr * t.y, sr * t.x + cr * t.y);   // turned level with the real horizon
         float a;
         if (uMode < 0.5) {
           float r = length(t), R = 0.5 * uOpen;
@@ -4755,6 +4756,8 @@ function zoomViewQ(aimQ) {                                  // look where the gu
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
+  { const f = _v1.set(0, 0, -1).applyQuaternion(q), vu = _v2.set(0, 1, 0).applyQuaternion(q), vrt = new THREE.Vector3(1, 0, 0).applyQuaternion(q);   // how far the view is tilted from level
+    const lu = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y); U.uRoll.value = lu.lengthSq() > 1e-6 ? Math.atan2(lu.dot(vrt), lu.dot(vu)) : 0; }
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
@@ -5122,7 +5125,11 @@ function update(dt) {
   const swimming = !iced && H(P.x, P.z) < water - 1.25;
   const wading = riverAt(P.x, P.z) > H(P.x, P.z) + .15;
   // glide: only in the air (after a jump or off a drop), only while the button is held
-  const steepVR = vr.on && slopeNy(P.x, P.z) < .77;                         // steeper than about 40 degrees
+  const steepVR = vr.on && slopeNy(P.x, P.z) < .77;                         // steeper than about 40 degrees (lets you lift off into a glide)
+  let skipVR = false;                                                          // the little downhill skips: only on a long steep slope you're actually moving down
+  if (steepVR && slopeNy(P.x, P.z) < .62) { const mx = P.x - (P._px ?? P.x), mz = P.z - (P._pz ?? P.z), ml = Math.hypot(mx, mz);
+    if (ml / Math.max(dt, 1e-3) > 2.5) { const g0 = groundAt(P.x, P.z), g1 = groundAt(P.x + mx / ml * 2.5, P.z + mz / ml * 2.5), g2 = groundAt(P.x + mx / ml * 5, P.z + mz / ml * 5); skipVR = g0 - g1 > 2.4 && g1 - g2 > 2.4; } }   // steeper than about 52 degrees, all the way down
+  P._px = P.x; P._pz = P.z;
   P.gliding = (gameMode === "pvp" || vr.on) && (input.glide || input.glideMouse) && (!P.onGround || steepVR) && !P.climb && !swimming;
   if (P.gliding && P.onGround) { P.onGround = false; P.vy = Math.max(P.vy, 1.5); P.y += .05; }   // push off the slope into the air
   if (swimming || P.gliding) P.crouch = false;
@@ -5180,8 +5187,8 @@ function update(dt) {
     if (P.gliding) P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4);   // ease into a slow, steady drop
     else P.vy -= 22 * dt;
     P.y += P.vy * dt;
-    if (steepVR && !P.gliding && P.y > gnd && P.y - gnd < .35 && P.onGround) P.onGround = false;
-    if (P.y <= gnd || (P.onGround && P.y - gnd < .6 && P.vy <= 0 && !(steepVR && !P.gliding))) { P.y = gnd; P.vy = 0; P.onGround = true; }   // on steep ground in VR the slope can drop away under you: little skips
+    if (skipVR && !P.gliding && P.y > gnd && P.y - gnd < .35 && P.onGround) P.onGround = false;
+    if (P.y <= gnd || (P.onGround && P.y - gnd < (vr.on ? 1.0 : .6) && P.vy <= 0 && !(skipVR && !P.gliding))) { P.y = gnd; P.vy = 0; P.onGround = true; }   // in VR you stay on the ground over small ledges   // on steep ground in VR the slope can drop away under you: little skips
     else P.onGround = false;
   }
   // steps come at a natural pace: about 2 a second walking, 2.7 sprinting, 1.5 crouched
