@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.44</title>
+<title>JUST TREES 1.45</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.44";              // Just Trees 1.44
+const VERSION = "1.45";              // Just Trees 1.45
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -340,6 +340,7 @@ const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [8, 20], cross: [10, 15] };  
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
+const CAPTURE = { r: 12, every: 20 };                     // capture point: radius (m), seconds held alone for each point
 const ZONE_EDGE_MAX = 11;                                  // VR zone: the edge never moves faster than this (m/s), a bit under sprinting (12.5), so you can always outrun it           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
@@ -374,7 +375,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3 };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -2271,7 +2272,7 @@ function drawMap(canvas) {
     ctx.fillStyle = `rgba(10,14,12,${fogA})`;
   }
   for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) if (!explored[j * 64 + i]) ctx.fillRect(i * cw - .5, j * ch - .5, cw + 1, ch + 1);
-  drawZoneOnMap(ctx, W, Hh);
+  drawZoneOnMap(ctx, W, Hh); drawCaptOnMap(ctx, W, Hh);
   const px = (P.x + HALF) / S * W, pz = (P.z + HALF) / S * Hh, a = -P.yaw, sz = Math.max(6, W / 26);
   ctx.save(); ctx.translate(px, pz); ctx.rotate(a);
   ctx.fillStyle = "#F2C14E"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
@@ -2922,7 +2923,7 @@ function generate() {
   perchTrees = allTrees.filter(t => t.kind !== "bare").map(t => ({ x: t.x, z: t.z, top: t.y + kinds[t.kind].vars[t.vi].h * t.s * t.sy * .78 })).filter(t => t.top - H(t.x, t.z) > 7);
   if (gameMode === "hunt") spawnAnimals(); else clearAnimals();
   if (ARMED() && VR_ON) { resetArms(); spawnAmmo(); } else clearAmmo();
-  startZone();
+  startZone(); startCapture();
   soundEnv = { day: smooth(-2, 15, sunPos(lat, set.month, hourNow).el), cold: winterSnow, season, biome };
   footEnv = { snow: winterSnow, sandy, leaves: litter > .5, snowLine };
   buildMap({ biome, winterSnow, snowLine, allTrees, grassCol: g[0] });
@@ -4352,7 +4353,7 @@ function vrTick(dt) {
     vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 3));                                      // binoculars: your head, smoothed
   } else vr.zoomK = 1;
   vr.zoomWas = zoomOn;
-  pvpHud(I, dt);
+  pvpHud(I, dt); captTick(I);
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
   input.glide = !!main && !!off && main.pos.distanceTo(off.pos) > 1.05 && main.pos.y > I.head.y - .65 && off.pos.y > I.head.y - .65;
   if (I.hands.left && I.hands.right) {
@@ -4925,7 +4926,7 @@ function vruiParts() {
   uiBtn(MPP, 720, 420, 590, 150, "Choose the map", () => { renderSetup(); vruiOpen("setup"); }, { primary: true, sub: "Everyone sees it with you", fs: 48, hide: () => !(MP.host && MP.code) });
   uiBtn(MPP, 90, 780, 380, 90, "Back", () => { if (MP.joining) { MP.joining = false; return; } mpLeave(); vruiOpen("mode"); }, { fs: 38 });
   // ---- settings: every choice with the same little explanation the flat menu gives ----
-  const S2 = uiPanel("setup", 2048, 1090, 2.1, 104, 1.4);
+  const S2 = uiPanel("setup", 2048, 1170, 2.1, 104, 1.4);
   const lx = 70, rx = 1078, cw = 900;
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
@@ -4943,6 +4944,7 @@ function vruiParts() {
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
     if (gameMode === "pvp") uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
+    if (gameMode === "pvp") { uiLabel(g, lx, 1128, "Capture point"); note(g, 680, 1128, "A hidden spot on the map: +1 point every " + CAPTURE.every + " s you hold it alone. A flag shows where it is."); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[MP.idx]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
@@ -4963,6 +4965,8 @@ function vruiParts() {
   uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
   uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"), { personal: true });
   uiSlider(S2, rx + 300, 884, 270, 5, 20, () => set.roundMin || 10, v => { set.roundMin = v; }, 1).hide = () => gameMode !== "pvp";   // PvP round length, 5 to 20 minutes
+  uiBtn(S2, 360, 1086, 130, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" });   // PvP capture point
+  uiBtn(S2, 500, 1086, 130, 62, "On", () => { set.capture = "on"; }, { active: () => set.capture === "on", hide: () => gameMode !== "pvp" });
   uiBtn(S2, 220, 1006, 130, 62, "Off", () => { set.zone = "off"; }, { active: () => set.zone !== "on", hide: () => gameMode !== "pvp" });   // PvP closing zone
   uiBtn(S2, 360, 1006, 130, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
   uiSlider(S2, 830, 1008, 330, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
@@ -4994,7 +4998,7 @@ function vruiParts() {
   Ov.paint = (g, P) => {
     uiBg(g, P, "ROUND OVER"); const rows = MP.board || [];
     rows.slice(0, 8).forEach((r, i) => { const y = 170 + i * 62; g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(250, y, 18, 0, 6.283); g.fill();
-      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (MP_COLN[r.c] || "Player") + (r.me ? " (you)" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText(r.k + " kills · " + r.d + " deaths", 1160, y); });
+      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (MP_COLN[r.c] || "Player") + (r.me ? " (you)" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " pts · " : "") + r.k + " kills · " + r.d + " deaths", 1160, y); });
     if (!MP.host) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
   };
   uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => !MP.host });
@@ -5027,7 +5031,7 @@ function vruiOpen(stage) {
   const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
-  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m, CAPT && CAPT.ring, CAPT && CAPT.flag]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
@@ -6430,6 +6434,76 @@ function nadeLootTick(I) {
     gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + (got === 1 ? " grenade" : " grenades"); vr.lootT = 2.5; vr.wristT = 0;
   }
 }
+/* ---- capture point (VR PvP): one hidden spot per map, picked smartly (a hilltop or the woods, inside the last zone circle when the zone is on);
+        nobody sees it on the preview; in the round a white ring on the ground and a floating flag show where it is; +1 point every 20 s you hold it alone ---- */
+let CAPT = null;
+function clearCapture() { if (CAPT) { for (const o of [CAPT.ring, CAPT.flag]) if (o) { scene.remove(o); o.geometry && o.geometry.dispose(); o.material.dispose(); } } CAPT = null; }
+function startCapture() {
+  clearCapture();
+  if (set.capture !== "on" || gameMode !== "pvp" || !VR_ON) return;
+  const rnd = mulberry32(seed * 13 + 5), Z = zone && zone.vr ? zone.circles[zone.circles.length - 1] : null;
+  let best = null;
+  for (let k = 0; k < 500; k++) {
+    let x, z;
+    if (Z) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Z[2] * .7; x = Z[0] + Math.cos(a) * d; z = Z[1] + Math.sin(a) * d; }
+    else { x = (rnd() * 2 - 1) * EDGE * .8; z = (rnd() * 2 - 1) * EDGE * .8; }
+    if (!okSpot(x, z)) continue;
+    const h = H(x, z); let ring = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ring += H(x + Math.cos(a) * 45, z + Math.sin(a) * 45); } ring /= 8;
+    let trees = 0; const gx = Math.floor(x / 8), gz = Math.floor(z / 8);
+    for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const l = obstacles.get((gx + i) + "," + (gz + j)); if (l) for (const o of l) if (o.t && (o.x - x) ** 2 + (o.z - z) ** 2 < 324) trees++; }
+    const sc = (h - ring) + Math.min(trees, 25) * 1.2 + rnd() * 3;        // higher than its surroundings, or in among the trees, beats an open valley
+    if (!best || sc > best[2]) best = [x, z, sc];
+  }
+  if (!best) return;
+  CAPT = { x: best[0], z: best[1], y: groundAt(best[0], best[1]), r: CAPTURE.r, prog: 0, state: "free", col: "#ffffff", key: "" };
+  const SEGS = 96, pos = [], idx = [];                         // a white band lying on the ground, following its bumps
+  for (let i = 0; i <= SEGS; i++) {
+    const a = i / SEGS * 6.283;
+    for (const rr of [CAPT.r - .3, CAPT.r + .3]) { const x = CAPT.x + Math.cos(a) * rr, z = CAPT.z + Math.sin(a) * rr; pos.push(x, Math.max(groundAt(x, z), rockTopAt(x, z), iced ? water : -1e9) + .1, z); }
+    if (i < SEGS) { const b = i * 2; idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  CAPT.ring = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: .85, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  CAPT.ring.frustumCulled = false; scene.add(CAPT.ring);
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
+  CAPT.flag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, fog: false, toneMapped: false, transparent: true }));
+  CAPT.flag.userData.cv = cv; CAPT.flag.renderOrder = 995; CAPT.flag.visible = false; scene.add(CAPT.flag);
+}
+const captIn = (x, y, z) => Math.hypot(x - CAPT.x, z - CAPT.z) < CAPT.r && Math.abs(y - CAPT.y) < 8;
+function captScore(dt) {                                     // (runs with the online tick) who's in it; holding it alone earns a point every 20 s
+  if (!CAPT || state !== "play") return;
+  const me = MP.dead <= 0 && captIn(P.x, P.y, P.z); let others = 0, who = -1;
+  for (const L of MP.links.values()) if (L.open && !L.bad && L.R && L.R.alive && captIn(L.R.head.x, L.R.feet, L.R.head.z)) { others++; who = L.idx; }
+  CAPT.state = me ? (others ? "contested" : "mine") : others > 1 ? "contested" : others === 1 ? "theirs" : "free";
+  CAPT.col = CAPT.state === "mine" ? MP_COL[MP.idx] : CAPT.state === "theirs" ? MP_COL[who] || "#ffffff" : "#ffffff";
+  if (CAPT.state === "mine") {
+    if ((CAPT.prog += dt) >= CAPTURE.every) { CAPT.prog -= CAPTURE.every; MP.pts++; bing(); vr.lootMsg = "+1 point"; vr.lootT = 2; vr.wristT = 0; }
+  } else if (!me) CAPT.prog = 0;                             // leave and you start over; while it's contested you just wait
+}
+function captTick(I) {                                       // the ring's colour and the floating flag
+  if (!CAPT) return;
+  const show = state === "play" && !VRUI.on;
+  CAPT.ring.visible = show; CAPT.flag.visible = show; if (!show) return;
+  const flash = CAPT.state === "contested" && Math.floor(performance.now() / 300) % 2;
+  CAPT.ring.material.color.set(flash ? "#ff5a4a" : CAPT.col);
+  const tx = CAPT.x, ty = CAPT.y + 4, tz = CAPT.z, dx = tx - I.head.x, dy = ty - I.head.y, dz = tz - I.head.z, d = Math.hypot(dx, dy, dz), k = Math.min(d, 24) / Math.max(d, .01);
+  CAPT.flag.position.set(I.head.x + dx * k, I.head.y + dy * k, I.head.z + dz * k); CAPT.flag.scale.setScalar(Math.min(d, 24) * .26);   // same size on screen however far, seen through trees and hills
+  const flat = Math.hypot(CAPT.x - P.x, CAPT.z - P.z), key = [Math.round(flat / 5), CAPT.state, flash, Math.floor(CAPT.prog)].join("|"); if (key === CAPT.key) return; CAPT.key = key;
+  const g = CAPT.flag.userData.cv.getContext("2d"); g.clearRect(0, 0, 256, 256);
+  const col = flash ? "#ff5a4a" : CAPT.col;
+  g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 12; g.beginPath(); g.moveTo(98, 34); g.lineTo(98, 176); g.stroke();
+  g.strokeStyle = "#f2f2f2"; g.lineWidth = 7; g.beginPath(); g.moveTo(98, 34); g.lineTo(98, 176); g.stroke();
+  g.fillStyle = col; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 5; g.beginPath(); g.moveTo(102, 36); g.lineTo(190, 66); g.lineTo(102, 96); g.closePath(); g.fill(); g.stroke();
+  g.textAlign = "center"; g.font = "bold 54px sans-serif"; g.lineWidth = 9; g.strokeStyle = "rgba(0,0,0,.75)";
+  const txt = CAPT.state === "mine" ? "Holding " + Math.max(0, Math.ceil(CAPTURE.every - CAPT.prog)) + "s" : CAPT.state === "contested" ? "Contested" : flat < CAPT.r ? "Capture" : Math.round(flat) + " m";
+  g.strokeText(txt, 128, 232); g.fillStyle = "#ffffff"; g.fillText(txt, 128, 232);
+  CAPT.flag.material.map.needsUpdate = true;
+}
+function drawCaptOnMap(ctx, W, Hh) {
+  if (!CAPT || !vr.on) return;
+  const px = (CAPT.x + HALF) / S * W, pz = (CAPT.z + HALF) / S * Hh, r = Math.max(3, CAPT.r / S * W);
+  ctx.save(); ctx.beginPath(); ctx.arc(px, pz, r, 0, 6.283); ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fill(); ctx.lineWidth = Math.max(1.5, W / 100); ctx.strokeStyle = "#ffffff"; ctx.stroke(); ctx.restore();
+}
 /* ---- PvP loot (VR): you spawn with a 1-star pistol; find the other guns (1 to 5 stars), green crosses (health), blue crosses (shield),
         ammo and grenades; a better gun upgrades the one you have; when you die it all spills on the ground where you fell ---- */
 const GUN_NAME = { hunt: "Sniper", ar: "Assault rifle", smg: "SMG", pistol: "Pistol" };
@@ -6560,11 +6634,11 @@ function pvpHud(I, dt) {
   if (!VHUD.init) { VHUD.p.copy(want); VHUD.q.copy(I.headQ); VHUD.init = true; }
   VHUD.p.lerp(want, 1 - Math.exp(-dt * 7)); VHUD.q.slerp(I.headQ, 1 - Math.exp(-dt * 7));
   VHUD.m.position.copy(VHUD.p); VHUD.m.quaternion.copy(VHUD.q); VHUD.m.rotateX(.32);
-  const zs = zoneStatus(), zout = !!(zone && zone.out > .2), key = [Math.ceil(MP.roundLeft || 0), Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.dead > 0, zs, zout].join("|"); if (key === VHUD.key) return; VHUD.key = key;
+  const zs = zoneStatus(), zout = !!(zone && zone.out > .2), key = [Math.ceil(MP.roundLeft || 0), Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.pts, MP.dead > 0, zs, zout].join("|"); if (key === VHUD.key) return; VHUD.key = key;
   const g = VHUD.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 512, 150);
   g.fillStyle = "rgba(8,12,10,.62)"; uiRound(g, 4, 4, 504, 142, 22); g.fill();
   g.textAlign = "center"; g.textBaseline = "middle"; g.font = "bold 44px sans-serif"; g.fillStyle = (MP.roundLeft || 0) < 60 ? "#ff7a5a" : "#f2f6ec"; g.fillText(clockText(MP.roundLeft || 0), 256, 38);
-  g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills, 26, 38);
+  g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills + (CAPT ? "  Pts " + MP.pts : ""), 26, 38);
   if (zs) { g.textAlign = "right"; g.font = "bold 24px sans-serif"; g.fillStyle = zout ? "#ff7a5a" : "#9dffc0"; g.fillText(zout ? "OUTSIDE ZONE" : zs, 486, 38); }
   const bar = (y, v, col, label) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, 26, y, 460, 26, 9); g.fill(); if (v > 0) { g.fillStyle = col; uiRound(g, 26, y, Math.max(18, 460 * v / 100), 26, 9); g.fill(); }
     g.fillStyle = "#fff"; g.font = "bold 22px sans-serif"; g.textAlign = "right"; g.fillText(label + " " + Math.round(v), 478, y + 14); g.textAlign = "left"; };
@@ -6574,9 +6648,9 @@ function pvpHud(I, dt) {
 // ---- the end of a round: the clock hits zero, everyone sees the kills
 function mpRoundOver() {
   MP.roundLeft = 0;
-  const rows = [{ c: MP.idx, k: MP.kills, d: MP.deaths, me: true }];
-  for (const L of mpOpen()) rows.push({ c: L.idx, k: L.k || 0, d: L.dd || 0 });
-  rows.sort((a, b) => b.k - a.k || a.d - b.d); MP.board = rows;
+  const rows = [{ c: MP.idx, k: MP.kills, d: MP.deaths, p: MP.pts, me: true }];
+  for (const L of mpOpen()) rows.push({ c: L.idx, k: L.k || 0, d: L.dd || 0, p: L.pts || 0 });
+  rows.sort((a, b) => (CAPT ? b.p - a.p : 0) || b.k - a.k || a.d - b.d); MP.board = rows;   // with a capture point: points first
   state = "over"; if (vr.on) vruiOpen("over");
 }
 // ammo cans lying about the map, one kind for each gun
@@ -6628,13 +6702,13 @@ function lootTick(I) {
         each picks their own start, then everyone's flags show in their colours for 3 seconds and you all drop in. ---------------- */
 const MP_MAX = 8, MP_COL = ["#f2c14e", "#e8504a", "#4f9bff", "#55d16a", "#b56cff", "#ff9a3c", "#3fd8d0", "#ff74c4"], MP_COLN = ["Yellow", "Red", "Blue", "Green", "Purple", "Orange", "Teal", "Pink"];
 const MP = { on: false, host: false, code: "", entry: "", joining: false, peer: null, links: new Map(), status: "", sendT: 0, idx: 0,
-  hp: 100, sh: 0, dead: 0, wake: 0, deathPos: null, roundLeft: 0, board: null, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
+  hp: 100, sh: 0, pts: 0, dead: 0, wake: 0, deathPos: null, roundLeft: 0, board: null, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
 Object.defineProperties(MP, {                               // the first other player and their line (handy shortcuts)
   R: { get() { for (const L of MP.links.values()) if (L.R) return L.R; return null; } },
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land", "roundMin", "zone", "zoneHold", "zoneSpeed"];
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture"];
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host && gameMode === "pvp";
@@ -6817,7 +6891,7 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
-  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = 0; MP.roundLeft = (set.roundMin || 10) * 60;
+  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (set.roundMin || 10) * 60;
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
 function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
@@ -6826,7 +6900,7 @@ function mpSendStartTo(L) {                                 // straight into a g
   mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft });
 }
 function mpGuestStart(o) {
-  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null; MP.kills = MP.deaths = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
+  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
     generate(); reveal(); drawMap($("miniMap"));
@@ -6864,7 +6938,7 @@ function mpRecv(o, L) {
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
   if (o.t === "drop") { for (const it of o.items || []) dropAdd(Object.assign({}, it)); return; }
   if (o.t === "take") { dropTake(o.id, true); return; }
-  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
   if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
   if (o.t === "die") { if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; } return; }
@@ -6986,10 +7060,11 @@ function mpTick(dt) {                                       // (also runs offlin
   if (MP.revealT > 0 && (MP.revealT -= dt) <= 0) mpRevealEnd();
   const playing = state === "play" && gameMode === "pvp";
   if (playing && MP.roundLeft > 0 && (MP.roundLeft -= dt) <= 0) { mpRoundOver(); return; }   // the round clock
+  captScore(dt);
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
     MP.sendT = .05; const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;
     mpSend({ t: "s", h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
-      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: MP.kills, dd: MP.deaths });
+      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: MP.kills, dd: MP.deaths, pts: MP.pts });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); }
   if (MP.dead > 0 && state === "play") {                    // down: the view holds still where you fell and goes red, then you're back in somewhere else

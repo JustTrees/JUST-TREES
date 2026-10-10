@@ -359,3 +359,11 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.44
 - Zone edge speed cap: `ZONE_EDGE_MAX` = 11 m/s (sprint is 12.5). `vrZonePlan` stretches any shrink whose edge would move faster (big maps); if the stages then don't fit the round it uses one fewer stage. Medium at speed 5 stays ~5 m/s; XXL now tops out at 11.
+
+## 1.45 — capture point (VR PvP)
+- Settings: "Capture point" Off/On (PvP, synced, `set.capture`). Settings panel now 1170 tall.
+- `startCapture` (after `startZone` in generate): seeded spot scored by height above its surroundings (45 m ring) + trees within 18 m; inside the final zone circle when the zone is on. Not shown on the preview.
+- In the round: white band ring on the ground (radius `CAPTURE.r` 12 m) + a floating flag (sprite, no depth test, kept 24 m out at a steady size) with distance / "Holding 12s" / "Contested". Colour: white free, your colour when yours, theirs when theirs, flashing red when contested. Dot on the wrist map.
+- `captScore` (in mpTick): +1 point (`MP.pts`) every `CAPTURE.every` 20 s held alone; contested pauses; leaving resets. Points ride in "s" messages; round-over board sorts by points first when a capture point is on.
+- Test: dev/test_capture.py; test_lobby checks everyone has the same point.
+- Note: run_all takes ~17 min now; run it in the background (setsid nohup … &) since a tool call times out at 10 min.
