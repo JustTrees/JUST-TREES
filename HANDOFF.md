@@ -288,3 +288,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 *Last updated at v1.22 (October 2026). He asked to set the old backlog aside and only work on what he brings up; his stated direction is VR mechanics, how the characters look, climbing and gliding feel, and later a PC VR high-quality setting chosen automatically by device.*
 
 *Earlier note: The next chat: read this, check the repo (`index.html`, `dev/`), then ask Ron what he wants to start with. Birdwatching (note 25) and the body notes (9 and 10) are waiting, and multiplayer is the big next chapter.*
+
+## 1.36
+- Bullets go 1.5 m into water in VR (`WATER_PEN` in `castShot`). Someone standing chest-deep can still be shot; dive deeper to escape. You can shoot out from just under the surface. PC/phone unchanged.

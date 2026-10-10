@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.35";              // Just Trees 1.35
+const VERSION = "1.36";              // Just Trees 1.36
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -6886,10 +6886,12 @@ const tracerMat = (glow) => new THREE.MeshBasicMaterial({ color: glow ? 0xffe066
   blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending });   // solid yellow head reads in bright daylight, glowing trail
 const TRACER_SPEED = 380;     // m/s: still fast, but your eye can follow it
 const PUFF = { ground: 0x6b5a40, rock: 0xd8d6cc, wood: 0xa07048, water: 0xd8eef6, snow: 0xf4f8fb };
+const WATER_PEN = 1.5;
 function castShot(o, dir, maxD) {
   const p = o.clone(), max = maxD || 120 + (72 / camera.fov) * 140;      // the scope reaches further
   const [aT, aWho] = beasts.length ? animalRay(o, dir) : [1e9, null];
   const [bT, bWho, bHead] = squad.length && gameMode === "pvp" ? botRay(o, dir) : [1e9, null, false];
+  let wet = 0;                                              // how far this bullet has gone through water
   for (let dist = 0; dist < max;) {
     const st = dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
     if (dist >= bT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
@@ -6897,7 +6899,7 @@ function castShot(o, dir, maxD) {
     if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) break;
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
-    if (!iced && p.y <= water && g < water) return { p, kind: "water" };
+    if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; }   // in a headset a bullet goes about 1.5 m into water before stopping
     if (p.y <= rockTopAt(p.x, p.z)) return { p, kind: "rock" };
     const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
     if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return { p, kind: "wood" };
