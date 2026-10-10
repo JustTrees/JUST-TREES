@@ -5,7 +5,7 @@ import os, sys, asyncio, json
 from playwright.async_api import async_playwright
 T = 'file://' + os.path.abspath(sys.argv[1])
 INIT = """() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setVR(true); D.setMode('pvp'); const T = D.THREE, V = D.vr; V.on = true;
-  Object.assign(D.set, { size: 'small', weather: 'clear', lat: 45, hour: 12, edges: 'endless', land: 'natural' });
+  Object.assign(D.set, { size: 'small', weather: 'clear', lat: 45, hour: 12, edges: 'endless', land: 'natural', roundMin: 7 });
   D.MP.peerOpts = { host: '127.0.0.1', port: 9000, path: '/jt', secure: false };
   V.readInputs = () => ({ head: new T.Vector3(0, 1.7, 0), headQ: new T.Quaternion(), hands: {} });
   window.tick = setInterval(() => { try { D.vruiTick(.1); D.mpTick(.1); } catch (e) { console.error(String(e)); } }, 100); return 1; }"""
@@ -59,11 +59,20 @@ async def main():
         cols = await B.evaluate("() => D.MP.reveal.map(e => e.c)"); out["flagColours"] = cols
         for pg in (A, B, C): await wait(pg, "() => D.state === 'play'", 15)
         out["allPlaying"] = [await pg.evaluate("() => D.state") for pg in (A, B, C)]
+        out["roundClock"] = [round(await pg.evaluate("() => D.MP.roundLeft")) for pg in (A, B, C)]
+        out["guestsPistolOnly"] = await B.evaluate("() => JSON.stringify(D.vr.own)")
         bp2 = await B.evaluate("() => [D.P.x, D.P.z]"); out["bAtOwnPick"] = abs(bp2[0] - bp[0]) < .5 and abs(bp2[1] - bp[1]) < .5
         # a 4th player joins mid-game
         Dp = await page("D"); await Dp.evaluate(f"() => {{ D.mpJoin('{code}'); return 1; }}")
         out["lateJoinerPlaying"] = await wait(Dp, "() => D.state === 'play' && D.MP.links.size >= 3", 30)
         out["lateJoinerSameMap"] = (await Dp.evaluate("() => D.seed")) == seeds[0]
         out["lateJoinerColour"] = await Dp.evaluate("() => D.MP.idx")
+        # the clock runs out: everyone sees the round-over board
+        for pg in (A, B, C, Dp): await pg.evaluate("() => { D.MP.roundLeft = .5; return 1; }")
+        for pg in (A, B, C, Dp): await wait(pg, "() => D.VRUIstage === 'over'", 10)
+        out["roundOverAll"] = [await pg.evaluate("() => D.VRUIstage") for pg in (A, B, C, Dp)]
+        out["boardRows"] = await A.evaluate("() => D.MP.board.length")
+        await A.evaluate("() => { D.startNew(); return 1; }")
+        out["nextMapPreviewForGuests"] = [await wait(pg, "() => D.VRUIstage === 'preview'", 20) for pg in (B, C)]
         print(json.dumps(out)); print("errors:", errs[:8] or "none"); await b.close()
 asyncio.run(main())

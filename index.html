@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.39";              // Just Trees 1.39
+const VERSION = "1.40";              // Just Trees 1.40
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -338,7 +338,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp" };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10 };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -4377,8 +4377,9 @@ function drawWrist() {
   g.fillStyle = "rgba(12,20,14,.82)"; g.beginPath(); g.roundRect ? g.roundRect(4, 4, 248, 120, 14) : g.rect(4, 4, 248, 120); g.fill();
   g.fillStyle = "#e8f0dc"; g.font = "bold 20px sans-serif";
   if (gameMode === "pvp" && vr.on) {
-    g.fillStyle = MP.hp > 35 ? "#5fd068" : "#ff6a5a"; g.fillRect(16, 16, 2.2 * MP.hp, 12); g.fillStyle = "#e8f0dc"; g.fillText("Health " + Math.round(MP.hp), 16, 52);
-    g.font = "16px sans-serif"; g.fillText(MP.kills + " kills · " + MP.deaths + " deaths", 16, 78);
+    g.fillStyle = "#3f9bff"; g.fillRect(16, 12, 2.2 * (MP.sh || 0), 9); g.fillStyle = MP.hp > 35 ? "#5fd068" : "#ff6a5a"; g.fillRect(16, 25, 2.2 * MP.hp, 9);
+    g.fillStyle = "#e8f0dc"; g.fillText("Health " + Math.round(MP.hp) + " · Shield " + Math.round(MP.sh || 0), 16, 56);
+    g.font = "16px sans-serif"; g.fillText(MP.kills + " kills · " + MP.deaths + " deaths · " + clockText(MP.roundLeft || 0), 16, 80);
     g.fillStyle = vr.lootT > 0 ? "#ffd65a" : "#b8c4ad";
     g.fillText(vr.lootT > 0 ? vr.lootMsg : MP.on ? mpCount() + " players · you're " + MP_COLN[MP.idx] : MP.code ? "Code " + MP.code + " · waiting" : "Offline", 16, 104);
   } else if (gameMode === "pvp") {
@@ -4435,7 +4436,7 @@ function vrTick(dt) {
   if (main && huntV && edge("bmark", main.b)) markFromHand(main);                 // Hunting: tap B marks; A is tap for the gun, hold for the wheel (in wheelTick)
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
   vr.cool = (vr.cool || 0) - dt; if (!main || main.trig <= .6) vr.cool = Math.max(0, vr.cool);   // held trigger: keep the leftover time so shots stay on an even beat
-  if (huntV) { lootTick(I); nadeLootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
+  if (huntV) { lootTick(I); nadeLootTick(I); dropsTick(I, dt); vr.lootT = Math.max(0, vr.lootT - dt); }
   const gunOn = canGun && vr.gunOut && !!main;
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
@@ -4493,6 +4494,7 @@ function vrTick(dt) {
     vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 3));                                      // binoculars: your head, smoothed
   } else vr.zoomK = 1;
   vr.zoomWas = zoomOn;
+  pvpHud(I, dt);
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
   input.glide = !!main && !!off && main.pos.distanceTo(off.pos) > 1.05 && main.pos.y > I.head.y - .65 && off.pos.y > I.head.y - .65;
   if (I.hands.left && I.hands.right) {
@@ -4517,6 +4519,7 @@ function vrTick(dt) {
   vr.climbing = climbTick(dt, I);
 }
 function vrAfterMove(dt) {                                // carry the play space along with this frame's walking and turning
+  mpDeadHold();
   const I = vr.I; if (!I) return;
   { // your face stops at trunks, limbs and boulders: the world slides back instead of letting you see inside
     const hy = P.y + vr.headLocalY;
@@ -4614,8 +4617,9 @@ function vrFire() {
   const huntM = ARMED(), S = GUNSPOT[vr.gunKind], W = huntM ? WEAP[vr.gunKind] : null;
   if (huntM) {
     const A = arms[vr.gunKind]; if (vr.cool > 0 || A.phase || A.mag <= 0) return;
-    late = W.auto ? Math.max(0, Math.min(W.cool * .99, -vr.cool)) : 0;          // how long ago this shot was due
-    vr.cool = W.cool - late; A.mag--; vr.kick = 0;                                   // no recoil for now
+    const cl = W.cool / TIER.rate[Math.max(1, tierOf(vr.gunKind))];             // better stars fire faster
+    late = W.auto ? Math.max(0, Math.min(cl * .99, -vr.cool)) : 0;              // how long ago this shot was due
+    vr.cool = cl - late; A.mag--; vr.kick = 0;                                   // no recoil for now
     if (gameMode === "hunt") scatterBeasts(P);
     if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoley(SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
     else if (vr.gunKind === "hunt") A.phase = 2;                                    // sniper: work the bolt by hand after every shot
@@ -4627,7 +4631,7 @@ function vrFire() {
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
   const online = gameMode === "pvp" && MP.on && !!W;
-  makeBullet(from, v, { reach: vr.scoped ? 2400 : W ? W.reach : 900, age: late, dmg: W ? W.dmg : 0, online });
+  makeBullet(from, v, { reach: vr.scoped ? 2400 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, online });
   if (online) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
   gunshot(huntM ? vr.gunKind : undefined);
 }
@@ -5087,6 +5091,7 @@ function vruiParts() {
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
+    if (gameMode === "pvp") uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[MP.idx]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
@@ -5105,6 +5110,7 @@ function vruiParts() {
   uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left", personal: true });
   uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
   uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen("mode"), { personal: true });
+  uiSlider(S2, rx + 300, 884, 270, 5, 20, () => set.roundMin || 10, v => { set.roundMin = v; }, 1).hide = () => gameMode !== "pvp";   // PvP round length, 5 to 20 minutes
   uiBtn(S2, rx + 300, 760, 280, 100, "Randomize", () => { $("randomBtn").click(); });
   uiBtn(S2, rx + 600, 760, 300, 100, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44 });
   uiBtn(S2, rx + 600, 880, 300, 72, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 30, personal: true });
@@ -5127,6 +5133,17 @@ function vruiParts() {
   uiBtn(Pv, 90, 290, 470, 100, "New map", () => startNew(), { fs: 42, hide: pvHide });                      // throw this one away and grow another, same settings
   uiBtn(Pv, 580, 290, 440, 100, "Settings", () => vruiOpen("setup"), { fs: 38, hide: pvHide });
   uiBtn(Pv, 1040, 290, 470, 100, "Play this map", () => vruiDropIn(), { primary: true, fs: 42, hide: pvHide });
+  // ---- end of a PvP round: everyone's kills ----
+  const Ov = uiPanel("over", 1400, 900, 2.0, 74, 1.45);
+  Ov.paint = (g, P) => {
+    uiBg(g, P, "ROUND OVER"); const rows = MP.board || [];
+    rows.slice(0, 8).forEach((r, i) => { const y = 170 + i * 62; g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(250, y, 18, 0, 6.283); g.fill();
+      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (MP_COLN[r.c] || "Player") + (r.me ? " (you)" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText(r.k + " kills · " + r.d + " deaths", 1160, y); });
+    if (!MP.host) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
+  };
+  uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => !MP.host });
+  uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiOpen("setup"), { fs: 40, hide: () => !MP.host });
+  uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 145, 1000, 34); };
@@ -5152,10 +5169,10 @@ function vruiOpen(stage) {
   VRUI.root.position.copy(hp); VRUI.root.rotation.set(0, fy, 0);
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
   for (const k in VRUI.panels) VRUI.panels[k].mesh.visible = false;
-  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"] }[stage] || [];
+  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
-  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
@@ -6192,7 +6209,8 @@ const WHEEL = ["hunt", "ar", "smg", "pistol", "gren"];  // five slices, clockwis
 const WSTEP = Math.PI * 2 / 5;
 const AMMO_CAP = 300;
 const arms = {};
-function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0; }
+function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
+  if (gameMode === "pvp") pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }
 vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
 resetArms();
 // the other three guns, built from code like the sniper (each has a "mag" and a "charge" part for reloading)
@@ -6321,11 +6339,15 @@ function drawWheel(sel) {
   WHEEL.forEach((k, i) => {
     const a0 = -Math.PI / 2 + (i - .5) * WSTEP, a1 = a0 + WSTEP, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === vr.weapon && !vr.nadeMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
-    g.fillStyle = on ? "rgba(255,214,90,.92)" : "rgba(14,20,15,.82)"; g.fill();
+    const lock = k !== "gren" && gameMode === "pvp" && !(vr.own[k] > 0), pv = k !== "gren" && gameMode === "pvp";
+    g.fillStyle = on && !lock ? "rgba(255,214,90,.92)" : lock ? "rgba(14,20,15,.45)" : "rgba(14,20,15,.82)"; g.fill();
     g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
-    const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165, A = arms[k];
-    g.textAlign = "center"; g.fillStyle = on ? "#1a1a12" : "#eef3e6"; g.font = "bold 36px sans-serif"; g.fillText(Wk.name, cx, cy);
-    g.font = "30px sans-serif"; g.fillStyle = on ? "#3a3420" : Wk.col; g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : A.mag + " | " + A.res, cx, cy + 40);
+    const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165 - (pv ? 12 : 0), A = arms[k];
+    g.textAlign = "center"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#1a1a12" : "#eef3e6"; g.font = "bold 36px sans-serif"; g.fillText(Wk.name, cx, cy);
+    if (pv && !lock) { const t = tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
+      for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
+    g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : lock ? "not found" : A.mag + " | " + A.res, cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -6361,6 +6383,7 @@ function wheelTick(dt, main, I) {
 }
 function pickGun(k) {
   if (k === "gren") { vr.nadeMode = true; vr.gunOut = false; gunFoley(SFX.swap); return; }
+  if (gameMode === "pvp" && !(vr.own[k] > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }   // not found yet
   vr.nadeMode = false;
   if (k !== vr.weapon) { vr.weapon = k; vr.gunInit = false; vr.rl.grab = null; vr.cool = Math.max(vr.cool, .25); gunFoley(SFX.swap); }
   vr.gunOut = true;
@@ -6412,7 +6435,7 @@ function reloadTick(dt, G, off) {
     if (R.grab === "mag") {                                              // the magazine only moves along its slot, so it lines up by itself
       const along = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - R.off;
       A.k = Math.max(0, Math.min(1, along / S.drop));
-      if (A.k < .07) { const n = Math.min(WEAP[kind].mag, A.res); A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
+      if (A.k < .07) { const n = Math.min(magOf(kind), A.res); A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
     }
     if (R.grab === "charge") {
       R.pull = Math.max(0, Math.min(S.pull, hl.z - R.start));
@@ -6548,7 +6571,7 @@ function vrClearNades() {
   nadeLootMesh = null; nadeLoot = []; nadeHide();
 }
 function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
-  const R = mulberry32(seed * 91 + 7), n = Math.round(6 + HALF / 22), spots = [];
+  const R = mulberry32(seed * 91 + 7), n = Math.round(12 + HALF / 11), spots = [];
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -6585,15 +6608,149 @@ function nadeLootTick(I) {
     gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + (got === 1 ? " grenade" : " grenades"); vr.lootT = 2.5; vr.wristT = 0;
   }
 }
+/* ---- PvP loot (VR): you spawn with a 1-star pistol; find the other guns (1 to 5 stars), green crosses (health), blue crosses (shield),
+        ammo and grenades; a better gun upgrades the one you have; when you die it all spills on the ground where you fell ---- */
+const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"], TIER_NAME = [null, "Normal", "Blue", "Purple", "Gold", "Red"];
+const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };
+const GUN_NAME = { hunt: "Sniper", ar: "Assault rifle", smg: "SMG", pistol: "Pistol" };
+const PICK = { hp: 30, sh: 35, back: 40 };
+vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 };
+const tierOf = k => gameMode === "pvp" ? (vr.own[k] || 0) : 1;
+const magOf = k => Math.max(1, Math.round(WEAP[k].mag * TIER.mag[Math.max(1, tierOf(k))]));
+const DROPS = new Map(); let dropSeq = 0;
+function pvpLoadout() {                                     // every spawn: a 1-star pistol and nothing else
+  vr.own = { pistol: 1 };
+  for (const k in WEAP) { const A = arms[k]; A.phase = 0; A.k = 0; A.popping = false; A.mag = k === "pistol" ? magOf("pistol") : 0; A.res = k === "pistol" ? WEAP.pistol.start : 0; }
+  vr.nades = 0; vr.nadeMode = false; vr.weapon = "pistol"; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; MP.sh = 0;
+}
+// ---- the things lying about
+let _crossGeo = null;
+function crossMesh(col) {                                   // a glowing plus sign
+  const g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: col, fog: false, toneMapped: false });
+  const halo = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false });
+  _crossGeo = _crossGeo || [new THREE.BoxGeometry(.34, .1, .1), new THREE.BoxGeometry(.1, .34, .1), new THREE.BoxGeometry(.5, .2, .2), new THREE.BoxGeometry(.2, .5, .2)];
+  g.add(new THREE.Mesh(_crossGeo[0], m), new THREE.Mesh(_crossGeo[1], m), new THREE.Mesh(_crossGeo[2], halo), new THREE.Mesh(_crossGeo[3], halo));
+  return g;
+}
+let _beamGeo = null, _boxGeo = null;
+function dropObj(d) {
+  const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin); g.userData.spin = spin;
+  if (d.type === "gun") {
+    const model = (d.kind === "hunt" ? sniper : GUNMODEL[d.kind] || sniper).clone(true); model.visible = true; model.rotation.y = Math.PI / 2; model.scale.multiplyScalar(1.5); spin.add(model); g.userData.model = model;
+    _beamGeo = _beamGeo || new THREE.CylinderGeometry(.05, .05, 3, 8, 1, true).translate(0, 1.5, 0);
+    const beam = new THREE.Mesh(_beamGeo, new THREE.MeshBasicMaterial({ color: TIER_COL[d.tier], transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide }));
+    g.add(beam); g.userData.beam = beam;
+    const glow = crossMesh(TIER_COL[d.tier]); glow.children.slice(0, 2).forEach(c => c.visible = false); glow.scale.set(2.2, .5, 2.2); spin.add(glow);   // a soft glow round the gun in its star colour
+  } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
+  else {                                                    // spilled ammo or grenades: a little box with a coloured band
+    _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
+    spin.add(new THREE.Mesh(_boxGeo[0], new THREE.MeshLambertMaterial({ color: 0x3e4733 })), new THREE.Mesh(_boxGeo[1], new THREE.MeshBasicMaterial({ color: d.type === "nade" ? 0x9be05a : WEAP[d.kind].col })));
+  }
+  g.position.set(d.x, d.y, d.z); scene.add(g); return g;
+}
+function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
+function dropTake(id, fromNet) {
+  const d = DROPS.get(id); if (!d || d.got) return;
+  if (d.type === "hp" || d.type === "sh") { d.got = true; d.back = PICK.back; d.obj.visible = false; return; }   // crosses come back after a while
+  scene.remove(d.obj); DROPS.delete(id);
+}
+function dropsClear() { for (const d of DROPS.values()) scene.remove(d.obj); DROPS.clear(); }
+function spawnPvpLoot() {                                   // seeded: everyone gets the same guns and crosses in the same places
+  const R = mulberry32(seed * 91 + 13), spot = () => { for (let k = 0; k < 200; k++) { const x = (R() * 2 - 1) * (EDGE - 10), z = (R() * 2 - 1) * (EDGE - 10); if (okSpot(x, z)) return [x, z]; } return null; };
+  const nG = Math.round(8 + HALF / 20), nC = Math.round(10 + HALF / 15);
+  for (let i = 0; i < nG; i++) {
+    const s = spot(); if (!s) continue; const r = R(), kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
+    const tier = r < .4 ? 1 : r < .68 ? 2 : r < .86 ? 3 : r < .96 ? 4 : 5;
+    dropAdd({ id: "g" + i, type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: s[0], z: s[1] });
+  }
+  for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
+}
+function dropsTick(I, dt) {
+  if (!DROPS.size) return;
+  const t = performance.now() / 1000, hs = [I.hands.left, I.hands.right].filter(Boolean), cx = P.x, cz = P.z;
+  for (const d of [...DROPS.values()]) {
+    if (d.got) { if ((d.back -= dt) <= 0) { d.got = false; d.obj.visible = true; } continue; }
+    const far = Math.hypot(d.x - cx, d.z - cz), o = d.obj, U = o.userData;
+    o.visible = far < (d.type === "gun" ? 320 : 140);
+    if (U.model) U.model.visible = U.spin.visible = far < 70;
+    if (!o.visible) continue;
+    const hover = d.type === "gun" ? .55 : d.type === "hp" || d.type === "sh" ? 1.1 : .12, ph = (d.x * 7 + d.z * 3) % 6.28;
+    U.spin.position.y = hover + (d.type === "ammo" || d.type === "nade" ? 0 : Math.sin(t * 2 + ph) * .07); U.spin.rotation.y = t * 1.3 + ph;
+    if (state !== "play" || MP.dead > 0) continue;
+    const dx = d.x - P.x, dz = d.z - P.z;
+    const near = (dx * dx + dz * dz < 1.6 && Math.abs(d.y - P.y) < 2) || hs.some(h => h.pos.distanceTo(_v1.set(d.x, d.y + hover, d.z)) < .4);
+    if (near && dropUse(d)) { dropTake(d.id); if (MP.on) mpSend({ t: "take", id: d.id }); }
+  }
+}
+function dropUse(d) {                                       // what grabbing it does; false = leave it there (you're full)
+  let msg = "";
+  if (d.type === "hp") { if (MP.hp >= 100) return false; MP.hp = Math.min(100, MP.hp + PICK.hp); msg = "+" + PICK.hp + " health"; }
+  else if (d.type === "sh") { if (MP.sh >= 100) return false; MP.sh = Math.min(100, MP.sh + PICK.sh); msg = "+" + PICK.sh + " shield"; }
+  else if (d.type === "nade") { if (vr.nades >= NADE.MAX) return false; const n = Math.min(d.n, NADE.MAX - vr.nades); vr.nades += n; msg = "+" + n + (n === 1 ? " grenade" : " grenades"); }
+  else if (d.type === "ammo") { const A = arms[d.kind]; if (A.res >= AMMO_CAP) return false; const n = Math.min(d.n, AMMO_CAP - A.res); A.res += n; msg = "+" + n + " " + WEAP[d.kind].name + " ammo"; }
+  else if (d.type === "gun") {
+    const k = d.kind, A = arms[k], had = vr.own[k] || 0;
+    A.res = Math.min(AMMO_CAP, A.res + WEAP[k].can);
+    if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
+    else msg = "+" + WEAP[k].can + " " + WEAP[k].name + " ammo";
+    if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
+  }
+  gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = msg; vr.lootT = 2.5; vr.wristT = 0;
+  return true;
+}
+function pvpSpill() {                                       // you died: everything you carried scatters round you
+  const items = [], put = o => { const a = Math.random() * 6.283, r = .8 + Math.random() * 2.2; o.x = P.x + Math.cos(a) * r; o.z = P.z + Math.sin(a) * r; o.id = mpMyId() + ":" + (++dropSeq); items.push(o); };
+  for (const k in WEAP) {
+    const t = vr.own[k] || 0, A = arms[k], n = A.res + A.mag;
+    if (t && !(k === "pistol" && t === 1)) put({ type: "gun", kind: k, tier: t });
+    if (n > 0) put({ type: "ammo", kind: k, n });
+  }
+  if (vr.nades > 0) put({ type: "nade", n: vr.nades });
+  for (const o of items) dropAdd(Object.assign({}, o));
+  if (items.length && MP.on) mpSend({ t: "drop", items });
+}
+// ---- the little bar low in your view: round clock, shield, health, kills
+const VHUD = { m: null, key: "", p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
+const clockText = s => { s = Math.max(0, Math.ceil(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+function pvpHud(I, dt) {
+  const show = gameMode === "pvp" && vr.on && state === "play" && !VRUI.on;
+  if (!VHUD.m) {
+    const cv = document.createElement("canvas"); cv.width = 512; cv.height = 150;
+    VHUD.m = new THREE.Mesh(new THREE.PlaneGeometry(.3, .088), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    VHUD.m.renderOrder = 996; VHUD.m.frustumCulled = false; VHUD.m.userData.cv = cv; scene.add(VHUD.m);
+  }
+  VHUD.m.visible = show; if (!show) { VHUD.init = false; return; }
+  const want = _v1.set(0, -.27, -.72).applyQuaternion(I.headQ).add(I.head);              // follows your head gently, low in your view
+  if (!VHUD.init) { VHUD.p.copy(want); VHUD.q.copy(I.headQ); VHUD.init = true; }
+  VHUD.p.lerp(want, 1 - Math.exp(-dt * 7)); VHUD.q.slerp(I.headQ, 1 - Math.exp(-dt * 7));
+  VHUD.m.position.copy(VHUD.p); VHUD.m.quaternion.copy(VHUD.q); VHUD.m.rotateX(.32);
+  const key = [Math.ceil(MP.roundLeft || 0), Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.dead > 0].join("|"); if (key === VHUD.key) return; VHUD.key = key;
+  const g = VHUD.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 512, 150);
+  g.fillStyle = "rgba(8,12,10,.62)"; uiRound(g, 4, 4, 504, 142, 22); g.fill();
+  g.textAlign = "center"; g.textBaseline = "middle"; g.font = "bold 44px sans-serif"; g.fillStyle = (MP.roundLeft || 0) < 60 ? "#ff7a5a" : "#f2f6ec"; g.fillText(clockText(MP.roundLeft || 0), 256, 38);
+  g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills, 26, 38);
+  const bar = (y, v, col, label) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, 26, y, 460, 26, 9); g.fill(); if (v > 0) { g.fillStyle = col; uiRound(g, 26, y, Math.max(18, 460 * v / 100), 26, 9); g.fill(); }
+    g.fillStyle = "#fff"; g.font = "bold 22px sans-serif"; g.textAlign = "right"; g.fillText(label + " " + Math.round(v), 478, y + 14); g.textAlign = "left"; };
+  bar(74, MP.sh, "#3f9bff", "Shield"); bar(108, MP.hp, MP.hp > 35 ? "#3fe060" : "#ff5a4a", "Health");
+  VHUD.m.material.map.needsUpdate = true;
+}
+// ---- the end of a round: the clock hits zero, everyone sees the kills
+function mpRoundOver() {
+  MP.roundLeft = 0;
+  const rows = [{ c: MP.idx, k: MP.kills, d: MP.deaths, me: true }];
+  for (const L of mpOpen()) rows.push({ c: L.idx, k: L.k || 0, d: L.dd || 0 });
+  rows.sort((a, b) => b.k - a.k || a.d - b.d); MP.board = rows;
+  state = "over"; if (vr.on) vruiOpen("over");
+}
 // ammo cans lying about the map, one kind for each gun
 let ammoCans = [], canMesh = null;
 function clearAmmo() {
   if (canMesh) { scene.remove(canMesh.body, canMesh.band); canMesh.body.geometry.dispose(); canMesh.band.geometry.dispose(); canMesh.body.material.dispose(); canMesh.band.material.dispose(); }
-  canMesh = null; ammoCans = []; vrClearNades();
+  canMesh = null; ammoCans = []; vrClearNades(); dropsClear();
 }
 function spawnAmmo() {
   clearAmmo(); const R = mulberry32(seed * 91 + 5);           // seeded: both players get the same cans
-  const n = Math.round(14 + HALF / 9), spots = [];
+  const n = Math.round(30 + HALF / 4), spots = [];
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -6613,7 +6770,7 @@ function spawnAmmo() {
     band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
   });
   body.frustumCulled = band.frustumCulled = false; scene.add(body, band); canMesh = { body, band };
-  spawnNadeLoot();
+  spawnNadeLoot(); if (gameMode === "pvp") spawnPvpLoot();
 }
 function lootTick(I) {
   if (!canMesh || !ammoCans.length) return;
@@ -6634,13 +6791,13 @@ function lootTick(I) {
         each picks their own start, then everyone's flags show in their colours for 3 seconds and you all drop in. ---------------- */
 const MP_MAX = 8, MP_COL = ["#f2c14e", "#e8504a", "#4f9bff", "#55d16a", "#b56cff", "#ff9a3c", "#3fd8d0", "#ff74c4"], MP_COLN = ["Yellow", "Red", "Blue", "Green", "Purple", "Orange", "Teal", "Pink"];
 const MP = { on: false, host: false, code: "", entry: "", joining: false, peer: null, links: new Map(), status: "", sendT: 0, idx: 0,
-  hp: 100, dead: 0, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, startT: 0, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
+  hp: 100, sh: 0, dead: 0, wake: 0, deathPos: null, roundLeft: 0, board: null, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, startT: 0, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
 Object.defineProperties(MP, {                               // the first other player and their line (handy shortcuts)
   R: { get() { for (const L of MP.links.values()) if (L.R) return L.R; return null; } },
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land"];
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "land", "roundMin"];
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host && gameMode === "pvp";
@@ -6823,16 +6980,16 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
-  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.dead = 0; mpCansReset();
+  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = 0; MP.roundLeft = (set.roundMin || 10) * 60; mpCansReset();
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
-function mpSendStart() { for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.dead = 0; mpCansReset(); }
+function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; mpCansReset(); }
 function mpSendStartTo(L) {                                 // straight into a game that's already going
   const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
-  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others });
+  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft });
 }
 function mpGuestStart(o) {
-  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null;
+  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null; MP.kills = MP.deaths = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
     generate(); mpCansReset(); reveal(); drawMap($("miniMap"));
@@ -6867,7 +7024,9 @@ function mpRecv(o, L) {
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
-  if (o.t === "s") { L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "drop") { for (const it of o.items || []) dropAdd(Object.assign({}, it)); return; }
+  if (o.t === "take") { dropTake(o.id, true); return; }
+  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
   if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
   if (o.t === "die") { if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; } return; }
@@ -6907,8 +7066,13 @@ function mpRemoteTick(L, dt) {
   const s = mpSample(L); if (!s) return;
   if (!L.R) L.R = mpRemoteMake();
   const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
-  S.group.visible = S.shadow.visible = s.alive && state === "play";
   for (const k in R.guns) R.guns[k].visible = false;
+  if (!s.alive) {                                           // shot down: they fall back, then vanish within 3 seconds
+    R.deadT = (R.deadT || 0) + dt; const e0 = Math.min(1, R.deadT * 1.8), e = e0 * e0 * (3 - 2 * e0);
+    S.group.visible = S.shadow.visible = R.deadT < 3 && state === "play";
+    S.group.rotation.order = "YXZ"; S.group.position.set(S.x, S.y + e * .25, S.z); S.group.rotation.set(-e * 1.48, S.yaw + Math.PI, 0); S.group.updateMatrixWorld(true); return;
+  }
+  R.deadT = 0; S.group.visible = S.shadow.visible = state === "play";
   if (!S.group.visible) return;
   const f = _mpA.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   const nx = s.h.p.x - fx * .19, nz = s.h.p.z - fz * .19;
@@ -6956,9 +7120,14 @@ function mpHitTest(from, dir, maxT) {                       // the nearest playe
 }
 function mpTakeHit(d, head) {
   if (MP.dead > 0 || state !== "play") return;
-  MP.hp = Math.max(0, MP.hp - d); MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
-  if (MP.hp <= 0) { MP.dead = 5; MP.deaths++; mpSend({ t: "die", by: MP.lastHitBy }); }
+  const s = Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
+  MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
+  if (MP.hp <= 0) {
+    MP.dead = 4; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy });
+    if (gameMode === "pvp" && VR_ON) { pvpSpill(); pvpLoadout(); }       // your loot spills where you fell; you'll be back with a 1-star pistol
+  }
 }
+function mpDeadHold() { if (MP.dead > 0 && MP.deathPos && gameMode === "pvp") { P.x = MP.deathPos[0]; P.y = MP.deathPos[1]; P.z = MP.deathPos[2]; P.vy = 0; P.gliding = false; } }   // your view stays where you fell
 function mpHurtMesh() {
   if (MP.hurtM) return MP.hurtM;
   MP.hurtM = new THREE.Mesh(new THREE.SphereGeometry(.27, 20, 12), new THREE.MeshBasicMaterial({ color: 0x9a0d0d, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false }));
@@ -6970,8 +7139,7 @@ function mpTakeCan(i, fromNet) {                            // an ammo can someo
   if (canMesh) { const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true; }
 }
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
-function mpTick(dt) {
-  if (!MP.peer) return;
+function mpTick(dt) {                                       // (also runs offline in VR PvP, for dying and respawning)
   const now = performance.now();
   if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 12 seconds is gone
   for (const L of [...MP.links.values()]) {
@@ -6980,17 +7148,20 @@ function mpTick(dt) {
   }
   if (MP.revealT > 0 && (MP.revealT -= dt) <= 0) mpRevealEnd();
   const playing = state === "play" && gameMode === "pvp";
+  if (playing && MP.roundLeft > 0 && (MP.roundLeft -= dt) <= 0) { mpRoundOver(); return; }   // the round clock
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
     MP.sendT = .05; const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;
     mpSend({ t: "s", h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
-      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp });
+      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: MP.kills, dd: MP.deaths });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); }
-  if (MP.dead > 0 && state === "play") {                    // down: a dark screen, then back in somewhere else
-    MP.dead -= dt; if (UW.mesh) { UW.mesh.visible = true; UW.mesh.material.uniforms.uBlack.value = Math.max(UW.mesh.material.uniforms.uBlack.value, .88); }
-    if (MP.dead <= 0) { MP.dead = 0; uwRespawn(); MP.hp = 100; if (UW.mesh) UW.mesh.material.uniforms.uBlack.value = 0; }
+  if (MP.dead > 0 && state === "play") {                    // down: the view holds still where you fell and goes red, then you're back in somewhere else
+    MP.dead -= dt; MP.hurt = Math.max(MP.hurt, .9);
+    if (MP.dead <= 0) { MP.dead = 0; uwRespawn(); MP.hp = 100; MP.sh = 0; MP.deathPos = null; MP.wake = .5; MP.hurt = 0; }
   }
   const hm = mpHurtMesh(); MP.hurt = Math.max(0, MP.hurt - dt * 1.6); hm.material.opacity = MP.hurt * .45; hm.visible = MP.hurt > .01 && state === "play"; if (vr.I) hm.position.copy(vr.I.head);
+  if (MP.dead > 0 && MP.dead < .5) hm.material.opacity = .4 + .57 * (1 - MP.dead / .5);      // a quick fade out just before you respawn
+  if (MP.wake > 0) { MP.wake -= dt; hm.visible = state === "play"; hm.material.color.setRGB(0, 0, 0); hm.material.opacity = .97 * Math.max(0, MP.wake / .5); } else hm.material.color.set(0x9a0d0d);
   if (SND.ctx && vr.I) {                                    // voice: in the game you hear each player from where their head is; in the menus, plainly
     const l = SND.ctx.listener, h = vr.I.head, f = _mpA.set(0, 0, -1).applyQuaternion(vr.I.headQ), u = _mpB.set(0, 1, 0).applyQuaternion(vr.I.headQ);
     if (l.positionX) { l.positionX.value = h.x; l.positionY.value = h.y; l.positionZ.value = h.z; l.forwardX.value = f.x; l.forwardY.value = f.y; l.forwardZ.value = f.z; l.upX.value = u.x; l.upY.value = u.y; l.upZ.value = u.z; }
@@ -7567,7 +7738,7 @@ function loop(now) {
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (state === "play" || state === "fly") { updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
-  if (MP.peer) mpTick(dt);
+  if (MP.peer || (vr.on && gameMode === "pvp")) mpTick(dt);
   if (state === "play") {
     if (vr.on) vrTick(dt);
     if (!(vr.on && vr.climbing)) update(dt);

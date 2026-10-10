@@ -309,7 +309,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Shared lobby: the others mirror the host's settings panel (`ui`/`set` messages, `mpHostSetSync` from `renderSetup`, `mpHostStage` from `vruiOpen`) and can only change Hand/Fling (`mpLocked`, `personal` widgets). Host Start → `gen` → everyone grows the same map and sees the same preview; each player starts with a random spot already picked (`mpRandomSpawn`), pick on the diorama sends `spawn` to the host. Host "Play this map" → `reveal` with everyone's spots → coloured flags on everyone's diorama for 3 s (`mpRevealStart`) → `mpRevealEnd` drops each in at their own flag. Joining mid-game still uses `start` (spawn away from everyone). Main menu = leave.
 - Tests: dev/test_lobby.py (3 players + a late 4th), test_mp, test_mp_fail still pass.
 
-## Notes from Ron (Oct 10, not built yet) — updated
+## Notes from Ron (Oct 10) — BUILT in 1.40 (kept for reference)
 - PvP: health + shield bars (small low HUD in view + wrist), kill counter.
 - Much more loot everywhere (ammo cans ~2-3x, grenade boxes ~2x).
 - Floating pickups, instant effect when grabbed: GREEN floating cross = health, BLUE floating cross = shield. Seeded, synced, respawn ~40 s. Shield soaks damage first; each life starts with 0 shield.
@@ -320,3 +320,14 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Death, seen by others: your avatar falls/collapses, then disappears within 3 seconds.
 - Death, seen by you: your view does NOT fall; it stays frozen where you died while the screen goes a bit red, then you respawn.
 - Every spawn (round start and each respawn) = a 1-star pistol only. Hunting keeps all guns as now.
+
+## 1.40 — PvP loot, shield, round clock (VR PvP only; Hunting unchanged)
+- Every spawn = 1-star pistol (`pvpLoadout`, called from `resetArms` in PvP and on death). `vr.own` = gun → stars (0 = locked). `tierOf`/`magOf`, `TIER` multipliers (mag, rate, dmg) for 1..5 stars; `TIER_COL` white/blue/purple/gold/red.
+- Wheel: locked guns greyed ("not found"), `pickGun` refuses them; stars in tier colour under the name.
+- `DROPS` map (string ids): seeded gun drops ("g#", glowing beam in tier colour, model shown < 70 m) and crosses ("c#": green = +30 health, blue = +35 shield, back after 40 s), plus spilled loot ("peerId:n"). `dropsTick` animates + picks up (walk over or touch), `dropUse` applies, "take"/"drop" messages sync.
+- More loot: ammo cans 30 + HALF/4, grenade boxes 12 + HALF/11.
+- Shield `MP.sh` soaks damage first; 0 each life. Death: `pvpSpill` scatters guns (except a 1-star pistol), ammo and grenades; `MP.dead` = 4 s, view held at the death spot (`mpDeadHold` in `vrAfterMove`), red tint then quick fade. Others see the body fall back and vanish within 3 s.
+- HUD (`pvpHud`): clock, kills, shield and health bars, low in view, follows the head gently. Wrist shows the same.
+- Round length `set.roundMin` 5–20 (slider on settings in PvP, synced). `MP.roundLeft` starts at drop-in; at 0 → `mpRoundOver` → "over" panel with everyone's kills/deaths ("s" messages now carry k/dd). Host: New map / Settings; others wait; Leave for all.
+- `mpTick` now also runs offline in VR PvP (for dying/respawning).
+- Tests: dev/test_pvploot.py; test_mp and test_lobby extended (falling body, spilled loot, round clock, round over → next map).
