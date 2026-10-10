@@ -4,3 +4,6 @@ main = "server/src/index.js"
 compatibility_date = "2025-06-01"
 workers_dev = true
 keep_vars = true
+
+[build]
+command = "sh server/put-secrets.sh"
