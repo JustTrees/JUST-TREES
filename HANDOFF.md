@@ -370,3 +370,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.46 — drowning in PvP
 - `pvpDrowned` (called from `uwTick` after the drown respawn, PvP + VR only): nobody gets a kill, your loot is gone (not spilled), kills −1 (not below 0), shield 0, and you come back with NO weapons at all (`vr.own = {}`); hands stay empty until you pick up a gun (the first gun you grab is put in your hand). Respawns inside the zone if it's on. Hiking/Hunting drowning unchanged.
+
+## Design rules (Ron)
+- No resource gathering and no building (no walls/ramps/tiles like Population: One). Fights are about aim, movement and terrain: climbing, gliding, cover from trees, hills and water.
