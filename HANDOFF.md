@@ -367,3 +367,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 - `captScore` (in mpTick): +1 point (`MP.pts`) every `CAPTURE.every` 20 s held alone; contested pauses; leaving resets. Points ride in "s" messages; round-over board sorts by points first when a capture point is on.
 - Test: dev/test_capture.py; test_lobby checks everyone has the same point.
 - Note: run_all takes ~17 min now; run it in the background (setsid nohup … &) since a tool call times out at 10 min.
+
+## 1.46 — drowning in PvP
+- `pvpDrowned` (called from `uwTick` after the drown respawn, PvP + VR only): nobody gets a kill, your loot is gone (not spilled), kills −1 (not below 0), shield 0, and you come back with NO weapons at all (`vr.own = {}`); hands stay empty until you pick up a gun (the first gun you grab is put in your hand). Respawns inside the zone if it's on. Hiking/Hunting drowning unchanged.

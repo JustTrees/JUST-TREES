@@ -44,6 +44,13 @@ async def main():
           out.spilledGunTier = [...D.DROPS.values()].filter(d => String(d.id).includes(':') && d.type === 'gun').map(d => d.kind + d.tier).join(',');
           pad.L.sy = -1; frames(60); pad.L.sy = 0; out.viewHeldM = +Math.hypot(D.P.x - here[0], D.P.z - here[1]).toFixed(2);
           frames(200); out.backAlive = D.MP.dead <= 0 && D.MP.hp === 100;
+          // drowning in PvP: no spill, everything gone, one kill off, back with empty hands
+          V.own.ar = 2; D.arms.ar.mag = 20; D.arms.ar.res = 40; V.nades = 3; V.weapon = 'ar'; V.gunOut = true; D.MP.kills = 3; D.MP.dead = 0; const nd = D.DROPS.size;
+          let lake = null; for (let i = -190; i <= 190 && !lake; i += 4) for (let j = -190; j <= 190 && !lake; j += 4) if (D.H(i, j) < D.water - 3) lake = [i, j];
+          out.foundLake = !!lake;
+          if (lake) { go(lake[0], lake[1]); for (let i = 0; i < 60 * 8; i++) frames(1);
+            out.drowned = { own: JSON.stringify(V.own), arAmmo: D.arms.ar.mag + D.arms.ar.res, nades: V.nades, kills: D.MP.kills, spilled: D.DROPS.size - nd, gunShown: !!(V.gun && V.gun.visible), onLand: D.H(D.P.x, D.P.z) > D.water };
+            const gd2 = [...D.DROPS.values()].find(d => d.type === 'gun' && !d.got); go(gd2.x, gd2.z); out.afterPickup = { weapon: V.weapon, gunShown: !!(V.gun && V.gun.visible) }; }
           return out; }""")
         d = await pg.evaluate("() => window._wheel"); open(SHOT, 'wb').write(base64.b64decode(d.split(',')[1]))
         print(json.dumps(r)); print("errors:", errs[:8] or "none")

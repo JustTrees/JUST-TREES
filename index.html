@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.45</title>
+<title>JUST TREES 1.46</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.45";              // Just Trees 1.45
+const VERSION = "1.46";              // Just Trees 1.46
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4296,7 +4296,7 @@ function vrTick(dt) {
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
   vr.cool = (vr.cool || 0) - dt; if (!main || main.trig <= .6) vr.cool = Math.max(0, vr.cool);   // held trigger: keep the leftover time so shots stay on an even beat
   if (huntV) { lootTick(I); nadeLootTick(I); dropsTick(I, dt); vr.lootT = Math.max(0, vr.lootT - dt); }
-  const gunOn = canGun && vr.gunOut && !!main;
+  const gunOn = canGun && vr.gunOut && !!main && !(gameMode === "pvp" && huntV && !(vr.own[vr.weapon] > 0));   // PvP with no gun at all (after drowning): empty hands
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
     const S = GUNSPOT[vr.gunKind];
@@ -4451,7 +4451,7 @@ function uwTick(dt, I) {                                     // runs after you'v
   UW.under = under;
   if (UW.drown > 0) {                                        // fading out, moving you, fading back in
     UW.drown += dt;
-    if (UW.drown > 1.2 && UW.drown - dt <= 1.2) { uwRespawn(); UW.t = 0; }
+    if (UW.drown > 1.2 && UW.drown - dt <= 1.2) { uwRespawn(); UW.t = 0; if (gameMode === "pvp" && VR_ON) pvpDrowned(); }
     const b = UW.drown < 1.2 ? UW.drown / 1.2 : Math.max(0, 1 - (UW.drown - 1.6) / .8);
     ov.material.uniforms.uBlack.value = b; if (UW.drown > 2.4) { UW.drown = 0; ov.material.uniforms.uBlack.value = 0; }
   } else if (under) { UW.t += dt; if (UW.t >= UW.LIMIT) UW.drown = .001; }
@@ -6601,12 +6601,20 @@ function dropUse(d) {                                       // what grabbing it 
   else if (d.type === "gun") {
     const k = d.kind, A = arms[k], had = vr.own[k] || 0;
     A.res = Math.min(AMMO_CAP, A.res + WEAP[k].can);
-    if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
+    if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } if (!(vr.own[vr.weapon] > 0)) { vr.weapon = k; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = false; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
     else msg = "+" + WEAP[k].can + " " + WEAP[k].name + " ammo";
     if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
   }
   gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = msg; vr.lootT = 2.5; vr.wristT = 0;
   return true;
+}
+function pvpDrowned() {                                     // PvP: drowning costs you everything you carried (it's gone, not spilled), one kill, and you come back empty-handed
+  vr.own = {};
+  for (const k in WEAP) { const A = arms[k]; A.mag = 0; A.res = 0; A.phase = 0; A.k = 0; A.popping = false; }
+  vr.nades = 0; vr.nadeMode = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null;
+  MP.kills = Math.max(0, MP.kills - 1); MP.sh = 0;
+  if (zone && zone.vr) zoneSpawnInside();
+  vr.lootMsg = "Drowned: lost your gear and a kill"; vr.lootT = 4; vr.wristT = 0;
 }
 function pvpSpill() {                                       // you died: everything you carried scatters round you
   const items = [], put = o => { const a = Math.random() * 6.283, r = .8 + Math.random() * 2.2; o.x = P.x + Math.cos(a) * r; o.z = P.z + Math.sin(a) * r; o.id = mpMyId() + ":" + (++dropSeq); items.push(o); };
