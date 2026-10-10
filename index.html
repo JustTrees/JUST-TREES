@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.36";              // Just Trees 1.36
+const VERSION = "1.37";              // Just Trees 1.37
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4216,7 +4216,7 @@ function updateBird(A, dt, T) {
   A.wings[0].rotation.z = -flap; A.wings[1].rotation.z = flap;
 }
 const _ao = new THREE.Vector3();
-function animalRay(o, dir) {                              // the nearest animal hit box along the shot
+function animalRay(o, dir, minT = .5) {                              // the nearest animal hit box along the shot
   let best = 1e9, who = null;
   for (const A of beasts) {
     if (A.dead || !A.root.visible) continue;
@@ -4226,7 +4226,7 @@ function animalRay(o, dir) {                              // the nearest animal 
       const rr = r * (A.scale || 1) * (A.kind === "bird" ? 2.2 : A.kind === "monkey" ? 1.5 : 1),   // birds and monkeys get generous hit boxes
  b = _ao.dot(dir), c = _ao.lengthSq() - rr * rr, disc = b * b - c;
       if (disc < 0) continue; const t = -b - Math.sqrt(disc);   // (radius scaled below)
-      if (t > .5 && t < best) { best = t; who = A; }
+      if (t > minT && t < best) { best = t; who = A; }
     }
   }
   return [best, who];
@@ -4433,7 +4433,7 @@ function vrTick(dt) {
   if (main && canGun && !huntV && edge("a", main.a)) vr.gunOut = !vr.gunOut;
   if (main && huntV && edge("bmark", main.b)) markFromHand(main);                 // Hunting: tap B marks; A is tap for the gun, hold for the wheel (in wheelTick)
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
-  vr.cool = Math.max(0, (vr.cool || 0) - dt);
+  vr.cool = (vr.cool || 0) - dt; if (!main || main.trig <= .6) vr.cool = Math.max(0, vr.cool);   // held trigger: keep the leftover time so shots stay on an even beat
   if (huntV) { lootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
   const gunOn = canGun && vr.gunOut && !!main;
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
@@ -4605,30 +4605,26 @@ function vrLens() {                                       // draw the lens pictu
   if (vr.gun && vr.gun.userData.lens) vr.gun.userData.lens.visible = false;
 }
 function vrFire() {
+  let late = 0;
   if (state !== "play" || gameMode === "hike" || P.gliding || !vr.gun || !vr.gun.visible || MP.dead > 0) return;
   const huntM = ARMED(), S = GUNSPOT[vr.gunKind], W = huntM ? WEAP[vr.gunKind] : null;
   if (huntM) {
     const A = arms[vr.gunKind]; if (vr.cool > 0 || A.phase || A.mag <= 0) return;
-    vr.cool = W.cool; A.mag--;
-    vr.kick = Math.min(1.3, (W.auto ? vr.kick : 0) + W.kick * (vr.two ? .35 : 1));          // much less kick with two hands on the gun
+    late = W.auto ? Math.max(0, Math.min(W.cool * .99, -vr.cool)) : 0;          // how long ago this shot was due
+    vr.cool = W.cool - late; A.mag--; vr.kick = 0;                                   // no recoil for now
     if (gameMode === "hunt") scatterBeasts(P);
     if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoley(SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
     else if (vr.gunKind === "hunt") A.phase = 2;                                    // sniper: work the bolt by hand after every shot
   } else {
     if (GUN.cool > 0) return;
-    GUN.cool = GUN.auto ? .1 : .28; vr.kick = vr.two ? .35 : 1; alertBots();
+    GUN.cool = GUN.auto ? .1 : .28; vr.kick = 0; alertBots();
   }
+  // a real bullet: it flies at the gun's speed and drops, so far shots take time (lead a runner) and fall (aim a touch high). No spread, no recoil.
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
-  if (W && W.spread) { const sp = W.spread * (vr.two ? .5 : 1); dir.add(new THREE.Vector3((Math.random() - .5) * 2 * sp, (Math.random() - .5) * 2 * sp, (Math.random() - .5) * 2 * sp)).normalize(); }
-  const hit = castShot(from, dir, vr.scoped ? 2400 : W ? W.reach : 900); hit.dist = from.distanceTo(hit.p);
-  if (gameMode === "pvp" && MP.on && W) {                   // online: did it hit them? (they take the damage; head shots double)
-    const rh = mpHitTest(from, dir, hit.dist);
-    if (rh) { hit.p = from.clone().addScaledVector(dir, rh.t); hit.dist = rh.t; hit.kind = null; hit.animal = null; mpSend({ t: "hit", d: W.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
-    mpSend({ t: "f", o: [from.x, from.y, from.z], e: [hit.p.x, hit.p.y, hit.p.z], k: vr.gunKind, hk: hit.kind || null });
-  }
-  const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
-  trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; scene.add(head, trail);
-  tracers.push({ head, trail, from, end: hit.p.clone(), len: from.distanceTo(hit.p), d: 0, hit, fade: 0, vr: true });
+  const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
+  const online = gameMode === "pvp" && MP.on && !!W;
+  makeBullet(from, v, { reach: vr.scoped ? 2400 : W ? W.reach : 900, age: late, dmg: W ? W.dmg : 0, online });
+  if (online) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
   gunshot(huntM ? vr.gunKind : undefined);
 }
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
@@ -5979,7 +5975,7 @@ function botFire(S, d) {
   tracers.push({ head, trail, from: _bm.clone(), end, len: _bm.distanceTo(end), d: 0, hit: { kind: null, botHit: hit }, fade: 0 });
   botShotSound(d);
 }
-function botRay(o, dir) {                                 // your shot against their bodies (head, torso, hips, legs)
+function botRay(o, dir, minT = .5) {                                 // your shot against their bodies (head, torso, hips, legs)
   let best = 1e9, who = null, head = false;
   for (const S of squad) {
     if (S.dead || !S.group.visible) continue;
@@ -5987,7 +5983,7 @@ function botRay(o, dir) {                                 // your shot against t
     for (const [y, r, h] of [[1.68, .16, true], [1.25, .32], [.8, .28], [.38, .22]]) {
       _aq.set(0, y * k, 0).applyMatrix4(S.group.matrixWorld); _ao.copy(o).sub(_aq);
       const b = _ao.dot(dir), c = _ao.lengthSq() - r * r, disc = b * b - c; if (disc < 0) continue;
-      const t = -b - Math.sqrt(disc); if (t > .5 && t < best) { best = t; who = S; head = !!h; }
+      const t = -b - Math.sqrt(disc); if (t > minT && t < best) { best = t; who = S; head = !!h; }
     }
   }
   return [best, who, head];
@@ -6170,10 +6166,10 @@ function boltSounds() {                        // lift, pull back, push forward,
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
 const WEAP = {
-  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     reach: 900, dmg: 100, col: "#e04848" },
-  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, reach: 900, dmg: 30,  col: "#e8c33a" },
-  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  reach: 350, dmg: 18,  col: "#f08a2a" },
-  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  reach: 250, dmg: 25,  col: "#4f86ff" } };
+  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     spd: 850, reach: 900, dmg: 100, col: "#e04848" },
+  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
+  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
+  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
 const WHEEL = ["hunt", "ar", "smg", "pistol"];          // top, right, bottom, left
 const AMMO_CAP = 300;
 const arms = {};
@@ -6631,10 +6627,8 @@ function mpRemoteTick(dt) {
   if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); }
 }
 function mpRemoteShot(o) {                                  // their tracer and their gunshot
-  const from = new THREE.Vector3(...o.o), end = new THREE.Vector3(...o.e);
-  const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
-  trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; scene.add(head, trail);
-  tracers.push({ head, trail, from, end, len: from.distanceTo(end), d: 0, hit: { kind: o.hk || null }, fade: 0, vr: true });
+  const from = new THREE.Vector3(...o.o);
+  makeBullet(from, new THREE.Vector3(...o.v), { reach: 2400, remote: true });
   if (camera.position.distanceTo(from) < 700) gunshot(o.k);
 }
 function mpHitTest(from, dir, maxT) {                       // did my shot hit them? (head counts double)
@@ -6887,19 +6881,53 @@ const tracerMat = (glow) => new THREE.MeshBasicMaterial({ color: glow ? 0xffe066
 const TRACER_SPEED = 380;     // m/s: still fast, but your eye can follow it
 const PUFF = { ground: 0x6b5a40, rock: 0xd8d6cc, wood: 0xa07048, water: 0xd8eef6, snow: 0xf4f8fb };
 const WATER_PEN = 1.5;
-function castShot(o, dir, maxD) {
+const BULLET_G = 9.81, BULLET_ZERO = 100;                  // VR bullets: gravity, and the distance the sights are set for
+const _bB = new THREE.Vector3(), _bD = new THREE.Vector3(), _bT = new THREE.Vector3();
+function makeBullet(from, v, o) {
+  const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
+  trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
+  const t = { head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, online: !!o.online, remote: !!o.remote,
+              cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true };
+  tracers.push(t); return t;
+}
+function bulletStep(t, dt) {                                // move one frame along its falling path; true when it stops
+  const st = Math.min(.25, dt + t.age); t.age = 0;
+  const a = t.p, b = _bB.copy(a).addScaledVector(t.v, st); b.y -= .5 * BULLET_G * st * st; t.v.y -= BULLET_G * st;
+  const seg = a.distanceTo(b); if (seg < 1e-6) return true;
+  const d = _bD.subVectors(b, a).divideScalar(seg);
+  let h = castShot(a, d, seg, t.cs), end = h.kind ? h.p : null;
+  if (t.online && MP.on) {                                  // online: did it reach them? (they take the damage; head shots double)
+    const rh = mpHitTest(a, d, end ? a.distanceTo(end) : seg);
+    if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSend({ t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
+  }
+  const pos = end || b, out = !end && (Math.abs(b.x) > HALF || Math.abs(b.z) > HALF);
+  t.gone += a.distanceTo(pos); a.copy(pos);
+  const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
+  const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
+  place(t.head, 18, w); place(t.trail, 70, w * .45);
+  if (end) {
+    if (!t.remote) {                                        // only the shooter's own game counts the hit
+      if (h.kind === "animal") killAnimal(h.animal, t.from.distanceTo(end));
+      else if (h.kind === "bot") damageBot(h.bot, h.head);
+    }
+    if (h.kind && h.kind !== "animal" && h.kind !== "bot") addPuff(end, h.kind);
+    return true;
+  }
+  return out || t.gone > t.reach || pos.y < -500;
+}
+function castShot(o, dir, maxD, cs) {                      // cs: a flying bullet's state between frames (water so far, step size)
   const p = o.clone(), max = maxD || 120 + (72 / camera.fov) * 140;      // the scope reaches further
-  const [aT, aWho] = beasts.length ? animalRay(o, dir) : [1e9, null];
-  const [bT, bWho, bHead] = squad.length && gameMode === "pvp" ? botRay(o, dir) : [1e9, null, false];
-  let wet = 0;                                              // how far this bullet has gone through water
+  const [aT, aWho] = beasts.length ? animalRay(o, dir, cs ? 0 : .5) : [1e9, null];
+  const [bT, bWho, bHead] = squad.length && gameMode === "pvp" ? botRay(o, dir, cs ? 0 : .5) : [1e9, null, false];
+  let wet = cs ? cs.wet : 0;                                // how far this bullet has gone through water
   for (let dist = 0; dist < max;) {
-    const st = dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
+    const st = cs ? Math.min(cs.st, max - dist + .001) : dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
     if (dist >= bT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
     if (dist >= aT) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho };
     if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) break;
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
-    if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; }   // in a headset a bullet goes about 1.5 m into water before stopping
+    if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; if (cs) cs.wet = wet; }   // in a headset a bullet goes about 1.5 m into water before stopping
     if (p.y <= rockTopAt(p.x, p.z)) return { p, kind: "rock" };
     const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
     if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return { p, kind: "wood" };
@@ -6959,6 +6987,7 @@ function updateGun(dt) {
   const place = (m, a, b, w) => { m.position.lerpVectors(a, b, .5); m.lookAt(b); m.scale.set(w, w, Math.max(.05, a.distanceTo(b))); };
   for (let i = tracers.length - 1; i >= 0; i--) {             // glowing yellow tracer with a short fading trail
     const t = tracers[i];
+    if (t.live) { if (bulletStep(t, dt)) t.live = false; continue; }
     if (t.d < t.len) {
       t.d += (t.vr ? 1100 : TRACER_SPEED) * dt;                 // in VR: a much faster round
       const k = Math.min(1, t.d / t.len), hp = new THREE.Vector3().lerpVectors(t.from, t.end, k);

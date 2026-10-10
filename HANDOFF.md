@@ -291,3 +291,8 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.36
 - Bullets go 1.5 m into water in VR (`WATER_PEN` in `castShot`). Someone standing chest-deep can still be shot; dive deeper to escape. You can shoot out from just under the surface. PC/phone unchanged.
+
+## 1.37
+- VR guns fire real bullets (`makeBullet`/`bulletStep`, stepped in the tracer loop). Speeds in `WEAP.spd`: sniper 850, AR 715, SMG 400, pistol 360 m/s. Gravity `BULLET_G`, sights zeroed at `BULLET_ZERO` = 100 m. Hits count when the bullet arrives (animals, bots, online player via `mpHitTest` per frame segment). Online "f" message now sends origin + velocity; the other side flies a show-only bullet.
+- Steady fire rate: `vr.cool` keeps leftover time while the trigger is held. No recoil (`vr.kick = 0`) and no spread in VR for now (`WEAP.kick/spread` still there to bring back).
+- Test: dev/test_bullets.py. test_mp frames now call `updateGun`.

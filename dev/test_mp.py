@@ -13,7 +13,7 @@ SETUP = """(role) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); 
   const gq = new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), -.6);
   V.readInputs = () => { const yq = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), V.yaw).multiply(hq);
     return { head: toW(L.head), headQ: yq.clone(), hands: { right: Object.assign({ pos: toW(L.R), q: yq.clone().multiply(gq), rayPos: toW(L.R), rayQ: yq.clone() }, pad.R), left: Object.assign({ pos: toW(L.Lh), q: yq.clone().multiply(gq), rayPos: toW(L.Lh), rayQ: yq.clone() }, pad.L) } }; };
-  window.frames = n => { for (let i = 0; i < n; i++) { D.vrTick(1 / 60); if (!V.climbing) D.update(1 / 60); D.vrAfterMove(1 / 60); D.mpTick(1 / 60); } };
+  window.frames = n => { for (let i = 0; i < n; i++) { D.vrTick(1 / 60); if (!V.climbing) D.update(1 / 60); D.vrAfterMove(1 / 60); D.mpTick(1 / 60); D.updateGun(1 / 60); } };
   window.placeAt = (x, z) => { D.P.x = x; D.P.z = z; D.P.y = D.groundAt(x, z); D.P.onGround = true; V.ox = x; V.oz = z; V.oy = D.P.y; V.yaw = 0; V.goodX = undefined; V.cl = null; };
   return true; }"""
 async def run_frames(pg, n, chunk=6):                     # step the game while letting real time pass, so network messages flow
