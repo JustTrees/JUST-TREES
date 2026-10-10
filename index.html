@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.25";              // Just Trees 1.25
+const VERSION = "1.26";              // Just Trees 1.26
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4172,17 +4172,18 @@ function xrInputs() {                                   // head from the two eye
 vr.readInputs = xrInputs;
 const _gyq = new THREE.Quaternion(), _gyqi = new THREE.Quaternion(), _ghL = new THREE.Vector3(), _ghQ = new THREE.Quaternion(), _gO = new THREE.Vector3();
 vr.gpL = new THREE.Vector3(); vr.gqL = new THREE.Quaternion();
-const _gl1 = new THREE.Vector3(), _gl2 = new THREE.Vector3();
+const _gl1 = new THREE.Vector3(), _gl2 = new THREE.Vector3(), IRON_DIP = -.15;    // about 8.5 degrees
+vr.gunHandQ = new THREE.Quaternion();
 function nearGunLine(p, a, b) {                             // how far p is from the line between the trigger hand and the front grip (a little past each end too)
   _gl1.copy(b).sub(a); const L2 = _gl1.lengthSq() || 1e-6, t = Math.max(-.15, Math.min(1.1, _gl2.copy(p).sub(a).dot(_gl1) / L2));
   return _gl2.copy(a).addScaledVector(_gl1, t).distanceTo(p);
 }
 function edge(key, v) { const was = vr.prev[key] || 0; vr.prev[key] = v; return v > .6 && was <= .6; }
 // the rifle you hold: a copy of this mode's rifle, placed in the world at your hand
-const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .07 },
-                  ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.59], counter: [.029, -.004, .015], drop: .065, magC: .06, handle: [0, .045, .16], pull: .06 },
-                  smg:    { grip: [0, -.075, .08], fore: [0, -.085, -.13], eye: [0, .062, .17], muzzle: [0, .01, -.31], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [0, .046, .055], pull: .05 },
-                  pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .035, snap: .15 },
+const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .14 },
+                  ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.59], counter: [.029, -.004, .015], drop: .065, magC: .06, handle: [0, .045, .16], pull: .12 },
+                  smg:    { grip: [0, -.075, .08], fore: [0, -.085, -.13], eye: [0, .062, .17], muzzle: [0, .01, -.31], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [0, .046, .055], pull: .1 },
+                  pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .07, snap: .15 },
                   pvp:  { grip: [0, -.085, .1], fore: [0, -.03, -.27], eye: [0, .068, .16], muzzle: [0, .012, -.71], fov: [6, 3.4] } };
 let lensRT = null, lensCam = null, lensMat = null;
 function makeLens(r) {
@@ -4299,7 +4300,8 @@ function vrTick(dt) {
   // buttons: gun-hand A toggles the gun, B marks (Hunting: tap B marks, hold B opens the gun wheel), trigger fires; off-hand trigger shows the map
   const canGun = gameMode !== "hike", huntV = gameMode === "hunt";
   const mainSide = set.hand === "right" ? "R" : "L", offSide = mainSide === "R" ? "L" : "R", hanging = vr.cl ? vr.cl.hold : null;
-  if (main && canGun && edge("a", main.a)) { if (huntV && hanging === mainSide) buzz(mainSide, .2, 30); else vr.gunOut = !vr.gunOut; }   // the gun hand is holding on: it can't take the gun
+  if (main && canGun && !huntV && edge("a", main.a)) vr.gunOut = !vr.gunOut;
+  if (main && huntV && edge("bmark", main.b)) markFromHand(main);                 // Hunting: tap B marks; A is tap for the gun, hold for the wheel (in wheelTick)
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
   vr.cool = Math.max(0, (vr.cool || 0) - dt);
   if (huntV) { lootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
@@ -4318,6 +4320,8 @@ function vrTick(dt) {
     vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
     G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12));
+    vr.gunHandQ.copy(G.quaternion);                                          // the hand keeps the controller's own angle
+    if (huntV && vr.gunKind !== "hunt") G.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), IRON_DIP));   // rifles and pistol without a scope: nose a touch down
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
     G.updateMatrixWorld(true);
     if (huntV) reloadTick(dt, G, off);
@@ -4449,14 +4453,17 @@ function vrAvatar(dt) {
   for (const [side, h] of [["R", I.hands.right], ["L", I.hands.left]]) {
     if (!h) continue;
     const isMain = (side === "R") === (set.hand === "right");
-    const hp = handPose(side === "R" ? "right" : "left", h), target = hp.pos.clone().add(_v2.set(side === "R" ? .018 : -.018, .1, .006).applyQuaternion(hp.q));   // the wrist: the sleeve tucks into the glove cuff
+    const hp = handPose(side === "R" ? "right" : "left", h), target = hp.pos.clone().add(_v2.set(side === "R" ? .02 : -.02, .1, 0).applyQuaternion(hp.q));   // the end of the forearm, just above the wrist
     const pole = new THREE.Vector3(side === "R" ? -.7 : .7, -1, -.2).applyAxisAngle(_UPv, S.yaw + Math.PI).normalize();
     const ua = S.B["upperArm" + side], fa = S.B["foreArm" + side], gs = S.group.scale.x, reach = .56 * gs * .985;   // the arm's real length (the body isn't scaled to your height)
     const d = ua.getWorldPosition(_v1).distanceTo(target) / gs;                                     // stretch the forearm to meet your hand, Pop: One style: the sleeve never stops short
     const k = Math.min(2.6, Math.max(1, (d / .985 - .30) / .26));
     fa.scale.y = k;
     ik2(ua, fa, target, pole, .3 * gs, .26 * gs * k, -1);
-    const hb = S.B["hand" + side]; hb.quaternion.identity(); hb.scale.setScalar(.6); hb.updateMatrixWorld(true);
+    const hb = S.B["hand" + side], root = S.B.root;                                   // the sleeve's wrist end turns with the glove and the camo stretches across the bend
+    if (hb.parent !== root) root.attach(hb);
+    hb.position.copy(root.worldToLocal(_v1.copy(hp.pos).add(_v2.set(side === "R" ? .02 : -.02, .06, 0).applyQuaternion(hp.q))));
+    hb.quaternion.copy(root.getWorldQuaternion(_q1).invert().multiply(hp.q)); hb.scale.setScalar(.88); hb.updateMatrixWorld(true);
   }
 }
 /* ---- VR climbing (Pop: One style): hands pass through things; grip inside anything to hold on; your body hangs from that hand ---- */
@@ -4596,7 +4603,7 @@ let vrHandsObj = null;
 function handPose(hand, h) {                               // where a hand is drawn: on the controller, or snapped to the rifle's front grip
   const isMain = hand === set.hand;
   if (isMain && vr.gun && vr.gun.visible) {                  // the gun hand is locked to the grip: glove, gun and arm move as one piece
-    const q = vr.gun.quaternion.clone().multiply(_q1.copy(h.rayQ).invert().multiply(h.q));
+    const q = vr.gunHandQ.clone().multiply(_q1.copy(h.rayQ).invert().multiply(h.q));
     return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].grip)), q };
   }
   if (!isMain && vr.rl && vr.rl.grab && vr.gun && vr.gun.visible) {        // reloading: the glove sits on the magazine or the handle it's holding
@@ -4661,7 +4668,7 @@ function vrHandsParts() {
     const addBox = (geo, x, y, z, boneI) => { const p = geo.attributes.position, nn = geo.attributes.normal, o = P.length / 3; for (let i = 0; i < p.count; i++) vert(p.getX(i) + x, p.getY(i) + y, p.getZ(i) + z, nn.getX(i), nn.getY(i), nn.getZ(i), boneI, boneI, 0); const id = geo.index; for (let i = 0; i < id.count; i++) IX.push(o + id.getX(i)); };
     addBox(roundBox(.038, .1, .092, .015), .027 * sgn, .036, 0, 0);
     const cuffStart = IX.length;
-    addBox(new THREE.CylinderGeometry(.037, .034, .075, 14), .022 * sgn, .112, 0, 0);          // a longer cuff that tucks under the sleeve
+    addBox(new THREE.CylinderGeometry(.03, .028, .05, 14), .022 * sgn, .08, 0, 0);            // a slim wristband that sits inside the sleeve
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(N, 3));
     geo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(SI, 4)); geo.setAttribute("skinWeight", new THREE.Float32BufferAttribute(SW, 4)); geo.setIndex(IX);
@@ -6018,7 +6025,7 @@ function drawWheel(sel) {
 const _wn = new THREE.Vector3(), _wd = new THREE.Vector3(), _wp = new THREE.Vector3();
 function wheelTick(dt, main, I) {
   const W = vr.wh || (vr.wh = { t: 0, open: false, sel: -1 });
-  if (main.b > .6) {
+  if (main.a > .6) {
     W.t += dt;
     if (!W.open && W.t > .3 && state === "play") {
       W.open = true; W.sel = -1; const m = vrWheel();
@@ -6027,7 +6034,7 @@ function wheelTick(dt, main, I) {
     }
   } else if (W.t > 0) {
     if (W.open) { if (W.sel >= 0) pickGun(WHEEL[W.sel]); W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
-    else markFromHand(main);
+    else { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else vr.gunOut = !vr.gunOut; }   // a quick tap: gun in or out (not while that hand is holding on)
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun

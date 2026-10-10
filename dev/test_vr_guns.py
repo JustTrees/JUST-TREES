@@ -27,7 +27,7 @@ async def main():
           // 1. empty the sniper: five shots, bolt time between
           let shots = 0; const nT = () => D.tracers.length;
           const cock = () => { const G0 = V.gun, S0 = D.GUNSPOT[V.gunKind], hw = G0.localToWorld(new T.Vector3(...S0.handle)); L.Lh.copy(toL(hw.add(new T.Vector3(-.15, 0, .1)))); frames(2); pad.L.grip = 1; frames(2);
-            const bk = G0.localToWorld(new T.Vector3(0, 0, 1)).sub(G0.localToWorld(new T.Vector3())).normalize().multiplyScalar(.009); for (let i = 0; i < 10; i++) { L.Lh.copy(toL(toW(L.Lh).add(bk))); frames(1); } pad.L.grip = 0; frames(2); L.Lh.set(-.25, 1.2, -.3); };
+            const bk = G0.localToWorld(new T.Vector3(0, 0, 1)).sub(G0.localToWorld(new T.Vector3())).normalize().multiplyScalar(.009); for (let i = 0; i < 20; i++) { L.Lh.copy(toL(toW(L.Lh).add(bk))); frames(1); } pad.L.grip = 0; frames(2); L.Lh.set(-.25, 1.2, -.3); };
           out.boltPerShot = [];
           for (let i = 0; i < 5; i++) { pad.R.trig = 1; const t0 = nT(); frames(1); shots += nT() > t0 ? 1 : 0; pad.R.trig = 0; frames(20);
             if (i === 0) { pad.R.trig = 1; const t9 = nT(); frames(2); out.secondShotWithoutBolt = nT() - t9; pad.R.trig = 0; frames(2); }
@@ -55,7 +55,7 @@ async def main():
           L.Lh.copy(toL(hW().add(new T.Vector3(-.12, -.03, .06)))); frames(2); pad.L.grip = 1; frames(2); out.grabbedBoltFrom13cm = V.rl.grab;
           out.gloveOnBoltCm = +(D.vrHandsObj.L.g.position.distanceTo(hW()) * 100).toFixed(1);
           const back = G.localToWorld(new T.Vector3(0, 0, 1)).sub(G.localToWorld(new T.Vector3())).normalize();
-          for (let i = 0; i < 10; i++) { L.Lh.add(toL(toW(new T.Vector3()).add(back.clone().multiplyScalar(.009))).sub(toL(toW(new T.Vector3())))); frames(1); }
+          for (let i = 0; i < 20; i++) { L.Lh.add(toL(toW(new T.Vector3()).add(back.clone().multiplyScalar(.009))).sub(toL(toW(new T.Vector3())))); frames(1); }
           out.boltArmed = V.rl.armed; pad.L.grip = 0; frames(2); out.afterBolt = { phase: A().phase };
           L.Lh.copy(toL(G.localToWorld(new T.Vector3(...S.fore)))); frames(2); pad.L.grip = 1; frames(2); out.loadedFrontGripSnap = V.two; pad.L.grip = 0; L.Lh.set(-.25, 1.2, -.3); frames(3);
           pad.R.trig = 1; const t3 = nT(); frames(2); out.shotAfterReload = nT() - t3; pad.R.trig = 0; frames(100);
@@ -67,7 +67,7 @@ async def main():
           L.Lh.copy(foreL()); frames(3); pad.L.grip = 1; frames(5); out.scopedTwoHandsLoose = V.scoped;
           pad.R.trig = 1; frames(1); pad.R.trig = 0; frames(5); out.scopedRightAfterShot = V.scoped; pad.L.grip = 0; frames(3); out.scopedOffHandLetGo = V.scoped;
           L.Lh.copy(L.R.clone().add(new T.Vector3(.1, -.05, .15))); frames(2); pad.L.grip = 1; frames(2); out.boltGrab = V.rl.grab;
-          const bk2 = new T.Vector3(0, 0, .009); for (let i = 0; i < 10; i++) { L.Lh.add(bk2); frames(1); } pad.L.grip = 0; frames(3); out.phaseAfterBolt = A().phase;
+          const bk2 = new T.Vector3(0, 0, .009); for (let i = 0; i < 20; i++) { L.Lh.add(bk2); frames(1); } pad.L.grip = 0; frames(3); out.phaseAfterBolt = A().phase;
           L.Lh.copy(foreL()); frames(3); pad.L.grip = 1; frames(5); out.scopedRegrip = V.scoped; pad.L.grip = 0;
           L.head.set(0, 1.7, 0); qs.head.identity(); L.R.set(.2, 1.35, -.35); L.Lh.set(-.25, 1.2, -.3); frames(40); out.scopedHandsDown = V.scoped;
           // hands close together (controllers almost touching) still snap the front hand on and bring up the scope
@@ -80,9 +80,9 @@ async def main():
           // 4. tap B: mark
           pad.R.b = 1; frames(5); pad.R.b = 0; frames(2); out.tapMark = !!(V.mark && V.mark.visible); out.wheelAfterTap = !!(V.wheelM && V.wheelM.visible);
           // 5. hold B: wheel; point right (assault rifle), let go
-          pad.R.b = 1; frames(25); out.wheelOpen = !!(V.wheelM && V.wheelM.visible);
+          pad.R.a = 1; frames(25); out.wheelOpen = !!(V.wheelM && V.wheelM.visible);
           qs.R.setFromAxisAngle(new T.Vector3(0, 1, 0), -.45); frames(3); out.wheelSel = V.wh.sel;
-          pad.R.b = 0; frames(2); qs.R.identity(); frames(40); out.afterWheel = V.gunKind; out.wheelClosed = !V.wheelM.visible;
+          pad.R.a = 0; frames(2); qs.R.identity(); frames(40); out.afterWheel = V.gunKind; out.wheelClosed = !V.wheelM.visible;
           // 6. assault rifle: hold the trigger for one second
           pad.R.trig = 1; frames(10); pad.R.trig = 0; frames(5); const dr = { mag: A().mag, res: A().res }; pad.R.stickBtn = 1; frames(2); pad.R.stickBtn = 0; frames(20);
           out.earlyDrop = { before: dr, after: { mag: A().mag, res: A().res, phase: A().phase }, hoverCm: +(V.gun.userData.mag.position.distanceTo(V.gun.userData.magBase) * 100).toFixed(1) };
@@ -90,11 +90,11 @@ async def main():
             L.Lh.copy(toL(mw().add(new T.Vector3(-.15, 0, 0)))); frames(2); pad.L.grip = 1; frames(2);
             const up = G2.localToWorld(U2.magDir.clone()).sub(G2.localToWorld(new T.Vector3())).normalize().multiplyScalar(-.012); for (let i = 0; i < 20 && A().phase === 1; i++) { L.Lh.copy(toL(toW(L.Lh).add(up))); frames(1); }
             pad.L.grip = 0; frames(2); L.Lh.copy(toL(G2.localToWorld(new T.Vector3(...S2.handle)))); frames(2); pad.L.grip = 1; frames(2);
-            const bk = G2.localToWorld(new T.Vector3(0, 0, 1)).sub(G2.localToWorld(new T.Vector3())).normalize().multiplyScalar(.009); for (let i = 0; i < 10; i++) { L.Lh.copy(toL(toW(L.Lh).add(bk))); frames(1); }
+            const bk = G2.localToWorld(new T.Vector3(0, 0, 1)).sub(G2.localToWorld(new T.Vector3())).normalize().multiplyScalar(.009); for (let i = 0; i < 20; i++) { L.Lh.copy(toL(toW(L.Lh).add(bk))); frames(1); }
             pad.L.grip = 0; frames(3); L.Lh.set(-.25, 1.2, -.3); out.afterEarlyReload = { mag: A().mag, res: A().res, phase: A().phase }; }
           let m0 = A().mag; let t4 = 0; pad.R.trig = 1; frames(60); pad.R.trig = 0; out.arShotsIn1s = m0 - A().mag; out.arMag = A().mag;
           // 7. SMG (point down) and pistol (point left)
-          const pick = (ang, axis) => { pad.R.b = 1; frames(25); qs.R.setFromAxisAngle(axis, ang); frames(3); pad.R.b = 0; frames(2); qs.R.identity(); frames(40); return V.gunKind; };
+          const pick = (ang, axis) => { pad.R.a = 1; frames(25); qs.R.setFromAxisAngle(axis, ang); frames(3); pad.R.a = 0; frames(2); qs.R.identity(); frames(40); return V.gunKind; };
           out.pickDown = pick(-.45, new T.Vector3(1, 0, 0));
           m0 = A().mag; pad.R.trig = 1; frames(60); pad.R.trig = 0; out.smgShotsIn1s = m0 - A().mag;
           out.pickLeft = pick(.45, new T.Vector3(0, 1, 0));
