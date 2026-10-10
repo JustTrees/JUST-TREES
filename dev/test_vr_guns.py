@@ -64,7 +64,7 @@ async def main():
           const Ss = D.GUNSPOT.hunt; L.head.copy(L.R.clone().add(new T.Vector3(Ss.eye[0] - Ss.grip[0], Ss.eye[1] - Ss.grip[1], Ss.eye[2] - Ss.grip[2]))).add(new T.Vector3(.12, .08, .14));
           const foreL = () => L.R.clone().add(new T.Vector3(Ss.fore[0] - Ss.grip[0], Ss.fore[1] - Ss.grip[1], Ss.fore[2] - Ss.grip[2]));
           frames(3); out.scopedOneHandNearFace = V.scoped;
-          L.Lh.copy(foreL()); frames(3); pad.L.grip = 1; frames(5); out.scopedTwoHandsLoose = V.scoped;
+          L.Lh.copy(foreL()); frames(3); pad.L.grip = 1; frames(5); out.scopedTwoHandsLoose = V.scoped; out.crossHiddenInScope = !V.cross.visible;
           pad.R.trig = 1; frames(1); pad.R.trig = 0; frames(5); out.scopedRightAfterShot = V.scoped; pad.L.grip = 0; frames(3); out.scopedOffHandLetGo = V.scoped;
           L.Lh.copy(L.R.clone().add(new T.Vector3(.1, -.05, .15))); frames(2); pad.L.grip = 1; frames(2); out.boltGrab = V.rl.grab;
           const bk2 = new T.Vector3(0, 0, .009); for (let i = 0; i < 20; i++) { L.Lh.add(bk2); frames(1); } pad.L.grip = 0; frames(3); out.phaseAfterBolt = A().phase;
@@ -83,6 +83,14 @@ async def main():
           pad.R.a = 1; frames(25); out.wheelOpen = !!(V.wheelM && V.wheelM.visible);
           qs.R.setFromAxisAngle(new T.Vector3(0, 1, 0), -.45); frames(3); out.wheelSel = V.wh.sel;
           pad.R.a = 0; frames(2); qs.R.identity(); frames(40); out.afterWheel = V.gunKind; out.wheelClosed = !V.wheelM.visible;
+          // crosshair: sits on the gun's line, faces you, hidden in the scope
+          { const X = V.cross, G = V.gun, S = D.GUNSPOT[V.gunKind], mz = G.localToWorld(new T.Vector3(...S.muzzle)), dz = new T.Vector3(0, 0, -1).applyQuaternion(G.quaternion);
+            const off = X.position.clone().sub(mz), along = off.dot(dz); out.crossVisible = X.visible; out.crossOnGunLineCm = +(off.addScaledVector(dz, -along).length() * 100).toFixed(2); out.crossDistM = +along.toFixed(1); }
+          // switch guns while walking forward and sprinting
+          pad.L.sy = -1; pad.L.stickBtn = 1; frames(1); pad.L.stickBtn = 0; frames(30); const p0 = [D.P.x, D.P.z];
+          pad.R.a = 1; frames(25); qs.R.setFromAxisAngle(new T.Vector3(1, 0, 0), -.45); frames(20); out.walkWheelSel = V.wh.sel; pad.R.a = 0; frames(2); qs.R.identity(); frames(20);
+          out.walkedM = +Math.hypot(D.P.x - p0[0], D.P.z - p0[1]).toFixed(1); out.switchedWhileWalking = V.gunKind;
+          pad.R.a = 1; frames(25); qs.R.setFromAxisAngle(new T.Vector3(0, 1, 0), -.45); frames(20); pad.R.a = 0; frames(2); qs.R.identity(); pad.L.sy = 0; frames(30); out.switchedBack = V.gunKind;
           // 6. assault rifle: hold the trigger for one second
           pad.R.trig = 1; frames(10); pad.R.trig = 0; frames(5); const dr = { mag: A().mag, res: A().res }; pad.R.stickBtn = 1; frames(2); pad.R.stickBtn = 0; frames(20);
           out.earlyDrop = { before: dr, after: { mag: A().mag, res: A().res, phase: A().phase }, hoverCm: +(V.gun.userData.mag.position.distanceTo(V.gun.userData.magBase) * 100).toFixed(1) };

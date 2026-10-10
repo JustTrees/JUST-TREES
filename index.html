@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.27";              // Just Trees 1.27
+const VERSION = "1.28";              // Just Trees 1.28
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4174,6 +4174,15 @@ const _gyq = new THREE.Quaternion(), _gyqi = new THREE.Quaternion(), _ghL = new 
 vr.gpL = new THREE.Vector3(); vr.gqL = new THREE.Quaternion();
 const _gl1 = new THREE.Vector3(), _gl2 = new THREE.Vector3(), IRON_DIP = -.15;    // about 8.5 degrees
 vr.gunHandQ = new THREE.Quaternion();
+const CROSS_D = 25;
+function vrCross() {
+  if (vr.cross) return vr.cross;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 128; const g = cv.getContext("2d");
+  const seg = (x0, y0, x1, y1) => { g.strokeStyle = "rgba(0,0,0,.55)"; g.lineWidth = 12; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); g.strokeStyle = "#ff3b2e"; g.lineWidth = 7; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); };
+  g.lineCap = "round"; seg(64, 14, 64, 48); seg(64, 80, 64, 114); seg(14, 64, 48, 64); seg(80, 64, 114, 64);     // four lines that never meet in the middle
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  m.renderOrder = 996; m.frustumCulled = false; m.visible = false; scene.add(m); return vr.cross = m;
+}
 function nearGunLine(p, a, b) {                             // how far p is from the line between the trigger hand and the front grip (a little past each end too)
   _gl1.copy(b).sub(a); const L2 = _gl1.lengthSq() || 1e-6, t = Math.max(-.15, Math.min(1.1, _gl2.copy(p).sub(a).dot(_gl1) / L2));
   return _gl2.copy(a).addScaledVector(_gl1, t).distanceTo(p);
@@ -4203,7 +4212,8 @@ function vrGun() {
   let g = vr.guns[kind];
   if (!g) {
     g = new THREE.Group(); const model = (kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
-    if (kind === "hunt") model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.color.set("#a8262b"); } });   // red sniper
+    if (kind === "hunt") { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(7, 7);
+      model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.map = t; o.material.color.set("#ffffff"); o.material.needsUpdate = true; } }); }   // camo sniper stock
     if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? .024 : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
     if (kind !== "pvp") {                                     // the parts you reload by hand get their own materials, so they can glow
       const U = g.userData; U.mag = model.getObjectByName("mag"); U.charge = model.getObjectByName("charge");
@@ -4326,6 +4336,8 @@ function vrTick(dt) {
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
     G.updateMatrixWorld(true);
     if (huntV) reloadTick(dt, G, off);
+    { const X = vrCross(), mz = G.localToWorld(_v1.set(...S.muzzle)), dz = _v2.set(0, 0, -1).applyQuaternion(G.quaternion);   // the floating crosshair: 4 little red lines where the gun points
+      X.position.copy(mz).addScaledVector(dz, CROSS_D); X.scale.setScalar(CROSS_D * .06); X.lookAt(I.head); X.visible = !vr.scoped; }
     const fore = G.localToWorld(_v2.set(...S.fore));
     vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && (S.snap ? off.pos.distanceTo(fore) < S.snap : nearGunLine(off.pos, G.localToWorld(_v1.set(...S.grip)), fore) < .17)));   // squeeze anywhere along the gun, even right next to the trigger hand        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
     const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
@@ -4344,7 +4356,7 @@ function vrTick(dt) {
       if (edge("trig", main.trig) && !GUN.auto) fire();
       if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
     }
-  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
+  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (vr.cross) vr.cross.visible = false; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(1, vr.zoom)); }
@@ -4743,7 +4755,7 @@ function zoomViewQ(aimQ) {                                  // look where the gu
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
-  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette];
+  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
   xr.cameraAutoUpdate = false; xr.updateCamera(camera);
@@ -4930,7 +4942,7 @@ function vruiOpen(stage) {
   const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
-  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
@@ -5061,7 +5073,7 @@ async function enterVR(menu) {
       const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
       if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
       vr.on = false; VR_ON = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
-      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
+      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
     });
@@ -5944,7 +5956,9 @@ const GUNMODEL = {};
   // smooth-shaded parts (no flat facets), rounded edges, side profiles cut like the sniper's stock
   const M = (col, o) => new THREE.MeshPhongMaterial(Object.assign({ color: col, fog: false, shininess: 30, specular: 0x333333 }, o || {}));
   const steel = M("#2a2c30", { shininess: 70, specular: 0x5a5d62 }), blued = M("#17191c", { shininess: 90, specular: 0x6a6e74 }), black = M("#1c1d1f", { shininess: 18, specular: 0x222222 });
-  const yellow = M("#d9a521", { shininess: 22, specular: 0x3a3320 }), orange = M("#e07a1f", { shininess: 16, specular: 0x332211 }), blue = M("#2f63c9", { shininess: 20, specular: 0x223355 });
+  const camo = rep => { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(rep, rep); return M("#ffffff", { map: t, shininess: 10, specular: 0x161616 }); };
+  const camoB = camo(1), camoE = camo(7);                   // woodland camo on the furniture (boxes and profiles are mapped at different scales)
+  const yellow = camoB, orange = camoB, blue = camoB;
   const B = (w, h, d, r) => roundBox(w, h, d, r === undefined ? Math.min(w, h, d) * .22 : r);
   const cyl = (r1, r2, l, s) => new THREE.CylinderGeometry(r1, r2, l, s || 18).rotateX(Math.PI / 2);
   const put = (par, geo, m, x, y, z, rx, ry, rz) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx || 0, ry || 0, rz || 0); par.add(o); return o; };
@@ -5977,7 +5991,7 @@ const GUNMODEL = {};
     put(g, B(.044, .024, .15, .01), yellow, 0, .046, -.2);                                                     // upper handguard
     for (let i = 0; i < 3; i++) put(g, B(.058, .004, .02, .0015), black, 0, -.004, -.14 - i * .045);           // finger grooves
     put(g, B(.034, .1, .044, .012), yellow, 0, -.07, .1, -.32);                                                // pistol grip
-    put(g, side([[.16, .03], [.43, -.004], [.445, -.012], [.445, -.098], [.425, -.104], [.27, -.075], [.16, -.035]], .036, .008), yellow, 0, 0, 0);   // stock
+    put(g, side([[.16, .03], [.43, -.004], [.445, -.012], [.445, -.098], [.425, -.104], [.27, -.075], [.16, -.035]], .036, .008), camoE, 0, 0, 0);   // stock
     put(g, B(.046, .1, .012, .004), black, 0, -.055, .452);                                                    // butt plate
     put(g, B(.008, .006, .1, .002), steel, .024, .012, .06);                                                   // selector lever
     trigger(g, .055, -.035);
@@ -5993,9 +6007,9 @@ const GUNMODEL = {};
   { // ---- UMP: black upper, orange polymer lower with the grip, long top rail, straight magazine, skeleton stock, charging handle on the left front
     const g = new THREE.Group();
     put(g, B(.046, .045, .31, .01), black, 0, .022, -.035);                                                    // upper receiver
-    put(g, side([[-.19, .0], [.09, .0], [.11, -.012], [.11, -.03], [-.03, -.03], [-.045, -.05], [-.075, -.05], [-.09, -.03], [-.19, -.03]], .046, .006), orange, 0, 0, 0);   // lower receiver + mag well
-    put(g, side([[.045, -.025], [.098, -.025], [.112, -.04], [.128, -.112], [.116, -.124], [.088, -.124], [.076, -.11], [.06, -.04]], .03, .008), orange, 0, 0, 0);    // grip
-    put(g, side([[-.02, -.025], [.045, -.025], [.05, -.065], [.035, -.07], [-.01, -.07], [-.02, -.06]], .006, .002), orange, 0, 0, 0);   // trigger guard
+    put(g, side([[-.19, .0], [.09, .0], [.11, -.012], [.11, -.03], [-.03, -.03], [-.045, -.05], [-.075, -.05], [-.09, -.03], [-.19, -.03]], .046, .006), camoE, 0, 0, 0);   // lower receiver + mag well
+    put(g, side([[.045, -.025], [.098, -.025], [.112, -.04], [.128, -.112], [.116, -.124], [.088, -.124], [.076, -.11], [.06, -.04]], .03, .008), camoE, 0, 0, 0);    // grip
+    put(g, side([[-.02, -.025], [.045, -.025], [.05, -.065], [.035, -.07], [-.01, -.07], [-.02, -.06]], .006, .002), camoE, 0, 0, 0);   // trigger guard
     put(g, B(.005, .022, .007, .002), steel, 0, -.035, .025, -.3);                                             // trigger
     put(g, B(.024, .008, .3, .002), steel, 0, .048, -.035);                                                    // top rail
     for (let i = 0; i < 14; i++) put(g, B(.026, .004, .006, .001), blued, 0, .054, -.17 + i * .02);            // rail teeth
@@ -6027,9 +6041,9 @@ const GUNMODEL = {};
     put(slide, B(.008, .014, .02, .003), blued, 0, .022, .068).name = "knob";                                  // where you grab to rack it
     put(g, cyl(.0075, .0075, .02), blued, 0, .022, -.128);                                                     // barrel crown
     put(g, B(.026, .02, .15, .007), blue, 0, -.005, -.05);                                                     // frame
-    for (let i = 0; i < 3; i++) put(g, B(.02, .004, .008, .001), blue, 0, -.017, -.07 - i * .016);            // rail slots
-    put(g, side([[.018, -.012], [.068, -.012], [.084, -.03], [.096, -.112], [.084, -.124], [.05, -.124], [.038, -.112], [.028, -.04]], .028, .008), blue, 0, 0, 0);   // curved grip
-    put(g, side([[-.04, -.014], [.012, -.014], [.016, -.048], [.004, -.052], [-.032, -.052], [-.04, -.04]], .006, .002), blue, 0, 0, 0);   // squared trigger guard
+    for (let i = 0; i < 3; i++) put(g, B(.02, .004, .008, .001), black, 0, -.017, -.07 - i * .016);            // rail slots
+    put(g, side([[.018, -.012], [.068, -.012], [.084, -.03], [.096, -.112], [.084, -.124], [.05, -.124], [.038, -.112], [.028, -.04]], .028, .008), camoE, 0, 0, 0);   // curved grip
+    put(g, side([[-.04, -.014], [.012, -.014], [.016, -.048], [.004, -.052], [-.032, -.052], [-.04, -.04]], .006, .002), camoE, 0, 0, 0);   // squared trigger guard
     put(g, B(.005, .02, .007, .002), steel, 0, -.026, -.008, -.25);                                            // trigger
     put(g, B(.01, .016, .012, .003), blued, 0, .03, .072, .4);                                                 // hammer
     put(g, B(.004, .012, .03, .002), steel, .015, .006, .02);                                                  // decocker / slide stop
@@ -6080,6 +6094,8 @@ function wheelTick(dt, main, I) {
       W.open = true; W.sel = -1; const m = vrWheel();
       m.position.copy(main.rayPos).addScaledVector(_wd.set(0, 0, -1).applyQuaternion(main.rayQ), .24);
       _wp.set(I.head.x, m.position.y, I.head.z); m.lookAt(I.head); m.visible = true; m.updateMatrixWorld(true); drawWheel(-1); buzz(set.hand === "right" ? "R" : "L", .2, 20);
+      const yq = new THREE.Quaternion().setFromAxisAngle(_UPv, vr.yaw), yqi = yq.clone().invert();       // remember it in your own play space
+      W.lp = m.position.clone().sub(new THREE.Vector3(vr.ox, vr.oy, vr.oz)).applyQuaternion(yqi); W.lq = yqi.multiply(m.quaternion);
     }
   } else if (W.t > 0) {
     if (W.open) { if (W.sel >= 0) pickGun(WHEEL[W.sel]); W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
@@ -6087,7 +6103,7 @@ function wheelTick(dt, main, I) {
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun
-    const m = vr.wheelM; _wn.set(0, 0, 1).applyQuaternion(m.quaternion); _wd.set(0, 0, -1).applyQuaternion(main.rayQ);
+    const m = vr.wheelM; if (W.lp) { const yq = new THREE.Quaternion().setFromAxisAngle(_UPv, vr.yaw); m.position.copy(W.lp).applyQuaternion(yq).add(_wp.set(vr.ox, vr.oy, vr.oz)); m.quaternion.copy(yq).multiply(W.lq); m.updateMatrixWorld(true); }   /* it walks with you */ _wn.set(0, 0, 1).applyQuaternion(m.quaternion); _wd.set(0, 0, -1).applyQuaternion(main.rayQ);
     const den = _wd.dot(_wn); let sel = W.sel;
     if (Math.abs(den) > 1e-3) {
       const t = _wp.copy(m.position).sub(main.rayPos).dot(_wn) / den;
