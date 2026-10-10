@@ -43,10 +43,14 @@ async def main():
         await pg.wait_for_timeout(9000)
         out["c"] = await pg.evaluate("""() => { frames(3); return { stage: D.VRUI.stage, dio: !!D.VRUI.dio, state: D.state, worldVis: D.world && D.world.visible }; }""")
         await shot("vr_preview")
-        out["d"] = await pg.evaluate("""() => { click(); for (let i = 0; i < 60; i++) frames(1); const head = toW(L.head);
+        out["d0"] = await pg.evaluate("""() => { const r = { seed: D.seed }; L.R.set(.25, 2.9, -.3); frames(2); click(); frames(3); r.strayClickStage = D.VRUI.stage; L.R.set(.25, 1.2, -.3); frames(2);
+          r.aimNew = aimAt('preview', 'New map'); click(); r.afterNew = D.VRUI.stage; return r; }""")
+        await pg.wait_for_timeout(9000)
+        out["d1"] = await pg.evaluate("""() => { frames(3); return { stage: D.VRUI.stage, seed: D.seed }; }""")
+        out["d"] = await pg.evaluate("""() => { aimAt('preview', 'Play this map'); click(); for (let i = 0; i < 60; i++) frames(1); const head = toW(L.head);
           return { state: D.state, stage: D.VRUI.stage, fade: +D.VRUI.fadeV.toFixed(2), headToSpawn: +Math.hypot(head.x - D.P.x, head.z - D.P.z).toFixed(2), worldVis: D.world.visible }; }""")
-        # Y hold -> pause menu, resume
-        out["e"] = await pg.evaluate("""() => { pad.L.b = 1; frames(50); const r = { state: D.state, stage: D.VRUI.stage }; pad.L.b = 0; frames(2);
+        # tap Y -> pause menu, resume
+        out["e"] = await pg.evaluate("""() => { pad.L.b = 1; frames(2); const r = { state: D.state, stage: D.VRUI.stage }; pad.L.b = 0; frames(2);
           aimAt('pause', 'Resume'); click(); r.after = D.state; r.stage2 = D.VRUI.stage; return r; }""")
         print(json.dumps(out, indent=0)); print("errors:", errs or "none"); await b.close()
 asyncio.run(main())

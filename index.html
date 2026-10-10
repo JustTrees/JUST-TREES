@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.30";              // Just Trees 1.30
+const VERSION = "1.31";              // Just Trees 1.31
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -790,20 +790,21 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) } };
 const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
-const GRADE = { uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
+const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
   uShadowTex: { value: null }, uShadowTex2: { value: null }, uShadowMix: { value: 0 }, uShadowCol: { value: new THREE.Color(1, 1, 1) }, uShadowOn: { value: 0 }, uMapHalf: { value: 320 }, uMapS: { value: 640 } };
 const GRADE_CODE = `{ float gL = dot(outgoingLight, vec3(0.3, 0.59, 0.11));
     vec3 gr = outgoingLight * mix(uShTint, uLtTint, smoothstep(0.04, 0.45, gL));
     outgoingLight = mix(vec3(dot(gr, vec3(0.3, 0.59, 0.11))), gr, uSat);
-    float lL = dot(outgoingLight, vec3(0.3, 0.59, 0.11)); outgoingLight *= 1.0 + uLift * (1.0 - smoothstep(0.02, 0.34, lL)); }   // lift the darks (headsets show them darker)
+    float lL = dot(outgoingLight, vec3(0.3, 0.59, 0.11)); outgoingLight *= 1.0 + uLift * (1.0 - smoothstep(0.02, 0.34, lL));
+    outgoingLight += uFloor * (1.0 - smoothstep(0.0, 0.06, lL)); }   // lift the darks (headsets show them darker), and never quite black at night
   #include <output_fragment>`;
 function grade(m) {
   const prev = m.onBeforeCompile, key = (prev ? prev.toString() : "") + "|graded";
   m.onBeforeCompile = (sh, r) => {
     if (prev) prev.call(m, sh, r);
-    addHF(sh); sh.uniforms.uShTint = GRADE.uShTint; sh.uniforms.uLtTint = GRADE.uLtTint; sh.uniforms.uSat = GRADE.uSat; sh.uniforms.uLift = GRADE.uLift;
-    sh.fragmentShader = "uniform vec3 uShTint; uniform vec3 uLtTint; uniform float uSat; uniform float uLift;\n" + sh.fragmentShader.replace("#include <output_fragment>", GRADE_CODE);
+    addHF(sh); sh.uniforms.uShTint = GRADE.uShTint; sh.uniforms.uLtTint = GRADE.uLtTint; sh.uniforms.uSat = GRADE.uSat; sh.uniforms.uLift = GRADE.uLift; sh.uniforms.uFloor = GRADE.uFloor;
+    sh.fragmentShader = "uniform vec3 uShTint; uniform vec3 uLtTint; uniform float uSat; uniform float uLift; uniform vec3 uFloor;\n" + sh.fragmentShader.replace("#include <output_fragment>", GRADE_CODE);
   };
   m.customProgramCacheKey = () => key;
   return m;
@@ -2070,7 +2071,7 @@ function buildPrecip() {
         }` }));
   }
   precipFx.frustumCulled = false; world.add(precipFx);
-  nextFlash = performance.now() + 5000 + Math.random() * 9000;
+  nextFlash = performance.now() + 5000 + Math.random() * 9000; clearStorm();
 }
 function updatePrecip(dt, now) {
   if (!precipFx) return;
@@ -2101,16 +2102,108 @@ function updatePrecip(dt, now) {
   if (fogField) k *= .65 + .5 * fogField(camera.position.x + 400, camera.position.z - 300);
   k = Math.min(1, Math.max(.15, k)); weather.k += (k - weather.k) * Math.min(1, dt * .3);
   if (rain) precipFx.material.opacity = .6 * weather.k; else precipFx.material.uniforms.uOp.value = .9 * (weather.snowStyle === "blizzard" ? Math.max(.75, weather.k) : weather.k);
-  if (weather.storm && now > nextFlash) {            // lightning, then thunder a moment later
-    flashT = .35; nextFlash = now + 6000 + Math.random() * 12000;
-    const delay = 700 + Math.random() * 2500; setTimeout(() => thunder(), delay);
-  }
-  if (flashT > 0) {
-    flashT -= dt;
-    const f = flashT > .25 || (flashT > .05 && flashT < .15) ? 1 : 0;
-    hemi.intensity = baseHemi + f * 1.4;
-  } else hemi.intensity = baseHemi;
+  if (weather.storm) stormTick(dt, now); else if (STORM.strikes.length || STORM.lit) clearStorm();
 }
+/* ---- lightning: real branching bolts, sheet lightning in the clouds and distant flicker; uneven timing, flickering strikes,
+        the flash lights the land from the bolt's side and fades with distance; thunder arrives later the further away it is ---- */
+const STORM = { next: 0, strikes: [], glowTex: null, flash: 0 };
+function stormGlowTex() {
+  if (STORM.glowTex) return STORM.glowTex;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 128; const g = cv.getContext("2d"), rg = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(.35, "rgba(220,215,255,.45)"); rg.addColorStop(1, "rgba(200,200,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 128, 128);
+  return STORM.glowTex = new THREE.CanvasTexture(cv);
+}
+function boltMesh(top, bottom, w, rnd) {                    // a jagged channel with branches, built as thin ribbons facing you
+  const cam = camera.position, segs = [];
+  const walk = (a, b, n, jit, width, depth) => {
+    let prev = a.clone(); const pts = [prev];
+    for (let i = 1; i <= n; i++) {
+      const t = i / n, p = a.clone().lerp(b, t);
+      if (i < n) p.add(new THREE.Vector3((rnd() - .5) * jit, (rnd() - .5) * jit * .4, (rnd() - .5) * jit));
+      segs.push([prev, p, width * (1 - .55 * t)]); pts.push(p); prev = p;
+    }
+    if (depth < 2) for (let i = 2; i < n - 2; i++) if (rnd() < (depth ? .18 : .32)) {          // branches fork off and wander down and out
+      const s = pts[i], len = b.distanceTo(a) * (.15 + rnd() * .25) * (depth ? .6 : 1);
+      const dir = new THREE.Vector3(rnd() - .5, -(.5 + rnd() * .6), rnd() - .5).normalize();
+      walk(s, s.clone().addScaledVector(dir, len), 5 + Math.floor(rnd() * 5), jit * .7, width * .45, depth + 1);
+    }
+  };
+  walk(top, bottom, 22 + Math.floor(rnd() * 8), top.distanceTo(bottom) * .07, w, 0);
+  const v = new THREE.Vector3(), side = new THREE.Vector3();
+  const ribbon = (wk, col) => {                             // the bright core, and a wide soft glow round it
+    const pos = [];
+    for (const [a, b, wd] of segs) {
+      v.copy(a).add(b).multiplyScalar(.5).sub(cam); side.copy(b).sub(a).cross(v).normalize().multiplyScalar(wd * wk / 2);
+      const a1 = a.clone().add(side), a2 = a.clone().sub(side), b1 = b.clone().add(side), b2 = b.clone().sub(side);
+      pos.push(a1.x, a1.y, a1.z, a2.x, a2.y, a2.z, b1.x, b1.y, b1.z, a2.x, a2.y, a2.z, b2.x, b2.y, b2.z, b1.x, b1.y, b1.z);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide, toneMapped: false }));
+    m.frustumCulled = false; return m;
+  };
+  return [ribbon(1, 0xffffff), ribbon(4.5, 0x8f86ff)];
+}
+function spawnStrike(now) {
+  const r = Math.random, kind = r() < .42 ? "ground" : r() < .7 ? "sheet" : "far";
+  const d = kind === "ground" ? 250 + Math.pow(r(), 1.4) * 2600 : kind === "sheet" ? 500 + r() * 3200 : 3200 + r() * 4000;
+  const ang = r() * Math.PI * 2, dx = Math.cos(ang), dz = Math.sin(ang), cam = camera.position;
+  const close = Math.min(1, Math.pow(700 / Math.max(300, d), .75));
+  const I = (kind === "ground" ? 1.8 : kind === "sheet" ? 1 : .32) * close * (.55 + r() * .7);   // some faint, some blinding
+  const pulses = []; let t = 0, amp = 1; const n = 2 + Math.floor(r() * (kind === "far" ? 2 : 4));   // a strike stutters a few times
+  for (let i = 0; i < n; i++) { const dur = .035 + r() * .07; pulses.push([t, dur, amp]); t += dur + .03 + r() * .14; amp *= .45 + r() * .5; }
+  const S = { t0: now / 1000, pulses, end: t + .15, I, kind, d, dir: new THREE.Vector3(dx, .55 + r() * .3, dz).normalize(), objs: [] };
+  const gx = cam.x + dx * d, gz = cam.z + dz * d, gy = Math.abs(gx) < HALF && Math.abs(gz) < HALF ? Math.max(H(gx, gz), water) : water;
+  if (kind === "ground") {
+    const top = new THREE.Vector3(gx + (r() - .5) * 200, gy + 520 + r() * 280, gz + (r() - .5) * 200), w = Math.max(3.5, d * .0045);
+    const [core, halo] = boltMesh(top, new THREE.Vector3(gx, gy, gz), w, r); scene.add(core, halo); S.objs.push([core, 1], [halo, .3]);
+  }
+  if (kind !== "ground" || r() < .5) {                     // the cloud glows round the strike (or, for sheet lightning, that's all you see)
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: stormGlowTex(), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, color: 0xd8d4ff }));
+    const hy = kind === "far" ? cam.y + 40 + r() * 80 : cam.y + 320 + r() * 300;
+    m.position.set(cam.x + dx * Math.min(d, 2600), hy, cam.z + dz * Math.min(d, 2600)); m.scale.setScalar((kind === "far" ? .35 : .7) * Math.min(d, 2600)); m.lookAt(cam); m.frustumCulled = false;
+    scene.add(m); S.objs.push([m, kind === "far" ? .5 : .8]);
+  }
+  STORM.strikes.push(S);
+  if (d < 5500) setTimeout(() => thunderAt(d, kind), d / 343 * 1000);   // sound travels about 343 m a second
+}
+function stormTick(dt, now) {
+  if (!STORM.next) STORM.next = now + 4000 + Math.random() * 8000;
+  if (now > STORM.next) {
+    spawnStrike(now);
+    STORM.next = now + (Math.random() < .35 ? 250 + Math.random() * 1800 : 2500 + Math.min(26000, -Math.log(1 - Math.random() * .999) * 8000));   // bursts, then long quiet spells
+  }
+  let flash = 0, dirFlash = 0; const T = now / 1000;
+  for (let i = STORM.strikes.length - 1; i >= 0; i--) {
+    const S = STORM.strikes[i], lt = T - S.t0; let p = 0;
+    for (const [t0, dur, amp] of S.pulses) if (lt >= t0 && lt < t0 + dur + .06) p = Math.max(p, amp * (lt < t0 + dur ? 1 : 1 - (lt - t0 - dur) / .06));
+    for (const [o, k] of S.objs) o.material.opacity = Math.min(1, p * k * (S.kind === "ground" ? 1 : S.I * 1.4));
+    flash = Math.max(flash, p * S.I); if (S.kind !== "far" && p * S.I > dirFlash) { dirFlash = p * S.I; STORM.dir = S.dir; }
+    if (lt > S.end) { dropStrike(S); STORM.strikes.splice(i, 1); }
+  }
+  STORM.flash = flash; hemi.intensity = baseHemi + flash * .9;
+  if (dirFlash > .002) {                                   // the sun/moon light swings round to the bolt for the moment of the flash
+    const k = dirFlash / (dirFlash + SUNB.i + .05); sunL.position.copy(SUNB.p).lerp(_v1.copy(STORM.dir).multiplyScalar(100), k);
+    sunL.intensity = SUNB.i + dirFlash * 1.6; sunL.color.copy(SUNB.c).lerp(_stormC, k); STORM.lit = true;
+  } else if (STORM.lit) { sunL.position.copy(SUNB.p); sunL.intensity = SUNB.i; sunL.color.copy(SUNB.c); STORM.lit = false; }
+}
+const _stormC = new THREE.Color(0xdcd8ff);
+function dropStrike(S) { const gs = new Set(); for (const [o] of S.objs) { scene.remove(o); o.material.dispose(); gs.add(o.geometry); } gs.forEach(g => g.dispose()); }
+function clearStorm() { for (const S of STORM.strikes) dropStrike(S); STORM.strikes = []; STORM.next = 0; if (STORM.lit) { sunL.position.copy(SUNB.p); sunL.intensity = SUNB.i; sunL.color.copy(SUNB.c); STORM.lit = false; } hemi.intensity = baseHemi; }
+function thunderAt(d, kind) {                               // close: a sharp crack then a roll; far: later, lower, longer, quieter
+  if (!SND.ctx || !SND.on || state !== "play") return;
+  const ctx = SND.ctx, t = ctx.currentTime, near = Math.max(0, 1 - d / 700), vol = .6 / (1 + d / 900) * (kind === "sheet" ? .75 : 1);
+  const burst = (at, dur, cut, v, q) => {
+    const s = ctx.createBufferSource(); s.buffer = SND.noise; s.loop = true; s.playbackRate.value = .6 + Math.random() * .5;
+    const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = cut; f.Q.value = q || .7;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t + at); g.gain.linearRampToValueAtTime(v, t + at + Math.min(.4, dur * .15)); g.gain.exponentialRampToValueAtTime(.0008, t + at + dur);
+    s.connect(f); f.connect(g); g.connect(SND.master); s.start(t + at); s.stop(t + at + dur + .05);
+  };
+  if (near > 0) { burst(0, .35, 3200, .55 * near, .5); burst(.02, .9, 900, .4 * near); }        // the crack overhead
+  const cut = 70 + 300 * Math.pow(800 / Math.max(800, d), .6), len = 2.5 + Math.min(6, d / 700);
+  const n = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) burst(near * .1 + Math.random() * (.6 + d / 2500), len * (.5 + Math.random() * .6), cut * (.8 + Math.random() * .5), vol * (.5 + Math.random() * .5));   // rolling rumble
+}
+
 
 /* ---------------- Sound: everything is generated, no audio files ---------------- */
 const SND = { ctx: null, on: true };
@@ -2362,6 +2455,8 @@ function updateFly(dt) {
 }
 
 /* ---------------- World generation ---------------- */
+let NIGHT_K = 0;
+const SUNB = { i: 1, p: new THREE.Vector3(0, 100, 0), c: new THREE.Color(1, 1, 1) };
 let baseHemi = .4, fogField = null, fogLocal = 0, fogBanks = null;
 function buildFogBanks(rand) {             // soft fog banks resting in the foggy parts of the map
   fogBanks = null;
@@ -3073,7 +3168,7 @@ function setLighting(lat, biome) {
   if (weather.storm) cloudDark.lerp(C("#3a4048").multiplyScalar(.3 + .7 * day), .6);
   U.cloudCol.value.copy(cloudCol); U.cloudDark.value.copy(cloudDark);
   U.ridgeCol.value.copy(hor).lerp(top, .35).lerp(C("#1a2030"), .25 + (1 - day) * .3);
-  const night = 1 - smooth(-14, -4, el);
+  const night = 1 - smooth(-14, -4, el); NIGHT_K = night;
   U.uNear.value.set(Q.lean[0]).offsetHSL(Q.hue, 0, 0); U.uMid.value.set(Q.lean[1]).offsetHSL(Q.hue, 0, 0); U.uFar.value.set(Q.lean[2]).offsetHSL(Q.hue, 0, 0);
   U.uSpread.value = Q.spread * (1 - oc * .8) * (Q.wow ? 1.15 : 1);
   U.uAur.value = (Q.aur || 0) * (1 - oc * .9); U.uAurA.value.setHSL(.36 + (Q.aurHue || 0) * .12, .9, .55); U.uAurB.value.setHSL(.78 + (Q.aurHue || 0) * .1, .8, .55);
@@ -3117,7 +3212,7 @@ function setLighting(lat, biome) {
     sunL.position.copy(moonDir).multiplyScalar(100);
     hemi.color.set("#3a5090").lerp(hor, twi * .5); liftLum(hemi.color, .38); hemi.groundColor.set("#141a28"); hemi.intensity = .4 + twi * .12;   // moonlit, never pitch black
   }
-  baseHemi = hemi.intensity;
+  baseHemi = hemi.intensity; SUNB.i = sunL.intensity; SUNB.p.copy(sunL.position); SUNB.c.copy(sunL.color);
   WATER_U.uSky.value.copy(top); WATER_U.uHor.value.copy(hor); liftLum(WATER_U.uSky.value, .05);
   if (el > -4) { WATER_U.uSunDir.value.copy(sp.dir); WATER_U.uSunCol.value.copy(sunCol); WATER_U.uSunVis.value = smooth(-3, 2, el) * (1 - oc * .9); }
   else { WATER_U.uSunDir.value.copy(moonDir); WATER_U.uSunCol.value.set("#c8d4f0"); WATER_U.uSunVis.value = U.moonVis.value * .7; }
@@ -4395,7 +4490,7 @@ function vrTick(dt) {
     vr.glideDir = { x: gx, z: gz };
   } else vr.glideDir = null;
   vr.I = I; vr.main = main; vr.off = off;
-  if (off && off.b > .6) { vr.menuHold = (vr.menuHold || 0) + dt; if (vr.menuHold > .7) { vr.menuHold = -1e9; pause(); vruiOpen("pause"); return; } } else vr.menuHold = 0;
+  if (off && edge("ymenu", off.b)) { pause(); vruiOpen("pause"); return; }        // tap Y: the game menu
   vr.climbing = climbTick(dt, I);
 }
 function vrAfterMove(dt) {                                // carry the play space along with this frame's walking and turning
@@ -4917,12 +5012,14 @@ function vruiParts() {
   const Ld = uiPanel("loading", 1200, 300, 2.0, 46, 1.5);
   Ld.paint = (g, P) => { uiBg(g, P); g.textAlign = "center"; g.font = "bold 64px sans-serif"; g.fillStyle = UIC.text; g.fillText("Growing trees…", 600, 150); g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Generating a new world", 600, 220); };
   // ---- the little map turning in front of you ----
-  const Pv = uiPanel("preview", 1600, 330, 2.2, 56, 2.05);
+  const Pv = uiPanel("preview", 1600, 430, 2.2, 56, 2.05);
   Pv.paint = (g, P) => {
     uiBg(g, P); const [t1, t2] = mapSummary(); g.textAlign = "center"; g.font = "bold 52px sans-serif"; g.fillStyle = UIC.text; g.fillText(MODE_NAME[gameMode] + " · " + t1, 800, 90);
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, t2, 800, 150, 1450, 42);
-    g.font = "bold 36px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Pull the trigger to drop in", 800, 290);
   };
+  uiBtn(Pv, 90, 290, 470, 100, "New map", () => startNew(), { fs: 42 });                      // throw this one away and grow another, same settings
+  uiBtn(Pv, 580, 290, 440, 100, "Settings", () => vruiOpen("setup"), { fs: 38 });
+  uiBtn(Pv, 1040, 290, 470, 100, "Play this map", () => vruiDropIn(), { primary: true, fs: 42 });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 145, 1000, 34); };
@@ -5011,7 +5108,6 @@ function vruiTick(dt) {
       clicked = true;
       if (st === "intro") { introSounds(false); titlePaint(); vruiOpen("title"); return; }
       if (st === "title") { vruiOpen("mode"); return; }
-      if (st === "preview") { vruiDropIn(); return; }
       if (w && !(w.disabled && w.disabled())) {
         buzz(hand === "right" ? "R" : "L", .3, 20);
         if (w.kind === "slider") { VRUI.drag = { hand, P, w }; w.set(Math.max(w.min, Math.min(w.max, w.min + (cx - w.x) / w.w * (w.max - w.min)))); }
@@ -6807,6 +6903,7 @@ function loop(now) {
   if (!vr.on) WIND.value = now / 1000;                 // the trees hold still in a headset (sway makes leaf edges shimmer)
   if (world || (vr.on && VRUI.on)) {
     GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = vr.on ? 1.08 : .95;
+    { const fl = vr.on ? NIGHT_K * (weather.storm ? .02 : weather.precip ? .014 : .009) : 0; GRADE.uFloor.value.setRGB(fl * .8, fl * .9, fl * 1.15); }
     if (world) { cullTiles(); updateGun(dt); }
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
