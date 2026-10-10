@@ -175,6 +175,10 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
           <div class="seg" role="group" aria-label="Map edges"><button data-edge="island">Island</button><button data-edge="endless">Endless trees</button></div>
         </div>
         <div class="note" id="edgeNote"></div>
+        <div class="fh" style="margin-top:12px"><b>Landscape</b>
+          <div class="seg" role="group" aria-label="Landscape"><button data-land="natural">Natural</button><button data-land="dramatic">Dramatic</button></div>
+        </div>
+        <div class="note" id="landNote"></div>
       </div>
       <div class="field">
         <div class="fh"><b>Weather</b><span class="val" id="weatherVal"></span></div>
@@ -289,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.23";              // Just Trees 1.23
+const VERSION = "1.24";              // Just Trees 1.24
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -323,7 +327,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp" };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp" };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -376,6 +380,7 @@ MONTHS.forEach((m, i) => {
 });
 document.querySelectorAll("[data-hemi]").forEach(b => b.addEventListener("click", () => { set.hemi = +b.dataset.hemi; renderSetup(); }));
 document.querySelectorAll("[data-edge]").forEach(b => b.addEventListener("click", () => { set.edges = b.dataset.edge; renderSetup(); }));
+document.querySelectorAll("[data-land]").forEach(b => b.addEventListener("click", () => { set.land = b.dataset.land; renderSetup(); }));
 document.querySelectorAll("[data-zone]").forEach(b => b.addEventListener("click", () => { set.zone = b.dataset.zone; renderSetup(); }));
 document.querySelectorAll("[data-hand]").forEach(b => b.addEventListener("click", () => { set.hand = b.dataset.hand; renderSetup(); }));
 $("fling").addEventListener("input", () => { set.fling = +$("fling").value; renderSetup(); });
@@ -414,6 +419,8 @@ function renderSetup() {
   latEl.value = set.lat; roughEl.value = Math.round(set.rough * 100); hourEl.value = set.hour;
   document.querySelectorAll("[data-hemi]").forEach(b => b.setAttribute("aria-pressed", +b.dataset.hemi === set.hemi));
   document.querySelectorAll("[data-edge]").forEach(b => b.setAttribute("aria-pressed", b.dataset.edge === set.edges));
+  document.querySelectorAll("[data-land]").forEach(b => b.setAttribute("aria-pressed", b.dataset.land === set.land));
+  $("landNote").textContent = set.land === "dramatic" ? "Each map gets one big landmark: a crater lake, a mesa, a canyon or a great cliff." : "Hills, valleys and lakes, just as nature made them.";
   $("edgeNote").textContent = set.edges === "island" ? "Ocean all the way to the horizon." : "Forest and hills roll on past the edge and fade into the haze.";
   document.querySelectorAll("#months button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.m === set.month));
   document.querySelectorAll("#weathers button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === set.weather));
@@ -1867,6 +1874,56 @@ function makeRivers(map, N, G, waterLevel) {
   }
   return { W, cells };
 }
+let FEAT = null;
+// Dramatic landscape: a crater lake, a mesa, a canyon or a great cliff, sized to the map. Big and scenic, never wild.
+function makeFeature(r, base, wGuess) {
+  const types = ["crater", "mesa", "canyon", "cliff"], type = types[Math.floor(r() * types.length)];
+  const R = Math.max(40, Math.min(150, HALF * .26)), reachR = type === "cliff" ? R * 2.4 : type === "canyon" ? R * 1.9 : R * 1.9;
+  let cx = 0, cz = 0, ok = false;
+  for (let t = 0; t < 60 && !ok; t++) {
+    const a = r() * 6.283, d = r() * HALF * .5; cx = Math.cos(a) * d; cz = Math.sin(a) * d;
+    ok = Math.max(Math.abs(cx), Math.abs(cz)) + reachR < EDGE - 10 && (!edgeShape.island || Math.hypot(cx, cz) + reachR < edgeShape.R0 * .84 - 40);
+  }
+  if (!ok) { cx = 0; cz = 0; }
+  const ph = [r() * 6.28, r() * 6.28, r() * 6.28], wob = a => .55 * Math.sin(a * 2 + ph[0]) + .3 * Math.sin(a * 3 + ph[1]) + .15 * Math.sin(a * 5 + ph[2]);   // irregular, natural outlines
+  let h0 = 0; for (let k = 0; k < 12; k++) { const a = k / 12 * 6.283; h0 += base(cx + Math.cos(a) * R * .5, cz + Math.sin(a) * R * .5); } h0 /= 12;
+  const dir = r() * 6.283, ca = Math.cos(dir), sa = Math.sin(dir), loc = (x, z) => { const dx = x - cx, dz = z - cz; return [dx * ca + dz * sa, -dx * sa + dz * ca]; };
+  const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  if (type === "crater") {                   // a ring of high rim round a deep blue lake
+    const rimH = 14 + R * .14, floor = wGuess - (4 + R * .04);
+    return { type, name: "Crater lake", x: cx, z: cz, R,
+      mask: (x, z) => { const t = Math.hypot(x - cx, z - cz) / R; return sm(1.9, 1.35, t); },
+      apply: (x, z, h) => { const d = Math.hypot(x - cx, z - cz), rr = R * (1 + .12 * wob(Math.atan2(z - cz, x - cx))), t = d / rr;
+        const ring = rimH * Math.exp(-Math.pow((t - 1) / (t < 1 ? .2 : .42), 2)), dig = t < 1 ? sm(1.02, .58, t) : 0;
+        return (h + ring) * (1 - dig) + Math.min(floor, h) * dig; } };
+  }
+  if (type === "mesa") {                     // a flat-topped, steep-walled tabletop with a skirt of scree
+    const top = h0 + 22 + R * .15;
+    return { type, name: "Mesa", x: cx, z: cz, R,
+      mask: (x, z) => sm(R * 1.75, R * 1.25, Math.hypot(x - cx, z - cz)),
+      apply: (x, z, h) => { const d = Math.hypot(x - cx, z - cz), rr = R * .85 * (1 + .15 * wob(Math.atan2(z - cz, x - cx)));
+        const wall = sm(rr + R * .22, rr, d), skirt = sm(rr + R * .7, rr + R * .15, d);
+        const lift = (top - h0) * .22 * skirt;
+        return Math.max(h + lift, (h + lift) * (1 - wall) + (top + (h - h0) * .25) * wall); } };
+  }
+  if (type === "canyon") {                   // a winding gorge cut down through a raised tableland
+    const L = R * 1.4, plat = 12 + R * .1, w = 7 + R * .06, D = plat + 10 + R * .08;
+    const lat = u => R * .25 * Math.sin(u / R * 1.3 + ph[0]) + R * .1 * Math.sin(u / R * 2.9 + ph[1]);
+    return { type, name: "Canyon", x: cx, z: cz, R,
+      mask: (x, z) => { const [u, v] = loc(x, z); return sm(L + R * .6, L, Math.abs(u)) * sm(R * 1.25, R * .8, Math.abs(v - lat(u))); },
+      apply: (x, z, h) => { const [u, v] = loc(x, z), dv = Math.abs(v - lat(u)), along = sm(L + R * .5, L - R * .1, Math.abs(u));
+        const raise = plat * sm(R * 1.15, R * .55, dv) * along, cut = sm(w + 7 + R * .05, w, dv) * sm(L + R * .3, L - R * .2, Math.abs(u));
+        return h + raise - cut * D * (.75 + .25 * along); } };
+  }
+  // a great cliff: a long, curving escarpment with high tableland on one side and the valley below
+  const L = R * 2.1, Hs = 20 + R * .15;
+  const bend = u => R * .3 * Math.sin(u / R * .9 + ph[0]) + R * .12 * Math.sin(u / R * 2.2 + ph[1]);
+  return { type, name: "Great cliff", x: cx, z: cz, R,
+    mask: (x, z) => { const [u, v] = loc(x, z); return sm(L + R * .4, L * .8, Math.abs(u)) * sm(R * 1.8, R * 1.1, Math.abs(v - bend(u))); },
+    apply: (x, z, h) => { const [u, v] = loc(x, z), vv = v - bend(u);
+      const step = sm(-R * .1, R * .1, vv), fadeU = sm(L, L * .55, Math.abs(u)), back = sm(R * 1.7, R * .9, vv);
+      return h + Hs * step * fadeU * back; } };
+}
 function bakeAndErode(Hf, rand, waterGuess) {
   const G = 2, N = S / G + 1, SC = 25, map = new Float32Array(N * N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) map[j * N + i] = Hf(-HALF + i * G, -HALF + j * G) / SC;
@@ -2226,19 +2283,22 @@ function reveal() {
       if (Math.hypot(cx - P.x, cz - P.z) < r) explored[j * 64 + i] = 1;
     }
 }
+let mapDirty = true;
 function drawMap(canvas) {
   if (!mapBase) return;
   const ctx = canvas.getContext("2d"), W = canvas.width, Hh = canvas.height;
   ctx.clearRect(0, 0, W, Hh); ctx.imageSmoothingEnabled = true;
   ctx.drawImage(mapBase, 0, 0, W, Hh);
-  ctx.fillStyle = "rgba(10,14,12,.82)";
+  if (canvas.id === "miniMap") mapDirty = true;
+  const fogA = vr.on && canvas.id === "miniMap" ? .5 : .82;              // in a headset the unexplored part is see-through
+  ctx.fillStyle = `rgba(10,14,12,${fogA})`;
   const cw = W / 64, ch = Hh / 64;
   if (false) {
     ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, Hh);
     for (let i = 0; i <= 96; i++) { const a = i / 96 * 6.283, r = edgeShape.f(a), x = (Math.cos(a) * r + HALF) / S * W, y = (Math.sin(a) * r + HALF) / S * Hh; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
     ctx.closePath(); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.fill("evenodd");
     ctx.strokeStyle = "rgba(242,193,78,.55)"; ctx.lineWidth = Math.max(1, W / 120); ctx.setLineDash([W / 40, W / 60]); ctx.stroke(); ctx.restore();
-    ctx.fillStyle = "rgba(10,14,12,.82)";
+    ctx.fillStyle = `rgba(10,14,12,${fogA})`;
   }
   for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) if (!explored[j * 64 + i]) ctx.fillRect(i * cw - .5, j * ch - .5, cw + 1, ch + 1);
   drawZoneOnMap(ctx, W, Hh);
@@ -2355,13 +2415,26 @@ function generate() {
       return sea + (rawH(x, z) - sea) * m;
     };
   }
+  FEAT = null;
+  if (set.land === "dramatic") {                       // one main feature, placed once, then eroded along with everything else
+    const base = shapedH, ws = [];
+    for (let i = 0; i < 32; i++) for (let j = 0; j < 32; j++) { const x = -HALF + (i + .5) * S / 32, z = -HALF + (j + .5) * S / 32; if (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) ws.push(base(x, z)); }
+    ws.sort((a, b) => a - b);
+    const wGuess = ws[Math.floor(ws.length * { tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])] || 0;
+    FEAT = makeFeature(mulberry32(seed * 41 + 9), base, wGuess);
+    if (FEAT) { FEAT.base = base; shapedH = (x, z) => FEAT.apply(x, z, base(x, z)); }
+  }
   const baked = bakeAndErode(shapedH, mulberry32(seed * 3 + 7));
+  if (FEAT) {                                          // erosion softens it like everything else; then part of its shape comes back, so it stays dramatic but keeps its gullies
+    const m = baked.map, N = baked.N, G = baked.G;
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = -HALF + i * G, z = -HALF + j * G; if (FEAT.mask(x, z) <= 0) continue; const b0 = FEAT.base(x, z); m[j * N + i] += (FEAT.apply(x, z, b0) - b0) * .55; }
+  }
   const H0 = baked.H; H = H0;
   const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand);
 
   // Height stats -> water level, snow line, tree line
   const hs = [];
-  for (let i = 0; i < 48; i++) for (let j = 0; j < 48; j++) { const x = -HALF + i * S / 47, z = -HALF + j * S / 47; if (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) hs.push(H0(x, z)); }   // islands: only the land counts
+  for (let i = 0; i < 48; i++) for (let j = 0; j < 48; j++) { const x = -HALF + i * S / 47, z = -HALF + j * S / 47; if ((!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) && !(FEAT && FEAT.mask(x, z) > .2)) hs.push(H0(x, z)); }   // islands: only the land counts
   hs.sort((a, b) => a - b);
   water = hs[Math.floor(hs.length * { tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])];
   const span = Math.max(6, hs[hs.length - 1] - water);
@@ -2381,12 +2454,13 @@ function generate() {
       const x0 = -HALF + si * secW, z0 = -HALF + sj * secD, x1 = x0 + secW, z1 = z0 + secD;
       const i0 = Math.max(1, Math.floor((x0 - 20 + HALF) / G)), i1 = Math.min(N - 2, Math.ceil((x1 + 20 + HALF) / G));
       const j0 = Math.max(1, Math.floor((z0 - 20 + HALF) / G)), j1 = Math.min(N - 2, Math.ceil((z1 + 20 + HALF) / G));
-      const wgt = (x, z) => smooth(20, 0, Math.hypot(Math.max(x0 - x, x - x1, 0), Math.max(z0 - z, z - z1, 0)));
+      const wgt = (x, z) => smooth(20, 0, Math.hypot(Math.max(x0 - x, x - x1, 0), Math.max(z0 - z, z - z1, 0))) * (FEAT ? 1 - FEAT.mask(x, z) : 1);
       const stats = () => {
         let tot = 0, wet = 0, steep = 0;
         for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
           const x = -HALF + i * G, z = -HALF + j * G;
           if (x < x0 || x > x1 || z < z0 || z > z1 || Math.abs(x) > EDGE || Math.abs(z) > EDGE) continue;
+          if (FEAT && FEAT.mask(x, z) > .3) continue;
           if (Math.hypot(x, z) > edgeR(x, z) - 25) continue;              // the sea is not a lake to fix
           const k = j * N + i, gx = (m[k + 1] - m[k - 1]) / (2 * G), gz = (m[k + N] - m[k - N]) / (2 * G);
           tot++; if (m[k] < water + .5) wet++; else if (1 / Math.sqrt(1 + gx * gx + gz * gz) < .62) steep++;
@@ -2790,7 +2864,7 @@ function generate() {
   for (let e = 0; e < nExtreme; e++) for (let t = 0; t < 60; t++) {
     const [x, z] = rpos(), h = H(x, z);
     if (h < water + 1 || slopeNy(x, z) < .8) continue;
-    const type = ["spire", "split", "overhang"][Math.floor(rand() * 3)];
+    const type = ["split", "split", "overhang"][Math.floor(rand() * 3)];        // no tall spike stones
     const s = type === "spire" ? 1.6 + rand() * 1.4 : type === "split" ? 3.5 + rand() * 2 : 3 + rand() * 1.5;
     rockAt(type, x, z, s, type === "spire" ? .05 : .2, { tx: (rand() - .5) * .12, tz: (rand() - .5) * .12 });
     addObstacleSoft(x, z, s * (type === "spire" ? .8 : type === "split" ? 1.3 : 1.6));
@@ -4321,8 +4395,8 @@ function vrAfterMove(dt) {                                // carry the play spac
   if (off) {
     wrist.visible = true; wrist.position.copy(off.pos).add(_v1.set(0, .035, .06).applyQuaternion(off.q)); wrist.quaternion.copy(off.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1));
     if ((vr.wristT -= dt) <= 0) { vr.wristT = .25; drawWrist(); }
-    vrMap.visible = off.trig > .6;
-    if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); vrMapTex.needsUpdate = true; }
+    const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
+    if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
   } else { wrist.visible = false; vrMap.visible = false; }
   if (vr.mark && (vr.markT -= dt) <= 0) vr.mark.visible = false;
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
@@ -4645,8 +4719,14 @@ function levelQ(q) {                                       // same aim, but neve
   _lvF.set(0, 0, -1).applyQuaternion(q); if (Math.abs(_lvF.y) > .995) return q;
   return _lvQ.setFromRotationMatrix(_lvM.lookAt(_lvO, _lvF, _UPv));
 }
+const _zvM = new THREE.Matrix4(), _zvF = new THREE.Vector3(), _zvU = new THREE.Vector3(), _zvQ = new THREE.Quaternion();
+function zoomViewQ(aimQ) {                                  // look where the gun (or your head) points, tilted exactly like your head, so the horizon stays level in the real world
+  _zvF.set(0, 0, -1).applyQuaternion(aimQ); _zvU.set(0, 1, 0).applyQuaternion(vr.headQ);
+  if (Math.abs(_zvF.dot(_zvU)) > .995) return levelQ(aimQ);
+  return _zvQ.setFromRotationMatrix(_zvM.lookAt(_lvO, _zvF, _zvU));
+}
 function vrZoomRender() {
-  const xr = renderer.xr, k = vr.zoomK, q = levelQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
+  const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
@@ -4774,7 +4854,7 @@ function vruiParts() {
     uiLabel(g, lx, 618, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees"); note(g, lx, 654, "From today's forest up to very thick woods.");
     uiLabel(g, lx, 768, "Month", MONTH_FULL[set.month]); note(g, lx + 420, 768, sea === "tropical" ? "Always warm" : sea[0].toUpperCase() + sea.slice(1));
     uiLabel(g, rx, 168, "Map size", $("sizeVal").textContent);
-    uiLabel(g, rx, 318, "Edges"); note(g, rx + 150, 318, set.edges === "island" ? "Ocean all the way to the horizon." : "Forest rolls on past the edge.");
+    uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
@@ -4787,8 +4867,9 @@ function vruiParts() {
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 790 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 196, 140, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
-  uiBtn(S2, rx, 346, 440, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
-  uiBtn(S2, rx + 460, 346, 440, 62, "Endless trees", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
+  uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
+  uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
+  uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
   uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right" });
   uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left" });
@@ -6512,7 +6593,7 @@ function startNew() {
 let fly = null;
 function mapSummary() {
   const lat = set.lat * set.hemi, s = seasonOf(lat, set.month);
-  return [`Map #${seed}`, `${set.lat}° ${set.hemi > 0 ? "N" : "S"}, ${BIOME_TEXT[biomeOf(lat)].split(":")[0].toLowerCase()}, ${MONTH_FULL[set.month]}${s === "tropical" ? "" : " (" + s + ")"}, ${hourText(hourNow)}, ${roughText(set.rough).toLowerCase()}, ${weather.type === "clear" ? "clear skies" : weather.type}`];
+  return [`Map #${seed}` + (FEAT ? " · " + FEAT.name : ""), `${set.lat}° ${set.hemi > 0 ? "N" : "S"}, ${BIOME_TEXT[biomeOf(lat)].split(":")[0].toLowerCase()}, ${MONTH_FULL[set.month]}${s === "tropical" ? "" : " (" + s + ")"}, ${hourText(hourNow)}, ${roughText(set.rough).toLowerCase()}, ${weather.type === "clear" ? "clear skies" : weather.type}`];
 }
 function endFly() {
   if (!fly) return;

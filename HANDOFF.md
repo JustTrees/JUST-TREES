@@ -27,9 +27,9 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 2. How we work (his rules)
 
-1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **39**). **Don't log notes until he says to take notes.**, restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
+1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **43**). **Don't log notes until he says to take notes.**, restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
 2. **Keep PC and phone exactly as they are** unless he says otherwise. Most new work is **VR only**; check before changing shared behaviour. Anything visual (tracers, fog, speed) gets a VR-only branch.
-3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → 1.21 → 1.22 (rolled back for a few hours) → **1.23** (live: the 1.22 guns plus fixes). If he just says go, pick the next small step (1.24). He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
+3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → 1.21 → 1.22 (rolled back for a few hours) → 1.23 → **1.24** (live). If he just says go, pick the next small step (1.25). He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
 4. **After building:**
    - Run the tests (section 5).
    - Push `index.html` to the repo, which makes the game live on his link.
@@ -52,7 +52,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ---
 
-## 4. What exists now (v1.23)
+## 4. What exists now (v1.24)
 
 ### World and generation (all modes)
 - **Settings:**
@@ -63,6 +63,7 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Tree density.
   - Map size: XS 250 m, S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km.
   - Edges: Island (ocean) or Endless (borderland terrain and forest fade into the haze).
+  - Landscape: Natural or Dramatic (one landmark per map).
   - Weather: random, clear, rain, fog, snow (with styles, including blizzard) or storm. Hiking never gets fog.
 - **Terrain:** generated heightfield with erosion and worn-down summits. `H(x,z)` is the exact triangle surface the player stands on.
 - **Trees:** trunk plus textured branch cards, Pop: One style; variants include pruned, odd and giant trees, and one tallest tree per map. **Big limbs** you can stand on (`limbGrid`) and hold (`limbHold`). Baked soft tree shadows.
@@ -134,6 +135,7 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Leaf edges smoothed (alpha-to-coverage on foliage, set when the map is generated in VR).
   - Render scale 0.8 and maximum foveation. He found Smooth looked best, so the resolution option was removed.
 - **1.23 fixes (notes 35–39):** the gun's weight-smoothing runs in play-space coordinates (`vr.gpL/gqL`), so walking, sprinting, snap turns and climbing no longer drag the gun off the hand; the gun hand's glove and arm are locked to the gun grip (`handPose`); gliding never turns the world (banking removed) and the glide direction keeps its side with straight arms and eases into new headings (it used to flip every frame); gloves are one skinned mesh per hand (fuller fingers that bend without gaps, longer cuff); the arm IK uses the body's real (unscaled) arm length and stretches the forearm (`foreArm.scale.y`) so the sleeve always reaches the glove; magazine hovers ~6 cm out, shows 1.35x while out, snap radius 22 cm.
+- **1.24 (notes 40–43):** scope/binocular zoom view aims with the gun (or head) but takes its tilt from the head (`zoomViewQ`), so the horizon stays level in the real world whatever hands or head do; the raised VR map's unexplored area is 50% see-through and the map texture is only re-uploaded when the minimap redraws (`mapDirty`), which should fix the frame drop; no tall spike stones (old "spire" extreme rocks become split boulders; nothing else changes); **Landscape setting: Natural (default, maps unchanged) or Dramatic**: one landmark per map (`makeFeature`, `FEAT`): crater lake, mesa, canyon or great cliff, sized to the map, placed inside the map, applied before erosion and then 55% of its shape added back after erosion; water/snow/tree lines and the lake/steepness fixer ignore the feature area. Monoliths/spikes are disliked: never add them. Test: `dev/test_landscape.py`.
 - **Workflow right now:** he asked that every prompt for a while gets built, tested and pushed live straight away, for a fast test loop. Test: `dev/test_vr_hold_glide.py`.
 - **Wrist HUD:** a small panel on the off-hand wrist showing info and score (and "+24 Pistol ammo" when you loot).
 
