@@ -1,4 +1,4 @@
-// Just Trees online helper (Cloudflare Worker).
+// Just Trees online helper (Cloudflare Worker), v2.
 // GET /ice-servers -> short-lived TURN relay logins for players whose networks can't connect directly.
 // The two secrets live only in Cloudflare (Settings -> Variables and Secrets): TURN_KEY_ID and TURN_KEY_API_TOKEN.
 const ALLOWED = ["https://justtrees.github.io"];           // only the game's own site may ask for relay logins
