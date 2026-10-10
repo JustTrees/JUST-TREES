@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.31";              // Just Trees 1.31
+const VERSION = "1.32";              // Just Trees 1.32
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -2211,7 +2211,9 @@ function initSound() {
   if (SND.ctx) { if (SND.ctx.state === "suspended" && SND.on) SND.ctx.resume(); return; }
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
   const ctx = new AC(); SND.ctx = ctx;
-  SND.master = ctx.createGain(); SND.master.gain.value = SND.on ? .9 : 0; SND.master.connect(ctx.destination);
+  SND.master = ctx.createGain(); SND.master.gain.value = SND.on ? .9 : 0;
+  SND.uw = ctx.createBiquadFilter(); SND.uw.type = "lowpass"; SND.uw.frequency.value = 22000; SND.master.connect(SND.uw); SND.uw.connect(ctx.destination);   // goes muffled and wavy under water
+  { const lfo = ctx.createOscillator(); lfo.frequency.value = .7; SND.uwLfoG = ctx.createGain(); SND.uwLfoG.gain.value = 0; lfo.connect(SND.uwLfoG); SND.uwLfoG.connect(SND.uw.frequency); lfo.start(); }
   const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), d = nb.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   SND.noise = nb;
@@ -2895,7 +2897,7 @@ function generate() {
   }
 
   // Lakes and rivers
-  const wMat = iced ? phong("#cfe6f0", { shininess: 60, specular: 0x666666 }) : waterMaterial(WATERC[biome]);
+  const wMat = iced ? phong("#cfe6f0", { shininess: 60, specular: 0x666666 }) : waterMaterial(WATERC[biome]); if (VR_ON) wMat.side = THREE.DoubleSide;   // you can see the surface from below
   const wMesh = new THREE.Mesh(new THREE.PlaneGeometry(S + 2 * (edgeShape.island ? 6000 : BORDER_EXT()), S + 2 * (edgeShape.island ? 6000 : BORDER_EXT())), wMat);
   wMesh.rotation.x = -Math.PI / 2; wMesh.position.y = water; world.add(wMesh);
   if (riverW) {
@@ -4524,7 +4526,62 @@ function vrAfterMove(dt) {                                // carry the play spac
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
   vrAvatar(dt);
   vrHands();
+  uwTick(dt, I);
 }
+/* ---- under water (VR): walk the bottom like normal for 5 seconds, then you drown and wake somewhere else ---- */
+const UW = { t: 0, under: false, mesh: null, drown: 0, fogC: new THREE.Color(), fogN: 0, bubbleT: 0, LIMIT: 5 };
+function uwOverlay() {
+  if (UW.mesh) return UW.mesh;
+  UW.mesh = new THREE.Mesh(new THREE.SphereGeometry(.28, 24, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false,
+    uniforms: { uFwd: { value: new THREE.Vector3(0, 0, -1) }, uTint: { value: 0 }, uPulse: { value: 0 }, uBlack: { value: 0 } },
+    vertexShader: "varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform vec3 uFwd; uniform float uTint; uniform float uPulse; uniform float uBlack; varying vec3 vD;
+      void main(){ float e = smoothstep(0.15, 0.85, 1.0 - dot(normalize(vD), uFwd));
+        vec3 c = mix(vec3(0.03, 0.16, 0.19), vec3(0.0), e * uPulse);
+        float a = uTint * (0.38 + 0.35 * e) + e * uPulse * 0.75;
+        gl_FragColor = vec4(mix(c, vec3(0.0), uBlack), max(min(a, 0.97), uBlack)); }` }));
+  UW.mesh.renderOrder = 998; UW.mesh.frustumCulled = false; UW.mesh.visible = false; scene.add(UW.mesh); return UW.mesh;
+}
+function uwRespawn() {                                      // wake up somewhere random on dry ground
+  let s = null;
+  for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2) s = [x, z]; }
+  if (!s) s = [P.x, P.z];
+  P.x = s[0]; P.z = s[1]; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
+}
+function uwAudio(under, dt) {
+  if (!SND.ctx || !SND.uw) return;
+  const t = SND.ctx.currentTime;
+  SND.uw.frequency.setTargetAtTime(under ? 520 : 22000, t, under ? .08 : .15); SND.uwLfoG.gain.setTargetAtTime(under ? 220 : 0, t, .1);
+  if (under && (UW.bubbleT -= dt) <= 0) {                    // little bubbles drifting up
+    UW.bubbleT = .25 + Math.random() * .9;
+    const o = SND.ctx.createOscillator(), g = SND.ctx.createGain(), f0 = 300 + Math.random() * 500; o.type = "sine";
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * 2.2, t + .08);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05, t + .01); g.gain.exponentialRampToValueAtTime(.0005, t + .1);
+    o.connect(g).connect(SND.master); o.start(t); o.stop(t + .12);
+  }
+}
+function uwTick(dt, I) {                                     // runs after you've moved this frame
+  const ov = uwOverlay(), headY = P.y + vr.headLocalY;
+  const under = !iced && state === "play" && headY < water - .05 && (!edgeShape.island || true);
+  if (under && !UW.under) { UW.fogC.copy(scene.fog.color); UW.fogN = scene.fog.near; }
+  if (!under && UW.under) { scene.fog.color.copy(UW.fogC); scene.fog.near = UW.fogN; }
+  UW.under = under;
+  if (UW.drown > 0) {                                        // fading out, moving you, fading back in
+    UW.drown += dt;
+    if (UW.drown > 1.2 && UW.drown - dt <= 1.2) { uwRespawn(); UW.t = 0; }
+    const b = UW.drown < 1.2 ? UW.drown / 1.2 : Math.max(0, 1 - (UW.drown - 1.6) / .8);
+    ov.material.uniforms.uBlack.value = b; if (UW.drown > 2.4) { UW.drown = 0; ov.material.uniforms.uBlack.value = 0; }
+  } else if (under) { UW.t += dt; if (UW.t >= UW.LIMIT) UW.drown = .001; }
+  else UW.t = Math.max(0, UW.t - dt * 2);                    // catch your breath
+  const k = Math.min(1, UW.t / UW.LIMIT), sp = 2 + k * 9;     // the pulse gets stronger and faster as your breath runs out
+  ov.material.uniforms.uTint.value += ((under ? 1 : 0) - ov.material.uniforms.uTint.value) * Math.min(1, dt * 8);
+  ov.material.uniforms.uPulse.value = under ? k * (.55 + .45 * Math.sin(performance.now() / 1000 * sp)) : 0;
+  ov.visible = ov.material.uniforms.uTint.value > .01 || UW.drown > 0;
+  ov.position.copy(I.head); ov.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ);
+  if (under) { scene.fog.color.setRGB(.03, .13, .15); scene.fog.near = .5; }
+  uwAudio(under, dt);
+}
+
 function vrLens() {                                       // draw the lens picture right before the frame
   if (vr.scoped && vr.gun) { const S = GUNSPOT[vr.gunKind]; lensView(vr.gun.localToWorld(new THREE.Vector3(...S.eye)), vr.gun.quaternion, S.fov[vr.zoom], [vr.gun, vr.avatar && vr.avatar.group]); }
   else if (vr.binos && binos) lensView(binos.position, binos.quaternion, [9, 5][vr.zoom], [binos, vr.avatar && vr.avatar.group]);
@@ -4858,7 +4915,7 @@ function vrZoomRender() {
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
   { const f = _v1.set(0, 0, -1).applyQuaternion(q), vu = _v2.set(0, 1, 0).applyQuaternion(q), vrt = new THREE.Vector3(1, 0, 0).applyQuaternion(q);   // how far the view is tilted from level
     const lu = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y); U.uRoll.value = lu.lengthSq() > 1e-6 ? Math.atan2(lu.dot(vrt), lu.dot(vu)) : 0; }
-  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross];
+  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
   xr.cameraAutoUpdate = false; xr.updateCamera(camera);
@@ -5016,6 +5073,7 @@ function vruiParts() {
   Pv.paint = (g, P) => {
     uiBg(g, P); const [t1, t2] = mapSummary(); g.textAlign = "center"; g.font = "bold 52px sans-serif"; g.fillStyle = UIC.text; g.fillText(MODE_NAME[gameMode] + " · " + t1, 800, 90);
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, t2, 800, 150, 1450, 42);
+    g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Point at the map and pull the trigger to choose where you start", 800, 262);
   };
   uiBtn(Pv, 90, 290, 470, 100, "New map", () => startNew(), { fs: 42 });                      // throw this one away and grow another, same settings
   uiBtn(Pv, 580, 290, 440, 100, "Settings", () => vruiOpen("setup"), { fs: 38 });
@@ -5047,7 +5105,7 @@ function vruiOpen(stage) {
   const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
-  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
@@ -5084,7 +5142,8 @@ function vruiTick(dt) {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
     if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
   } else if (st === "title") uiDraw(VRUI.panels.title);
-  if (VRUI.dio) VRUI.dio.children[0].rotation.y += dt * .22;
+  if (VRUI.dio && !VRUI.dioHold) VRUI.dio.children[0].rotation.y += dt * .22;   // stops turning while you point at it
+  VRUI.dioHold = false;
   // point and click
   const rc = vruiRay || (vruiRay = new THREE.Raycaster());
   VRUI.root.updateMatrixWorld(true);
@@ -5094,6 +5153,13 @@ function vruiTick(dt) {
     const h = I.hands[hand], L = VRUI.lasers[li]; if (!h) { L.line.visible = L.dot.visible = false; return; }
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(h.rayQ); rc.set(h.rayPos, dir); rc.far = 8;
     const hit = rc.intersectObjects(meshes, false)[0];
+    const dHit = st === "preview" && VRUI.dio ? rc.intersectObject(VRUI.dio.userData.terrain, false)[0] : null;
+    if (dHit && (!hit || dHit.distance < hit.distance)) {      // pointing at the little map: choose where you'll start
+      VRUI.dioHold = true; L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, dHit.distance);
+      L.dot.visible = true; L.dot.position.copy(dHit.point);
+      if (edge("ui" + hand, h.trig) && !clicked) { clicked = true; pickSpawn(VRUI.dio.userData.spin.worldToLocal(dHit.point.clone())); buzz(hand === "right" ? "R" : "L", .4, 25); }
+      return;
+    }
     L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, hit ? hit.distance : 1.2);
     L.dot.visible = !!hit; if (hit) L.dot.position.copy(hit.point);
     let P = null, w = null, cx = 0, cy = 0;
@@ -5122,6 +5188,17 @@ function vruiTick(dt) {
   }
 }
 let vruiRay = null;
+function pickSpawn(p) {                                     // the nearest good spot to where you pointed: dry, not too steep, inside the map
+  let best = null;
+  for (let r = 0; r <= 80 && !best; r += 4) for (let k = 0; k < (r ? 16 : 1) && !best; k++) {
+    const a = k / 16 * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
+    if (okSpot(x, z)) best = [x, z];
+  }
+  if (!best) return;
+  P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z);
+  const U = VRUI.dio.userData, gy = (H(P.x, P.z) - water) * U.ex;
+  U.pin.position.set(P.x, gy + 16 * U.ps, P.z); U.beam.position.set(P.x, gy, P.z);
+}
 // a little model of the map: the land, water, every tree as a tiny cone, and a yellow pin where you'll start
 function buildDiorama() {
   const outer = new THREE.Group(), spin = new THREE.Group(); outer.add(spin);
@@ -5161,6 +5238,7 @@ function buildDiorama() {
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(.8, .8, 16, 6).translate(0, 8, 0), new THREE.MeshBasicMaterial({ color: 0xf2c14e, transparent: true, opacity: .5, fog: false }));
   beam.scale.setScalar(ps); beam.position.set(P.x, (H(P.x, P.z) - water) * ex, P.z); spin.add(beam);
   outer.scale.setScalar(sc); outer.position.set(0, .95, -1.25);
+  outer.userData = { spin, terrain: spin.children[0], pin, beam, ex, ps };
   return outer;
 }
 
@@ -5200,6 +5278,7 @@ const CROUCH_DROP = .62;   // eye height drops from 1.65 m to about 1.03 m
 function groundAt(x, z) {
   const h = H(x, z);
   if (iced) return Math.max(h, water);
+  if (vr.on) return h;                                      // in a headset you walk along the bottom of lakes and the sea
   return h < water - 1.25 ? water - 1.25 : h;
 }
 function spawn(rand) {
@@ -5223,7 +5302,7 @@ function update(dt) {
   let mag = Math.hypot(mx, my); if (mag > 1) { mx /= mag; my /= mag; mag = 1; }
   const running = (keys.ShiftLeft || keys.ShiftRight || input.run) && !P.crouch;
   P.ck += ((P.crouch ? 1 : 0) - P.ck) * Math.min(1, dt * 10);
-  const swimming = !iced && H(P.x, P.z) < water - 1.25;
+  const swimming = !vr.on && !iced && H(P.x, P.z) < water - 1.25;
   const wading = riverAt(P.x, P.z) > H(P.x, P.z) + .15;
   // glide: only in the air (after a jump or off a drop), only while the button is held
   const steepVR = vr.on && slopeNy(P.x, P.z) < .77;                         // steeper than about 40 degrees (lets you lift off into a glide)
@@ -5287,6 +5366,7 @@ function update(dt) {
     input.jump = false;
     if (P.gliding) P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4);   // ease into a slow, steady drop
     else P.vy -= 22 * dt;
+    if (vr.on && !iced && P.y < water - .3) P.vy = Math.max(P.vy, -2.5);     // under water you sink slowly
     P.y += P.vy * dt;
     if (skipVR && !P.gliding && P.y > gnd && P.y - gnd < .35 && P.onGround) P.onGround = false;
     if (P.y <= gnd || (P.onGround && P.y - gnd < (vr.on ? 1.0 : .6) && P.vy <= 0 && !(skipVR && !P.gliding))) { P.y = gnd; P.vy = 0; P.onGround = true; }   // in VR you stay on the ground over small ledges   // on steep ground in VR the slope can drop away under you: little skips
@@ -6898,6 +6978,7 @@ function loop(now) {
   scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
+    if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
     zoneFog();
   updateBirds(now);
   if (!vr.on) WIND.value = now / 1000;                 // the trees hold still in a headset (sway makes leaf edges shimmer)
