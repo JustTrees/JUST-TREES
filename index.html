@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.29";              // Just Trees 1.29
+const VERSION = "1.30";              // Just Trees 1.30
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -394,7 +394,12 @@ WEATHERS.forEach(([k, label]) => {
 });
 const densEl = $("density");
 densEl.addEventListener("input", () => { set.density = densEl.value / 100; renderSetup(); });
-const densMul = () => .5 + set.density;       // 0.5x to 1.5x of the normal forest, middle of the slider is normal
+const densMul = () => .5 + set.density;
+// headset savings on the biggest maps: fewer far-off copies, trees switch to their lighter version a bit sooner, a few less trees, lighter rain and snow
+const PERF = () => !VR_ON ? { lod: 270, zoomLod: 99, border: 1, trees: 1, precip: 1 }
+  : set.size === "xxl" ? { lod: 205, zoomLod: 2.5, border: .4, trees: .82, precip: .6 }
+  : set.size === "xl" ? { lod: 240, zoomLod: 3.5, border: .7, trees: .92, precip: .8 }
+  : { lod: 270, zoomLod: 4, border: 1, trees: 1, precip: 1 };       // 0.5x to 1.5x of the normal forest, middle of the slider is normal
 [["xs", "XS"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, label]) => {
   const b = document.createElement("button"); b.textContent = label; b.dataset.size = k;
   b.addEventListener("click", () => { set.size = k; renderSetup(); });
@@ -2034,14 +2039,14 @@ function weatherText() {
 function buildPrecip() {
   precipFx = null;
   if (!weather.precip) return;
-  const rain = weather.precip === "rain", n = Math.round((isTouch ? 1400 : 2600) * (weather.storm ? 1.4 : 1));
+  const rain = weather.precip === "rain", n = Math.round((isTouch ? 1400 : 2600) * (weather.storm ? 1.4 : 1) * PERF().precip);
   if (rain) {
     const a = new Float32Array(n * 6);
     for (let i = 0; i < n; i++) { const x = (Math.random() - .5) * 60, y = Math.random() * 30, z = (Math.random() - .5) * 60; a.set([x, y, z, x + .06, y - 1.1, z], i * 6); }
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(a, 3));
     precipFx = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xc8d2de, transparent: true, opacity: .6, depthWrite: false }));
   } else {
-    const st = SNOW_STYLE[weather.snowStyle || "steady"], m = Math.round((isTouch ? 1500 : 2800) * st.n);
+    const st = SNOW_STYLE[weather.snowStyle || "steady"], m = Math.round((isTouch ? 1500 : 2800) * st.n * PERF().precip);
     const a = new Float32Array(m * 3), sz = new Float32Array(m), ph = new Float32Array(m), sp = new Float32Array(m), dv = new Float32Array(m);
     for (let i = 0; i < m; i++) {
       a.set([(Math.random() - .5) * 60, Math.random() * 30, (Math.random() - .5) * 60], i * 3);
@@ -2543,7 +2548,7 @@ function generate() {
   // Trees: slight species groupings with overlap, plus random loners, and more size variety
   const allTrees = [];
   const dens = { tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[biome];
-  const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
+  const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
   for (let k = 0; k < attempts && dens > 0 && allTrees.length < maxTrees; k++) {
     const x = (rand() - .5) * (S - 30), z = (rand() - .5) * (S - 30), h = H0(x, z);
     if (h < water + .6 || h > treeLine) continue;
@@ -2769,7 +2774,7 @@ function generate() {
     world.add(new THREE.Mesh(bgeo, groundMaterial(litter, biome === "tropical" ? "#7a6a3a" : "#b5642a", weather.wet)));
     // forest on the borderlands: copies of this map's own trees, grouped in big chunks that get culled like the map tiles
     const brand = mulberry32(seed * 17 + 3), bn = makeNoise(brand), CH = 320, reach = HALF + Math.min(ext, (VR_ON ? 1500 : isTouch ? 550 : 950) + 120);
-    const dens = allTrees.length / (S * S) * .55, cap = VR_ON ? 7000 : isTouch ? 2600 : 7500;
+    const dens = allTrees.length / (S * S) * .55, cap = Math.round((VR_ON ? 7000 : isTouch ? 2600 : 7500) * PERF().border);
     const ringArea = (2 * reach) ** 2 - (S - 40) ** 2, want = Math.min(cap, Math.round(dens * ringArea));
     const chunks = new Map();
     if (allTrees.length) for (let k = 0, tries = 0; k < want && tries < want * 4; tries++) {
@@ -6097,7 +6102,7 @@ function wheelTick(dt, main, I) {
   const W = vr.wh || (vr.wh = { t: 0, open: false, sel: -1 });
   if (main.a > .6) {
     W.t += dt;
-    if (!W.open && W.t > .3 && state === "play") {
+    if (!W.open && state === "play") {                       // opens straight away
       W.open = true; W.sel = -1; const m = vrWheel();
       m.position.copy(main.rayPos).addScaledVector(_wd.set(0, 0, -1).applyQuaternion(main.rayQ), .24);
       _wp.set(I.head.x, m.position.y, I.head.z); m.lookAt(I.head); m.visible = true; m.updateMatrixWorld(true); drawWheel(-1); buzz(set.hand === "right" ? "R" : "L", .2, 20);
@@ -6105,8 +6110,9 @@ function wheelTick(dt, main, I) {
       W.lp = m.position.clone().sub(new THREE.Vector3(vr.ox, vr.oy, vr.oz)).applyQuaternion(yqi); W.lq = yqi.multiply(m.quaternion);
     }
   } else if (W.t > 0) {
-    if (W.open) { if (W.sel >= 0) pickGun(WHEEL[W.sel]); W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
-    else { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else vr.gunOut = !vr.gunOut; }   // a quick tap: gun in or out (not while that hand is holding on)
+    const picked = W.open && W.sel >= 0; if (picked) pickGun(WHEEL[W.sel]);
+    if (W.open) { W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
+    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else vr.gunOut = !vr.gunOut; }   // a quick tap with nothing picked: gun in or out
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun
@@ -6742,7 +6748,7 @@ function cullTiles() {
   let cc = camera;
   if (vr.on && !(vr.scoped || vr.binos)) { cullCam.position.copy(camera.position); cullCam.quaternion.copy(camera.quaternion); cullCam.updateMatrixWorld(); cc = cullCam; }
   PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
-  const lodD = 270 * Math.max(1, vr.on ? vr.zoomK : 72 / camera.fov);       // full-detail trees nearby (and further out through a scope)
+  const pf = PERF(), lodD = pf.lod * Math.max(1, vr.on ? Math.min(vr.zoomK, pf.zoomLod) : 72 / camera.fov);   // full-detail trees nearby (and further out through a scope, but not all the way to the horizon)
   for (const t of tiles) {
     const d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
     const tr = t.r || TILE * .72;
