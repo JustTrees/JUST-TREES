@@ -289,7 +289,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.21";              // Just Trees 1.21
+const VERSION = "1.23";              // Just Trees 1.23
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -2905,6 +2905,7 @@ function generate() {
   if (gameMode === "pvp") spawnSquad(); else clearSquad();
   perchTrees = allTrees.filter(t => t.kind !== "bare").map(t => ({ x: t.x, z: t.z, top: t.y + kinds[t.kind].vars[t.vi].h * t.s * t.sy * .78 })).filter(t => t.top - H(t.x, t.z) > 7);
   if (gameMode === "hunt") spawnAnimals(); else clearAnimals();
+  if (gameMode === "hunt" && VR_ON) { resetArms(); spawnAmmo(); } else clearAmmo();
   startZone();
   soundEnv = { day: smooth(-2, 15, sunPos(lat, set.month, hourNow).el), cold: winterSnow, season, biome };
   footEnv = { snow: winterSnow, sandy, leaves: litter > .5, snowLine };
@@ -4095,9 +4096,14 @@ function xrInputs() {                                   // head from the two eye
   return { head, headQ, hands };
 }
 vr.readInputs = xrInputs;
+const _gyq = new THREE.Quaternion(), _gyqi = new THREE.Quaternion(), _ghL = new THREE.Vector3(), _ghQ = new THREE.Quaternion(), _gO = new THREE.Vector3();
+vr.gpL = new THREE.Vector3(); vr.gqL = new THREE.Quaternion();
 function edge(key, v) { const was = vr.prev[key] || 0; vr.prev[key] = v; return v > .6 && was <= .6; }
 // the rifle you hold: a copy of this mode's rifle, placed in the world at your hand
-const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1] },
+const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .07 },
+                  ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.59], counter: [.029, -.004, .015], drop: .065, magC: .06, handle: [0, .045, .16], pull: .06 },
+                  smg:    { grip: [0, -.075, .08], fore: [0, -.085, -.13], eye: [0, .062, .17], muzzle: [0, .01, -.31], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [0, .046, .055], pull: .05 },
+                  pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .035, snap: .15 },
                   pvp:  { grip: [0, -.085, .1], fore: [0, -.03, -.27], eye: [0, .068, .16], muzzle: [0, .012, -.71], fov: [6, 3.4] } };
 let lensRT = null, lensCam = null, lensMat = null;
 function makeLens(r) {
@@ -4110,12 +4116,24 @@ function makeLens(r) {
   ov.position.z = .0008; g.add(ov); return g;
 }
 function vrGun() {
-  const kind = gameMode === "hunt" ? "hunt" : "pvp";
+  const kind = gameMode === "hunt" ? (vr.weapon || "hunt") : "pvp";
   if (vr.gun && vr.gunKind === kind) return vr.gun;
-  if (vr.gun) scene.remove(vr.gun);
-  const g = new THREE.Group(), model = (kind === "hunt" ? sniper : pvpRifle).clone(true); model.visible = true; g.add(model);
-  const lens = makeLens(kind === "hunt" ? .024 : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens;
-  scene.add(g); vr.gun = g; vr.gunKind = kind; return g;
+  if (vr.gun) vr.gun.visible = false;
+  vr.guns = vr.guns || {};
+  let g = vr.guns[kind];
+  if (!g) {
+    g = new THREE.Group(); const model = (kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
+    if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? .024 : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
+    if (kind !== "pvp") {                                     // the parts you reload by hand get their own materials, so they can glow
+      const U = g.userData; U.mag = model.getObjectByName("mag"); U.charge = model.getObjectByName("charge");
+      for (const o of [U.mag, U.charge]) if (o) { if (o.isMesh) o.material = o.material.clone(); o.traverse(c => { if (c.isMesh && c !== o) c.material = c.material.clone(); }); }
+      U.magBase = U.mag.position.clone(); U.magDir = new THREE.Vector3(0, -1, 0).applyQuaternion(U.mag.quaternion);
+      U.chargeBase = U.charge.position.clone();
+      U.counter = makeCounter(kind); g.add(U.counter);
+    }
+    scene.add(g); vr.guns[kind] = g;
+  }
+  vr.gun = g; vr.gunKind = kind; return g;
 }
 let binos = null;
 function vrBinos() {
@@ -4155,7 +4173,8 @@ function drawWrist() {
   if (gameMode === "pvp") {
     g.fillStyle = "#4aa8ff"; g.fillRect(16, 18, 2.2 * P.sh, 14); g.fillStyle = "#5fd068"; g.fillRect(16, 40, 2.2 * P.hp, 14);
     g.fillStyle = "#ffcf9a"; g.fillText($("botInfo").textContent || "", 16, 82); g.fillStyle = "#9dffc0"; g.font = "16px sans-serif"; g.fillText(($("zoneInfo").textContent || "").slice(0, 26), 16, 108);
-  } else if (gameMode === "hunt") { g.fillText("Score " + hunt.score.toFixed(1), 16, 40); g.font = "16px sans-serif"; g.fillText(hunt.kills + " kills · longest " + Math.round(hunt.longest) + " m", 16, 72); }
+  } else if (gameMode === "hunt") { g.fillText("Score " + hunt.score.toFixed(1), 16, 40); g.font = "16px sans-serif"; g.fillText(hunt.kills + " kills · longest " + Math.round(hunt.longest) + " m", 16, 72);
+    if (vr.lootT > 0) { g.fillStyle = "#ffd65a"; g.fillText(vr.lootMsg, 16, 104); } }
   else { g.fillText($("info").textContent || "", 16, 40); g.font = "16px sans-serif"; g.fillText("Hold both grips at your face: binoculars", 16, 72); }
   wrist.material.map.needsUpdate = true;
 }
@@ -4198,31 +4217,50 @@ function vrTick(dt) {
     else { if (edge("tr", main.sx)) turn = -Math.PI / 6; if (edge("tl", -main.sx)) turn = Math.PI / 6; }
   }
   vr.pendTurn = turn;
-  // buttons: gun-hand A toggles the gun, B marks, trigger fires; off-hand trigger shows the map
-  const canGun = gameMode !== "hike";
-  if (main && canGun && edge("a", main.a)) vr.gunOut = !vr.gunOut;
+  // buttons: gun-hand A toggles the gun, B marks (Hunting: tap B marks, hold B opens the gun wheel), trigger fires; off-hand trigger shows the map
+  const canGun = gameMode !== "hike", huntV = gameMode === "hunt";
+  const mainSide = set.hand === "right" ? "R" : "L", offSide = mainSide === "R" ? "L" : "R", hanging = vr.cl ? vr.cl.hold : null;
+  if (main && canGun && edge("a", main.a)) { if (huntV && hanging === mainSide) buzz(mainSide, .2, 30); else vr.gunOut = !vr.gunOut; }   // the gun hand is holding on: it can't take the gun
+  if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
+  vr.cool = Math.max(0, (vr.cool || 0) - dt);
+  if (huntV) { lootTick(I); vr.lootT = Math.max(0, vr.lootT - dt); }
   const gunOn = canGun && vr.gunOut && !!main;
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
     const S = GUNSPOT[vr.gunKind];
-    if (!vr.gunInit) { vr.gq.copy(main.rayQ); vr.gp.copy(main.pos); vr.gunInit = true; }
-    // a weighty rifle: small quick shakes are soaked up, a deliberate swing is followed (the bigger the swing, the faster it catches up); steadier again in the scope
-    const ang = 2 * Math.acos(Math.min(1, Math.abs(vr.gq.dot(main.rayQ)))), gd = vr.gp.distanceTo(main.pos);
+    // a weighty rifle: small quick shakes are soaked up, a deliberate swing is followed (the bigger the swing, the faster it catches up); steadier again in the scope.
+    // All of it happens in your own play space, so walking, sprinting, snap turns and climbing carry the gun along exactly with your hand.
+    const yq = _gyq.setFromAxisAngle(_UPv, vr.yaw), yqi = _gyqi.copy(yq).invert();
+    const hL = _ghL.copy(main.pos).sub(_gO.set(vr.ox, vr.oy, vr.oz)).applyQuaternion(yqi), hQ = _ghQ.copy(yqi).multiply(main.rayQ);
+    if (!vr.gunInit) { vr.gqL.copy(hQ); vr.gpL.copy(hL); vr.gunInit = true; }
+    const ang = 2 * Math.acos(Math.min(1, Math.abs(vr.gqL.dot(hQ)))), gd = vr.gpL.distanceTo(hL);
     const rq = vr.scoped ? 2.2 + ang * 30 : 4.5 + ang * 55, rp = vr.scoped ? 3.5 + gd * 50 : 7 + gd * 90;
-    vr.gq.slerp(main.rayQ, 1 - Math.exp(-dt * rq)); vr.gp.lerp(main.pos, 1 - Math.exp(-dt * rp));
+    vr.gqL.slerp(hQ, 1 - Math.exp(-dt * rq)); vr.gpL.lerp(hL, 1 - Math.exp(-dt * rp));
+    vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
     G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12));
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
     G.updateMatrixWorld(true);
+    if (huntV) reloadTick(dt, G, off);
     const fore = G.localToWorld(_v2.set(...S.fore));
-    vr.two = !!off && off.grip > .5 && (vr.two || off.pos.distanceTo(fore) < .35);        // the off hand snaps to the front grip
+    vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && off.pos.distanceTo(fore) < (S.snap || .35)));        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
     const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
-    vr.scoped = vr.two && gf.dot(hf) > .8 && eye.distanceTo(I.head) < (vr.scoped ? .2 : .14);       // eye to the eyepiece: the whole view goes into the scope
+    vr.scoped = !!S.fov && vr.two && (huntV ? gf.dot(hf) > .55 && eye.distanceTo(I.head) < (vr.scoped ? .36 : .3)          // Hunting: two hands on the sniper anywhere near your face = scope
+                                            : gf.dot(hf) > .8 && eye.distanceTo(I.head) < (vr.scoped ? .2 : .14));          // eye to the eyepiece: the whole view goes into the scope
     vr.zoom = Math.max(0, Math.min(scopeFovs().length - 1, vr.zoom));
-    fireHeld = main.trig > .6 && state === "play";
-    if (edge("trig", main.trig) && !GUN.auto) fire();
-    if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
-  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
+    if (huntV) {                                                        // Hunting: each gun has its own rate of fire, magazine and reload
+      fireHeld = false;
+      const W = WEAP[vr.gunKind], A = arms[vr.gunKind], pressed = edge("trig", main.trig);
+      if (edge("drop", main.stickBtn) && A.phase !== 1) {                 // click the gun-hand stick: drop the magazine early (its rounds go back to your spare ammo)
+        A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoley(SFX.magOut); buzz(mainSide, .3, 25);
+      }
+      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoley(SFX.dry); } else if (vr.cool <= 0) vrFire(); }
+    } else {
+      fireHeld = main.trig > .6 && state === "play";
+      if (edge("trig", main.trig) && !GUN.auto) fire();
+      if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
+    }
+  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(1, vr.zoom)); }
@@ -4243,10 +4281,18 @@ function vrTick(dt) {
     let gx = rz / rl, gz = -rx / rl;                                        // 90 degrees to the line from left hand to right hand
     const hfx = -2 * (Lh.rayQ.x * Lh.rayQ.z + Lh.rayQ.w * Lh.rayQ.y) - 2 * (Rh.rayQ.x * Rh.rayQ.z + Rh.rayQ.w * Rh.rayQ.y);
     const hfz = -(1 - 2 * (Lh.rayQ.x * Lh.rayQ.x + Lh.rayQ.y * Lh.rayQ.y)) - (1 - 2 * (Rh.rayQ.x * Rh.rayQ.x + Rh.rayQ.y * Rh.rayQ.y));
-    if (gx * hfx + gz * hfz < 0) { gx = -gx; gz = -gz; }                    // on the side your hands face
+    // which side of the arm line to fly toward: the side your hands face when that's clear; with straight arms (hands pointing out along the line) it isn't,
+    // so keep the side you were already flying (or, starting fresh, the side you face). Never flips back and forth.
+    const hl = Math.hypot(hfx, hfz) || 1, side = (gx * hfx + gz * hfz) / hl, prev = vr.glideDir;
+    let flip;
+    if (prev && P.gliding) flip = side < -.6 ? true : side > .6 ? false : (gx * prev.x + gz * prev.z) < 0;
+    else { const fq = I.headQ, fx = -2 * (fq.x * fq.z + fq.w * fq.y), fz = -(1 - 2 * (fq.x * fq.x + fq.y * fq.y)); flip = Math.abs(side) > .35 ? side < 0 : (gx * fx + gz * fz) < 0; }
+    if (flip) { gx = -gx; gz = -gz; }
+    if (prev && P.gliding) {                                                // ease into a new heading instead of snapping
+      const k = 1 - Math.exp(-dt * 2.5); let nx = prev.x + (gx - prev.x) * k, nz = prev.z + (gz - prev.z) * k; const nl = Math.hypot(nx, nz) || 1; gx = nx / nl; gz = nz / nl;
+    }
     vr.glideDir = { x: gx, z: gz };
   } else vr.glideDir = null;
-  if (P.gliding && main && off) vr.pendTurn += ((set.hand === "right" ? off.pos.y - main.pos.y : main.pos.y - off.pos.y)) * dt * 1.4;
   vr.I = I; vr.main = main; vr.off = off;
   if (off && off.b > .6) { vr.menuHold = (vr.menuHold || 0) + dt; if (vr.menuHold > .7) { vr.menuHold = -1e9; pause(); vruiOpen("pause"); return; } } else vr.menuHold = 0;
   vr.climbing = climbTick(dt, I);
@@ -4289,16 +4335,26 @@ function vrLens() {                                       // draw the lens pictu
   if (vr.gun && vr.gun.userData.lens) vr.gun.userData.lens.visible = false;
 }
 function vrFire() {
-  if (state !== "play" || gameMode === "hike" || GUN.cool > 0 || P.gliding || !vr.gun || !vr.gun.visible) return;
-  const huntM = gameMode === "hunt", S = GUNSPOT[vr.gunKind];
-  GUN.cool = GUN.auto ? .1 : huntM ? BOLT_TIME : .28; vr.kick = vr.two ? .35 : 1;                // much less kick with two hands on the gun
-  if (huntM) { boltSounds(); scatterBeasts(P); } else alertBots();
+  if (state !== "play" || gameMode === "hike" || P.gliding || !vr.gun || !vr.gun.visible) return;
+  const huntM = gameMode === "hunt", S = GUNSPOT[vr.gunKind], W = huntM ? WEAP[vr.gunKind] : null;
+  if (huntM) {
+    const A = arms[vr.gunKind]; if (vr.cool > 0 || A.phase || A.mag <= 0) return;
+    vr.cool = W.cool; A.mag--;
+    vr.kick = Math.min(1.3, (W.auto ? vr.kick : 0) + W.kick * (vr.two ? .35 : 1));          // much less kick with two hands on the gun
+    scatterBeasts(P);
+    if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoley(SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
+    else if (vr.gunKind === "hunt") A.phase = 2;                                    // sniper: work the bolt by hand after every shot
+  } else {
+    if (GUN.cool > 0) return;
+    GUN.cool = GUN.auto ? .1 : .28; vr.kick = vr.two ? .35 : 1; alertBots();
+  }
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
-  const hit = castShot(from, dir, vr.scoped ? 2400 : 900); hit.dist = from.distanceTo(hit.p);
+  if (W && W.spread) { const sp = W.spread * (vr.two ? .5 : 1); dir.add(new THREE.Vector3((Math.random() - .5) * 2 * sp, (Math.random() - .5) * 2 * sp, (Math.random() - .5) * 2 * sp)).normalize(); }
+  const hit = castShot(from, dir, vr.scoped ? 2400 : W ? W.reach : 900); hit.dist = from.distanceTo(hit.p);
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; scene.add(head, trail);
   tracers.push({ head, trail, from, end: hit.p.clone(), len: from.distanceTo(hit.p), d: 0, hit, fade: 0, vr: true });
-  gunshot();
+  gunshot(huntM ? vr.gunKind : undefined);
 }
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
 function vrAvatar(dt) {
@@ -4314,9 +4370,13 @@ function vrAvatar(dt) {
   for (const [side, h] of [["R", I.hands.right], ["L", I.hands.left]]) {
     if (!h) continue;
     const isMain = (side === "R") === (set.hand === "right");
-    const hp = handPose(side === "R" ? "right" : "left", h), target = hp.pos.clone().add(_v2.set(side === "R" ? .012 : -.012, .075, .012).applyQuaternion(hp.q));   // the wrist
+    const hp = handPose(side === "R" ? "right" : "left", h), target = hp.pos.clone().add(_v2.set(side === "R" ? .018 : -.018, .1, .006).applyQuaternion(hp.q));   // the wrist: the sleeve tucks into the glove cuff
     const pole = new THREE.Vector3(side === "R" ? -.7 : .7, -1, -.2).applyAxisAngle(_UPv, S.yaw + Math.PI).normalize();
-    ik2(S.B["upperArm" + side], S.B["foreArm" + side], target, pole, .3 * sc, .26 * sc, -1);
+    const ua = S.B["upperArm" + side], fa = S.B["foreArm" + side], gs = S.group.scale.x, reach = .56 * gs * .985;   // the arm's real length (the body isn't scaled to your height)
+    const d = ua.getWorldPosition(_v1).distanceTo(target) / gs;                                     // stretch the forearm to meet your hand, Pop: One style: the sleeve never stops short
+    const k = Math.min(2.6, Math.max(1, (d / .985 - .30) / .26));
+    fa.scale.y = k;
+    ik2(ua, fa, target, pole, .3 * gs, .26 * gs * k, -1);
     const hb = S.B["hand" + side]; hb.quaternion.identity(); hb.scale.setScalar(.6); hb.updateMatrixWorld(true);
   }
 }
@@ -4395,13 +4455,16 @@ function headBlocked(x, y, z) {                            // your face can't go
 }
 let climbFx = null;
 function climbTick(dt, I) {                               // returns true while climbing or flying through the air, so normal walking is skipped
-  const gunHands = (gameMode === "hunt" || gameMode === "pvp") && vr.gunOut;          // the gun must be put away to climb
+  const gunHands = gameMode === "pvp" && vr.gunOut;                                  // PvP: the gun must be put away to climb
+  const gunOutH = gameMode === "hunt" && vr.gunOut, mainS = set.hand === "right" ? "R" : "L";    // Hunting: the gun hand holds the gun, the off hand can still hold on
   const sides = { R: I.hands.right, L: I.hands.left };
   if (!vr.cl) vr.cl = { hold: null, anchor: new THREE.Vector3(), vel: new THREE.Vector3(), prevP: null, air: null, was: {} };
   const C = vr.cl;
   for (const side of ["L", "R"]) {
     const h = sides[side]; if (!h) { C.was[side + "in"] = false; continue; }
-    const hit = gunHands || vr.binos ? null : climbableAt(h.pos), grip = h.grip > .5;
+    const busy = gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab));
+    if (busy && C.hold === side) C.hold = null;
+    const hit = gunHands || busy || vr.binos ? null : climbableAt(h.pos), grip = h.grip > .5;
     const wasInside = C.was[side + "in"], wasGrip = C.was[side + "g"];
     C.was[side + "in"] = !!hit; C.was[side + "g"] = grip;
     if (hit && grip && C.hold !== side && (!wasGrip || !wasInside)) {      // squeeze inside it, or arrive already squeezing: you catch
@@ -4453,6 +4516,15 @@ function buzz(side, strength, ms) {                       // a little controller
 let vrHandsObj = null;
 function handPose(hand, h) {                               // where a hand is drawn: on the controller, or snapped to the rifle's front grip
   const isMain = hand === set.hand;
+  if (isMain && vr.gun && vr.gun.visible) {                  // the gun hand is locked to the grip: glove, gun and arm move as one piece
+    const q = vr.gun.quaternion.clone().multiply(_q1.copy(h.rayQ).invert().multiply(h.q));
+    return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].grip)), q };
+  }
+  if (!isMain && vr.rl && vr.rl.grab && vr.gun && vr.gun.visible) {        // reloading: the glove sits on the magazine or the handle it's holding
+    const U = vr.gun.userData, S = GUNSPOT[vr.gunKind];
+    const lp = vr.rl.grab === "mag" ? U.mag.position.clone().addScaledVector(U.magDir, S.magC) : new THREE.Vector3(...S.handle).add(new THREE.Vector3(0, 0, vr.rl.pull));
+    return { pos: vr.gun.localToWorld(lp), q: h.q };
+  }
   if (!isMain && vr.two && vr.gun && vr.gun.visible) return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].fore)), q: h.q };
   return { pos: h.pos, q: h.q };
 }
@@ -4460,26 +4532,66 @@ function vrHandsParts() {
   if (vrHandsObj) return vrHandsObj;
   const mat = grade(new THREE.MeshLambertMaterial({ color: 0x2c3326 })), pad = grade(new THREE.MeshLambertMaterial({ color: 0x1b1e19 }));
   const ghost = new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    vertexShader: "#include <common>\n#include <skinning_pars_vertex>\nvarying vec3 vN; varying vec3 vV;\nvoid main(){\n#include <beginnormal_vertex>\n#include <skinbase_vertex>\n#include <skinnormal_vertex>\n#include <begin_vertex>\n#include <skinning_vertex>\n vec4 mv = modelViewMatrix * vec4(transformed, 1.0); vN = normalize(normalMatrix * objectNormal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
     fragmentShader: "varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(vec3(0.3, 0.72, 1.0) * (0.25 + 1.1 * r * r), 1.0); }" });
-  const seg = (r, len) => new THREE.CapsuleGeometry(r, len, 3, 8).translate(0, -len / 2, 0);   // one finger bone, hanging from its joint
   const make = sgn => {
-    const g = new THREE.Group(), ghostParts = [];
-    const add = (parent, geo, m) => { const o = new THREE.Mesh(geo, m); parent.add(o); const gh = new THREE.Mesh(geo, ghost); gh.renderOrder = 997; gh.visible = false; o.add(gh); ghostParts.push(gh); return o; };
-    const palm = add(g, roundBox(.03, .092, .084, .011), mat); palm.position.set(.026 * sgn, .034, 0);              // back of the hand toward +X (right) / -X (left), wrist toward +Y
-    const cuff = add(g, new THREE.CylinderGeometry(.033, .036, .045, 12), pad); cuff.position.set(.02 * sgn, .095, 0);
-    const fingers = [];
-    [-.03, -.01, .01, .03].forEach((z, k) => {                                                                        // index (thumb side, -Z) to little finger
-      const L = [.044, .027, .021].map(v => v * (k === 3 ? .82 : k === 2 ? .96 : 1)), r = k === 3 ? .0082 : .0092;
-      const j0 = new THREE.Group(); j0.position.set(.03 * sgn, -.01, z); g.add(j0); add(j0, seg(r, L[0]), mat);
-      const j1 = new THREE.Group(); j1.position.y = -L[0]; j0.add(j1); add(j1, seg(r * .94, L[1]), mat);
-      const j2 = new THREE.Group(); j2.position.y = -L[1]; j1.add(j2); add(j2, seg(r * .88, L[2]), mat);
-      fingers.push([j0, j1, j2]);
+    const g = new THREE.Group();
+    // bones: the wrist, three joints per finger, two for the thumb (same places as before, so the poses carry over)
+    const root = new THREE.Bone(), bones = [root], fingers = [], FZ = [-.031, -.0105, .0105, .031];
+    const LEN = k => [.046, .029, .023].map(v => v * (k === 3 ? .82 : k === 2 ? .96 : 1)), RAD = k => k === 3 ? .0102 : .0116;
+    FZ.forEach((z, k) => {
+      const L = LEN(k), j0 = new THREE.Bone(); j0.position.set(.03 * sgn, -.01, z); root.add(j0);
+      const j1 = new THREE.Bone(); j1.position.y = -L[0]; j0.add(j1); const j2 = new THREE.Bone(); j2.position.y = -L[1]; j1.add(j2);
+      bones.push(j0, j1, j2); fingers.push([j0, j1, j2]);
     });
-    const t0 = new THREE.Group(); t0.position.set(.018 * sgn, .045, -.036); g.add(t0); add(t0, seg(.011, .04), mat);   // thumb, from the heel of the hand
-    const t1 = new THREE.Group(); t1.position.y = -.04; t0.add(t1); add(t1, seg(.0095, .032), mat);
+    const t0 = new THREE.Bone(); t0.position.set(.018 * sgn, .045, -.038); root.add(t0); const t1 = new THREE.Bone(); t1.position.y = -.042; t0.add(t1); bones.push(t0, t1);
+    // geometry in the rest pose (fingers straight down), each vertex tied to one or two bones with a soft blend across every joint
+    const P = [], N = [], SI = [], SW = [], IX = [], G1 = [];
+    const bi = b => bones.indexOf(b);
+    const vert = (x, y, z, nx, ny, nz, a, b, w) => { P.push(x, y, z); N.push(nx, ny, nz); SI.push(a, b, 0, 0); SW.push(1 - w, w, 0, 0); return P.length / 3 - 1; };
+    const blend = (t, cuts, ids) => {                          // along a chain: which bone(s), and how much of the next one
+      const band = .007; for (let i = 0; i < cuts.length; i++) if (t < cuts[i] + band) { const w = Math.max(0, Math.min(1, (t - (cuts[i] - band)) / (2 * band))); return [ids[i], ids[i + 1], w * w * (3 - 2 * w)]; }
+      return [ids[ids.length - 1], ids[ids.length - 1], 0];
+    };
+    // a tube hanging from (bx, by, bz) along a local direction, rings every few mm, a rounded tip; d: distance along it
+    const tube = (base, dir, side, len, r0, r1, cuts, ids, seg) => {
+      const rings = [], step = .0045, n = Math.ceil(len / step), side2 = new THREE.Vector3().crossVectors(dir, side).normalize();
+      for (let i = 0; i <= n + 3; i++) {
+        let d = Math.min(len, i * step), r = r0 + (r1 - r0) * (d / len);
+        if (i > n) { const a = (i - n) / 4 * Math.PI / 2; d = len + Math.sin(a) * r1 * .9; r = Math.cos(a) * r1; }   // the rounded fingertip
+        const c = base.clone().addScaledVector(dir, d), row = [];
+        const [a, b, w] = blend(d, cuts, ids);
+        for (let j = 0; j < seg; j++) {
+          const ang = j / seg * Math.PI * 2, nrm = side.clone().multiplyScalar(Math.cos(ang) * 1.08).addScaledVector(side2, Math.sin(ang)).normalize();   // a touch flatter across the palm
+          const p = c.clone().addScaledVector(side, Math.cos(ang) * r * 1.08).addScaledVector(side2, Math.sin(ang) * r);
+          row.push(vert(p.x, p.y, p.z, nrm.x, nrm.y, nrm.z, a, b, w));
+        }
+        rings.push(row);
+      }
+      const tipC = base.clone().addScaledVector(dir, len + r1 * .9), [a, b, w] = blend(len, cuts, ids), tip = vert(tipC.x, tipC.y, tipC.z, dir.x, dir.y, dir.z, a, b, w);
+      for (let i = 0; i < rings.length - 1; i++) for (let j = 0; j < seg; j++) { const A = rings[i][j], B = rings[i][(j + 1) % seg], C = rings[i + 1][j], D = rings[i + 1][(j + 1) % seg]; IX.push(A, C, B, B, C, D); }
+      const last = rings[rings.length - 1]; for (let j = 0; j < seg; j++) IX.push(last[j], tip, last[(j + 1) % seg]);
+    };
+    FZ.forEach((z, k) => {                                       // fingers start a little inside the palm so the knuckles stay closed
+      const L = LEN(k), r = RAD(k), base = new THREE.Vector3(.03 * sgn, .004, z);
+      tube(base, new THREE.Vector3(0, -1, 0), new THREE.Vector3(sgn, 0, 0), .014 + L[0] + L[1] + L[2] - .004, r, r * .86,
+           [.014, .014 + L[0], .014 + L[0] + L[1]], [bi(root), bi(fingers[k][0]), bi(fingers[k][1]), bi(fingers[k][2])], 9);
+    });
+    tube(new THREE.Vector3(.018 * sgn, .062, -.038), new THREE.Vector3(0, -1, 0), new THREE.Vector3(sgn, 0, 0), .017 + .042 + .03, .0135, .0108, [.017, .059], [bi(root), bi(t0), bi(t1)], 9);
+    // the palm and back of the hand: a rounded block on the wrist bone
+    const addBox = (geo, x, y, z, boneI) => { const p = geo.attributes.position, nn = geo.attributes.normal, o = P.length / 3; for (let i = 0; i < p.count; i++) vert(p.getX(i) + x, p.getY(i) + y, p.getZ(i) + z, nn.getX(i), nn.getY(i), nn.getZ(i), boneI, boneI, 0); const id = geo.index; for (let i = 0; i < id.count; i++) IX.push(o + id.getX(i)); };
+    addBox(roundBox(.038, .1, .092, .015), .027 * sgn, .036, 0, 0);
+    const cuffStart = IX.length;
+    addBox(new THREE.CylinderGeometry(.037, .034, .075, 14), .022 * sgn, .112, 0, 0);          // a longer cuff that tucks under the sleeve
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(N, 3));
+    geo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(SI, 4)); geo.setAttribute("skinWeight", new THREE.Float32BufferAttribute(SW, 4)); geo.setIndex(IX);
+    geo.addGroup(0, cuffStart, 0); geo.addGroup(cuffStart, IX.length - cuffStart, 1); geo.computeBoundingSphere();
+    const mesh = new THREE.SkinnedMesh(geo, [mat, pad]); mesh.frustumCulled = false; mesh.add(root); g.add(mesh);
+    g.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones));
+    const gh = new THREE.SkinnedMesh(geo, ghost); gh.frustumCulled = false; gh.renderOrder = 997; gh.visible = false; gh.bind(mesh.skeleton, mesh.bindMatrix); g.add(gh);
     g.visible = false; scene.add(g);
-    return { g, fingers, thumb: [t0, t1], ghostParts, sgn };
+    return { g, fingers, thumb: [t0, t1], ghostParts: [gh], sgn };
   };
   return vrHandsObj = { L: make(-1), R: make(1) };
 }
@@ -4722,7 +4834,7 @@ function vruiOpen(stage) {
   const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
-  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
+  for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
@@ -4853,7 +4965,7 @@ async function enterVR(menu) {
       const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
       if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
       vr.on = false; VR_ON = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
-      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv]) if (o) o.visible = false;
+      for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
     });
@@ -5683,7 +5795,7 @@ const sniper = new THREE.Group(), sniperBolt = new THREE.Group(); gun.add(sniper
   // round action, bolt and handle
   add(tubeZ([[.0001, .16], [.026, .16], [.027, .13], [.027, -.12], [.024, -.15], [.0001, -.15]]), steel, 0, .012, 0);
   add(new THREE.BoxGeometry(.012, .022, .07), blued, .022, .022, .02);                                     // ejection port
-  sniperBolt.position.set(0, .012, .1); sniper.add(sniperBolt);
+  sniperBolt.position.set(0, .012, .1); sniperBolt.name = "charge"; sniper.add(sniperBolt);
   add(new THREE.CylinderGeometry(.0055, .0055, .065, 12), steel, .03, -.008, 0, 0, 0, -1.1, sniperBolt);   // bolt handle
   add(new THREE.SphereGeometry(.012, 16, 12), blued, .058, -.022, 0, 0, 0, 0, sniperBolt);                 // bolt knob
   add(tubeZ([[.0001, .03], [.016, .03], [.016, -.02], [.0001, -.02]], 20), blued, 0, 0, .04, 0, 0, 0, sniperBolt);   // bolt shroud
@@ -5697,7 +5809,7 @@ const sniper = new THREE.Group(), sniperBolt = new THREE.Group(); gun.add(sniper
   add(new THREE.BoxGeometry(.052, .124, .03), rubber, 0, -.004, .49);                                       // recoil pad
   add(new THREE.TorusGeometry(.024, .004, 8, 24, Math.PI), steel, 0, -.035, .03, 0, Math.PI / 2, Math.PI); // trigger guard
   add(new THREE.BoxGeometry(.004, .022, .006), steel, 0, -.03, .025, -.3);                                  // trigger
-  add(new THREE.BoxGeometry(.03, .05, .06), blued, 0, -.035, -.04);                                         // magazine
+  add(new THREE.BoxGeometry(.03, .05, .06), blued, 0, -.035, -.04).name = "mag";                             // magazine
   for (const s of [-1, 1]) add(new THREE.CylinderGeometry(.005, .005, .2, 10), steel, s * .012, -.05, -.42, Math.PI / 2 - .12);   // folded bipod
   add(new THREE.TorusGeometry(.008, .002, 6, 14), steel, 0, -.03, .34, Math.PI / 2); add(new THREE.TorusGeometry(.008, .002, 6, 14), steel, 0, -.03, -.46, Math.PI / 2);   // sling swivels
   // the scope: big objective bell, turrets, rings, glinting lenses
@@ -5717,6 +5829,240 @@ function boltSounds() {                        // lift, pull back, push forward,
     const g = c.createGain(); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + .004); g.gain.exponentialRampToValueAtTime(.001, t + dt + d);
     sb.connect(bp).connect(g).connect(SND.master); sb.start(t + dt, Math.random()); sb.stop(t + dt + d + .02);
   });
+}
+/* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
+const WEAP = {
+  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     reach: 900, dmg: 100, col: "#e8933a" },
+  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, reach: 900, dmg: 30,  col: "#4a90e2" },
+  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  reach: 350, dmg: 18,  col: "#52c463" },
+  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  reach: 250, dmg: 25,  col: "#b77ee6" } };
+const WHEEL = ["hunt", "ar", "smg", "pistol"];          // top, right, bottom, left
+const AMMO_CAP = 300;
+const arms = {};
+function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0; }
+vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
+resetArms();
+// the other three guns, built from code like the sniper (each has a "mag" and a "charge" part for reloading)
+const GUNMODEL = {};
+(function buildGuns() {
+  const M = (col, o) => phong(col, Object.assign({ fog: false }, o || {}));
+  const black = M("#1d1f22", { shininess: 40, specular: 0x444444 }), steel = M("#2d3035", { shininess: 60, specular: 0x555555 }), tan = M("#6e6248", { shininess: 8 }), poly = M("#26292c", { shininess: 10 });
+  const B = (w, h, d) => new THREE.BoxGeometry(w, h, d), cyl = (r1, r2, l, s) => new THREE.CylinderGeometry(r1, r2, l, s || 12).rotateX(Math.PI / 2);
+  const put = (par, geo, m, x, y, z, rx) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx || 0; par.add(o); return o; };
+  const part = (par, name, x, y, z, rx) => { const g = new THREE.Group(); g.name = name; g.position.set(x, y, z); g.rotation.x = rx || 0; par.add(g); return g; };
+  { // assault rifle: tan furniture, curved magazine, T charging handle on top
+    const g = new THREE.Group();
+    put(g, B(.05, .07, .26), black, 0, 0, -.02);                    // receiver
+    put(g, B(.036, .014, .3), steel, 0, .042, -.05);                // top rail
+    put(g, B(.058, .06, .22), tan, 0, .006, -.26);                  // handguard
+    put(g, cyl(.011, .011, .2), steel, 0, .012, -.46);              // barrel
+    put(g, cyl(.016, .016, .05), black, 0, .012, -.565);            // flash hider
+    put(g, B(.006, .045, .01), black, 0, .06, -.34);                // front sight
+    put(g, B(.03, .022, .02), black, 0, .058, .07);                 // rear sight
+    put(g, B(.04, .065, .2), tan, 0, -.02, .2);                     // stock
+    put(g, B(.044, .085, .022), poly, 0, -.025, .31);               // butt pad
+    put(g, B(.034, .09, .04), poly, 0, -.075, .1, -.35);            // pistol grip
+    put(g, B(.01, .005, .055), steel, 0, -.06, .035); put(g, B(.004, .02, .006), steel, 0, -.045, .03);   // guard and trigger
+    const mag = part(g, "mag", 0, -.035, -.05, .22); put(mag, B(.028, .12, .055), black, 0, -.06, 0); put(mag, B(.031, .012, .058), steel, 0, -.122, 0);
+    const ch = part(g, "charge", 0, .045, .14); put(ch, B(.012, .012, .04), steel, 0, 0, 0); put(ch, B(.05, .01, .014), steel, 0, 0, .02);
+    GUNMODEL.ar = g;
+  }
+  { // SMG: short, vertical front grip, straight magazine, wire stock
+    const g = new THREE.Group();
+    put(g, B(.045, .065, .2), black, 0, 0, -.03);                   // receiver
+    put(g, B(.03, .012, .18), steel, 0, .038, -.03);                // rail
+    put(g, cyl(.016, .016, .12), black, 0, .01, -.19);              // barrel shroud
+    put(g, cyl(.01, .01, .06), steel, 0, .01, -.28);                // muzzle
+    put(g, B(.006, .03, .01), black, 0, .052, -.11); put(g, B(.026, .02, .016), black, 0, .052, .05);   // sights
+    put(g, B(.032, .085, .04), poly, 0, -.07, .08, -.35);           // grip
+    put(g, B(.03, .075, .03), poly, 0, -.07, -.13);                 // front grip
+    for (const s of [-1, 1]) put(g, cyl(.005, .005, .2, 8), steel, s * .016, -.005, .17);   // wire stock
+    put(g, B(.04, .07, .012), poly, 0, -.02, .27);                  // butt plate
+    put(g, B(.01, .005, .045), steel, 0, -.055, .02); put(g, B(.004, .018, .006), steel, 0, -.042, .015);
+    const mag = part(g, "mag", 0, -.032, -.045); put(mag, B(.026, .15, .036), black, 0, -.075, 0); put(mag, B(.03, .01, .04), steel, 0, -.15, 0);
+    const ch = part(g, "charge", 0, .046, .055); put(ch, B(.016, .014, .022), steel, 0, 0, 0);
+    GUNMODEL.smg = g;
+  }
+  { // pistol: the slide is what you rack; the magazine drops out of the grip
+    const g = new THREE.Group();
+    const slide = part(g, "charge", 0, 0, 0);
+    put(slide, B(.03, .033, .19), black, 0, .02, -.03); put(slide, B(.005, .01, .006), steel, 0, .041, -.115); put(slide, B(.022, .009, .008), steel, 0, .041, .055);
+    for (let i = 0; i < 4; i++) put(slide, B(.032, .02, .003), steel, 0, .02, .035 + i * .007);   // grip serrations at the back
+    put(g, cyl(.007, .007, .02), steel, 0, .02, -.128);              // barrel tip
+    put(g, B(.028, .024, .15), poly, 0, -.006, -.045);               // frame
+    put(g, B(.03, .1, .042), poly, 0, -.06, .04, -.25);              // grip
+    put(g, B(.008, .005, .04), poly, 0, -.033, -.02); put(g, B(.004, .016, .006), steel, 0, -.022, -.008);
+    const mag = part(g, "mag", 0, -.012, .028, -.25); put(mag, B(.024, .1, .034), steel, 0, -.052, 0); put(mag, B(.031, .01, .044), poly, 0, -.104, 0);
+    GUNMODEL.pistol = g;
+  }
+})();
+// a short burst of filtered noise: clicks, clacks and slides for the reload
+function gunFoley(parts) {
+  if (!SND.ctx || !SND.on) return;
+  const c = SND.ctx, t = c.currentTime;
+  parts.forEach(([dt, f, d, v]) => {
+    const sb = c.createBufferSource(); sb.buffer = SND.noise; const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = 2.5;
+    const g = c.createGain(); g.gain.setValueAtTime(0, t + dt); g.gain.linearRampToValueAtTime(v, t + dt + .004); g.gain.exponentialRampToValueAtTime(.001, t + dt + d);
+    sb.connect(bp).connect(g).connect(SND.master); sb.start(t + dt, Math.random()); sb.stop(t + dt + d + .02);
+  });
+}
+const SFX = { dry: [[0, 3200, .03, .12]], magOut: [[0, 1800, .05, .12], [.05, 900, .12, .07]], magIn: [[0, 1300, .05, .14], [.04, 2600, .04, .16]],
+  back: [[0, 2400, .05, .1], [.05, 1300, .1, .08]], fwd: [[0, 1500, .08, .1], [.07, 2900, .05, .14]], swap: [[0, 1100, .08, .08], [.1, 2200, .04, .1]], loot: [[0, 700, .1, .12], [.08, 1600, .05, .1]] };
+// the gun wheel: hold B, point at a gun, let go
+function vrWheel() {
+  if (vr.wheelM) return vr.wheelM;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 512;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.26, .26), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  m.renderOrder = 998; m.frustumCulled = false; m.visible = false; m.userData.cv = cv; scene.add(m); vr.wheelM = m; return m;
+}
+function drawWheel(sel) {
+  const m = vrWheel(), cv = m.userData.cv, g = cv.getContext("2d"); g.clearRect(0, 0, 512, 512);
+  WHEEL.forEach((k, i) => {
+    const a0 = -Math.PI / 2 + (i - .5) * Math.PI / 2, a1 = a0 + Math.PI / 2, on = i === sel, cur = k === vr.weapon;
+    g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
+    g.fillStyle = on ? "rgba(255,214,90,.92)" : "rgba(14,20,15,.82)"; g.fill();
+    g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? WEAP[k].col : "rgba(255,255,255,.25)"; g.stroke();
+    const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165, A = arms[k];
+    g.textAlign = "center"; g.fillStyle = on ? "#1a1a12" : "#eef3e6"; g.font = "bold 40px sans-serif"; g.fillText(WEAP[k].name, cx, cy);
+    g.font = "30px sans-serif"; g.fillStyle = on ? "#3a3420" : WEAP[k].col; g.fillText(A.mag + " | " + A.res, cx, cy + 40);
+  });
+  g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
+  m.material.map.needsUpdate = true;
+}
+const _wn = new THREE.Vector3(), _wd = new THREE.Vector3(), _wp = new THREE.Vector3();
+function wheelTick(dt, main, I) {
+  const W = vr.wh || (vr.wh = { t: 0, open: false, sel: -1 });
+  if (main.b > .6) {
+    W.t += dt;
+    if (!W.open && W.t > .3 && state === "play") {
+      W.open = true; W.sel = -1; const m = vrWheel();
+      m.position.copy(main.rayPos).addScaledVector(_wd.set(0, 0, -1).applyQuaternion(main.rayQ), .24);
+      _wp.set(I.head.x, m.position.y, I.head.z); m.lookAt(I.head); m.visible = true; m.updateMatrixWorld(true); drawWheel(-1); buzz(set.hand === "right" ? "R" : "L", .2, 20);
+    }
+  } else if (W.t > 0) {
+    if (W.open) { if (W.sel >= 0) pickGun(WHEEL[W.sel]); W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
+    else markFromHand(main);
+    W.t = 0;
+  }
+  if (W.open) {                                            // where the hand points on the wheel picks a gun
+    const m = vr.wheelM; _wn.set(0, 0, 1).applyQuaternion(m.quaternion); _wd.set(0, 0, -1).applyQuaternion(main.rayQ);
+    const den = _wd.dot(_wn); let sel = W.sel;
+    if (Math.abs(den) > 1e-3) {
+      const t = _wp.copy(m.position).sub(main.rayPos).dot(_wn) / den;
+      if (t > 0) { const lp = m.worldToLocal(_wp.copy(main.rayPos).addScaledVector(_wd, t)); const r = Math.hypot(lp.x, lp.y);
+        sel = r < .025 ? -1 : Math.abs(lp.y) >= Math.abs(lp.x) ? (lp.y > 0 ? 0 : 2) : (lp.x > 0 ? 1 : 3); }
+    }
+    if (sel !== W.sel) { W.sel = sel; drawWheel(sel); if (sel >= 0) buzz(set.hand === "right" ? "R" : "L", .15, 12); }
+  }
+}
+function pickGun(k) {
+  if (k !== vr.weapon) { vr.weapon = k; vr.gunInit = false; vr.rl.grab = null; vr.cool = Math.max(vr.cool, .25); gunFoley(SFX.swap); }
+  vr.gunOut = true;
+}
+function markFromHand(main) {
+  if (vr.gun && vr.gun.visible) placeMark(vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].muzzle)), new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion));
+  else placeMark(main.rayPos, new THREE.Vector3(0, 0, -1).applyQuaternion(main.rayQ));
+}
+// the little ammo counter on the side of each gun: rounds in the magazine | spare rounds you've looted
+function makeCounter(kind) {
+  const cv = document.createElement("canvas"); cv.width = 128; cv.height = 80; const S = GUNSPOT[kind], w = kind === "pistol" ? .032 : .042;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * .625), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, fog: false, toneMapped: false }));
+  const s = set.hand === "right" ? -1 : 1, a = .5, n = new THREE.Vector3(s * Math.cos(a), Math.sin(a), 0), x = new THREE.Vector3(0, 0, -s), y = new THREE.Vector3().crossVectors(n, x);
+  m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, n)); m.position.set(s * Math.abs(S.counter[0]), S.counter[1], S.counter[2]).addScaledVector(n, .002);
+  m.userData = { cv, key: "", side: s }; return m;
+}
+function drawCounter(m, A) {
+  const key = A.mag + "|" + A.res + "|" + A.phase; if (m.userData.key === key) return; m.userData.key = key;
+  const g = m.userData.cv.getContext("2d"); g.clearRect(0, 0, 128, 80);
+  g.fillStyle = "rgba(10,14,11,.88)"; g.beginPath(); g.roundRect ? g.roundRect(2, 2, 124, 76, 10) : g.rect(2, 2, 124, 76); g.fill();
+  g.strokeStyle = "rgba(255,255,255,.25)"; g.lineWidth = 2; g.beginPath(); g.moveTo(64, 14); g.lineTo(64, 66); g.stroke();
+  g.textAlign = "center"; g.font = "bold 40px sans-serif";
+  g.fillStyle = A.phase || A.mag === 0 ? "#ffcf3a" : "#f2f6ec"; g.fillText(String(A.mag), 33, 55);
+  g.fillStyle = A.res === 0 ? "#ff6a5a" : "#b8c4ad"; g.font = (A.res > 99 ? "bold 30px" : "bold 38px") + " sans-serif"; g.fillText(String(A.res), 96, 54);
+  m.material.map.needsUpdate = true;
+}
+function glowParts(o, amt) {
+  if (!o) return; o.traverse(c => { if (c.isMesh && c.material.emissive) c.material.emissive.setRGB(amt, amt * .78, amt * .05); });
+}
+// reloading by hand (off hand only), one step at a time: squeeze anywhere near the gun and the hand snaps to the magazine, push it in;
+// squeeze again and it snaps to the glowing bolt / charging handle / slide, pull it back and let go; only then does it snap to the front grip
+const SNAP_R = .22;                                      // a little tighter than before
+const _rl = new THREE.Vector3(), _rm = new THREE.Vector3();
+function reloadTick(dt, G, off) {
+  const kind = vr.gunKind, A = arms[kind], U = G.userData, S = GUNSPOT[kind], R = vr.rl, offSide = set.hand === "right" ? "L" : "R";
+  const offG = !!off && off.grip > .5, offPress = off ? edge("rlg", off.grip) : false;
+  if (A.phase === 1 && A.popping && R.grab !== "mag") { A.k = Math.min(1, A.k + dt * 6); if (A.k >= 1) A.popping = false; }
+  if (R.grab && !offG) {                                    // let go
+    if (R.grab === "charge" && R.armed) { A.phase = 0; gunFoley(SFX.fwd); buzz(offSide, .5, 30); }
+    R.grab = null; R.pull = 0; R.armed = false;
+  }
+  if (off) {
+    const hl = G.worldToLocal(_rl.copy(off.pos));                       // the off hand, in the gun's own space
+    if (offPress && !R.grab) {
+      const mc = _rm.copy(U.magBase).addScaledVector(U.magDir, S.drop * A.k + S.magC);
+      if (A.phase === 1 && A.res > 0 && hl.distanceTo(mc) < SNAP_R) { R.grab = "mag"; R.off = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - S.drop * A.k; A.popping = false; buzz(offSide, .3, 25); }
+      else if (A.phase === 2 && hl.distanceTo(_rm.set(...S.handle)) < SNAP_R) { R.grab = "charge"; R.start = hl.z; R.pull = 0; R.armed = false; buzz(offSide, .3, 25); }
+    }
+    if (R.grab === "mag") {                                              // the magazine only moves along its slot, so it lines up by itself
+      const along = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - R.off;
+      A.k = Math.max(0, Math.min(1, along / S.drop));
+      if (A.k < .07) { const n = Math.min(WEAP[kind].mag, A.res); A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
+    }
+    if (R.grab === "charge") {
+      R.pull = Math.max(0, Math.min(S.pull, hl.z - R.start));
+      if (!R.armed && R.pull > S.pull * .85) { R.armed = true; gunFoley(SFX.back); buzz(offSide, .4, 25); }
+    }
+  }
+  if (U.mag) { U.mag.position.copy(U.magBase).addScaledVector(U.magDir, A.phase === 1 ? S.drop * A.k : 0);
+    const big = A.phase === 1 ? 1 + .35 * Math.min(1, A.k * 3) : 1; U.mag.scale.setScalar(big); }          // out of the gun it shows a bit oversized, easy to see and grab
+  if (U.charge) { U.charge.position.copy(U.chargeBase); U.charge.position.z += R.grab === "charge" ? R.pull : 0; if (kind === "hunt") U.charge.rotation.z = R.grab === "charge" ? 1.2 : 0; }
+  const pulse = 1.1 + .45 * Math.sin(performance.now() * .008);          // a bright, slow yellow pulse
+  glowParts(U.mag, A.phase === 1 && A.res > 0 ? pulse : 0);
+  glowParts(U.charge, A.phase === 2 ? pulse : 0);
+  if (U.counter) drawCounter(U.counter, A);
+}
+// ammo cans lying about the map, one kind for each gun
+let ammoCans = [], canMesh = null;
+function clearAmmo() {
+  if (canMesh) { scene.remove(canMesh.body, canMesh.band); canMesh.body.geometry.dispose(); canMesh.band.geometry.dispose(); canMesh.body.material.dispose(); canMesh.band.material.dispose(); }
+  canMesh = null; ammoCans = [];
+}
+function spawnAmmo() {
+  clearAmmo();
+  const n = Math.round(14 + HALF / 9), spots = [];
+  for (let i = 0; i < n; i++) {
+    let s = null;
+    for (let k = 0; k < 200 && !s; k++) {
+      let x, z;
+      if (i < 4) { const a = Math.random() * 6.283, d = 10 + Math.random() * 30; x = P.x + Math.cos(a) * d; z = P.z + Math.sin(a) * d; }   // a few close to where you start
+      else { x = (Math.random() * 2 - 1) * (EDGE - 10); z = (Math.random() * 2 - 1) * (EDGE - 10); }
+      if (okSpot(x, z)) s = [x, z];
+    }
+    if (s) spots.push(s);
+  }
+  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(.32, .18, .15), grade(new THREE.MeshLambertMaterial({ color: 0x3e4733 })), spots.length);
+  const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.326, .05, .156), new THREE.MeshBasicMaterial({ color: 0xffffff }), spots.length);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
+  spots.forEach(([x, z], i) => {
+    const kind = WHEEL[i % 4], y = H(x, z) + .09; q.setFromAxisAngle(_UPv, Math.random() * 6.283);
+    m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .03, z), q, one); band.setMatrixAt(i, m4);
+    band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
+  });
+  body.frustumCulled = band.frustumCulled = false; scene.add(body, band); canMesh = { body, band };
+}
+function lootTick(I) {
+  if (!canMesh || !ammoCans.length) return;
+  const hs = [I.hands.left, I.hands.right].filter(Boolean);
+  for (let i = 0; i < ammoCans.length; i++) {
+    const c = ammoCans[i]; if (c.got) continue;
+    const dx = c.x - P.x, dz = c.z - P.z; if (dx * dx + dz * dz > 9) continue;
+    const near = (dx * dx + dz * dz < 1.44 && Math.abs(c.y - P.y) < 2) || hs.some(h => (h.pos.x - c.x) ** 2 + (h.pos.y - c.y) ** 2 + (h.pos.z - c.z) ** 2 < .12);
+    if (!near) continue;
+    const A = arms[c.kind]; if (A.res >= AMMO_CAP) continue;          // already full of this ammo: leave it
+    const got = Math.min(WEAP[c.kind].can, AMMO_CAP - A.res); A.res += got; c.got = true;
+    const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true;
+    gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + " " + WEAP[c.kind].name + " ammo"; vr.lootT = 2.5; vr.wristT = 0;
+  }
 }
 const MUZZLE = new THREE.Vector3(0, .012, -.71);
 const flash = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -6004,9 +6350,18 @@ function updateGun(dt) {
     if (f.life <= 0) { scene.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); puffs.splice(i, 1); }
   }
 }
-function gunshot() {
+function gunshot(kind) {
   if (!SND.ctx || !SND.on) return;
-  const c = SND.ctx, t = c.currentTime;
+  const c = SND.ctx, t = c.currentTime, pr = { ar: [.75, 3000, .5, .55], smg: [.5, 4200, .3, .32], pistol: [.6, 3800, .4, .4] }[kind];
+  if (pr) {                                                  // VR Hunting's assault rifle, SMG and pistol
+    const [v, f, e, b] = pr, cr = (delay, vol, fq) => { const s = c.createBufferSource(); s.buffer = SND.noise; const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = fq;
+      const g = c.createGain(); g.gain.setValueAtTime(0, t + delay); g.gain.linearRampToValueAtTime(vol, t + delay + .003); g.gain.exponentialRampToValueAtTime(.001, t + delay + .25);
+      s.connect(lp).connect(g).connect(SND.master); s.start(t + delay, Math.random()); s.stop(t + delay + .3); };
+    cr(0, v, f); cr(.28, .18 * e, 900); cr(.55, .07 * e, 600);
+    const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(45, t + .14);
+    g.gain.setValueAtTime(.7 * b, t); g.gain.exponentialRampToValueAtTime(.001, t + .16); o.connect(g).connect(SND.master); o.start(t); o.stop(t + .2);
+    return;
+  }
   const crack = (delay, vol, f) => {
     const s = c.createBufferSource(); s.buffer = SND.noise;
     const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = f;

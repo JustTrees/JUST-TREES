@@ -43,7 +43,7 @@ async def main():
           // squeeze near the front grip while empty: no front grip, the hand goes to the magazine (or nothing if it's too far)
           L.Lh.copy(toL(G.localToWorld(new T.Vector3(...S.fore)))); frames(2); pad.L.grip = 1; frames(2); out.emptyFrontGripSnap = V.two; pad.L.grip = 0; frames(2);
           // squeeze 25 cm away from the magazine: the hand snaps to it
-          L.Lh.copy(toL(magW().add(new T.Vector3(-.2, .1, .1)))); frames(3); pad.L.grip = 1; frames(2); out.grabbedMagFrom25cm = V.rl.grab;
+          L.Lh.copy(toL(magW().add(new T.Vector3(-.12, .06, .06)))); frames(3); pad.L.grip = 1; frames(2); out.grabbedMagFrom15cm = V.rl.grab;
           out.gloveOnMagCm = +(D.vrHandsObj.L.g.position.distanceTo(magW()) * 100).toFixed(1);
           const up = G.localToWorld(U.magDir.clone()).sub(G.localToWorld(new T.Vector3())).normalize().multiplyScalar(-.012); for (let i = 0; i < 20 && A().phase === 1; i++) { L.Lh.copy(toL(toW(L.Lh).add(up))); frames(1); }
           out.afterInsert = { mag: A().mag, res: A().res, phase: A().phase }; pad.L.grip = 0; frames(3);
@@ -52,7 +52,7 @@ async def main():
           // 3. grab the bolt and pull it back, let go
           const hW = () => G.localToWorld(new T.Vector3(...S.handle));
           L.Lh.copy(toL(G.localToWorld(new T.Vector3(...S.fore)))); frames(2); pad.L.grip = 1; frames(2); out.unchamberedFrontGripSnap = V.two; out.grabAtFore = V.rl.grab; pad.L.grip = 0; frames(2);
-          L.Lh.copy(toL(hW().add(new T.Vector3(-.2, -.05, .1)))); frames(2); pad.L.grip = 1; frames(2); out.grabbedBoltFrom23cm = V.rl.grab;
+          L.Lh.copy(toL(hW().add(new T.Vector3(-.12, -.03, .06)))); frames(2); pad.L.grip = 1; frames(2); out.grabbedBoltFrom13cm = V.rl.grab;
           out.gloveOnBoltCm = +(D.vrHandsObj.L.g.position.distanceTo(hW()) * 100).toFixed(1);
           const back = G.localToWorld(new T.Vector3(0, 0, 1)).sub(G.localToWorld(new T.Vector3())).normalize();
           for (let i = 0; i < 10; i++) { L.Lh.add(toL(toW(new T.Vector3()).add(back.clone().multiplyScalar(.009))).sub(toL(toW(new T.Vector3())))); frames(1); }
