@@ -293,7 +293,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.26";              // Just Trees 1.26
+const VERSION = "1.27";              // Just Trees 1.27
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -4181,8 +4181,8 @@ function nearGunLine(p, a, b) {                             // how far p is from
 function edge(key, v) { const was = vr.prev[key] || 0; vr.prev[key] = v; return v > .6 && was <= .6; }
 // the rifle you hold: a copy of this mode's rifle, placed in the world at your hand
 const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .14 },
-                  ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.59], counter: [.029, -.004, .015], drop: .065, magC: .06, handle: [0, .045, .16], pull: .12 },
-                  smg:    { grip: [0, -.075, .08], fore: [0, -.085, -.13], eye: [0, .062, .17], muzzle: [0, .01, -.31], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [0, .046, .055], pull: .1 },
+                  ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.635], counter: [.025, -.004, .015], drop: .065, magC: .06, handle: [.054, .02, .03], pull: .12 },
+                  smg:    { grip: [0, -.075, .08], fore: [0, -.02, -.15], eye: [0, .062, .17], muzzle: [0, .012, -.265], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [-.047, .03, -.13], pull: .1 },
                   pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .07, snap: .15 },
                   pvp:  { grip: [0, -.085, .1], fore: [0, -.03, -.27], eye: [0, .068, .16], muzzle: [0, .012, -.71], fov: [6, 3.4] } };
 let lensRT = null, lensCam = null, lensMat = null;
@@ -4203,6 +4203,7 @@ function vrGun() {
   let g = vr.guns[kind];
   if (!g) {
     g = new THREE.Group(); const model = (kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
+    if (kind === "hunt") model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.color.set("#a8262b"); } });   // red sniper
     if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? .024 : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
     if (kind !== "pvp") {                                     // the parts you reload by hand get their own materials, so they can glow
       const U = g.userData; U.mag = model.getObjectByName("mag"); U.charge = model.getObjectByName("charge");
@@ -4608,6 +4609,8 @@ function handPose(hand, h) {                               // where a hand is dr
   }
   if (!isMain && vr.rl && vr.rl.grab && vr.gun && vr.gun.visible) {        // reloading: the glove sits on the magazine or the handle it's holding
     const U = vr.gun.userData, S = GUNSPOT[vr.gunKind];
+    const knob = vr.rl.grab === "charge" && U.charge.getObjectByName("knob");     // the glove stays on the bolt knob, wherever it lifts and slides to
+    if (knob) return { pos: knob.getWorldPosition(new THREE.Vector3()), q: h.q };
     const lp = vr.rl.grab === "mag" ? U.mag.position.clone().addScaledVector(U.magDir, S.magC) : new THREE.Vector3(...S.handle).add(new THREE.Vector3(0, 0, vr.rl.pull));
     return { pos: vr.gun.localToWorld(lp), q: h.q };
   }
@@ -5890,7 +5893,7 @@ const sniper = new THREE.Group(), sniperBolt = new THREE.Group(); gun.add(sniper
   add(new THREE.BoxGeometry(.012, .022, .07), blued, .022, .022, .02);                                     // ejection port
   sniperBolt.position.set(0, .012, .1); sniperBolt.name = "charge"; sniper.add(sniperBolt);
   add(new THREE.CylinderGeometry(.0055, .0055, .065, 12), steel, .03, -.008, 0, 0, 0, -1.1, sniperBolt);   // bolt handle
-  add(new THREE.SphereGeometry(.012, 16, 12), blued, .058, -.022, 0, 0, 0, 0, sniperBolt);                 // bolt knob
+  add(new THREE.SphereGeometry(.012, 16, 12), blued, .058, -.022, 0, 0, 0, 0, sniperBolt).name = "knob";                 // bolt knob
   add(tubeZ([[.0001, .03], [.016, .03], [.016, -.02], [.0001, -.02]], 20), blued, 0, 0, .04, 0, 0, 0, sniperBolt);   // bolt shroud
   // the stock: one smooth, bevelled shape (forend, grip, cheek rest, butt), seen from the side
   const sh = new THREE.Shape(), pts = [[-.5, -.012], [-.12, -.01], [-.05, -.02], [.06, -.035], [.1, -.12], [.13, -.125], [.14, -.05], [.2, -.035], [.42, -.07], [.47, -.072],
@@ -5925,10 +5928,10 @@ function boltSounds() {                        // lift, pull back, push forward,
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
 const WEAP = {
-  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     reach: 900, dmg: 100, col: "#e8933a" },
-  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, reach: 900, dmg: 30,  col: "#4a90e2" },
-  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  reach: 350, dmg: 18,  col: "#52c463" },
-  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  reach: 250, dmg: 25,  col: "#b77ee6" } };
+  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     reach: 900, dmg: 100, col: "#e04848" },
+  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, reach: 900, dmg: 30,  col: "#e8c33a" },
+  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  reach: 350, dmg: 18,  col: "#f08a2a" },
+  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  reach: 250, dmg: 25,  col: "#4f86ff" } };
 const WHEEL = ["hunt", "ar", "smg", "pistol"];          // top, right, bottom, left
 const AMMO_CAP = 300;
 const arms = {};
@@ -5938,54 +5941,100 @@ resetArms();
 // the other three guns, built from code like the sniper (each has a "mag" and a "charge" part for reloading)
 const GUNMODEL = {};
 (function buildGuns() {
-  const M = (col, o) => phong(col, Object.assign({ fog: false }, o || {}));
-  const black = M("#1d1f22", { shininess: 40, specular: 0x444444 }), steel = M("#2d3035", { shininess: 60, specular: 0x555555 }), tan = M("#6e6248", { shininess: 8 }), poly = M("#26292c", { shininess: 10 });
-  const B = (w, h, d) => new THREE.BoxGeometry(w, h, d), cyl = (r1, r2, l, s) => new THREE.CylinderGeometry(r1, r2, l, s || 12).rotateX(Math.PI / 2);
-  const put = (par, geo, m, x, y, z, rx) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.x = rx || 0; par.add(o); return o; };
+  // smooth-shaded parts (no flat facets), rounded edges, side profiles cut like the sniper's stock
+  const M = (col, o) => new THREE.MeshPhongMaterial(Object.assign({ color: col, fog: false, shininess: 30, specular: 0x333333 }, o || {}));
+  const steel = M("#2a2c30", { shininess: 70, specular: 0x5a5d62 }), blued = M("#17191c", { shininess: 90, specular: 0x6a6e74 }), black = M("#1c1d1f", { shininess: 18, specular: 0x222222 });
+  const yellow = M("#d9a521", { shininess: 22, specular: 0x3a3320 }), orange = M("#e07a1f", { shininess: 16, specular: 0x332211 }), blue = M("#2f63c9", { shininess: 20, specular: 0x223355 });
+  const B = (w, h, d, r) => roundBox(w, h, d, r === undefined ? Math.min(w, h, d) * .22 : r);
+  const cyl = (r1, r2, l, s) => new THREE.CylinderGeometry(r1, r2, l, s || 18).rotateX(Math.PI / 2);
+  const put = (par, geo, m, x, y, z, rx, ry, rz) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx || 0, ry || 0, rz || 0); par.add(o); return o; };
   const part = (par, name, x, y, z, rx) => { const g = new THREE.Group(); g.name = name; g.position.set(x, y, z); g.rotation.x = rx || 0; par.add(g); return g; };
-  { // assault rifle: tan furniture, curved magazine, T charging handle on top
+  const side = (pts, depth, bevel) => {                     // a side profile [z, y] along the gun (forward is -z), extruded across it with soft edges
+    const sh = new THREE.Shape(); pts.forEach(([z, y], i) => i ? sh.lineTo(-z, y) : sh.moveTo(-z, y));
+    const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 });
+    g.translate(0, 0, -depth / 2); g.rotateY(Math.PI / 2); g.computeVertexNormals(); return g;
+  };
+  const trigger = (par, z, y) => {                         // a curved trigger and a guard round it
+    put(par, new THREE.TorusGeometry(.022, .0035, 8, 22, Math.PI), steel, 0, y, z, 0, Math.PI / 2, Math.PI);
+    put(par, B(.005, .024, .007, .002), steel, 0, y + .006, z - .002, -.3);
+  };
+  { // ---- AKM: stamped receiver with a rounded top cover, gas tube over the barrel, slant brake, banana magazine, yellow furniture
     const g = new THREE.Group();
-    put(g, B(.05, .07, .26), black, 0, 0, -.02);                    // receiver
-    put(g, B(.036, .014, .3), steel, 0, .042, -.05);                // top rail
-    put(g, B(.058, .06, .22), tan, 0, .006, -.26);                  // handguard
-    put(g, cyl(.011, .011, .2), steel, 0, .012, -.46);              // barrel
-    put(g, cyl(.016, .016, .05), black, 0, .012, -.565);            // flash hider
-    put(g, B(.006, .045, .01), black, 0, .06, -.34);                // front sight
-    put(g, B(.03, .022, .02), black, 0, .058, .07);                 // rear sight
-    put(g, B(.04, .065, .2), tan, 0, -.02, .2);                     // stock
-    put(g, B(.044, .085, .022), poly, 0, -.025, .31);               // butt pad
-    put(g, B(.034, .09, .04), poly, 0, -.075, .1, -.35);            // pistol grip
-    put(g, B(.01, .005, .055), steel, 0, -.06, .035); put(g, B(.004, .02, .006), steel, 0, -.045, .03);   // guard and trigger
-    const mag = part(g, "mag", 0, -.035, -.05, .22); put(mag, B(.028, .12, .055), black, 0, -.06, 0); put(mag, B(.031, .012, .058), steel, 0, -.122, 0);
-    const ch = part(g, "charge", 0, .045, .14); put(ch, B(.012, .012, .04), steel, 0, 0, 0); put(ch, B(.05, .01, .014), steel, 0, 0, .02);
+    put(g, side([[-.09, -.026], [.155, -.026], [.165, -.012], [.165, .03], [.15, .036], [-.075, .036], [-.09, .028]], .044, .004), steel, 0, 0, 0);   // receiver
+    put(g, cyl(.021, .021, .2), steel, 0, .028, .055);                                                     // rounded top cover
+    for (let i = 0; i < 4; i++) put(g, B(.044, .004, .006, .0015), blued, 0, .052, .03 + i * .03);          // top cover ribs
+    put(g, B(.03, .02, .05, .004), blued, 0, .047, -.075);                                                    // rear sight block
+    put(g, B(.012, .006, .05, .002), steel, 0, .06, -.07);                                                    // rear sight leaf
+    put(g, cyl(.0095, .0095, .5), blued, 0, .012, -.34);                                                       // barrel
+    put(g, cyl(.011, .011, .28), steel, 0, .042, -.22);                                                        // gas tube
+    put(g, B(.03, .045, .03, .006), steel, 0, .026, -.38);                                                     // gas block
+    put(g, B(.022, .03, .025, .005), steel, 0, .026, -.535);                                                   // front sight base
+    put(g, B(.004, .03, .004, .001), blued, 0, .055, -.535);                                                   // front sight post
+    for (const s of [-1, 1]) put(g, B(.003, .022, .012, .001), blued, s * .009, .052, -.535);                  // the post's ears
+    put(g, cyl(.015, .015, .045), blued, 0, .012, -.61);                                                       // slant muzzle brake
+    put(g, B(.032, .012, .03, .004), blued, 0, .022, -.618, -.35);
+    put(g, B(.056, .046, .2, .016), yellow, 0, -.004, -.2);                                                    // lower handguard
+    put(g, B(.044, .024, .15, .01), yellow, 0, .046, -.2);                                                     // upper handguard
+    for (let i = 0; i < 3; i++) put(g, B(.058, .004, .02, .0015), black, 0, -.004, -.14 - i * .045);           // finger grooves
+    put(g, B(.034, .1, .044, .012), yellow, 0, -.07, .1, -.32);                                                // pistol grip
+    put(g, side([[.16, .03], [.43, -.004], [.445, -.012], [.445, -.098], [.425, -.104], [.27, -.075], [.16, -.035]], .036, .008), yellow, 0, 0, 0);   // stock
+    put(g, B(.046, .1, .012, .004), black, 0, -.055, .452);                                                    // butt plate
+    put(g, B(.008, .006, .1, .002), steel, .024, .012, .06);                                                   // selector lever
+    trigger(g, .055, -.035);
+    const mag = part(g, "mag", 0, -.03, -.05, .22);                                                            // banana magazine, ribbed
+    { const pts = []; for (let i = 0; i <= 10; i++) { const y = -i * .019; pts.push([.024 - 1.0 * y * y, y]); } for (let i = 10; i >= 0; i--) { const y = -i * .019; pts.push([-.026 - 1.6 * y * y, y]); }
+      put(mag, side(pts, .024, .004), black, 0, 0, 0);                                                        // one smooth curved banana magazine
+      for (let i = 1; i < 10; i += 2) { const y = -i * .019; put(mag, B(.032, .004, .044, .0015), blued, 0, y, -.001 - 1.3 * y * y, Math.atan(2.6 * y) * -.5); }   // ribs
+      put(mag, B(.032, .012, .06, .004), steel, 0, -.196, -.026 - 1.3 * .036, .5); }
+    const ch = part(g, "charge", .028, .02, .03);                                                               // charging handle on the right side
+    put(ch, B(.026, .008, .01, .002), steel, .01, 0, 0); put(ch, new THREE.SphereGeometry(.0085, 14, 10), steel, .026, 0, 0).name = "knob";
     GUNMODEL.ar = g;
   }
-  { // SMG: short, vertical front grip, straight magazine, wire stock
+  { // ---- UMP: black upper, orange polymer lower with the grip, long top rail, straight magazine, skeleton stock, charging handle on the left front
     const g = new THREE.Group();
-    put(g, B(.045, .065, .2), black, 0, 0, -.03);                   // receiver
-    put(g, B(.03, .012, .18), steel, 0, .038, -.03);                // rail
-    put(g, cyl(.016, .016, .12), black, 0, .01, -.19);              // barrel shroud
-    put(g, cyl(.01, .01, .06), steel, 0, .01, -.28);                // muzzle
-    put(g, B(.006, .03, .01), black, 0, .052, -.11); put(g, B(.026, .02, .016), black, 0, .052, .05);   // sights
-    put(g, B(.032, .085, .04), poly, 0, -.07, .08, -.35);           // grip
-    put(g, B(.03, .075, .03), poly, 0, -.07, -.13);                 // front grip
-    for (const s of [-1, 1]) put(g, cyl(.005, .005, .2, 8), steel, s * .016, -.005, .17);   // wire stock
-    put(g, B(.04, .07, .012), poly, 0, -.02, .27);                  // butt plate
-    put(g, B(.01, .005, .045), steel, 0, -.055, .02); put(g, B(.004, .018, .006), steel, 0, -.042, .015);
-    const mag = part(g, "mag", 0, -.032, -.045); put(mag, B(.026, .15, .036), black, 0, -.075, 0); put(mag, B(.03, .01, .04), steel, 0, -.15, 0);
-    const ch = part(g, "charge", 0, .046, .055); put(ch, B(.016, .014, .022), steel, 0, 0, 0);
+    put(g, B(.046, .045, .31, .01), black, 0, .022, -.035);                                                    // upper receiver
+    put(g, side([[-.19, .0], [.09, .0], [.11, -.012], [.11, -.03], [-.03, -.03], [-.045, -.05], [-.075, -.05], [-.09, -.03], [-.19, -.03]], .046, .006), orange, 0, 0, 0);   // lower receiver + mag well
+    put(g, side([[.045, -.025], [.098, -.025], [.112, -.04], [.128, -.112], [.116, -.124], [.088, -.124], [.076, -.11], [.06, -.04]], .03, .008), orange, 0, 0, 0);    // grip
+    put(g, side([[-.02, -.025], [.045, -.025], [.05, -.065], [.035, -.07], [-.01, -.07], [-.02, -.06]], .006, .002), orange, 0, 0, 0);   // trigger guard
+    put(g, B(.005, .022, .007, .002), steel, 0, -.035, .025, -.3);                                             // trigger
+    put(g, B(.024, .008, .3, .002), steel, 0, .048, -.035);                                                    // top rail
+    for (let i = 0; i < 14; i++) put(g, B(.026, .004, .006, .001), blued, 0, .054, -.17 + i * .02);            // rail teeth
+    put(g, cyl(.014, .014, .05), blued, 0, .012, -.215);                                                       // barrel shroud
+    put(g, cyl(.009, .009, .03), steel, 0, .012, -.25);                                                        // muzzle
+    put(g, new THREE.TorusGeometry(.01, .003, 8, 18), blued, 0, .072, .06);                                    // rear diopter sight
+    put(g, B(.02, .016, .016, .003), blued, 0, .06, .06);
+    put(g, B(.02, .024, .02, .004), blued, 0, .066, -.16); put(g, B(.004, .016, .004, .001), steel, 0, .074, -.16);   // hooded front sight
+    for (const s of [-1, 1]) put(g, cyl(.006, .006, .21, 10), black, s * .017, .0, .195);                      // folding skeleton stock
+    put(g, B(.044, .1, .016, .005), orange, 0, -.03, .3); put(g, B(.04, .014, .03, .004), black, 0, .012, .29);
+    for (const s of [-1, 1]) put(g, B(.004, .02, .05, .002), steel, s * .024, -.012, -.12);                    // side vents
+    const mag = part(g, "mag", 0, -.04, -.06);                                                                  // straight .45 magazine
+    put(mag, B(.026, .15, .04, .006), black, 0, -.07, 0); put(mag, B(.03, .012, .046, .004), steel, 0, -.148, 0);
+    for (const s of [-1, 1]) put(mag, B(.003, .12, .01, .001), black, s * .0135, -.07, 0);
+    const ch = part(g, "charge", -.025, .03, -.13);                                                             // charging handle, left side front
+    put(ch, B(.02, .01, .012, .003), steel, -.01, 0, 0); put(ch, B(.012, .018, .018, .005), steel, -.022, 0, 0).name = "knob";
     GUNMODEL.smg = g;
   }
-  { // pistol: the slide is what you rack; the magazine drops out of the grip
+  { // ---- PX4: rounded slide with serrations, blue polymer frame with a curved grip, exposed hammer, accessory rail
     const g = new THREE.Group();
     const slide = part(g, "charge", 0, 0, 0);
-    put(slide, B(.03, .033, .19), black, 0, .02, -.03); put(slide, B(.005, .01, .006), steel, 0, .041, -.115); put(slide, B(.022, .009, .008), steel, 0, .041, .055);
-    for (let i = 0; i < 4; i++) put(slide, B(.032, .02, .003), steel, 0, .02, .035 + i * .007);   // grip serrations at the back
-    put(g, cyl(.007, .007, .02), steel, 0, .02, -.128);              // barrel tip
-    put(g, B(.028, .024, .15), poly, 0, -.006, -.045);               // frame
-    put(g, B(.03, .1, .042), poly, 0, -.06, .04, -.25);              // grip
-    put(g, B(.008, .005, .04), poly, 0, -.033, -.02); put(g, B(.004, .016, .006), steel, 0, -.022, -.008);
-    const mag = part(g, "mag", 0, -.012, .028, -.25); put(mag, B(.024, .1, .034), steel, 0, -.052, 0); put(mag, B(.031, .01, .044), poly, 0, -.104, 0);
+    put(slide, B(.028, .03, .19, .011), steel, 0, .022, -.03);                                                 // slide
+    put(slide, B(.016, .008, .05, .002), blued, .011, .03, -.01);                                              // ejection port
+    for (let i = 0; i < 6; i++) put(slide, B(.03, .022, .003, .001), blued, 0, .02, .035 + i * .008);           // rear serrations
+    for (let i = 0; i < 4; i++) put(slide, B(.03, .018, .003, .001), blued, 0, .018, -.1 - i * .008);           // front serrations
+    put(slide, B(.004, .01, .008, .001), blued, 0, .041, -.11);                                                // front sight
+    put(slide, B(.022, .01, .009, .002), blued, 0, .041, .052); put(slide, new THREE.SphereGeometry(.0018, 6, 4), M("#e8e8e8"), .006, .044, .057);   // rear sight with dots
+    put(slide, new THREE.SphereGeometry(.0018, 6, 4), M("#e8e8e8"), -.006, .044, .057);
+    put(slide, B(.008, .014, .02, .003), blued, 0, .022, .068).name = "knob";                                  // where you grab to rack it
+    put(g, cyl(.0075, .0075, .02), blued, 0, .022, -.128);                                                     // barrel crown
+    put(g, B(.026, .02, .15, .007), blue, 0, -.005, -.05);                                                     // frame
+    for (let i = 0; i < 3; i++) put(g, B(.02, .004, .008, .001), blue, 0, -.017, -.07 - i * .016);            // rail slots
+    put(g, side([[.018, -.012], [.068, -.012], [.084, -.03], [.096, -.112], [.084, -.124], [.05, -.124], [.038, -.112], [.028, -.04]], .028, .008), blue, 0, 0, 0);   // curved grip
+    put(g, side([[-.04, -.014], [.012, -.014], [.016, -.048], [.004, -.052], [-.032, -.052], [-.04, -.04]], .006, .002), blue, 0, 0, 0);   // squared trigger guard
+    put(g, B(.005, .02, .007, .002), steel, 0, -.026, -.008, -.25);                                            // trigger
+    put(g, B(.01, .016, .012, .003), blued, 0, .03, .072, .4);                                                 // hammer
+    put(g, B(.004, .012, .03, .002), steel, .015, .006, .02);                                                  // decocker / slide stop
+    const mag = part(g, "mag", 0, -.012, .028, -.25);
+    put(mag, B(.024, .1, .034, .005), steel, 0, -.052, 0); put(mag, B(.031, .012, .044, .004), blue, 0, -.106, 0);
     GUNMODEL.pistol = g;
   }
 })();
@@ -6108,7 +6157,7 @@ function reloadTick(dt, G, off) {
   }
   if (U.mag) { U.mag.position.copy(U.magBase).addScaledVector(U.magDir, A.phase === 1 ? S.drop * A.k : 0);
     const big = A.phase === 1 ? 1 + .35 * Math.min(1, A.k * 3) : 1; U.mag.scale.setScalar(big); }          // out of the gun it shows a bit oversized, easy to see and grab
-  if (U.charge) { U.charge.position.copy(U.chargeBase); U.charge.position.z += R.grab === "charge" ? R.pull : 0; if (kind === "hunt") U.charge.rotation.z = R.grab === "charge" ? 1.2 : 0; }
+  if (U.charge) { U.charge.position.copy(U.chargeBase); U.charge.position.z += R.grab === "charge" ? R.pull : 0; if (kind === "hunt") U.charge.rotation.z += ((R.grab === "charge" ? 1.2 : 0) - U.charge.rotation.z) * Math.min(1, dt * 16); }   // the bolt lifts as you grab it
   const pulse = 1.1 + .45 * Math.sin(performance.now() * .008);          // a bright, slow yellow pulse
   glowParts(U.mag, A.phase === 1 && A.res > 0 ? pulse : 0);
   glowParts(U.charge, A.phase === 2 ? pulse : 0);
