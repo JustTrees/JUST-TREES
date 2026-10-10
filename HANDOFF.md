@@ -342,3 +342,9 @@ Read this first. It carries over the project, the person, the way we work, and e
 - `dev/check_code.py`: the game parses, no function declared twice, no debug hooks; `--unused` lists dead names.
 - `dev/run_all.py [file] --nm <node_modules>`: code check + every test (online ones with the local PeerJS server), pass/fail list. All 19 tests pass on 1.42.
 - `dev/make_debug.py`: duplicate entries removed.
+
+## Idea on hold (Ron, Oct 10): capture zone for PvP
+- Host turns on a round capture zone on the map preview; white circle on the diorama (host moves it, size slider up to ~100 ft / 30 m); a plain white circle on the ground in game (no wall).
+- Score while you're in it alone. A small flag on your screen points to it through trees and hills (plus distance), coloured by who holds it.
+- Placing: a switch on the host's preview "Place: My start | Capture zone" so the trigger doesn't do both.
+- Why it's on hold: players could just put their start right next to the zone. Needs a rule first (e.g. starts must be far from the zone, or random starts when a zone is on).
