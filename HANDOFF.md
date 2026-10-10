@@ -319,4 +319,4 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Dying (PvP): you lose your loot. Everything you carried (unlocked guns at their tier, spare ammo, grenades) scatters on the ground around where you died, for anyone to grab.
 - Death, seen by others: your avatar falls/collapses, then disappears within 3 seconds.
 - Death, seen by you: your view does NOT fall; it stays frozen where you died while the screen goes a bit red, then you respawn.
-- Open question: after respawning, do you start again with a 1-star pistol (suggested), or with nothing? Hunting keeps all guns as now.
+- Every spawn (round start and each respawn) = a 1-star pistol only. Hunting keeps all guns as now.
