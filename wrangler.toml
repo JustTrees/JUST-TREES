@@ -3,3 +3,4 @@ name = "just-trees-online"
 main = "server/src/index.js"
 compatibility_date = "2025-06-01"
 workers_dev = true
+keep_vars = true
