@@ -334,3 +334,11 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.41
 - Gun drops: no more beam or boxy glow. `gunGlow` spreads ~220 soft dots over the gun's surface (cached per gun kind) in `NEON_COL` (saturated star colours), size .3 / opacity .36: a neon glow ~10 cm round the gun's outline. Gun + glow shown within 120 m.
+
+## 1.42 — code cleanup (no change in play)
+- Removed dead code: an old second `spawnAnimals`/`updateAnimals` (silently overridden), the old animal species tables and builder, rivers and fog-bank builders, `vrLens`/`lensView`, `skullTex`, `zoneCenterFor`, `shadowDir`, heap helpers, unused constants, `mpCansReset`/`MP.cansTaken`, `MP.startT`.
+- A "what's where" table of contents at the top of the game script (search words for each part).
+- Tuning block right after `VERSION`: `WEAP`, `AMMO_CAP`, bullets, `WATER_PEN`, `NADE`, `TIER`, `TIER_COL`, `NEON_COL`, `TIER_ODDS`, `PICK`, `LOOT` (counts per map), `PVP` (respawn / body / flag seconds). Change numbers there.
+- `dev/check_code.py`: the game parses, no function declared twice, no debug hooks; `--unused` lists dead names.
+- `dev/run_all.py [file] --nm <node_modules>`: code check + every test (online ones with the local PeerJS server), pass/fail list. All 19 tests pass on 1.42.
+- `dev/make_debug.py`: duplicate entries removed.

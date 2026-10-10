@@ -304,7 +304,39 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.41";              // Just Trees 1.41
+const VERSION = "1.42";              // Just Trees 1.42
+/* ================================================================================================
+   JUST TREES: what's where (search for the words in quotes)
+     the world ............ "Terrain", "generate()", "Trees", "Rocks", "Water", "weather", "lightning"
+     moving about ......... "update(dt)", "climbing", "glide"
+     VR ................... "vrTick", "vrAfterMove", "your hands", "under water (VR)"
+     guns ................. "the rifle you hold", "vrFire", "a real bullet", "castShot", "the gun wheel", "reloading by hand"
+     grenades (VR) ........ "grenades (VR Hunting"
+     PvP loot (VR) ........ "PvP loot (VR)", "the little bar low in your view", "end of a round"
+     ammo and boxes ....... "ammo cans lying about"
+     online play .......... "Multiplayer (VR PvP"
+     VR menus ............. "vruiParts", "vruiOpen", "the little map turning"
+     animals .............. "spawnAnimals", "updateAnimals"
+     the main loop ........ "function loop("
+   ================================================================================================ */
+/* ---------------- Tuning: the numbers that decide how the game plays, all in one place ---------------- */
+const WEAP = {                     // mag = rounds per magazine, start = spare rounds you begin with, can = rounds in an ammo can, cool = seconds between shots,
+                                   // spd = bullet speed m/s, reach = how far it flies, dmg = damage (head shots double), col = its colour on the wheel (kick/spread: off for now)
+  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     spd: 850, reach: 900, dmg: 100, col: "#e04848" },
+  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
+  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
+  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
+const AMMO_CAP = 300;                                       // most spare rounds you can carry for one gun
+const BULLET_G = 9.81, BULLET_ZERO = 100;                  // VR bullets: gravity, and the distance the sights are set for
+const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
+const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per box
+const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
+const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
+const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
+const TIER_ODDS = [.4, .68, .86, .96];                       // a gun on the map: 40% 1 star, then blue to 68%, purple to 86%, gold to 96%, red the rest
+const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
+const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [8, 20], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
+const PVP = { respawn: 4, bodyGone: 3, flags: 3 };           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -1362,10 +1394,6 @@ function bakeShadows(trees, kinds, dir) {
   GRADE.uShadowTex.value = shadowTex; GRADE.uShadowTex2.value = shadowTex; GRADE.uShadowMix.value = 0;
   GRADE.uMapHalf.value = HALF + .5; GRADE.uMapS.value = Math.ceil(S) + 1; GRADE.uShadowOn.value = 1;
 }
-function shadowDir(lat, hour) {
-  const sp = sunPos(lat, set.month, hour);
-  return sp.el > -4 ? sp.dir : new THREE.Vector3(-sp.dir.x, Math.max(.45, -sp.dir.y * .5 + .4), -sp.dir.z).normalize();
-}
 /* ---------------- Limb platforms: solid from above only, so you can walk underneath ---------------- */
 let limbGrid = null, limbHold = null;
 function limbGround(x, z, feet) {
@@ -1549,27 +1577,7 @@ function bushVariant() {
   return mergeUV(parts);
 }
 
-/* ---------------- Animals ---------------- */
-const SPECIES = {
-  deer:      { L: 1.5, H: .75, W: .45, leg: .85, neck: .55, head: .32, col: "#8a5a32", belly: "#d8c0a0", tail: .15, ears: .16, antlers: .55, speed: 1.8, run: 9, flee: 30, herd: [2, 4] },
-  rabbit:    { L: .38, H: .26, W: .24, leg: .12, neck: .04, head: .17, col: "#8a7a66", belly: "#e8e0d0", tail: .07, ears: .2, speed: 1.1, run: 7, flee: 12, herd: [1, 2], hop: true },
-  fox:       { L: .75, H: .32, W: .22, leg: .35, neck: .15, head: .2, col: "#c8642a", belly: "#f0e6d8", tail: .55, tailCol: "#d8744a", ears: .12, speed: 1.6, run: 8, flee: 22, herd: [1, 1] },
-  moose:     { L: 2.4, H: 1.1, W: .75, leg: 1.2, neck: .5, head: .55, col: "#3e2c20", belly: "#5a4636", tail: .1, ears: .18, antlers: 1.1, speed: 1.4, run: 6, flee: 22, herd: [1, 2] },
-  wolf:      { L: 1.1, H: .45, W: .3, leg: .6, neck: .25, head: .28, col: "#7a7a78", belly: "#c8c8c0", tail: .45, ears: .14, speed: 2.2, run: 9, flee: 30, herd: [3, 5] },
-  caribou:   { L: 1.6, H: .8, W: .5, leg: .85, neck: .5, head: .35, col: "#6a5a48", belly: "#e0d8c8", tail: .12, ears: .14, antlers: .85, speed: 1.8, run: 8, flee: 32, herd: [5, 9] },
-  hare:      { L: .42, H: .28, W: .25, leg: .14, neck: .04, head: .18, col: "#ecebe6", belly: "#ffffff", tail: .07, ears: .22, speed: 1.2, run: 8, flee: 12, herd: [1, 2], hop: true },
-  polarbear: { L: 2.2, H: 1.0, W: .9, leg: .7, neck: .45, head: .45, col: "#efece2", belly: "#e2ddd0", tail: .1, ears: .1, speed: 1.1, run: 4.5, flee: 0, herd: [1, 1] },
-  seal:      { L: 1.6, H: .45, W: .5, leg: 0, neck: .02, head: .3, col: "#5a5a60", belly: "#8a8a90", tail: .25, speed: .5, run: 1.6, flee: 12, herd: [2, 4], water: true },
-  monkey:    { L: .6, H: .35, W: .28, leg: .45, neck: .15, head: .25, col: "#4a3426", belly: "#8a6a4a", tail: .8, ears: .08, speed: 1.4, run: 6, flee: 16, herd: [2, 4] },
-  lizard:    { L: .5, H: .12, W: .16, leg: .07, neck: .02, head: .12, col: "#5a7a2a", belly: "#9aaa5a", tail: .6, speed: .8, run: 5, flee: 8, herd: [1, 1] }
-};
-const FAUNA = {
-  tropical: [["monkey", 4], ["lizard", 6]],
-  temperate: [["deer", 4], ["rabbit", 6], ["fox", 3]],
-  boreal: [["moose", 3], ["wolf", 2], ["rabbit", 3]],
-  tundra: [["caribou", 3], ["hare", 5], ["wolf", 1]],
-  polar: [["polarbear", 2], ["seal", 3], ["hare", 2]]
-};
+/* ---------------- Animals (the old ones are switched off; see beasts) ---------------- */
 let animals = [], birds = null;
 function mergeColored(list) {
   const parts = list.map(([g, c]) => {
@@ -1586,107 +1594,7 @@ function mergeColored(list) {
   }
   return out;
 }
-function buildAnimal(sp, male) {
-  const L = sp.L, Hh = sp.H, W = sp.W, leg = sp.leg, bodyY = leg + Hh / 2, parts = [];
-  parts.push([new THREE.IcosahedronGeometry(1, 1).scale(L / 2, Hh / 2, W / 2).translate(0, bodyY, 0), sp.col]);
-  parts.push([new THREE.IcosahedronGeometry(1, 1).scale(L * .38, Hh * .3, W * .42).translate(0, bodyY - Hh * .18, 0), sp.belly]);
-  const hx = L * .5 + sp.head * .3, hy = bodyY + Hh * .25 + sp.neck;
-  if (sp.neck > .05) parts.push([new THREE.CylinderGeometry(W * .24, W * .34, sp.neck + Hh * .45, 6).rotateZ(-.5).translate(L * .43, bodyY + Hh * .2 + sp.neck * .5, 0), sp.col]);
-  parts.push([new THREE.IcosahedronGeometry(1, 1).scale(sp.head * 1.25, sp.head * .72, sp.head * .62).translate(hx, hy, 0), sp.col]);
-  parts.push([new THREE.IcosahedronGeometry(1, 0).scale(sp.head * .45, sp.head * .35, sp.head * .35).translate(hx + sp.head * .9, hy - sp.head * .15, 0), sp.belly]);
-  parts.push([new THREE.IcosahedronGeometry(sp.head * .12, 0).translate(hx + sp.head * 1.3, hy - sp.head * .1, 0), "#1c1612"]);
-  if (sp.ears) for (const sd of [-1, 1]) parts.push([new THREE.ConeGeometry(sp.head * .18, sp.ears, 4).rotateX(sd * .35).translate(hx - sp.head * .2, hy + sp.head * .45 + sp.ears * .4, sd * sp.head * .3), sp.col]);
-  if (sp.antlers && male) for (const sd of [-1, 1]) {
-    const a = sp.antlers;
-    parts.push([new THREE.CylinderGeometry(.02 + .03 * a, .02 + .04 * a, a, 4).rotateX(sd * .6).translate(hx - sp.head * .2, hy + sp.head * .4 + a * .4, sd * (sp.head * .3 + a * .25)), "#5a4632"]);
-    parts.push([new THREE.CylinderGeometry(.015 + .02 * a, .015 + .03 * a, a * .6, 4).rotateZ(.7).rotateX(sd * .5).translate(hx, hy + sp.head * .5 + a * .55, sd * (sp.head * .3 + a * .38)), "#5a4632"]);
-  }
-  if (sp.tail) parts.push([new THREE.ConeGeometry(Math.max(.04, W * .15), sp.tail, 5).rotateZ(Math.PI / 2 + (sp.tail > .4 ? .25 : .6)).translate(-L / 2 - sp.tail * .35, bodyY + Hh * .1, 0), sp.tailCol || sp.col]);
-  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
-  body.add(new THREE.Mesh(mergeColored(parts), phong(0xffffff, { vertexColors: true })));
-  const legs = [];
-  if (leg > 0) {
-    const lg = new THREE.CylinderGeometry(W * .15 + .02, W * .1 + .015, leg, 5).translate(0, -leg / 2, 0), lm = phong(sp.col);
-    for (const [px, pz] of [[L * .32, W * .3], [L * .32, -W * .3], [-L * .32, W * .3], [-L * .32, -W * .3]]) {
-      const pivot = new THREE.Group(); pivot.position.set(px, leg + .02, pz); pivot.add(new THREE.Mesh(lg, lm)); body.add(pivot); legs.push(pivot);
-    }
-  }
-  return { g, body, legs };
-}
 const angDiff = (a, b) => { let d = (a - b + Math.PI) % (Math.PI * 2); if (d < 0) d += Math.PI * 2; return d - Math.PI; };
-function animalGround(sp, x, z) {
-  const h = H(x, z);
-  if (iced) return Math.max(h, water);
-  return sp.water ? Math.max(h, water - .25) : h;
-}
-function spawnAnimals(rand, biome) {
-  animals = [];
-  for (const [name, groups] of FAUNA[biome]) {
-    const sp = SPECIES[name];
-    for (let gi = 0; gi < groups; gi++) {
-      let cx = 0, cz = 0, ok = false;
-      for (let t = 0; t < 80 && !ok; t++) {
-        cx = (rand() - .5) * (S - 90); cz = (rand() - .5) * (S - 90);
-        const h = H(cx, cz);
-        ok = sp.water ? (h > water - .4 && h < water + 1.2) : (h > water + 1 && slopeNy(cx, cz) > .8);
-      }
-      if (!ok) continue;
-      const n = sp.herd[0] + Math.floor(rand() * (sp.herd[1] - sp.herd[0] + 1));
-      for (let k = 0; k < n; k++) {
-        const x = cx + (rand() - .5) * 10, z = cz + (rand() - .5) * 10;
-        const m = buildAnimal(sp, rand() < .55);
-        const s = .9 + rand() * .2; m.g.scale.setScalar(s);
-        world.add(m.g);
-        animals.push({ ...m, sp, x, z, y: animalGround(sp, x, z), hx: cx, hz: cz, yaw: rand() * 6.28, dir: 0, state: "graze", timer: rand() * 5, phase: rand() * 6 });
-      }
-    }
-  }
-}
-function updateAnimals(dt) {
-  for (const a of animals) {
-    const sp = a.sp, dx = a.x - P.x, dz = a.z - P.z, d = Math.hypot(dx, dz);
-    a.g.visible = d < scene.fog.far + 30;
-    if (d > 230) continue;
-    if (sp.flee > 0 && d < sp.flee && a.state !== "flee") { a.state = "flee"; a.timer = 2.5 + Math.random() * 2.5; a.dir = Math.atan2(dz, dx) + (Math.random() - .5) * .8; }
-    let speed = 0;
-    if (a.state === "flee") {
-      speed = sp.run; a.timer -= dt;
-      if (a.timer < 0) { a.state = "graze"; a.timer = 2 + Math.random() * 4; a.hx = a.x; a.hz = a.z; }
-    } else if (a.state === "walk") {
-      const tx = a.tx - a.x, tz = a.tz - a.z;
-      a.dir = Math.atan2(tz, tx); speed = sp.speed;
-      if (Math.hypot(tx, tz) < 1.5) { a.state = "graze"; a.timer = 3 + Math.random() * 6; }
-    } else {
-      a.timer -= dt;
-      if (a.timer < 0) {
-        for (let t = 0; t < 6; t++) {
-          const an = Math.random() * 6.28, r = 5 + Math.random() * 25, tx = a.hx + Math.cos(an) * r, tz = a.hz + Math.sin(an) * r;
-          const h = H(tx, tz);
-          if (sp.water ? h < water + 1.5 : h > water + .3) { a.tx = tx; a.tz = tz; a.state = "walk"; break; }
-        }
-        if (a.state !== "walk") a.timer = 2;
-      }
-    }
-    if (speed > 0) {
-      const nx = a.x + Math.cos(a.dir) * speed * dt, nz = a.z + Math.sin(a.dir) * speed * dt, gh = animalGround(sp, nx, nz);
-      const blocked = (!sp.water && !iced && H(nx, nz) < water + .2) || Math.abs(nx) > EDGE || Math.abs(nz) > EDGE || (gh - a.y) / (speed * dt + 1e-6) > 1.3;
-      if (blocked) { a.dir += Math.PI * (.5 + Math.random() * .5); if (a.state === "walk") { a.state = "graze"; a.timer = 1; } }
-      else { a.x = nx; a.z = nz; }
-      a.yaw += angDiff(Math.atan2(-Math.sin(a.dir), Math.cos(a.dir)), a.yaw) * Math.min(1, dt * 6);
-    }
-    a.y = animalGround(sp, a.x, a.z);
-    a.g.position.set(a.x, a.y, a.z); a.g.rotation.y = a.yaw;
-    a.phase += speed * dt * (sp.hop ? 2.4 : 3.4) / Math.max(.25, sp.leg + .1);
-    const amp = speed > 0 ? Math.min(.55, .25 + speed / sp.run * .35) : 0;
-    if (sp.hop) {
-      a.body.position.y = speed > 0 ? Math.abs(Math.sin(a.phase)) * sp.H * 1.3 : 0;
-      a.legs.forEach(l => l.rotation.z = Math.sin(a.phase) * amp);
-    } else if (!a.legs.length) {
-      a.body.position.y = speed > 0 ? Math.abs(Math.sin(a.phase)) * .08 : 0;
-    } else a.legs.forEach((l, i) => l.rotation.z = Math.sin(a.phase + (i === 0 || i === 3 ? 0 : Math.PI)) * amp);
-    a.body.rotation.z = a.state === "graze" ? -.12 : 0;
-  }
-}
 
 /* ---------------- Beach runner ---------------- */
 let runner = null;
@@ -1837,62 +1745,7 @@ function erode(map, N, drops, rand) {
   }
 }
 /* Binary min-heap used to fill pits so water can always find a way downhill */
-function heapPush(hv, hi, v, i) {
-  let k = hv.length; hv.push(v); hi.push(i);
-  while (k > 0) { const p = (k - 1) >> 1; if (hv[p] <= hv[k]) break; [hv[p], hv[k]] = [hv[k], hv[p]]; [hi[p], hi[k]] = [hi[k], hi[p]]; k = p; }
-}
-function heapPop(hv, hi) {
-  const i = hi[0], lv = hv.pop(), li = hi.pop();
-  if (hv.length) {
-    hv[0] = lv; hi[0] = li; let k = 0;
-    for (;;) {
-      const l = 2 * k + 1, r = l + 1; let m = k;
-      if (l < hv.length && hv[l] < hv[m]) m = l; if (r < hv.length && hv[r] < hv[m]) m = r;
-      if (m === k) break; [hv[m], hv[k]] = [hv[k], hv[m]]; [hi[m], hi[k]] = [hi[k], hi[m]]; k = m;
-    }
-  }
-  return i;
-}
 // Rivers: route rain over the eroded ground, find where lots of water gathers, carve channels there
-function makeRivers(map, N, G, waterLevel) {
-  const n = N * N, filled = Float32Array.from(map), done = new Uint8Array(n), hv = [], hi = [];
-  for (let i = 0; i < N; i++) for (const c of [i, (N - 1) * N + i, i * N, i * N + N - 1]) if (!done[c]) { done[c] = 1; heapPush(hv, hi, filled[c], c); }
-  const nb = [-N - 1, -N, -N + 1, -1, 1, N - 1, N, N + 1];
-  const order = new Int32Array(n); let oi = 0;
-  while (hv.length) {
-    const c = heapPop(hv, hi); order[oi++] = c;
-    const cx = c % N;
-    for (const d of nb) {
-      const m = c + d; if (m < 0 || m >= n || done[m]) continue;
-      const mx = m % N; if (Math.abs(mx - cx) > 1) continue;
-      done[m] = 1; if (filled[m] < filled[c] + 1e-3) filled[m] = filled[c] + 1e-3; heapPush(hv, hi, filled[m], m);
-    }
-  }
-  const acc = new Float32Array(n).fill(1), rec = new Int32Array(n).fill(-1);
-  for (let k = n - 1; k >= 0; k--) {               // highest first: pass water to the lowest neighbour
-    const c = order[k], cx = c % N; let best = -1, bh = filled[c];
-    for (const d of nb) { const m = c + d; if (m < 0 || m >= n || Math.abs(m % N - cx) > 1) continue; if (filled[m] < bh) { bh = filled[m]; best = m; } }
-    rec[c] = best; if (best >= 0) acc[best] += acc[c];
-  }
-  const sorted = Float32Array.from(acc).sort(), thr = Math.max(500, sorted[Math.floor(n * .985)]);
-  const W = new Float32Array(n).fill(-1e9), orig = Float32Array.from(map);
-  let cells = 0;
-  for (let c = 0; c < n; c++) {
-    if (acc[c] < thr || orig[c] < waterLevel + .3) continue;
-    const big = acc[c] / thr, r = big > 6 ? 2 : big > 2 ? 1.5 : 1, d0 = .9 + Math.min(1.2, Math.log2(big) * .3);
-    const surf = Math.min(filled[c] - d0 * .3, orig[c] - .3), bed = surf - .75;
-    const cx = c % N, cz = (c / N) | 0, R = Math.ceil(r + 1);
-    for (let j = -R; j <= R; j++) for (let i = -R; i <= R; i++) {
-      const x = cx + i, z = cz + j; if (x < 1 || z < 1 || x >= N - 1 || z >= N - 1) continue;
-      const m = z * N + x, dist = Math.hypot(i, j);
-      if (dist <= r) { if (W[m] < -1e8 || surf < W[m]) W[m] = surf; }
-      const want = bed + Math.max(0, dist - r * .6) * 1.1;
-      if (map[m] > want) map[m] = want;
-    }
-    cells++;
-  }
-  return { W, cells };
-}
 let FEAT = null;
 // Dramatic landscape: a crater lake, a mesa, a canyon or a great cliff, sized to the map. Big and scenic, never wild.
 function makeFeature(r, base, wGuess) {
@@ -2473,36 +2326,6 @@ function updateFly(dt) {
 let NIGHT_K = 0;
 const SUNB = { i: 1, p: new THREE.Vector3(0, 100, 0), c: new THREE.Color(1, 1, 1) };
 let baseHemi = .4, fogField = null, fogLocal = 0, fogBanks = null;
-function buildFogBanks(rand) {             // soft fog banks resting in the foggy parts of the map
-  fogBanks = null;
-  const list = [], n = Math.round((weather.type === "fog" ? 130 : 60) * AREA);
-  for (let k = 0; k < n * 8 && list.length < n; k++) {
-    const x = (rand() - .5) * S, z = (rand() - .5) * S;
-    if (fogField(x, z) < .45 + rand() * .2) continue;
-    list.push({ x, y: Math.max(H(x, z), water) + 2 + rand() * 6, z, s: 22 + rand() * 30 });
-  }
-  if (!list.length) return;
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { uCol: { value: new THREE.Color() }, uOp: { value: weather.type === "fog" ? .7 : .42 } },
-    vertexShader: `varying vec2 vUv; varying float vD;
-      void main(){ vUv = uv;
-        vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-        float sc = length(instanceMatrix[0].xyz);
-        c.xy += position.xy * vec2(sc, sc * 0.5); vD = -c.z;
-        gl_Position = projectionMatrix * c; }`,
-    fragmentShader: `uniform vec3 uCol; uniform float uOp; varying vec2 vUv; varying float vD;
-      void main(){ vec2 p = (vUv - 0.5) * 2.0; float a = smoothstep(1.0, 0.0, dot(p, p)); a *= a;
-        a *= smoothstep(3.0, 20.0, vD) * (1.0 - smoothstep(600.0, 800.0, vD));
-        gl_FragColor = linearToOutputTexel(vec4(uCol, a * uOp));
-        #include <tonemapping_fragment>
-        }`,
-    transparent: true, depthWrite: false
-  });
-  const m = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), mat, list.length);
-  list.forEach((b, i) => m.setMatrixAt(i, M4.makeScale(b.s, b.s, b.s).setPosition(b.x, b.y, b.z)));
-  m.frustumCulled = false; m.renderOrder = 2; world.add(m); fogBanks = m;
-  mat.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
-}
 function generate() {
   clearSquad();
   applySize();
@@ -3242,16 +3065,6 @@ let zone = null;
 function zoneR(Z, cx, cz, r, x, z, t) {
   const a = Math.atan2(z - cz, x - cx), w = Z.waves;
   return r * (1 + w[0] * Math.sin(3 * a + t * .15 + w[3]) + w[1] * Math.sin(5 * a - t * .21 + w[4]) + w[2] * Math.sin(8 * a + t * .35 + w[5]));
-}
-function zoneCenterFor(r, cx, cz, cr, rnd, last) {                          // a new circle inside the old one, on dry land
-  let best = null;
-  if (last && coin && rnd() < .3 && Math.hypot(coin.x - cx, coin.z - cz) < cr - r) return [coin.x, coin.z];   // sometimes it ends on the giant tree
-  for (let k = 0; k < 60; k++) {
-    const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.max(0, cr - r) * .85, x = cx + Math.cos(a) * d, z = cz + Math.sin(a) * d;
-    if (Math.abs(x) > HALF - 10 || Math.abs(z) > HALF - 10) continue;
-    if (H(x, z) > water + 1 || k > 50) { best = [x, z]; break; }
-  }
-  return best || [cx, cz];
 }
 function startZone() {
   clearZoneMesh();
@@ -4270,7 +4083,6 @@ const ctrl = [0, 1].map(i => { const ray = renderer.xr.getController(i), grip = 
   ray.addEventListener("connected", e => { c.hand = e.data.handedness; c.src = e.data; }); ray.addEventListener("disconnected", () => { c.hand = ""; c.src = null; });
   return c; });
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _q1 = new THREE.Quaternion(), _m1 = new THREE.Matrix4(), _UPv = new THREE.Vector3(0, 1, 0);
-const QX90 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2);
 function xrInputs() {                                   // head from the two eyes, hands from the controllers
   const xc = renderer.xr.getCamera(); if (!xc.cameras || xc.cameras.length < 1) return null;
   const head = new THREE.Vector3(), headQ = new THREE.Quaternion();
@@ -4351,12 +4163,6 @@ function vrBinos() {
   }
   g.add(new THREE.Mesh(new THREE.BoxGeometry(.03, .02, .05), body));
   scene.add(g); binos = g; return g;
-}
-function lensView(pos, q, fov, hide) {                     // the magnified picture inside a scope or binocular lens
-  lensCam.position.copy(pos); lensCam.quaternion.copy(q); lensCam.fov = fov; lensCam.updateProjectionMatrix(); lensCam.updateMatrixWorld();
-  const vis = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; });
-  renderer.xr.enabled = false; const old = renderer.getRenderTarget(); renderer.setRenderTarget(lensRT); renderer.render(scene, lensCam); renderer.setRenderTarget(old); renderer.xr.enabled = true;
-  hide.forEach((o, i) => { if (o) o.visible = vis[i]; });
 }
 // wrist display and the map you raise with the off-hand trigger
 let wrist = null, wristCv = null, vrMap = null, vrMapTex = null, vignette = null;
@@ -4606,11 +4412,6 @@ function uwTick(dt, I) {                                     // runs after you'v
   uwAudio(under, dt);
 }
 
-function vrLens() {                                       // draw the lens picture right before the frame
-  if (vr.scoped && vr.gun) { const S = GUNSPOT[vr.gunKind]; lensView(vr.gun.localToWorld(new THREE.Vector3(...S.eye)), vr.gun.quaternion, S.fov[vr.zoom], [vr.gun, vr.avatar && vr.avatar.group]); }
-  else if (vr.binos && binos) lensView(binos.position, binos.quaternion, [9, 5][vr.zoom], [binos, vr.avatar && vr.avatar.group]);
-  if (vr.gun && vr.gun.userData.lens) vr.gun.userData.lens.visible = false;
-}
 function vrFire() {
   let late = 0;
   if (state !== "play" || gameMode === "hike" || P.gliding || !vr.gun || !vr.gun.visible || MP.dead > 0) return;
@@ -4664,7 +4465,7 @@ function vrAvatar(dt) {
 }
 /* ---- VR climbing (Pop: One style): hands pass through things; grip inside anything to hold on; your body hangs from that hand ---- */
 const CLIMB_G = 22;
-const _hv = new THREE.Vector3(), _hd = new THREE.Vector3(), _hm = new THREE.Matrix4(), _he = new THREE.Euler(), _hq = new THREE.Quaternion(), _hs = new THREE.Vector3();
+const _hv = new THREE.Vector3(), _hd = new THREE.Vector3(), _he = new THREE.Euler(), _hq = new THREE.Quaternion(), _hs = new THREE.Vector3();
 function treeInv(t) {                                       // world -> this tree's own drawing space
   if (!t._inv) {
     _hq.setFromEuler(_he.set(t.tx || 0, t.ry, t.tz || 0, t.ord || "XYZ"));
@@ -4735,7 +4536,6 @@ function headBlocked(x, y, z) {                            // your face can't go
   }
   return false;
 }
-let climbFx = null;
 function climbTick(dt, I) {                               // returns true while climbing or flying through the air, so normal walking is skipped
   const gunHands = gameMode === "pvp" && !VR_ON && vr.gunOut;                        // old PvP: the gun must be put away to climb
   const gunOutH = ARMED() && vr.gunOut, mainS = set.hand === "right" ? "R" : "L";    // Hunting: the gun hand holds the gun, the off hand can still hold on
@@ -4830,7 +4630,7 @@ function vrHandsParts() {
     });
     const t0 = new THREE.Bone(); t0.position.set(.018 * sgn, .045, -.038); root.add(t0); const t1 = new THREE.Bone(); t1.position.y = -.042; t0.add(t1); bones.push(t0, t1);
     // geometry in the rest pose (fingers straight down), each vertex tied to one or two bones with a soft blend across every joint
-    const P = [], N = [], SI = [], SW = [], IX = [], G1 = [];
+    const P = [], N = [], SI = [], SW = [], IX = [];
     const bi = b => bones.indexOf(b);
     const vert = (x, y, z, nx, ny, nz, a, b, w) => { P.push(x, y, z); N.push(nx, ny, nz); SI.push(a, b, 0, 0); SW.push(1 - w, w, 0, 0); return P.length / 3 - 1; };
     const blend = (t, cuts, ids) => {                          // along a chain: which bone(s), and how much of the next one
@@ -4957,7 +4757,6 @@ function vrZoomRender() {
         Point with either controller and pull the trigger. Before each map, a little model of it turns in front of you. ---- */
 const VRUI = { on: false, stage: "", panels: {}, root: null, env: null, lasers: [], prev: {}, drag: null, fade: null, fadeV: 0, fadeGo: null, t: 0, dio: null, dioSpin: null };
 const UIC = { bg: "rgba(48,86,62,.97)", panel: "#30563e", line: "#7fae8d", text: "#ffffff", dim: "#dcebe0", sun: "#FFD45A", btn: "#467a56", on: "#6aa878", off: "rgba(255,255,255,.14)" };   // bright enough to read easily in a headset   // bright enough to read easily in a headset
-const VR_RES = { smooth: .8, balanced: .9, sharp: 1 };
 function uiRound(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 // one curved panel: a slice of a cylinder around you, with a canvas painted on the inside
 function uiPanel(name, W, H, radius, arcDeg, centerY, yawDeg = 0, src = null) {
@@ -5150,7 +4949,6 @@ function vruiParts() {
   [["Resume", () => vruiResume(), true], ["New map, same settings", () => startNew()], ["Change settings", () => vruiOpen("setup")], ["Main menu", () => vruiOpen("mode")],
    ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42, personal: i === 0 || i >= 3 }));
 }
-function saveVrRes() { try { localStorage.setItem("jt-vrres", set.vrRes); } catch (_) {} }
 // open a menu stage: the menus are placed in front of wherever you are looking
 function vruiOpen(stage) {
   vruiParts();
@@ -5469,7 +5267,6 @@ const CAMO = {                       // mostly solid, baggy uniforms; "mixed" is
   mixed: { base: "#5e5c3d", spots: ["#3a3925", "#7b6c49", "#2a2a1f", "#6b7445"], a: .95, gear: 0x46462f, boot: 0x29231a, glove: 0x33301f }
 };
 const CAMO_KEYS = ["black", "brown", "green", "snow", "mixed"];
-const SKIN_TONES = [0xc99a7a, 0xa8775a, 0x8a5a3e, 0xe0b597, 0x6e4430];
 const texCache = {};
 function blobPath(g, cx, cy, pts) {               // smooth closed blob through the points
   const n = pts.length, mid = i => [(pts[i][0] + pts[(i + 1) % n][0]) / 2, (pts[i][1] + pts[(i + 1) % n][1]) / 2];
@@ -5498,31 +5295,6 @@ function camoTex(style) {
   g.putImageData(img, 0, 0);
   const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4;
   return texCache[style] = t;
-}
-function skullTex() {                                 // skull and crossbones on the face cover (front is the middle of the texture)
-  if (texCache.skull) return texCache.skull;
-  const W = 1024, Hh = 160, cv = document.createElement("canvas"); cv.width = W; cv.height = Hh;
-  const g = cv.getContext("2d"), cx = W / 2, cy = 78, bone = "#e8e4d8", dark = "#141414";
-  g.fillStyle = dark; g.fillRect(0, 0, W, Hh);
-  g.strokeStyle = bone; g.fillStyle = bone; g.lineCap = "round";
-  for (const s of [-1, 1]) {                          // crossed bones behind the skull
-    const x0 = cx - 92 * s, y0 = cy - 58, x1 = cx + 92 * s, y1 = cy + 62;
-    g.lineWidth = 15; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-    for (const [x, y] of [[x0, y0], [x1, y1]]) {
-      const ax = (y1 - y0), ay = -(x1 - x0), al = Math.hypot(ax, ay), ux = ax / al * 9, uy = ay / al * 9;
-      g.beginPath(); g.arc(x + ux, y + uy, 11, 0, 7); g.fill(); g.beginPath(); g.arc(x - ux, y - uy, 11, 0, 7); g.fill();
-    }
-  }
-  g.beginPath(); g.ellipse(cx, cy - 14, 52, 50, 0, 0, 7); g.fill();            // cranium
-  g.beginPath(); g.moveTo(cx - 40, cy + 6); g.quadraticCurveTo(cx - 36, cy + 52, cx, cy + 58); g.quadraticCurveTo(cx + 36, cy + 52, cx + 40, cy + 6); g.fill();   // jaw
-  g.fillStyle = dark;
-  for (const s of [-1, 1]) { g.beginPath(); g.ellipse(cx + 21 * s, cy - 12, 16, 18, s * .15, 0, 7); g.fill(); }   // eye sockets
-  g.beginPath(); g.moveTo(cx, cy + 4); g.lineTo(cx - 9, cy + 20); g.lineTo(cx + 9, cy + 20); g.closePath(); g.fill();   // nose
-  g.fillRect(cx - 30, cy + 31, 60, 4);                                       // mouth line
-  g.lineWidth = 3; g.strokeStyle = dark;
-  for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(cx + i * 8.5, cy + 25); g.lineTo(cx + i * 8.5, cy + 46); g.stroke(); }   // teeth
-  const t = new THREE.CanvasTexture(cv); t.anisotropy = 4;
-  return texCache.skull = t;
 }
 function roundBox(w, h, d, r) {
   const g = new THREE.BoxGeometry(w, h, d, 4, 4, 4), p = g.attributes.position, v = new THREE.Vector3(), c = new THREE.Vector3();
@@ -6200,14 +5972,8 @@ function boltSounds() {                        // lift, pull back, push forward,
   });
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
-const WEAP = {
-  hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     spd: 850, reach: 900, dmg: 100, col: "#e04848" },
-  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
-  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
-  pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
 const WHEEL = ["hunt", "ar", "smg", "pistol", "gren"];  // five slices, clockwise from the top
 const WSTEP = Math.PI * 2 / 5;
-const AMMO_CAP = 300;
 const arms = {};
 function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
   if (gameMode === "pvp") pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }
@@ -6451,7 +6217,6 @@ function reloadTick(dt, G, off) {
   if (U.counter) drawCounter(U.counter, A);
 }
 /* ---- grenades (VR Hunting / PvP): a fifth slot on the wheel, up to 10, picked up from grenade boxes; aim shows the arc, trigger throws ---- */
-const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };
 const NADES = [], BOOMS = [];
 let nadeLoot = [], nadeLootMesh = null, nadeArc = null;
 function nadeModel() {
@@ -6571,7 +6336,7 @@ function vrClearNades() {
   nadeLootMesh = null; nadeLoot = []; nadeHide();
 }
 function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
-  const R = mulberry32(seed * 91 + 7), n = Math.round(12 + HALF / 11), spots = [];
+  const R = mulberry32(seed * 91 + 7), n = Math.round(LOOT.nade[0] + HALF / LOOT.nade[1]), spots = [];
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -6610,10 +6375,7 @@ function nadeLootTick(I) {
 }
 /* ---- PvP loot (VR): you spawn with a 1-star pistol; find the other guns (1 to 5 stars), green crosses (health), blue crosses (shield),
         ammo and grenades; a better gun upgrades the one you have; when you die it all spills on the ground where you fell ---- */
-const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"], TIER_NAME = [null, "Normal", "Blue", "Purple", "Gold", "Red"];
-const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };
 const GUN_NAME = { hunt: "Sniper", ar: "Assault rifle", smg: "SMG", pistol: "Pistol" };
-const PICK = { hp: 30, sh: 35, back: 40 };
 vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 };
 const tierOf = k => gameMode === "pvp" ? (vr.own[k] || 0) : 1;
 const magOf = k => Math.max(1, Math.round(WEAP[k].mag * TIER.mag[Math.max(1, tierOf(k))]));
@@ -6633,7 +6395,6 @@ function crossMesh(col) {                                   // a glowing plus si
   return g;
 }
 let _boxGeo = null, _glowTex = null;
-const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // stronger, neon versions of the star colours
 const _glowGeo = {};
 function gunGlow(kind, model, tier) {                       // lots of soft dots spread over the gun's surface: together they make a glow about 10 cm round its outline
   if (!_glowTex) { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -6667,7 +6428,7 @@ function dropObj(d) {
   g.position.set(d.x, d.y, d.z); scene.add(g); return g;
 }
 function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
-function dropTake(id, fromNet) {
+function dropTake(id) {
   const d = DROPS.get(id); if (!d || d.got) return;
   if (d.type === "hp" || d.type === "sh") { d.got = true; d.back = PICK.back; d.obj.visible = false; return; }   // crosses come back after a while
   scene.remove(d.obj); DROPS.delete(id);
@@ -6675,10 +6436,10 @@ function dropTake(id, fromNet) {
 function dropsClear() { for (const d of DROPS.values()) scene.remove(d.obj); DROPS.clear(); }
 function spawnPvpLoot() {                                   // seeded: everyone gets the same guns and crosses in the same places
   const R = mulberry32(seed * 91 + 13), spot = () => { for (let k = 0; k < 200; k++) { const x = (R() * 2 - 1) * (EDGE - 10), z = (R() * 2 - 1) * (EDGE - 10); if (okSpot(x, z)) return [x, z]; } return null; };
-  const nG = Math.round(8 + HALF / 20), nC = Math.round(10 + HALF / 15);
+  const nG = Math.round(LOOT.gun[0] + HALF / LOOT.gun[1]), nC = Math.round(LOOT.cross[0] + HALF / LOOT.cross[1]);
   for (let i = 0; i < nG; i++) {
     const s = spot(); if (!s) continue; const r = R(), kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
-    const tier = r < .4 ? 1 : r < .68 ? 2 : r < .86 ? 3 : r < .96 ? 4 : 5;
+    const tier = 1 + TIER_ODDS.filter(o => r >= o).length;
     dropAdd({ id: "g" + i, type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: s[0], z: s[1] });
   }
   for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
@@ -6768,7 +6529,7 @@ function clearAmmo() {
 }
 function spawnAmmo() {
   clearAmmo(); const R = mulberry32(seed * 91 + 5);           // seeded: both players get the same cans
-  const n = Math.round(30 + HALF / 4), spots = [];
+  const n = Math.round(LOOT.ammo[0] + HALF / LOOT.ammo[1]), spots = [];
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -6809,7 +6570,7 @@ function lootTick(I) {
         each picks their own start, then everyone's flags show in their colours for 3 seconds and you all drop in. ---------------- */
 const MP_MAX = 8, MP_COL = ["#f2c14e", "#e8504a", "#4f9bff", "#55d16a", "#b56cff", "#ff9a3c", "#3fd8d0", "#ff74c4"], MP_COLN = ["Yellow", "Red", "Blue", "Green", "Purple", "Orange", "Teal", "Pink"];
 const MP = { on: false, host: false, code: "", entry: "", joining: false, peer: null, links: new Map(), status: "", sendT: 0, idx: 0,
-  hp: 100, sh: 0, dead: 0, wake: 0, deathPos: null, roundLeft: 0, board: null, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, startT: 0, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
+  hp: 100, sh: 0, dead: 0, wake: 0, deathPos: null, roundLeft: 0, board: null, kills: 0, deaths: 0, mic: null, hurtM: null, hurt: 0, peerOpts: {}, lastSet: "", revealT: 0, reveal: null, pendingReveal: null, lastHitBy: null, genBusy: false };
 Object.defineProperties(MP, {                               // the first other player and their line (handy shortcuts)
   R: { get() { for (const L of MP.links.values()) if (L.R) return L.R; return null; } },
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
@@ -6984,7 +6745,7 @@ function mpRandomSpawn() {                                  // your own random s
   mpSendHost({ t: "spawn", x: P.x, z: P.z });
 }
 function mpRevealStart(list) {                              // everyone's flags pop up in their colours for 3 seconds
-  MP.reveal = list; MP.revealT = 3;
+  MP.reveal = list; MP.revealT = PVP.flags;
   if (VRUI.dio) {
     const U = VRUI.dio.userData;
     for (const e of list) {
@@ -6998,10 +6759,10 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
-  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = 0; MP.roundLeft = (set.roundMin || 10) * 60; mpCansReset();
+  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = 0; MP.roundLeft = (set.roundMin || 10) * 60;
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
-function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; mpCansReset(); }
+function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
 function mpSendStartTo(L) {                                 // straight into a game that's already going
   const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
   mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft });
@@ -7010,7 +6771,7 @@ function mpGuestStart(o) {
   mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; MP.pendingReveal = null; MP.kills = MP.deaths = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
-    generate(); mpCansReset(); reveal(); drawMap($("miniMap"));
+    generate(); reveal(); drawMap($("miniMap"));
     const far = o.others || [[o.hx, o.hz]];                   // start somewhere away from everyone
     let best = null; const want = Math.min(160, HALF * .55);
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
@@ -7087,7 +6848,7 @@ function mpRemoteTick(L, dt) {
   for (const k in R.guns) R.guns[k].visible = false;
   if (!s.alive) {                                           // shot down: they fall back, then vanish within 3 seconds
     R.deadT = (R.deadT || 0) + dt; const e0 = Math.min(1, R.deadT * 1.8), e = e0 * e0 * (3 - 2 * e0);
-    S.group.visible = S.shadow.visible = R.deadT < 3 && state === "play";
+    S.group.visible = S.shadow.visible = R.deadT < PVP.bodyGone && state === "play";
     S.group.rotation.order = "YXZ"; S.group.position.set(S.x, S.y + e * .25, S.z); S.group.rotation.set(-e * 1.48, S.yaw + Math.PI, 0); S.group.updateMatrixWorld(true); return;
   }
   R.deadT = 0; S.group.visible = S.shadow.visible = state === "play";
@@ -7141,7 +6902,7 @@ function mpTakeHit(d, head) {
   const s = Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
   if (MP.hp <= 0) {
-    MP.dead = 4; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy });
+    MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy });
     if (gameMode === "pvp" && VR_ON) { pvpSpill(); pvpLoadout(); }       // your loot spills where you fell; you'll be back with a 1-star pistol
   }
 }
@@ -7151,8 +6912,7 @@ function mpHurtMesh() {
   MP.hurtM = new THREE.Mesh(new THREE.SphereGeometry(.27, 20, 12), new THREE.MeshBasicMaterial({ color: 0x9a0d0d, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false }));
   MP.hurtM.renderOrder = 999; MP.hurtM.frustumCulled = false; scene.add(MP.hurtM); return MP.hurtM;
 }
-function mpCansReset() { MP.cansTaken = new Set(); }
-function mpTakeCan(i, fromNet) {                            // an ammo can someone picked up disappears for everyone
+function mpTakeCan(i) {                            // an ammo can someone picked up disappears for everyone
   const c = ammoCans[i]; if (!c || c.got) return; c.got = true;
   if (canMesh) { const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true; }
 }
@@ -7302,7 +7062,7 @@ function updateNades(dt) {
     if (b.t > 3) { disposeBlast(b); blasts.splice(i, 1); }
   }
 }
-const blastGeo = new THREE.SphereGeometry(1, 18, 12), puffGeo = new THREE.IcosahedronGeometry(1, 2);
+const puffGeo = new THREE.IcosahedronGeometry(1, 2);
 function disposeBlast(b) { scene.remove(b.fire); b.fire.material.dispose(); for (const q of b.puffs) scene.remove(q.m); b.smokeMat.dispose(); }
 function blastBots(p) {                              // the blast hurts any enemy close by: 250 at the centre, fading to nothing at 8 m
   for (const S of squad) {
@@ -7380,8 +7140,6 @@ const tracerMat = (glow) => new THREE.MeshBasicMaterial({ color: glow ? 0xffe066
   blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending });   // solid yellow head reads in bright daylight, glowing trail
 const TRACER_SPEED = 380;     // m/s: still fast, but your eye can follow it
 const PUFF = { ground: 0x6b5a40, rock: 0xd8d6cc, wood: 0xa07048, water: 0xd8eef6, snow: 0xf4f8fb };
-const WATER_PEN = 1.5;
-const BULLET_G = 9.81, BULLET_ZERO = 100;                  // VR bullets: gravity, and the distance the sights are set for
 const _bB = new THREE.Vector3(), _bD = new THREE.Vector3(), _bT = new THREE.Vector3();
 function makeBullet(from, v, o) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
