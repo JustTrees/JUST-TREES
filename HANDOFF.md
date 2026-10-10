@@ -373,3 +373,6 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## Design rules (Ron)
 - No resource gathering and no building (no walls/ramps/tiles like Population: One). Fights are about aim, movement and terrain: climbing, gliding, cover from trees, hills and water.
+
+## 1.47
+- `zoneSpawnInside`: respawns (death, drowning, late join) go inside the circle the zone is heading to, at least `ZONE_SAFE` 15 m (or a quarter of its radius) in from its edge; falls back to looser rings, then any dry ground. Test: 344 respawns across a whole round, closest 15.3 m inside the next edge, none outside the current zone.

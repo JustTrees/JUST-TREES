@@ -27,6 +27,11 @@ async def main():
           for (const size of ['medium', 'xxl']) { Object.assign(D.set, { size, roundMin: 20, zoneHold: 15, zoneSpeed: 5 }); D.generate(); const Z2 = D.zone, C2 = Z2.circles; let mx = 0;
             for (let i = 1; i < C2.length; i++) mx = Math.max(mx, ((C2[i - 1][2] - C2[i][2]) + Math.hypot(C2[i][0] - C2[i - 1][0], C2[i][1] - C2[i - 1][1])) / Z2.T.shrink[i - 1]);
             out.edgeMaxMs[size] = +mx.toFixed(1); out['stages_' + size] = C2.length - 1; }
+          // respawns: well inside the circle it's heading to, at any moment of the round
+          Object.assign(D.set, { size: 'small', roundMin: 10, zoneHold: 30, zoneSpeed: 3 }); D.generate(); const Z3 = D.zone, C3 = Z3.circles; let worst = 1e9, tries = 0, outsideNow = 0;
+          for (let e = 0; e < 600; e += 7) { D.zoneSeek(Z3, e); const nx = Z3.phase !== 'final' && Z3.stage + 1 < C3.length ? C3[Z3.stage + 1] : [Z3.cx, Z3.cz, Z3.r];
+            for (let k = 0; k < 4; k++) { D.zoneSpawnInside(); tries++; worst = Math.min(worst, nx[2] - Math.hypot(D.P.x - nx[0], D.P.z - nx[1])); if (Math.hypot(D.P.x - Z3.cx, D.P.z - Z3.cz) > Z3.r) outsideNow++; } }
+          out.respawn = { tries, closestToNextEdgeM: +worst.toFixed(1), outsideCurrentZone: outsideNow };
           D.drawMap(document.getElementById('miniMap')); window._map = document.getElementById('miniMap').toDataURL('image/png');
           return out; }""")
         d = await pg.evaluate("() => window._map"); open(SHOT, 'wb').write(base64.b64decode(d.split(',')[1]))
