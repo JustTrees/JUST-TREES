@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.58</title>
+<title>JUST TREES 1.59</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.58";              // Just Trees 1.58
+const VERSION = "1.59";              // Just Trees 1.59
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -554,7 +554,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;   // filmic look instead of raw video-game colour
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .1, 2400);   // covers the XXL diagonal, even zoomed
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .1, 3200);   // covers the XXL diagonal and beyond, even zoomed
 camera.rotation.order = "YXZ";
 const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, .6);
 const sunL = new THREE.DirectionalLight(0xffffff, 1);
@@ -3863,7 +3863,7 @@ function buildQuad(r, q) {
     const e = at(.3); hb.add(new THREE.SphereGeometry(Math.max(.012, hh * .13), 8, 6), 0x0a0806, s * hw * .86, e[0] + hh * .3, e[1]);
     if (q.ear) { const [er, el, sp] = q.ear; hb.add(new THREE.ConeGeometry(er, el, 8).scale(1, 1, .45), q.earC || pal[0], s * hw * .7, hh * .85, -hh * .1, -.4, 0, -s * sp); }
   }
-  const P = { hb, bb, at, hl, hw, hh, L, W, D, Y, nb, nt, ntk, pal };
+  const P = { hb, bb, at, hl, hw, hh, L, W, D, Y, nb, nt, ntk, pal, hits: [] };
   if (q.extra) q.extra(P);
   head.add(hb.mesh(mat));
   const hipF = Y(L * .36) - D * .25, hipB = Y(-L * .36) - D * .2, lw = q.lw, pillar = q.pillar;
@@ -3871,6 +3871,7 @@ function buildQuad(r, q) {
     .map(([s, hy, z, rh, rk], i) => { const tot = hy - .05, l1 = tot * .48, l2 = tot * .52, k = i < 2 ? 1 : 1.2;
       return makeLeg(body, mat, s * W * (q.legX || .6), hy, z, [l1, lw * k, lw * .72 * k], pillar ? [l2, lw * .85, lw * .8] : [l2, lw * .6, lw * .4], pal, q.foot || "hoof", rh, rk); });
   const R = Math.max(W, D) * 1.15, hit = [[0, Y(L * .25), L * .25, R], [0, Y(-L * .25), -L * .25, R], [0, ...at(.45), Math.max(hw, hh) * 1.4, 1]];
+  hit.push(...P.hits);
   if (q.neck > .5) { const n = Math.ceil(q.neck / (ntk * 2.6)); for (let i = 1; i < n; i++) { const t = i / n; hit.push([0, nb[0] + (nt[0] - nb[0]) * t, nb[1] + (nt[1] - nb[1]) * t, ntk * 1.6]); } }
   if (q.leg > .9) for (const z of [L * .36, -L * .36]) hit.push([0, q.leg * .5, z, W * .85]);   // tall legs can be hit too
   return finish({ root, body, head, legs, w: W, rad: q.rad || W * 1.1, step: q.step || .8, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
@@ -3933,7 +3934,7 @@ const QSPEC = {
   moose: r => ({ pal: [0x2a1e16, 0x3a2a1e, 0x4a3a2a, 0x8a7a64], L: 1.9, W: .38, D: .5, leg: 1.12, frontK: 1.08, hump: .18, neck: .5, na: .55, nt: .24, hl: .75, hw: .13, hh: .17, ht: 1.15, muz: .75, lw: .085, bend: true,
     ear: [.05, .2, 1.1], tail: [.1, .04, 1, null],
     extra: P => { const { hb, hh, at } = P, c = 0xc8b898, t = at(.5);
-      hb.seg([0, t[0] - hh * .8, t[1] - .05], [0, t[0] - hh * .8 - .3, t[1] - .02], .05, .02, 0x2a1e16);                               // the bell under the throat
+      hb.seg([0, t[0] - hh * .8, t[1] - .05], [0, t[0] - hh * .8 - .3, t[1] - .02], .05, .02, 0x2a1e16); P.hits.push([0, t[0] - hh * .8 - .12, t[1] - .04, .11, 1]);                               // the bell under the throat
       for (const s of [-1, 1]) { hb.seg([s * .05, hh * .8, -.02], [s * .25, hh + .1, -.05], .04, .035, c);
         hb.add(new THREE.BoxGeometry(.6, .035, .38), c, s * .5, hh + .2, -.03, 0, 0, s * .35);                                        // wide flat antlers
         for (let k = 0; k < 5; k++) hb.seg([s * (.3 + k * .1), hh + .17 + k * .035, .14], [s * (.34 + k * .12), hh + .32 + k * .05, .2], .02, .004, c); } },
@@ -4007,7 +4008,7 @@ const NATIVE = {
   polar:     [["polar", 6], ["seal", 12, [2, 5]], ["arcticfox", 3], ["owl", 3], ["bird", 3], ["yeti", 1]]
 };
 const BEAST_CAP = isTouch ? 90 : 170, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
-const beastDraw = () => vr.on ? 750 * Math.min(3, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
+const beastDraw = () => vr.on ? 750 * Math.min(4.2, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
 const sealOk = (x, z) => Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) + 10) && !nearObstacle(x, z, 1.2)
   && (iced ? H(x, z) < water + 1.5 : H(x, z) > water + .05 && H(x, z) < water + 1.6) && slopeNy(x, z) > .85;     // the shore, or out on the ice
 const nearWater = (x, z) => { for (let k = 0; k < 8; k++) { const a = k * .785, X = x + Math.cos(a) * 30, Z = z + Math.sin(a) * 30; if (H(X, Z) < water) return true; } return false; };
@@ -4158,6 +4159,28 @@ function trunkNear(x, z, pad) {                            // trees and other so
 function walkable(A, x, z) {                              // logs and small rocks: step over them; trees and big boulders: go round
   return targetOk(A, x, z) && !trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < Math.max(2.5, A.step * 2);   // only big boulders and cliff rocks turn them
 }
+function neckHits(b) {                                   // hit spheres along the neck, chest to head (the head's own spheres follow it as it grazes)
+  let mr = 0; for (const h of b.hit) if (!h[4]) mr = Math.max(mr, h[3]);
+  let front = null; for (const h of b.hit) if (!h[4] && h[3] >= mr * .7 && (!front || h[2] > front[2])) front = h; if (!front || !b.head) return;   // the chest (not a leg)
+  const hp = b.head.position, p0 = new THREE.Vector3(front[0], front[1], front[2]), d = p0.distanceTo(hp), rn = Math.max(.07, front[3] * .5), n = Math.ceil(d / (rn * 1.1));
+  for (let i = 1; i <= n; i++) { const t = i / n; b.hit.push([p0.x + (hp.x - p0.x) * t, p0.y + (hp.y - p0.y) * t, p0.z + (hp.z - p0.z) * t, rn * (1 - .25 * t)]); }
+  // the head: spheres fitted along it, from the back of the skull to the nose (antlers, horns and ears are left out)
+  const vs = [], v = new THREE.Vector3(); b.head.updateMatrixWorld(true);
+  b.head.traverse(o => { if (!o.isMesh) return; const P = o.geometry.attributes.position; for (let i = 0; i < P.count; i += 2) vs.push(v.fromBufferAttribute(P, i).applyMatrix4(o.matrix).clone()); });
+  if (vs.length < 8) return;
+  const ax = vs.map(p => Math.abs(p.x)).sort((a, c) => a - c), xw = ax[Math.floor(ax.length * .5)] * 2.2 + .01;
+  let tip = null; for (const p of vs) if (Math.abs(p.x) < xw && (!tip || p.z > tip.z)) tip = p;
+  const L = tip.length(); if (L < .05) return; const u = tip.clone().divideScalar(L), K = 6;
+  const perp = p => Math.sqrt(Math.max(0, p.lengthSq() - p.dot(u) ** 2)), pd = vs.map(perp).sort((a, c) => a - c), pMax = pd[Math.floor(pd.length * .5)] * 2.2 + .02;   // ignore parts sticking far out (antlers)
+  for (let k = 0; k < K; k++) {
+    const t0 = -.15 + k * 1.15 / K, t1 = t0 + 1.15 / K, sl = [];
+    for (const p of vs) { const t = p.dot(u) / L; if (t >= t0 && t < t1 && Math.abs(p.x) < xw * 1.6 && perp(p) < pMax) sl.push(p); }
+    if (sl.length < 4) continue;
+    const c = new THREE.Vector3(); sl.forEach(p => c.add(p)); c.divideScalar(sl.length);
+    const ds = sl.map(p => p.distanceTo(c)).sort((a, e) => a - e), r = ds[Math.floor(ds.length * .7)];
+    b.hit.push([c.x, c.y, c.z, r * 1.15, 1]);
+  }
+}
 function addGround(kind, x, z, home) {
   const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
   const b = QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
@@ -4165,7 +4188,7 @@ function addGround(kind, x, z, home) {
           : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
           : kind === "panther" ? buildPanther(r, biomeOf(lat) === "tropical") : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
-  const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc;
+  const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
   A.y = beastGround(A, x, z);
@@ -4454,7 +4477,8 @@ const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gun
   prev: {}, mark: null, markT: 0, wristT: 0, avatar: null, gun: null, gunKind: "", head: new THREE.Vector3(0, 1.6, 0), headQ: new THREE.Quaternion(), gp: new THREE.Vector3(), gq: new THREE.Quaternion(),
   readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6, hOff: 0, hCal: false };
 try { const hs = parseFloat(localStorage.getItem("jt-height-off")); if (isFinite(hs)) vr.hOff = hs; } catch (_) {}
-const scopeFovs = () => ZOOM_FOV[vr.gunKind === "hunt" ? "hunt" : "pvp"].slice(1);      // the same zoom steps as the PC scope
+const VR_SCOPE_FOV = [18, 9, 6, 4, 2.7, 2], VR_BINO_FOV = [11, 7, 4.6, 3];   // VR sniper ≈ 4.6×, 9×, 14×, 21×, 31×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
+const scopeFovs = () => vr.gunKind === "hunt" ? VR_SCOPE_FOV : ZOOM_FOV.pvp.slice(1);
 const XRV = { ok: false };
 renderer.xr.enabled = true;
 if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { XRV.ok = ok; if (ok) { $("vrRow").style.display = ""; if (intro.stage !== "done") $("introVR").classList.remove("hidden"); } }).catch(() => {});
@@ -4673,12 +4697,12 @@ function vrTick(dt) {
   } else nadeHide();
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
-  if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(1, vr.zoom)); }
+  if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(VR_BINO_FOV.length - 1, vr.zoom)); }
   else if (binos) binos.visible = false;
   // full-view zoom: steadied view direction, magnification to match the PC zoom steps, a quick iris opening
   const zoomOn = vr.scoped || vr.binos;
   if (zoomOn) {
-    const f = vr.scoped ? scopeFovs()[vr.zoom] : [11, 7][vr.zoom] || 11; vr.zoomK = Math.tan(36 * Math.PI / 180) / Math.tan(f * Math.PI / 360);
+    const f = vr.scoped ? scopeFovs()[vr.zoom] : VR_BINO_FOV[vr.zoom] || 11; vr.zoomK = Math.tan(36 * Math.PI / 180) / Math.tan(f * Math.PI / 360);
     if (!vr.zoomWas) { vr.zoomOpen = .2; vr.binoQ.copy(I.headQ); }
     vr.zoomOpen = Math.min(1, vr.zoomOpen + dt * 6);
     vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 3));                                      // binoculars: your head, smoothed
@@ -4816,7 +4840,7 @@ function vrFire() {
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
   const online = gameMode === "pvp" && MP.on && !!W;
-  makeBullet(from, v, { reach: vr.scoped ? 2400 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, online });
+  makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, online });
   if (online) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
   gunshot(huntM ? vr.gunKind : undefined);
 }
@@ -7388,7 +7412,7 @@ function mpRemoteTick(L, dt) {
 }
 function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
-  makeBullet(from, new THREE.Vector3(...o.v), { reach: 2400, remote: true });
+  makeBullet(from, new THREE.Vector3(...o.v), { reach: 3200, remote: true });
   if (camera.position.distanceTo(from) < 700) gunshot(o.k);
 }
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
@@ -8069,7 +8093,7 @@ function loop(now) {
   fogLocal += (fogT - fogLocal) * Math.min(1, dt * .5);
   scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
-  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(3.6, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
+  scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(4.5, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
     zoneFog();
   updateBirds(now);

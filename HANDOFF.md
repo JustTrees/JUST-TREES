@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.59**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.60**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,7 +39,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.58)
+## 4. What exists now (v1.59)
 
 ### World (all modes)
 - **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
@@ -57,6 +57,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Falling (`deadPose`):** topples sideways (speeding up), then the legs and head go limp on the ground.
 - **Legends:** only on XL/XXL maps, on half of them.
 - Scoring: a hit is a kill (tip over, bing, no blood); points = distance × `SCORE[kind]` (big easy animals low, small/flying high, legends 5).
+- **Hit boxes (1.59):** `neckHits` adds spheres from the chest up the neck to the head, plus spheres fitted along each head's real shape (antlers/horns/ears left out). Test: dev/test_hitbox.py (rays across every head and neck; all kinds 88–100%).
 - **One shot at a legend (1.57):** any shot within 900 m of Bigfoot/Yeti (or aimed at one, up to 2.6 km) makes it wait until the bullet lands (`boltIn`, so the shot is always fair), then sprint off like a runner, leaning, elbows bent, arms pumping (`legendBolt`), and vanish for the rest of the map (`A.gone`). Back only on a new map. Test: dev/test_legend.py.
 
 ### PC and phone (keep as is)
@@ -70,6 +71,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Guns:** sniper (bolt each shot, the only scope), assault rifle, SMG, pistol, plus grenades (5th wheel slice, up to 10). Real bullets with travel time and **no drop** (you lead moving targets). Steady fire rate, no recoil. Reload by hand: pull the magazine, push a new one, rack the bolt. Ammo cans and grenade boxes as loot.
 - **Find your guns (VR Hunting and PvP):** every spawn starts with a 1-star pistol; other guns are greyed on the wheel until you find one. Guns lie on a jittered grid all over the map with a neon glow in their star colour (1★ white, 2 blue, 3 purple, 4 gold, 5 red; rarer the higher). A higher star upgrades the gun.
 - **Scope:** two hands, eyepiece near your eye; the whole view zooms and the horizon stays level. **Binoculars:** empty hands, both grips at your face.
+- **Zoom steps (1.59, VR; PC unchanged):** sniper 4.6×, 9×, 14×, 21×, 31×, 42× (`VR_SCOPE_FOV`); binoculars 7.5×, 12×, 18×, 28× (`VR_BINO_FOV`). Hunting is a long-shot game: scoped shots count to 3.2 km, camera far 3.2 km, animals drawn up to ~3.1 km while zoomed, fog stretches up to 4.5×.
 - **Climbing:** grab anything you see (trunks, branches, limbs, rocks, cliffs); fling on release; glide by spreading your arms; high gravity, no fall damage. The gun must be away to climb.
 - **Under water:** walk on the bed, murky view, 5 s of breath, then respawn. Bullets go 1.5 m into water.
 - **Body:** camo soldier avatar with arm IK and gloves on the controllers.
