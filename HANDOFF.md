@@ -384,3 +384,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## 1.49
 - No bullet drop: `BULLET_G` = 0 (bullets fly dead straight at the gun's speed, travel time stays, so you still lead). Grenades use their own `VR_NADE_G` = 9.81 for their arc.
+
+## 1.50 — lots of guns, spread evenly
+- Guns now sit on a jittered grid: one per square of `LOOT.gunGrid` = 22 + 0.02 × half-width metres (~29 m on medium). Counts: small ~208, medium ~365, XXL ~1600. Tier odds unchanged (50/28/14/6/2%).
+- Performance: each gun on the ground is just its glow (Points) until you're within 55 m; the gun model is cloned from `gunTemplate(kind)` then and removed past 75 m. Scene has fewer objects than 1.49 even with 4–6× the guns.

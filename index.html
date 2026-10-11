@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.49</title>
+<title>JUST TREES 1.50</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.49";              // Just Trees 1.49
+const VERSION = "1.50";              // Just Trees 1.50
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -337,7 +337,7 @@ const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"]; 
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
 const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
-const LOOT = { ammo: [30, 4], nade: [12, 11], gun: [24, 5], cross: [10, 15] };   // how many of each on a map: a + (half the map width) / b
+const LOOT = { ammo: [30, 4], nade: [12, 11], cross: [10, 15], gunGrid: [22, .02] };   // ammo/grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
@@ -6602,6 +6602,8 @@ function crossMesh(col) {                                   // a glowing plus si
   return g;
 }
 let _boxGeo = null, _glowTex = null;
+const _gunTpl = {};
+function gunTemplate(kind) { if (!_gunTpl[kind]) { const m = (kind === "hunt" ? sniper : GUNMODEL[kind] || sniper).clone(true); m.visible = true; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1); _gunTpl[kind] = m; } return _gunTpl[kind]; }
 const _glowGeo = {};
 function gunGlow(kind, model, tier) {                       // lots of soft dots spread over the gun's surface: together they make a glow about 10 cm round its outline
   if (!_glowTex) { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -6625,8 +6627,8 @@ function gunGlow(kind, model, tier) {                       // lots of soft dots
 function dropObj(d) {
   const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin); g.userData.spin = spin;
   if (d.type === "gun") {
-    const model = (d.kind === "hunt" ? sniper : GUNMODEL[d.kind] || sniper).clone(true); model.visible = true; model.rotation.y = Math.PI / 2; model.scale.multiplyScalar(1.5); spin.add(model); g.userData.model = model;
-    model.add(gunGlow(d.kind, model, d.tier));               // a soft neon glow hugging the gun's shape, in its star colour
+    const holder = new THREE.Group(); holder.rotation.y = Math.PI / 2; holder.scale.setScalar(1.5); spin.add(holder); g.userData.holder = holder;
+    holder.add(gunGlow(d.kind, gunTemplate(d.kind), d.tier));   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
   else {                                                    // spilled ammo or grenades: a little box with a coloured band
     _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
@@ -6643,11 +6645,13 @@ function dropTake(id) {
 function dropsClear() { for (const d of DROPS.values()) scene.remove(d.obj); DROPS.clear(); }
 function spawnPvpLoot() {                                   // seeded: everyone gets the same guns and crosses in the same places
   const R = mulberry32(seed * 91 + 13), spot = () => { for (let k = 0; k < 200; k++) { const x = (R() * 2 - 1) * (EDGE - 10), z = (R() * 2 - 1) * (EDGE - 10); if (okSpot(x, z)) return [x, z]; } return null; };
-  const nG = Math.round(LOOT.gun[0] + HALF / LOOT.gun[1]), nC = Math.round(LOOT.cross[0] + HALF / LOOT.cross[1]);
-  for (let i = 0; i < nG; i++) {
-    const s = spot(); if (!s) continue; const r = R(), kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
-    const tier = 1 + TIER_ODDS.filter(o => r >= o).length;
-    dropAdd({ id: "g" + i, type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: s[0], z: s[1] });
+  const nC = Math.round(LOOT.cross[0] + HALF / LOOT.cross[1]), cell = LOOT.gunGrid[0] + HALF * LOOT.gunGrid[1], kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
+  let gi = 0;
+  for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
+    let sp = null; for (let k = 0; k < 14 && !sp; k++) { const x = gx + (R() - .5) * cell * .85, z = gz + (R() - .5) * cell * .85; if (okSpot(x, z)) sp = [x, z]; }
+    if (!sp) continue;
+    const r = R(), tier = 1 + TIER_ODDS.filter(o => r >= o).length;
+    dropAdd({ id: "g" + (gi++), type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: sp[0], z: sp[1] });
   }
   for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
 }
@@ -6658,7 +6662,11 @@ function dropsTick(I, dt) {
     if (d.got) { if ((d.back -= dt) <= 0) { d.got = false; d.obj.visible = true; } continue; }
     const far = Math.hypot(d.x - cx, d.z - cz), o = d.obj, U = o.userData;
     o.visible = far < (d.type === "gun" ? 320 : 140);
-    if (U.model) U.model.visible = U.spin.visible = far < 120;
+    if (U.holder) {
+      U.spin.visible = far < 160;
+      if (far < 55 && !U.model) { U.model = gunTemplate(d.kind).clone(true); U.model.visible = true; U.holder.add(U.model); }
+      else if (far > 75 && U.model) { U.holder.remove(U.model); U.model = null; }
+    }
     if (!o.visible) continue;
     const hover = d.type === "gun" ? .55 : d.type === "hp" || d.type === "sh" ? 1.1 : .12, ph = (d.x * 7 + d.z * 3) % 6.28;
     U.spin.position.y = hover + (d.type === "ammo" || d.type === "nade" ? 0 : Math.sin(t * 2 + ph) * .07); U.spin.rotation.y = t * 1.3 + ph;
