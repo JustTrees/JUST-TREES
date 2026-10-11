@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.56</title>
+<title>JUST TREES 1.57</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.56";              // Just Trees 1.56
+const VERSION = "1.57";              // Just Trees 1.57
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3990,7 +3990,7 @@ const HERD = { baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, 
 const BEAST_SCALE = { polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
 const SCORE = { buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
-  coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 3, yeti: 3 };
+  coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5 };
 const BEAST_NAME = { buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
   elephant: "Elephant", giraffe: "Giraffe", zebra: "Zebra", rhino: "Rhino", lion: "Lion", crocodile: "Crocodile", parrot: "Parrot", goat: "Mountain goat", horse: "Wild horse",
   elk: "Elk", moose: "Moose", boar: "Boar", coyote: "Coyote", fox: "Fox", turkey: "Turkey", eagle: "Eagle", caribou: "Caribou", muskox: "Musk ox", arcticfox: "Arctic fox",
@@ -4174,11 +4174,22 @@ function senseTick(dt) {
   sense.calm = moving ? 0 : sense.calm + dt;
   sense.shotT = Math.max(0, sense.shotT - dt);
 }
+const _lf = new THREE.Vector3();
 function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0;
-  for (const A of beasts) { if (A.dead) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
+  camera.getWorldDirection(_lf);
+  for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
+    const dx = A.x - o.x, dy = A.y + 1.4 - o.y, dz = A.z - o.z, d = Math.hypot(dx, dy, dz), aimed = (dx * _lf.x + dy * _lf.y + dz * _lf.z) / d > .994;   // within ~6° of where you look
+    if (d < 900 || (aimed && d < 2600)) A.boltIn = Math.max(.6, d / 700 + .3);       // waits for the bullet: you always get your one shot
+  }
+  for (const A of beasts) { if (A.dead || LEGEND[A.kind]) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
     if (FLY[A.kind]) { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
     if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
+function legendBolt(A) {                                  // Bigfoot / Yeti: sprints off like a runner, arms pumping, and is never seen again on this map
+  A.bolting = true; A.run = 9.5; A.stride = 2.8 * (A.scale || 1); A.swing = .9; A.wary = 99; A.goneT = 9;
+  if (!fleeFar(A, P.x, P.z, A.run, 200, 420)) fleeFrom(A, P.x, P.z, A.run, 10, 120);
+  A.fleeT = 99; A.want = A.run;
+}
 function fleeFrom(A, ox, oz, speed, secs, dist) {         // head directly away, bending round water and cliffs
   const base = Math.atan2(A.x - ox, A.z - oz);
   for (const da of [0, .4, -.4, .8, -.8, 1.2, -1.2, 1.7, -1.7]) for (const dd of [dist, dist * .6, dist * .35]) {
@@ -4225,6 +4236,9 @@ function updateAnimals(dt) {
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
     if (FLY[A.kind]) { updateBird(A, dt, T); A.root.visible = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < far * 1.4; continue; }
+    if (A.gone) { A.root.visible = false; continue; }
+    if (A.boltIn > 0 && (A.boltIn -= dt) <= 0 && !A.dead) legendBolt(A);
+    if (A.bolting && !A.dead && ((A.goneT -= dt) <= 0 || Math.hypot(A.x - P.x, A.z - P.z) > 700)) { A.gone = true; A.root.visible = false; continue; }   // gone
     if (A.dead) {                                         // tips over onto its side and lies still
       A.deadT = Math.min(1, A.deadT + dt * 2.2); const e = A.deadT * A.deadT * (3 - 2 * A.deadT), a = e * Math.PI / 2 * A.side;
       A.root.rotation.set(0, A.yaw, a); A.root.position.set(A.x, A.y + Math.abs(Math.sin(a)) * A.w, A.z); continue;
@@ -4314,8 +4328,8 @@ function updateAnimals(dt) {
       }
     } else if (A.legs.length === 2) {                      // two legs: the turkey, Bigfoot, the Yeti
       A.legs.forEach((l, i) => { const s = i ? 1 : -1; l.rotation.x = l.userData.rest + s * sw; l.userData.knee.rotation.x = l.userData.kneeRest + Math.max(0, s * fl) * .9 * amt; });
-      if (A.arms) A.arms.forEach((a, i) => { a.rotation.x = a.userData.rest - (i ? 1 : -1) * sw * .8; });
-      A.body.position.y = Math.abs(fl) * .04 * amt;
+      if (A.arms) A.arms.forEach((a, i) => { a.rotation.x = a.userData.rest - (i ? 1 : -1) * sw * (A.bolting ? 1.7 : .8); a.userData.knee.rotation.x = A.bolting ? -1.5 : a.userData.kneeRest; });   // sprinting: elbows bent, arms pumping
+      A.body.position.y = Math.abs(fl) * (A.bolting ? .1 : .04) * amt; A.body.rotation.x = A.bolting ? .28 * amt : 0;
     } else A.body.position.y = Math.abs(Math.sin(A.phase)) * .05 * Math.min(1, A.speed * 2);   // seals hump along
     A.head.rotation.x = A.grazeK * A.graze + Math.sin(T * .7 + A.phase) * .04;                  // head down to graze, up to look around
     A.head.rotation.y = (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);
