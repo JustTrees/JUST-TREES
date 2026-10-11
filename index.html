@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.50</title>
+<title>JUST TREES 1.51</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.50";              // Just Trees 1.50
+const VERSION = "1.51";              // Just Trees 1.51
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -343,6 +343,7 @@ const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds 
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
 const CAPTURE = { r: 12, every: 20 };                     // capture point: radius (m), seconds held alone for each point
 const ZONE_SAFE = 15;                                      // VR zone: respawns land at least this far (m) inside the circle the zone is heading to
+const ZONE_LAST = [.1, 18, 55];                           // VR zone: the radius of the last circle = 0.1 × half the map width, kept between 18 and 55 m
 const ZONE_EDGE_MAX = 11;                                  // VR zone: the edge never moves faster than this (m/s), a bit under sprinting (12.5), so you can always outrun it           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
@@ -3151,7 +3152,7 @@ function startZone() {
     const a = rnd() * 6.283, d = Math.sqrt(rnd()) * HALF * .14, x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (H(x, z) > water + 1 || k === 59) { fx = x; fz = z; break; }
   }
-  const plan = VR_ON ? vrZonePlan(rnd, r0, rf) : null;        // in a headset: several stages, each a hold then a shrink, from the host's settings
+  const plan = VR_ON ? vrZonePlan(rnd, r0, Math.max(ZONE_LAST[1], Math.min(ZONE_LAST[2], HALF * ZONE_LAST[0]))) : null;        // in a headset: several stages, each a hold then a shrink, from the host's settings
   const T = plan ? plan.T : { wait: ZONE_WAIT, shrink: [ROUND_SEC - ZONE_WAIT], hold: [] }, circles = plan ? plan.circles : [[0, 0, r0], [fx, fz, rf]], round = plan ? 1e9 : ROUND_SEC;
   let lo = 1e9, hi = -1e9;
   for (let i = 0; i < 20; i++) for (let j = 0; j < 20; j++) { const h = H(-HALF + (i + .5) * S / 20, -HALF + (j + .5) * S / 20); lo = Math.min(lo, h); hi = Math.max(hi, h); }
@@ -5075,10 +5076,10 @@ function vruiParts() {
     uiBg(g, P, "ROUND OVER"); const rows = MP.board || [];
     rows.slice(0, 8).forEach((r, i) => { const y = 170 + i * 62; g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(250, y, 18, 0, 6.283); g.fill();
       g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (MP_COLN[r.c] || "Player") + (r.me ? " (you)" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " pts · " : "") + r.k + " kills · " + r.d + " deaths", 1160, y); });
-    if (!MP.host) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
+    if (mpGuest()) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
   };
-  uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => !MP.host });
-  uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiOpen("setup"), { fs: 40, hide: () => !MP.host });
+  uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => mpGuest() });
+  uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiOpen("setup"), { fs: 40, hide: () => mpGuest() });
   uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
@@ -5128,6 +5129,7 @@ function vruiResume() { vruiClose(); $("pause").classList.add("hidden"); state =
 function vruiDropIn() {                                          // from the little map into the real one, through a quick fade
   if (MP.on && MP.host && gameMode === "pvp" && VRUI.stage === "preview") { mpHostPlay(); return; }   // online: everyone's flags show, then everyone drops in
   if (mpGuest() && VRUI.stage === "preview" && !MP.revealT) return;
+  if (gameMode === "pvp" && VR_ON && VRUI.stage === "preview") pvpRoundStart();   // playing alone (or before anyone joins): the clock still runs
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
 // every frame while a menu is up
@@ -6521,7 +6523,7 @@ function startCapture() {
   let best = null;
   for (let k = 0; k < 500; k++) {
     let x, z;
-    if (Z) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Z[2] * .7; x = Z[0] + Math.cos(a) * d; z = Z[1] + Math.sin(a) * d; }
+    if (Z) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.max(0, Z[2] - CAPTURE.r - 2); x = Z[0] + Math.cos(a) * d; z = Z[1] + Math.sin(a) * d; }
     else { x = (rnd() * 2 - 1) * EDGE * .8; z = (rnd() * 2 - 1) * EDGE * .8; }
     if (!okSpot(x, z)) continue;
     const h = H(x, z); let ring = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ring += H(x + Math.cos(a) * 45, z + Math.sin(a) * 45); } ring /= 8;
@@ -6982,8 +6984,11 @@ function mpRevealStart(list) {                              // everyone's flags 
   }
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
+function pvpRoundStart() {                                   // a fresh round: full health, no scores yet, the round clock set
+  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (set.roundMin || 10) * 60;
+}
 function mpRevealEnd() {                                    // into the real map, each at your own flag
-  MP.revealT = 0; MP.reveal = null; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (set.roundMin || 10) * 60;
+  MP.revealT = 0; MP.reveal = null; pvpRoundStart();
   VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
 function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
@@ -7002,7 +7007,7 @@ function mpGuestStart(o) {
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
-    if (vr.on && VRUI.root) vruiDropIn(); else { vr.placeAt = true; state = "play"; }
+    if (vr.on && VRUI.root) VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); }; else { vr.placeAt = true; state = "play"; }   // joining late keeps the clock the host sent
   }, vr.on ? 350 : 10);
 }
 function mpRecv(o, L) {

@@ -388,3 +388,8 @@ Read this first. It carries over the project, the person, the way we work, and e
 ## 1.50 — lots of guns, spread evenly
 - Guns now sit on a jittered grid: one per square of `LOOT.gunGrid` = 22 + 0.02 × half-width metres (~29 m on medium). Counts: small ~208, medium ~365, XXL ~1600. Tier odds unchanged (50/28/14/6/2%).
 - Performance: each gun on the ground is just its glow (Points) until you're within 55 m; the gun model is cloned from `gunTemplate(kind)` then and removed past 75 m. Scene has fewer objects than 1.49 even with 4–6× the guns.
+
+## 1.51
+- Round clock fix: it only started after the online flag reveal, so playing alone (or as a host before anyone joined) it stayed 0 and the round never ended. Now `pvpRoundStart()` runs on every VR PvP drop-in from the preview (alone too) and from the reveal; late joiners keep the clock the host sent (no longer call vruiDropIn). Round-over buttons show for anyone who isn't a guest (so solo players get New map / Settings).
+- Zone: smaller last circle, `ZONE_LAST` = 0.1 × half-width, kept 18–55 m radius (medium 28 m, was ~61). Capture point now sits fully inside the last circle.
+- Test: dev/test_round.py.
