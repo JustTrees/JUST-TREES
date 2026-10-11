@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.61**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.62**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,13 +39,14 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.60)
+## 4. What exists now (v1.61)
 
 ### World (all modes)
 - **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
 - **Terrain:** heightfield with erosion and rounded summits. `H(x,z)` is the exact surface. Dramatic maps get one landmark from a generator (`makeFeature`: crevasses, canyons, rifts, walls, cliffs, mesas, buttes, terraces, craters, sinkholes, volcanoes in many shapes).
 - **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
-- **The tallest tree and its porch (1.60):** one giant per map, not marked on any map — you have to find it. Its own one-off straight shape (`treeVariant(…, {clearAt, noLean})`), towering over the rest (1.2× the tallest real treetop, at least +9 m). A doughnut wooden deck (planks, rim board, joists, braces into the trunk, no railing) sits 1.5 m above every other treetop, with no branches near it for a clear 360° view. Solid via the rock grid (stand on it; walk or climb under it; animals walk under it). The middle is open: climb the trunk up through it. `PORCH` = {x, z, top, rIn, rOut}. The **only red (5★) sniper** lies on the deck (`gRed`); ground loot never has a red sniper. Test: dev/test_porch.py (give a folder for pictures).
+- **Trunks (1.61):** `trunkNice` — flared base with root buttresses that run into the ground (lobes), 8 sides, same taper; every trunk has a gentle natural bend (`bend(y)` applied to the whole variant, firs straighter than broadleaf). Climbing/head-blocking follow the bend and flare (`treeHit` uses `hold.bend`, `hold.fl`). Far trees keep the 4-sided trunk. (Also fixed: animals were updated twice a frame — they moved at double speed.)
+- **The tallest tree (1.60–1.61):** one per map, not on any map — you find it. Built like the Dramatic landmarks: random features from a seeded roll (`GR`): huge buttressed root base (always), leaning (55%), gnarled bends (40%), a twin crown split above the porch (45%, only when there's room), bark: plain / redwood / silverbark / blackbark (trunk tint), thicker trunk. It gets a name ("Leaning gnarled redwood giant"), shown the first time you step on the porch (wrist in VR, hint on PC). Size: porch at the tallest real treetop + 2.5 m, the giant ≈ 1.65× that, so the porch is ~2/3 up with a real crown above. Its own one-off variant (`treeVariant(…, {giant, clearAt, thick, noLean})`, `giant.ry = 0`). **Porch:** doughnut wooden deck (planks, rim board, joists, braces to the trunk, no railing), centred on the trunk at that height (follows the lean), no leaves in a band from 2.6 m below to 6.5 m above it (clear 360° view), solid via the rock grid (stand on it, walk/climb under it, animals walk under it), open middle to climb through. `PORCH` = {x, z, top, rIn, rOut, name, tree}. The **only red (5★) sniper** lies on the deck (`gRed`); ground loot never has a red sniper. Test: dev/test_porch.py (5 seeds; give a folder for pictures).
 - **Rocks:** boulders, slabs, cliffs, outcrops, logs, bushes on a 1 m height grid (`rockGrid`, `rockTopAt`, `rockAround`). Overhangs work: you can stand under a rock with a gap below it (`rockLow`).
 - **Look and sound:** ACES tone mapping, `grade()` colour shader, valley fog, sky with sun/moon/stars, lightning storms with distance-delayed thunder. All sound is synthesized.
 

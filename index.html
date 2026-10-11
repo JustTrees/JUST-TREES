@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.60</title>
+<title>JUST TREES 1.61</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.60";              // Just Trees 1.60
+const VERSION = "1.61";              // Just Trees 1.61
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1133,6 +1133,17 @@ function trunkLow(r, h, lean) {           // the far-away trunk: four sides
   if (lean) { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = Math.max(0, p.getY(i)) / h; p.setX(i, p.getX(i) + t * t * lean); } }
   return g;
 }
+function trunkNice(r, h, lean, fl, fh, nl, la, S, ph) {   // flared, root-buttressed base (roots carry on into the ground), then the usual taper
+  const ys = [-1.3, -.3, 0, fh * .15, fh * .35, fh * .6, fh * .9, fh * 1.3, h * .3, h * .55, h * .8, h - .3].filter(y => y <= h - .3).sort((a, b) => a - b).filter((y, i, a) => i === 0 || y > a[i - 1] + .04);
+  const pos = [], uv = [], idx = [], W = S + 1;
+  for (let iy = ys.length - 1, row = 0; iy >= 0; iy--, row++) {                       // top to bottom, like a cylinder
+    const y = ys[iy], base = r * (1 - .7 * (y + 1.3) / (h + 1)), F = y < 0 ? fl : fl * Math.pow(Math.max(0, 1 - y / fh), 2.2), cx = lean ? Math.pow(Math.max(0, y) / h, 2) * lean : 0;
+    for (let j = 0; j <= S; j++) { const a = j / S * Math.PI * 2, rr = base * (1 + F * (1 + la * Math.cos(nl * a + ph))); pos.push(Math.sin(a) * rr + cx, y, Math.cos(a) * rr); uv.push(j / S, (y + 1.3) / (h + 1)); }
+  }
+  for (let iy = 0; iy < ys.length - 1; iy++) for (let j = 0; j < S; j++) { const a = iy * W + j, b = (iy + 1) * W + j, c = b + 1, d = a + 1; idx.push(a, b, d, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  return remapV(g, 0, .2);
+}
 function trunk(r, h, lean) {
   const g = remapV(new THREE.CylinderGeometry(r * .3, r, h + 1, 6, 3, true), 0, .2);
   g.translate(0, (h + 1) / 2 - 1.3, 0);                 // trunks continue well below the ground
@@ -1161,7 +1172,7 @@ function deadStubs(parts, hb, up) {        // dead twiggy stubs left on the lowe
   }
 }
 // What a hand can hold on a tree: the tapering trunk and each branch card exactly where it was drawn (tree-local space)
-function holdShape(parts, tr, th, lean) {
+function holdShape(parts, tr, th, lean, ex) {
   const cards = [];
   for (const g of parts) {
     const p = g.attributes.position; if (p.count !== 4) continue;                       // the flat branch cards (tubes have many more points)
@@ -1169,7 +1180,7 @@ function holdShape(parts, tr, th, lean) {
     let y0 = 1e9, y1 = -1e9; for (let i = 0; i < 4; i++) { y0 = Math.min(y0, p.getY(i)); y1 = Math.max(y1, p.getY(i)); }
     cards.push({ o, U, W, uu: U.lengthSq(), ww: W.lengthSq(), N: U.clone().cross(W).normalize(), y0: y0 - .25, y1: y1 + .25 });
   }
-  return { cards, tr, th, lean };
+  return Object.assign({ cards, tr, th, lean }, ex || {});
 }
 // Every variant is built from its own recipe: proportions, droop, gaps, a bare side, scragginess.
 // `pruned` = grown in a crowded stand (bare lower trunk), `odd` = one of the ~10% with a broken, flat or double top.
@@ -1178,7 +1189,7 @@ function treeVariant(kind, pruned, odd, opt) {
   const oddType = odd ? (kind === "palm" ? "dead" : kind === "fir" ? pickS(["broken", "double", "flat"]) : pickS(["broken", "flat"])) : null;
   const gapsOf = () => Array.from({ length: Math.floor(rnd() * 3) }, () => [.1 + rnd() * .75, .04 + rnd() * .08]);
   if (kind === "fir") {
-    Ht = 9.5 + rnd() * 9; tr = .2 + rnd() * .15;
+    Ht = 9.5 + rnd() * 9; tr = .2 + rnd() * .15; if (opt && opt.thick) tr *= opt.thick;
     const form = rnd(); Lmax = lerp(2.2, 5, form) * (.85 + rnd() * .3);              // narrow spire ... broad cone
     const prof = .6 + rnd() * .55, droop = lerp(.4, .95, rnd()), scrag = rnd() < .3 ? .3 + rnd() * .3 : .12;
     hb = pruned ? Math.max(3.2, Ht * (.3 + rnd() * .22)) : .25 + rnd() * .6;
@@ -1215,7 +1226,7 @@ function treeVariant(kind, pruned, odd, opt) {
     if (oddType === "broken") parts.push(shadeGeo(tubeGeo([new THREE.Vector3(0, Ht * topT - .6, 0), new THREE.Vector3(.08, Ht * topT + .6, .05), new THREE.Vector3(.12, Ht * topT + 1.3, .02)], [tr * .32, tr * .22, .03], 4), () => DEADC));
     if (pruned) deadStubs(parts, hb, false);
   } else if (kind === "broad" || kind === "bare") {
-    Ht = 7.5 + rnd() * 6; tr = .26 + rnd() * .16;
+    Ht = 7.5 + rnd() * 6; tr = .26 + rnd() * .16; if (opt && opt.thick) tr *= opt.thick;
     const shape = rnd(); Lmax = lerp(2.6, 5, shape) * (.85 + rnd() * .3);           // tall and narrow ... wide and round
     lean = rnd() < .3 ? (rnd() - .5) * 1.4 : 0; if (opt && opt.noLean) lean = 0;
     const lx = y => { const t = Math.max(0, y) / Ht; return t * t * lean; };
@@ -1250,8 +1261,8 @@ function treeVariant(kind, pruned, odd, opt) {
       const f = card(L, L * .55, Ht - .2 + (rnd() - .5) * .4, k / n * Math.PI * 2 + rnd() * .3, dead ? 1.2 + rnd() * .3 : .15 + rnd() * .8, (rnd() - .5) * .4);
       f.translate(lean, 0, 0); parts.push(shadeCard(f, 4.5, Ht - 1.5, Ht + .5, lx, dead ? [.85, .65, .4] : cardTint(), false));
     }
-    parts.push(shadeGeo(trunk(tr, Ht, lean), () => [.92, .92, .92]));
-    return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true, hold: holdShape(parts, tr, Ht, lean) };
+    parts.push(shadeGeo(trunkNice(tr, Ht, lean, .45, .7, 3, .15, 8, rnd() * 6), () => [.92, .92, .92]));
+    return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true, hold: holdShape(parts, tr, Ht, lean, { fl: .45, fh: .7, la: .15 }) };
   }
   const clr = opt && opt.clearAt && opt.clearAt(Ht);
   if (clr) {                                    // the giant's porch: no branches anywhere near its height, for a clear 360° view
@@ -1259,8 +1270,31 @@ function treeVariant(kind, pruned, odd, opt) {
     const br = parts.slice(ls, le).filter(keep); parts.splice(ls, le - ls, ...br); le = ls + br.length;
     const lo = low.filter(keep); low.length = 0; low.push(...lo);
   }
-  parts.push(shadeGeo(trunk(tr, Ht + .6, lean), () => [.9, .9, .9]));
-  return { geo: mergeUV(parts), geoLow: mergeUV([...low, ...parts.slice(le).filter(g => g.attributes.position.count === 4), shadeGeo(trunkLow(tr, Ht + .6, lean), () => [.9, .9, .9])]), r: tr + .2, h: Ht, pruned, hold: holdShape(parts, tr, Ht + .6, lean) };
+  const G = opt && opt.giant ? opt.giant(Ht) : null, segs = [];
+  const fl = G ? G.flare : .3 + rnd() * .35, fh = G ? G.fh : .9 + rnd() * .8, nl = G ? G.lobes : 4, la = G ? G.lobA : .25 + rnd() * .2;
+  const bamp = G ? G.wob : Ht * (kind === "fir" ? .004 + rnd() * .008 : .01 + rnd() * .02), f1 = .6 + rnd() * .8, f2 = .6 + rnd() * .8, p1 = rnd() * 6.28, p2 = rnd() * 6.28, lv = G ? G.lean : [0, 0];
+  const bend = y => { const t = Math.min(1.3, Math.max(0, y / Ht)); return [bamp * t * Math.sin(t * Math.PI * f1 + p1) + lv[0] * t * t, bamp * t * Math.cos(t * Math.PI * f2 + p2) * .7 + lv[1] * t * t]; };   // trunks are never quite straight
+  const tint = G ? G.tint : [1, 1, 1], tc = (k) => () => [k * tint[0], k * tint[1], k * tint[2]];
+  if (G && G.split && G.split.y < Ht * .98 - 2) {          // the giant splits into a second leader above the porch (when there's room)
+    const y0 = G.split.y, rS = tr * (1 - .7 * (y0 + 1.3) / (Ht + 1.6)) * .8, top = Ht * .98, hz = (top - y0) * .42, ca = Math.cos(G.split.a), sa = Math.sin(G.split.a);
+    const pA = new THREE.Vector3(0, y0, 0), pM = new THREE.Vector3(ca * hz * .55, y0 + (top - y0) * .45, sa * hz * .55), pB = new THREE.Vector3(ca * hz, top, sa * hz);
+    parts.push(shadeGeo(tubeGeo([pA, pM, pB], [rS, rS * .7, .08], 10), tc(.88)));
+    segs.push({ a: [0, y0, 0], b: [pM.x, pM.y, pM.z], ra: rS, rb: rS * .7 }, { a: [pM.x, pM.y, pM.z], b: [pB.x, pB.y, pB.z], ra: rS * .7, rb: .1 });
+    for (let k = 0; k < 12; k++) {                             // its own crown
+      const t = .5 + k / 11 * .5, y = y0 + (top - y0) * t, px = ca * hz * Math.min(1, t * 1.15), pz = sa * hz * Math.min(1, t * 1.15), L = Lmax * (1.05 - t * .6) * (.8 + rnd() * .4);
+      const c = card(L, L * .8, y, k * 2.39996 + rnd() * .6, -.1 - t * .35, (rnd() - .5) * .6).translate(px, 0, pz);
+      if (clr) { c.computeBoundingBox(); if (c.boundingBox.min.y < clr[1]) continue; }   // keep the porch view clear
+      parts.push(shadeGeo(c, () => { const v = .7 + t * .35; return [v, v, v]; }));
+    }
+    for (const a of [0, Math.PI / 2]) parts.push(shadeGeo(card(2.4, 1.6, top, a, -1.3, 0).translate(pB.x, 0, pB.z), () => [1.02, 1.06, .96]));
+  }
+  if (clr) for (let i = parts.length - 1; i >= le; i--) { const g = parts[i]; if (g.attributes.position.count !== 4) continue; g.computeBoundingBox(); const b = g.boundingBox; if (!(b.max.y < clr[0] || b.min.y > clr[1])) parts.splice(i, 1); }
+  parts.push(shadeGeo(trunkNice(tr, Ht + .6, lean, fl, fh, nl, la, G ? 20 : 8, rnd() * 6), tc(.9)));
+  const bendG = g => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const b = bend(p.getY(i)); p.setX(i, p.getX(i) + b[0]); p.setZ(i, p.getZ(i) + b[1]); } return g; };
+  parts.forEach(bendG); low.forEach(bendG);
+  for (const sg of segs) for (const e of [sg.a, sg.b]) { const b = bend(e[1]); e[0] += b[0]; e[2] += b[1]; }
+  return { geo: mergeUV(parts), geoLow: mergeUV([...low, ...parts.slice(le).filter(g => g.attributes.position.count === 4), bendG(shadeGeo(trunkLow(tr, Ht + .6, lean), tc(.9)))]), r: tr + .2, h: Ht, pruned,
+    hold: holdShape(parts, tr, Ht + .6, lean, { fl, fh, la, bend, segs: segs.length ? segs : null }), bend, split: segs.length > 0 };
 }
 
 const phong = (color, extra = {}) => new THREE.MeshPhongMaterial({ color, flatShading: true, shininess: 0, specular: 0x000000, ...extra });
@@ -2638,10 +2672,19 @@ function generate() {
       if (giant.kind === "palm") giant.kind = "broad";                          // palms lean and have no trunk for a porch
       const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
       let maxT = 0; for (const t of allTrees) if (t !== giant) maxT = Math.max(maxT, topOf(kinds[t.kind].vars[t.vi]) * t.s * t.sy);
-      const GT = Math.max(16, maxT * 1.2, maxT + 9), pH = maxT + 1.5;                     // the giant towers over the rest; the porch sits just above every other treetop
-      const gv = treeVariant(giant.kind, true, false, { noLean: true, clearAt: Ht => { const s0 = GT / (Ht + 1.4), y = pH / s0; return [y - 2.6 / s0, y + 4.2 / s0]; } });
+      const pH = maxT + 2.5, GT = Math.max(22, pH * 1.65, maxT + 16); /* the porch about two thirds of the way up */                     // the giant towers over the rest; the porch sits just above every other treetop
+      const GR = mulberry32(seed * 13 + 7), gr = Array.from({ length: 12 }, GR);
+      const lean = gr[0] < .55, gnarl = gr[1] < .4, split = gr[2] < .45, bark = [["", [1, 1, 1]], ["Redwood", [1.18, .8, .66]], ["Silverbark", [1.08, 1.08, 1.12]], ["Blackbark", [.62, .6, .58]]][Math.floor(gr[3] * 4)];
+      const roots = ["Great-rooted", "Ancient", "Old"][Math.floor(gr[11] * 3)];
+      const la = gr[4] * 6.2832, gtrait = Ht => { const s0 = GT / (Ht + 1.4);                // world metres → this variant's units
+        return { flare: 1 + gr[5] * .7, fh: (2.4 + gr[6] * 1.6) / s0, lobes: 5 + Math.floor(gr[7] * 3), lobA: .45 + gr[8] * .25, tint: bark[1],
+          lean: lean ? [Math.cos(la) * GT * (.08 + gr[9] * .08) / s0, Math.sin(la) * GT * (.08 + gr[9] * .08) / s0] : [0, 0], wob: gnarl ? GT * (.012 + gr[10] * .015) / s0 : Ht * .005,
+          split: split ? { y: (pH + 7.5) / s0, a: la + 2.2 } : null }; };
+      const gv = treeVariant(giant.kind, true, false, { noLean: true, thick: 1.45, giant: gtrait, clearAt: Ht => { const s0 = GT / (Ht + 1.4), y = pH / s0; return [y - 2.6 / s0, y + 6.5 / s0]; } });
       kinds[giant.kind].vars.push(gv); recs[giant.kind].push([]); giant.vi = kinds[giant.kind].vars.length - 1;   // its own one-off shape
-      giant.sx = giant.sy = 1; giant.tx = giant.tz = 0; giant.s = GT / topOf(gv); giant.giant = true; giant.porchH = pH; setTreeSize(giant);
+      giant.name = [lean ? "Leaning" : roots, gnarl ? "gnarled" : "", gv.split ? "twin-crowned" : "", bark[0] ? bark[0].toLowerCase() : "", "giant"].filter(Boolean).join(" ");
+      giant.name = giant.name[0].toUpperCase() + giant.name.slice(1);
+      giant.sx = giant.sy = 1; giant.tx = giant.tz = 0; giant.ry = 0; giant.s = GT / (gv.h + 1.4); /* the same scale the clear band was worked out with */ giant.giant = true; giant.porchH = pH; setTreeSize(giant);
     }
   }
   for (const t of allTrees) { recs[t.kind][t.vi].push(t); if (t.ob) { t.ob.t = t; t.hold = kinds[t.kind].vars[t.vi].hold; } }
@@ -2972,6 +3015,7 @@ function generate() {
   if (giant) {
     const gv = kinds[giant.kind].vars[giant.vi], s = giant.s, Ht = gv.h, tr0 = gv.r - .2, yv = giant.porchH / s;
     const trunkAt = y => tr0 * (1 - .7 * (y + 1.3) / (Ht + 1.6)) * s;          // trunk radius at a height (variant units → metres)
+    const ax = y => { const b = gv.bend ? gv.bend(y) : [0, 0]; return [b[0] * s, b[1] * s]; }, a0 = ax(yv), cxP = giant.x + a0[0], czP = giant.z + a0[1];   // where the trunk is at porch height
     const top = giant.y + yv * s, tR = trunkAt(yv), rIn = tR + 1.4, rOut = rIn + 2.6, th = .14;
     const bag = new Bag(), N = 44, pr = mulberry32(seed * 7 + 5);
     const wedge = (r0, r1, a0, a1, y0, y1, col) => {
@@ -2987,18 +3031,18 @@ function generate() {
     for (let i = 0; i < 8; i++) {                                               // joists under the planks, and a brace from each down to the trunk
       const a = i / 8 * 6.2832 + .2, c = Math.cos(a), sn = Math.sin(a);
       bag.seg([c * (rIn - .3), -th - .09, sn * (rIn - .3)], [c * rOut, -th - .09, sn * rOut], .08, .08, 0x5e4630);
-      const yb = -3.2, rb = trunkAt(yv - 3.2 / s) - .05;
-      bag.seg([c * (rIn + 1.5), -th - .15, sn * (rIn + 1.5)], [c * rb, yb, sn * rb], .1, .1, 0x5a4230);
+      const yb = -3.2, rb = trunkAt(yv - 3.2 / s) - .05, ab = ax(yv - 3.2 / s), ox = ab[0] - a0[0], oz = ab[1] - a0[1];
+      bag.seg([c * (rIn + 1.5), -th - .15, sn * (rIn + 1.5)], [c * rb + ox, yb, sn * rb + oz], .1, .1, 0x5a4230);
       bag.seg([c * (rIn - .2), -th - .12, sn * (rIn - .2)], [c * (tR - .05), -th - .5, sn * (tR - .05)], .08, .08, 0x5a4230);   // short arm into the trunk
     }
-    const m = bag.mesh(grade(new THREE.MeshLambertMaterial({ vertexColors: true }))); m.position.set(giant.x, top, giant.z); world.add(m);
-    if (rockGrid) for (let x = Math.floor(giant.x - rOut - 1); x <= giant.x + rOut + 1; x++) for (let z = Math.floor(giant.z - rOut - 1); z <= giant.z + rOut + 1; z++) {
+    const m = bag.mesh(grade(new THREE.MeshLambertMaterial({ vertexColors: true }))); m.position.set(cxP, top, czP); world.add(m);
+    if (rockGrid) for (let x = Math.floor(cxP - rOut - 1); x <= cxP + rOut + 1; x++) for (let z = Math.floor(czP - rOut - 1); z <= czP + rOut + 1; z++) {
       const i = Math.floor(x + HALF), j = Math.floor(z + HALF); if (i < 0 || j < 0 || i >= rockN || j >= rockN) continue;
-      const px = i + .5 - HALF, pz = j + .5 - HALF, d = Math.hypot(px - giant.x, pz - giant.z), k = j * rockN + i;
+      const px = i + .5 - HALF, pz = j + .5 - HALF, d = Math.hypot(px - cxP, pz - czP), k = j * rockN + i;
       if (d >= rIn + .3 && d <= rOut && rockGrid[k] < -1e8) { rockGrid[k] = top; rockLow[k] = top - th - .1; }   // stand on it; walk (or climb) under it
     }
     const ra = pr() * 6.2832;
-    PORCH = { x: giant.x, z: giant.z, top, rIn, rOut, mesh: m, gun: [giant.x + Math.cos(ra) * (rIn + 1.3), giant.z + Math.sin(ra) * (rIn + 1.3)] };
+    PORCH = { x: cxP, z: czP, top, rIn, rOut, mesh: m, gun: [cxP + Math.cos(ra) * (rIn + 1.3), czP + Math.sin(ra) * (rIn + 1.3)], name: giant.name, found: false, tree: giant };
   }
 
   // Grenade pickup at the foot of the tallest tree: walk onto it for 5 grenades
@@ -4929,8 +4973,14 @@ function treeHit(p, t, tolW, trunkOnly) {                  // "trunk", "branches
   const hd = t.hold; if (!hd) return null;
   const l = _hv.copy(p).applyMatrix4(treeInv(t)), tl = tolW / (t.s * (t.sx || 1));
   if (l.y > -1.3 && l.y < hd.th - .3) {
-    const f = (l.y + 1.3) / (hd.th + 1), r = hd.tr * (1 - .7 * f) * .95, c = hd.lean ? Math.pow(Math.max(0, l.y) / hd.th, 2) * hd.lean : 0;
-    if (Math.hypot(l.x - c, l.z) < r + tl) return "trunk";
+    const f = (l.y + 1.3) / (hd.th + 1), F = hd.fl ? (l.y < 0 ? hd.fl : hd.fl * Math.pow(Math.max(0, 1 - l.y / hd.fh), 2.2)) : 0, r = hd.tr * (1 - .7 * f) * .95 * (1 + F * (1 + (hd.la || 0) * .5));
+    let c = hd.lean ? Math.pow(Math.max(0, l.y) / hd.th, 2) * hd.lean : 0, cz = 0; if (hd.bend) { const b = hd.bend(l.y); c += b[0]; cz = b[1]; }
+    if (Math.hypot(l.x - c, l.z - cz) < r + tl) return "trunk";
+  }
+  if (hd.segs) for (const sg of hd.segs) {                   // a split leader
+    const vx = sg.b[0] - sg.a[0], vy = sg.b[1] - sg.a[1], vz = sg.b[2] - sg.a[2], wx = l.x - sg.a[0], wy = l.y - sg.a[1], wz = l.z - sg.a[2];
+    const t = Math.max(0, Math.min(1, (wx * vx + wy * vy + wz * vz) / (vx * vx + vy * vy + vz * vz))), ex = wx - vx * t, ey = wy - vy * t, ez = wz - vz * t;
+    if (ex * ex + ey * ey + ez * ez < (sg.ra + (sg.rb - sg.ra) * t + tl) ** 2) return "trunk";
   }
   if (trunkOnly) return null;
   for (const c of hd.cards) {
@@ -8109,8 +8159,10 @@ function loop(now) {
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
     updateNades(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
     updateCoin(dt, now);
+    if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
+      PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + ".");
+    }
     if ((mapT += dt) > .25) { mapT = 0; reveal(); drawMap($("miniMap")); if (mapOpen) drawMap($("bigMapCanvas")); }
-    updateAnimals(dt);
     updateRunner(dt, now);
     if ((infoT += dt) > .25) {
       infoT = 0;

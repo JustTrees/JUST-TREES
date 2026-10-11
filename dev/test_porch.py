@@ -10,10 +10,10 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         out = []
-        for lat, size in [[45, "medium"], [58, "large"], [12, "small"]]:
-            r = await pg.evaluate("""([lat, size]) => { window.FREEZE = true; D.setVR(true); D.setMode('hunt'); D.set.size = size; D.set.weather = 'clear'; D.set.lat = lat; D.generate(); D.state = 'play';
+        for lat, size, sd in [[45, "medium", 11], [58, "large", 222], [12, "small", 3333], [40, "medium", 44], [50, "small", 505]]:
+            r = await pg.evaluate("""([lat, size, sd]) => { window.FREEZE = true; D.setSeed(sd); D.setVR(true); D.setMode('hunt'); D.set.size = size; D.set.weather = 'clear'; D.set.lat = lat; D.generate(); D.state = 'play';
               const Pc = D.PORCH, o = { lat, porch: !!Pc }; if (!Pc) return o;
-              o.top = +Pc.top.toFixed(1); o.ground = +D.H(Pc.x, Pc.z).toFixed(1);
+              o.top = +Pc.top.toFixed(1); o.name = Pc.name; o.base = +Pc.tree.y.toFixed(1); o.ground = +D.H(Pc.x, Pc.z).toFixed(1);
               // other trees' tops: highest within 300 m
               const T = D.THREE; let other = -1e9, giantTop = 0;
               D.scene.traverse(m => { if (!m.isInstancedMesh) return; });
@@ -26,13 +26,13 @@ async def main():
               const A = D.beasts.find(a => !a.wings && a.kind !== 'monkey'); if (A) { A.y = D.H(Pc.x + Pc.rIn + 1.3, Pc.z); o.animalUnder = +(D.beastGround(A, Pc.x + Pc.rIn + 1.3, Pc.z) - A.y).toFixed(2); }
               // zoom steps by stars
               o.steps = [1, 2, 3, 4, 5].map(st => { D.setLoot({ hunt: st, pistol: 1 }); D.vr.gunKind = 'hunt'; return D.scopeFovs().length; });
-              return o; }""", [lat, size])
+              return o; }""", [lat, size, sd])
             # clear view: no branch geometry of the giant near porch height (beyond the trunk)
             r2 = await pg.evaluate("""() => { const Pc = D.PORCH; if (!Pc) return null; const T = D.THREE; let n = 0, other = 0, m4 = new T.Matrix4(), v = new T.Vector3();
               D.scene.traverse(m => { if (!m.isInstancedMesh || !m.geometry.attributes.position) return;
-                for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, m4); const px = m4.elements[12], pz = m4.elements[14]; const dd = Math.hypot(px - Pc.x, pz - Pc.z);
+                for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, m4); const px = m4.elements[12], pz = m4.elements[14]; const dd = Math.hypot(px - (Pc.tree ? Pc.tree.x : Pc.x), pz - (Pc.tree ? Pc.tree.z : Pc.z));
                   if (dd < .5) { const P = m.geometry.attributes.position; for (let k = 0; k < P.count; k += 3) { v.fromBufferAttribute(P, k).applyMatrix4(m4); const r = Math.hypot(v.x - Pc.x, v.z - Pc.z); if (v.y > Pc.top - .3 && v.y < Pc.top + 3 && r > Pc.rIn - .2 && r < 30) n++; } }
-                  else if (dd < 250) { const sy = Math.hypot(m4.elements[4], m4.elements[5], m4.elements[6]); other = Math.max(other, m4.elements[13] + sy * (m.geometry.boundingBox || (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).max.y - D.H(px, pz)); } } });
+                  else if (dd < 250) { const sy = Math.hypot(m4.elements[4], m4.elements[5], m4.elements[6]); other = Math.max(other, m4.elements[13] + sy * (m.geometry.boundingBox || (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).max.y - m4.elements[13]); } } });
               return { branchVertsInView: n, tallestOtherTop: +other.toFixed(1) }; }""")
             r.update(r2 or {}); out.append(r)
             if SHOTS and lat == 45:
@@ -47,7 +47,7 @@ async def main():
                     open(os.path.join(SHOTS, name + ".jpg"), "wb").write(base64.b64decode(img.split(",", 1)[1]))
         print(json.dumps(out))
         ok = all(o["porch"] and abs(o["standOnDeck"] - o["top"]) < .05 and o["underDeck"] and o["holeOpen"] and o["redSnipers"] == 1 and o["redOnDeck"] and o.get("animalUnder", 0) < .5
-                 and o["steps"] == [1, 2, 3, 4, 5] and o["branchVertsInView"] == 0 and o["top"] - o["ground"] > o["tallestOtherTop"] for o in out)
+                 and o["steps"] == [1, 2, 3, 4, 5] and o["branchVertsInView"] == 0 and o["top"] - o["base"] > o["tallestOtherTop"] for o in out)
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
