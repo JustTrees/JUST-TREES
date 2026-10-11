@@ -434,3 +434,18 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Flyers (`FLY`): big bird, eagle, snowy owl circle like before (`buildBird(r, cols)`); parrots fly in small fast flapping flocks, lower down.
 - Spawning goes a round at a time over the biome list (`spawnKind`), so every kind shows up before the animal cap. `HERD` kinds keep their group together. New SCORE / BEAST_NAME / NATIVE entries.
 - Test: dev/test_zoo.py (every biome spawns all its kinds, nothing broken; lineup shots with a shot dir).
+
+## Plan (notes only, Oct 11): animal walking, habitat map, falling, legends
+- Clumping, likely causes: (1) `lureTarget` — when you stand still, every animal within 260 m walks toward a ring around you, so they bunch up; (2) after a shot, `fleeFar` sends everything the same way to similar spots; (3) wandering `home` drifts to wherever they end up, so over time they pile into the same open patches.
+- Fix ideas: each animal/herd keeps its own home area and spacing from other groups; lure only pulls the few closest, slowly; fleeing spreads out (different headings, own new home); walking at real pace with stops, not constant shuffling.
+- Habitat map built at generate: tag the land into zones — open grass/savanna, forest edge, deep forest, water edge, high rocky ground, snow fields. Each kind has places it likes:
+  - Open: zebra, horse, giraffe, elephant, caribou, musk ox, rhino, lion (near herds).
+  - Forest edge: buck, elk, turkey, fox, coyote, boar.
+  - Deep forest: bear, moose (near water), panther, monkeys, Bigfoot.
+  - Water edge: crocodile, seal, moose, polar bear, elephants come to drink.
+  - High rocks / cliffs: mountain goat, eagles circle over them.
+  - Snow: arctic fox, owl, Yeti.
+  - Daily rhythm (later?): drink at water, graze in open, rest in cover.
+  - Goal: scan with binos and read the land — "that meadow by the lake should have horses".
+- Falling: tip sideways, and when it hits the ground the legs go limp (fold down/relax toward the ground, no stiff legs sticking up); head drops.
+- Bigfoot/Yeti: only on XL and XXL maps, still rare (maybe not every map). Mysterious: sometimes follows you at a far distance (100–250 m), stops when you look/scope at it, slips behind trees, never comes close, vanishes if you push toward it.
