@@ -14,7 +14,7 @@ async def main():
         r = await pg.evaluate("""() => { window.FREEZE = true; const out = {};
           for (const [name, lat] of [['tropical', 10], ['temperate', 42], ['boreal', 56], ['tundra', 67], ['polar', 80]]) {
             D.setMode('hunt'); D.set.size = 'medium'; D.set.weather = 'clear'; D.set.lat = lat; D.set.month = 6; D.set.rough = .6; D.generate(); D.state = 'play';
-            const want = D.NATIVE[name].map(k => k[0]), count = {};
+            const want = D.NATIVE[name].map(k => k[0]).filter(k => !D.LEGEND[k]), count = {};
             for (const A of D.beasts) count[A.kind] = (count[A.kind] || 0) + 1;
             for (let i = 0; i < 600; i++) D.updateAnimals(1 / 30);
             const bad = D.beasts.filter(A => !isFinite(A.x + A.y + A.z)).map(A => A.kind);

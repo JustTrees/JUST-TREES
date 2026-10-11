@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.57</title>
+<title>JUST TREES 1.58</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.57";              // Just Trees 1.57
+const VERSION = "1.58";              // Just Trees 1.58
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4079,6 +4079,61 @@ function updateMonkey(A, dt, T) {
   const vis = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < beastDraw();
   A.root.visible = vis; A.root.position.set(A.x, A.y - (A.to ? 1.1 : .35), A.z); A.root.rotation.set(0, A.yaw, 0);
 }
+/* ---- where animals like to live (1.58): a coarse habitat grid, built when the animals spawn ----
+   Each kind has favourite ground and a couple of home ranges on the map, so different parts of a map hold different animals.
+   It's a liking, not a wall: they can wander or run anywhere. Kinds not in PREF (bears, wolves, rabbits…) roam everywhere. */
+// [open grass, forest edge, deep forest, water's edge, high ground]
+const PREF = {
+  zebra: [1, .4, 0, .3, 0], horse: [1, .5, 0, .3, .1], giraffe: [.9, .7, .1, .2, 0], elephant: [.8, .6, .3, .8, 0], rhino: [.9, .5, .1, .5, 0], lion: [.9, .6, .1, .3, 0],
+  caribou: [1, .4, .1, .3, .2], muskox: [1, .3, 0, .2, .3], buck: [.4, 1, .5, .3, 0], elk: [.5, 1, .5, .3, .2], turkey: [.4, 1, .4, .2, 0], fox: [.6, 1, .4, .2, .1],
+  coyote: [.8, .8, .3, .2, .1], boar: [.2, .8, 1, .4, 0], moose: [.2, .6, .9, 1, 0], panther: [.1, .6, 1, .3, .3], baboon: [.7, .8, .4, .3, .3],
+  crocodile: [0, 0, 0, 1, 0], goat: [0, .1, 0, 0, 1], arcticfox: [1, .6, .2, .3, .4], polar: [.4, .2, 0, 1, 0]
+};
+const HAB = { cell: 24, n: 0, g: null, ranges: {}, homes: [], gid: 0, flee: 0, top: {} };
+function habInit(peak) {
+  const c = HAB.cell, n = HAB.n = Math.ceil(S / c) + 1, g = HAB.g = new Float32Array(n * n * 5), span = Math.max(1, peak - water);
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const x = -HALF + i * c, z = -HALF + j * c, h = H(x, z), o = (i * n + j) * 5; if (h < water + .2) continue;
+    let trees = 0; const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = obstacles.get((cx + a) + "," + (cz + b)); if (L) for (const t of L) if (t.tr !== undefined) trees++; }
+    const forest = smooth(5, 12, trees), open = 1 - smooth(1, 4, trees);
+    g[o] = open; g[o + 1] = smooth(1, 4, trees) * (1 - smooth(7, 14, trees)); g[o + 2] = forest;
+    g[o + 3] = nearWater(x, z) ? 1 : 0; g[o + 4] = Math.max(smooth(.45, .75, (h - water) / span), 1 - smooth(.66, .82, slopeNy(x, z)));
+  }
+  HAB.ranges = {}; HAB.homes = []; HAB.gid = 0;
+  for (const k in PREF) HAB.ranges[k] = [0, 1].map(() => [(Math.random() * 2 - 1) * HALF * .75, (Math.random() * 2 - 1) * HALF * .75]);
+  HAB.top = {}; for (const k in PREF) { let t = .05; for (let q = 0; q < 400; q++) t = Math.max(t, animalLike(k, (Math.random() * 2 - 1) * HALF * .95, (Math.random() * 2 - 1) * HALF * .95)); HAB.top[k] = t; }
+}
+const likeN = (kind, x, z) => Math.min(1, animalLike(kind, x, z) / (HAB.top[kind] || 1));   // compared with the best this map has for it
+function animalLike(kind, x, z) {                          // 0..1: how much this kind likes this spot
+  const p = PREF[kind]; if (!p || !HAB.g) return 1;
+  const n = HAB.n, i = Math.max(0, Math.min(n - 1, Math.round((x + HALF) / HAB.cell))), j = Math.max(0, Math.min(n - 1, Math.round((z + HALF) / HAB.cell))), o = (i * n + j) * 5;
+  let best = 0; for (let k = 0; k < 5; k++) best = Math.max(best, p[k] * HAB.g[o + k]);
+  const R = Math.max(120, HALF * .5); let rb = 0; for (const [rx, rz] of HAB.ranges[kind] || []) rb = Math.max(rb, Math.exp(-((x - rx) ** 2 + (z - rz) ** 2) / (R * R)));
+  return (.12 + .88 * best) * (.3 + .7 * rb);
+}
+// standing still: now and then a group that's far away and out of sight turns up somewhere around you (not in a ring, never in view); moving around, nothing new turns up
+const appear = { t: 12 };
+function appearTick(dt) {
+  if (sense.calm < 15) { appear.t = Math.max(appear.t, 8); return; }
+  if ((appear.t -= dt) > 0) return;
+  appear.t = Math.max(10, 35 - sense.calm / 12) * (.7 + Math.random() * .6);
+  const ground = A => !A.dead && !A.gone && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && !LEGEND[A.kind];
+  camera.getWorldDirection(_lf); const seen = (x, z, d) => d < beastDraw() && ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (d * Math.hypot(_lf.x, _lf.z) || 1) > .55;
+  const R = Math.min(380, HALF * .6); let near = 0, all = 0; for (const A of beasts) if (ground(A)) { all++; if (Math.hypot(A.x - P.x, A.z - P.z) < R) near++; }
+  if (near >= Math.max(14, all * .45)) return;                                  // plenty around already
+  const far = beasts.filter(A => { if (!ground(A)) return false; const d = Math.hypot(A.x - P.x, A.z - P.z); return d > R && !seen(A.x, A.z, d); });
+  if (!far.length) return;
+  const lead = far[Math.floor(Math.random() * far.length)], grp = beasts.filter(A => A.grp === lead.grp && ground(A));
+  for (let k = 0; k < 60; k++) {
+    const a = Math.random() * 6.283, r = 90 + Math.random() * (R - 90), x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+    if (seen(x, z, r) || !targetOk(lead, x, z) || Math.random() > likeN(lead.kind, x, z) + (k > 40 ? .5 : 0)) continue;
+    if (beasts.some(A => !A.dead && !A.wings && !grp.includes(A) && Math.hypot(A.x - x, A.z - z) < 45)) continue;   // not on top of another group
+    for (const A of grp) { const px = x + (Math.random() - .5) * 10, pz = z + (Math.random() - .5) * 10, ok = targetOk(A, px, pz);
+      A.x = ok ? px : x; A.z = ok ? pz : z; A.y = beastGround(A, A.x, A.z); A.home = [x, z]; A.mode = "idle"; A.timer = 2 + Math.random() * 6; A.trek = false; A.fleeT = 0; A.speed = 0; }
+    return;
+  }
+}
 function animalSpot(minFromPlayer, ok, extra) {
   for (let k = 0; k < 300; k++) {
     const x = (Math.random() * 2 - 1) * (EDGE - 10), z = (Math.random() * 2 - 1) * (EDGE - 10);
@@ -4090,7 +4145,7 @@ function animalSpot(minFromPlayer, ok, extra) {
 function beastGround(A, x, z) { const g = groundY(x, z); return A.kind === "seal" && iced ? Math.max(g, water) : g; }
 function targetOk(A, x, z) {                            // somewhere it could stand (trees and logs are handled while walking)
   if (A.kind === "seal") return sealOk(x, z);
-  return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4 && slopeNy(x, z) > .72;
+  return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4;   // any slope: they can climb
 }
 function trunkNear(x, z, pad) {                            // trees and other solid things it must go round
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
@@ -4101,7 +4156,7 @@ function trunkNear(x, z, pad) {                            // trees and other so
   return false;
 }
 function walkable(A, x, z) {                              // logs and small rocks: step over them; trees and big boulders: go round
-  return targetOk(A, x, z) && !trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < A.step;
+  return targetOk(A, x, z) && !trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < Math.max(2.5, A.step * 2);   // only big boulders and cliff rocks turn them
 }
 function addGround(kind, x, z, home) {
   const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
@@ -4133,17 +4188,21 @@ function spawnKind(kind, grp, peak) {
   const ok = kind === "seal" ? sealOk : okSpot;
   const extra = kind === "polar" ? nearWater : kind === "crocodile" ? (x, z) => nearWater(x, z) && H(x, z) < water + 4
               : kind === "goat" ? (x, z) => H(x, z) > water + (peak - water) * .5 : null;
-  const s = animalSpot(LEGEND[kind] ? 150 : kind === "rabbit" ? 25 : 45, ok, extra); if (!s) return;
+  const apart = kind === "rabbit" ? 20 : 55, like = (x, z) => (!extra || extra(x, z)) && Math.random() < likeN(kind, x, z) && !HAB.homes.some(h => Math.hypot(h[0] - x, h[1] - z) < apart);
+  const s = animalSpot(LEGEND[kind] ? 150 : kind === "rabbit" ? 25 : 45, ok, like); if (!s) return;
+  HAB.homes.push(s); const gid = ++HAB.gid;
   if (grp) {                                                 // packs, herds and troops stay together
     const home = [s[0], s[1]], m = grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1)), sp = kind === "elephant" || kind === "giraffe" ? 16 : 8;
-    for (let j = 0; j < m; j++) { const x = s[0] + (Math.random() - .5) * sp, z = s[1] + (Math.random() - .5) * sp; if (ok(x, z)) addGround(kind, x, z, home); }
-  } else addGround(kind, s[0], s[1]);
+    for (let j = 0; j < m; j++) { const x = s[0] + (Math.random() - .5) * sp, z = s[1] + (Math.random() - .5) * sp; if (ok(x, z)) addGround(kind, x, z, home).grp = gid; }
+  } else addGround(kind, s[0], s[1]).grp = gid;
 }
 function spawnAnimals() {
   clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
   const k = Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
-  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? 1 : n(base) }));
+  habInit(peak); appear.t = 12;
+  const bigMap = set.size === "xl" || set.size === "xxl";
+  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap && Math.random() < .5 ? 1 : 0) : n(base) }));
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
     for (const p of plan) { if (p.left <= 0 || beasts.length >= BEAST_CAP) continue; p.left--; more = true; spawnKind(p.kind, p.grp, peak); }
@@ -4154,7 +4213,7 @@ function spawnAnimals() {
 function pickAnimalTarget(A) {
   for (let k = 0; k < 20; k++) {
     const a = Math.random() * 6.283, d = (A.kind === "seal" ? 1.5 : 5) + Math.random() * A.range, x = A.home[0] + Math.cos(a) * d, z = A.home[1] + Math.sin(a) * d;
-    if (targetOk(A, x, z)) return [x, z];
+    if (targetOk(A, x, z) && (k > 14 || Math.random() < likeN(A.kind, x, z) + .15)) return [x, z];      // drawn to the ground it likes
   }
   return null;
 }
@@ -4175,7 +4234,7 @@ function senseTick(dt) {
   sense.shotT = Math.max(0, sense.shotT - dt);
 }
 const _lf = new THREE.Vector3();
-function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0;
+function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0; HAB.flee++;
   camera.getWorldDirection(_lf);
   for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
     const dx = A.x - o.x, dy = A.y + 1.4 - o.y, dz = A.z - o.z, d = Math.hypot(dx, dy, dz), aimed = (dx * _lf.x + dy * _lf.y + dz * _lf.z) / d > .994;   // within ~6° of where you look
@@ -4204,7 +4263,7 @@ function lineOk(A, x0, z0, x1, z1) {
   return true;
 }
 function fleeFar(A, ox, oz, speed, dMin, dMax) {
-  const base = Math.atan2(A.x - ox, A.z - oz);
+  const base = Math.atan2(A.x - ox, A.z - oz) + (hash1((A.grp || 0) * 7.31 + HAB.flee * 1.7) - .5) * 1.8;   // its own line away, shared by its herd
   for (const dd of [dMax, (dMin + dMax) / 2, dMin, dMin * .6, dMin * .35]) for (const da of [0, .35, -.35, .7, -.7, 1.05, -1.05, 1.5, -1.5, 2, -2]) {
     const h = base + da + (Math.random() - .5) * .25, x = A.x + Math.sin(h) * dd, z = A.z + Math.cos(h) * dd;
     if (!targetOk(A, x, z) || !lineOk(A, A.x, A.z, x, z)) continue;
@@ -4221,17 +4280,9 @@ function unstick(A) {
   }
   return false;
 }
-function lureTarget(A) {                                  // a still hunter: drift closer, but keep a comfort distance that shrinks with time
-  const comfort = lerp(80, 3, smooth(40, 300, sense.calm)), d = Math.hypot(A.x - P.x, A.z - P.z);
-  if (d > 260 || d < comfort + 5) return null;
-  const pass = sense.calm > 300 && Math.random() < .5;     // after ~5 minutes they may wander right past you
-  const a = Math.atan2(A.x - P.x, A.z - P.z) + (Math.random() - .5) * (pass ? 2.4 : .9), r = pass ? comfort + 4 + Math.random() * 6 : Math.max(comfort, d * .55) + Math.random() * 12;
-  const x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
-  return targetOk(A, x, z) ? [x, z] : null;
-}
 function updateAnimals(dt) {
   if (!animalGroup) return;
-  senseTick(dt);
+  senseTick(dt); appearTick(dt);
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -4239,10 +4290,7 @@ function updateAnimals(dt) {
     if (A.gone) { A.root.visible = false; continue; }
     if (A.boltIn > 0 && (A.boltIn -= dt) <= 0 && !A.dead) legendBolt(A);
     if (A.bolting && !A.dead && ((A.goneT -= dt) <= 0 || Math.hypot(A.x - P.x, A.z - P.z) > 700)) { A.gone = true; A.root.visible = false; continue; }   // gone
-    if (A.dead) {                                         // tips over onto its side and lies still
-      A.deadT = Math.min(1, A.deadT + dt * 2.2); const e = A.deadT * A.deadT * (3 - 2 * A.deadT), a = e * Math.PI / 2 * A.side;
-      A.root.rotation.set(0, A.yaw, a); A.root.position.set(A.x, A.y + Math.abs(Math.sin(a)) * A.w, A.z); continue;
-    }
+    if (A.dead) { deadPose(A, dt); continue; }
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const pd = Math.hypot(A.x - P.x, A.z - P.z);
     const sR = sense.R * (A.wary || 1);                     // the legends notice you from further off
@@ -4252,17 +4300,13 @@ function updateAnimals(dt) {
       else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, P.x, P.z, sp, 70, 160)) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
       else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k);
     }
-    if (!(A.fleeT > 0) && sense.calm > 40 && (A.lureT = (A.lureT || Math.random() * 6) - dt) <= 0) {
-      A.lureT = 5 + Math.random() * 6;
-      const t = lureTarget(A); if (t) { A.mode = "walk"; A.target = t; A.want = A.walk; A.timer = 40; A.home = t; A.steerT = 0; }
-    }
     if (A.mode !== "walk" && A.timer <= 0) {
       const t = pickAnimalTarget(A);
       if (t && Math.random() < .75) { A.mode = "walk"; A.target = t; A.want = Math.random() < .12 ? A.run * .7 : A.walk; A.timer = 25; A.steerT = 0; }
       else { A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = (A.hop ? 1 : 3) + Math.random() * (A.hop ? 3 : 8); }
     } else if (A.mode === "walk" && (A.timer <= 0 || Math.hypot(A.target[0] - A.x, A.target[1] - A.z) < 1.5)) {
       A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = 3 + Math.random() * 9; A.trek = false;   // arrived: settle down here
-      if (!HERD[A.kind] && Math.random() < .4) A.home = [A.x, A.z];        // wanders on across the map over time
+      if (!HERD[A.kind] && Math.random() < .4 * likeN(A.kind, A.x, A.z)) A.home = [A.x, A.z];        // wanders on across the map over time
     }
     if (HERD[A.kind] && A.mode === "walk" && Math.random() < dt * .02) A.home = [A.home[0] + (Math.random() - .5) * 30, A.home[1] + (Math.random() - .5) * 30];   // the troop drifts
     let want = 0;
@@ -4334,6 +4378,18 @@ function updateAnimals(dt) {
     A.head.rotation.x = A.grazeK * A.graze + Math.sin(T * .7 + A.phase) * .04;                  // head down to graze, up to look around
     A.head.rotation.y = (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);
   }
+}
+function deadPose(A, dt) {                                 // falls over sideways, and once it hits the ground the legs and head go limp
+  if (!A.deathPose) { A.deathPose = A.legs.concat(A.arms || []).map(l => [l.rotation.x, l.userData.knee.rotation.x, (Math.random() - .5) * .9, .4 + Math.random() * .8]); A.limpT = 0; A.body.rotation.x = 0; A.body.position.y = 0; A.head0 = A.head.rotation.x; }
+  A.deadT = Math.min(1, A.deadT + dt * 2.4); const e = A.deadT * A.deadT, a = e * Math.PI / 2 * .93 * A.side;      // speeds up as it topples, like a real fall
+  if (A.deadT >= 1) A.limpT = Math.min(1, A.limpT + dt * 2.2);
+  const L = A.limpT * A.limpT * (3 - 2 * A.limpT), bounce = A.deadT >= 1 ? Math.sin(Math.min(1, A.limpT * 2.5) * Math.PI) * .04 : 0;
+  A.root.rotation.set(0, A.yaw, a + bounce * A.side); A.root.position.set(A.x, A.y + Math.abs(Math.sin(a)) * A.w * (1 - .12 * L), A.z);
+  A.legs.concat(A.arms || []).forEach((l, i) => {
+    const [h0, k0, hr, kr] = A.deathPose[i], up = l.position.x * A.side > 0;                       // legs on the top side flop down over the body, the bottom ones lie flat
+    l.rotation.x = h0 + (l.userData.rest + hr - h0) * L; l.rotation.z = -A.side * (up ? .55 : .2) * L; l.userData.knee.rotation.x = k0 + (l.userData.kneeRest + kr - k0) * L;
+  });
+  A.head.rotation.x = A.head0 + (.25 - A.head0) * L; A.head.rotation.z = -A.side * .35 * L;
 }
 function updateBird(A, dt, T) {
   if (A.dead) {

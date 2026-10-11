@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.58**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.59**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,7 +39,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.57)
+## 4. What exists now (v1.58)
 
 ### World (all modes)
 - **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
@@ -51,7 +51,11 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 ### Animals (Hunting)
 - **32 kinds**, native per biome (`NATIVE`): buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, monkeys, big birds, plus (1.55) elephant, giraffe, zebra, rhino, lion, crocodile, parrots, mountain goat, wild horse, elk, moose, boar, coyote, fox, turkey, eagle, caribou, musk ox, arctic fox, snowy owl, and the legends Bigfoot and Yeti.
 - Built from code (legs have rounded haunches and knees, 1.56): `buildQuad(r, QSPEC[kind])` makes most four-legged animals from a spec; separate builders for buck, bear, wolf (also coyote/fox/arctic fox), turkey, Bigfoot/Yeti (`buildApe`), birds (`buildBird` with colours), monkeys.
-- Behaviour (`updateAnimals`): wander, graze, notice your movement and ease away or bolt; a shot empties the area (`fleeFar`); stuck animals squeeze free (`unstick`); standing still slowly draws them in (`lureTarget`). Birds circle; parrots fly in flocks; monkeys swing through trees.
+- **Where they live (1.58, Ron: "a natural world with some tweaks"):** `habInit` builds a 24 m habitat grid at spawn (open, forest edge, deep forest, water's edge, high ground). `PREF[kind]` = what each kind likes; each also gets 2 home ranges per map, so different parts of a map hold different animals (explore to find them). `likeN` = liking compared with the best spot on this map. It's a liking, not a wall: bears, wolves, rabbits etc. roam everywhere, and anything can run anywhere.
+- **Movement:** no slope limit (they climb anything; only big boulders/cliff rocks turn them), so they don't get stuck or bunch up. Groups spawn ≥55 m apart. Wander targets favour liked ground. A shot: each herd/loner flees on its own line (`HAB.flee`), not all the same way. Stuck animals squeeze free (`unstick`).
+- **No gathering round you.** Standing still, `appearTick` every ~10–35 s moves a far, out-of-sight group to liked ground 90–380 m around you (never in view, not in a ring, never on top of another group); stops when plenty are already near. Moving around, nothing new turns up.
+- **Falling (`deadPose`):** topples sideways (speeding up), then the legs and head go limp on the ground.
+- **Legends:** only on XL/XXL maps, on half of them.
 - Scoring: a hit is a kill (tip over, bing, no blood); points = distance × `SCORE[kind]` (big easy animals low, small/flying high, legends 5).
 - **One shot at a legend (1.57):** any shot within 900 m of Bigfoot/Yeti (or aimed at one, up to 2.6 km) makes it wait until the bullet lands (`boltIn`, so the shot is always fair), then sprint off like a runner, leaning, elbows bent, arms pumping (`legendBolt`), and vanish for the rest of the map (`A.gone`). Back only on a new map. Test: dev/test_legend.py.
 
@@ -117,19 +121,9 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 7. Next up and backlog
 
-### Next: animal walking and where they live (Ron, Oct 11 — build this)
-- **They clump.** Likely causes: when you stand still, every animal within 260 m walks to a ring around you (`lureTarget`); after a shot they all flee the same way to similar spots (`fleeFar`); wandering homes drift into the same open patches.
-  - Fix: each herd keeps its own home area and spacing from other groups; only the nearest few drift toward you, slowly; fleeing spreads out in different directions; real walking pace with pauses.
-- **Habitat map** built at generate, so you can scan with binoculars and read the land ("that meadow by the lake should have horses"):
-  - Open grass: zebra, horse, giraffe, elephant, rhino, caribou, musk ox, lions near the herds.
-  - Forest edge: buck, elk, turkey, fox, coyote, boar.
-  - Deep forest: bear, panther, monkeys, moose.
-  - Water edge: crocodile, seal, polar bear; moose and elephants come to drink.
-  - High rocks: mountain goats, eagles circling above.
-  - Snow: arctic fox, snowy owl.
-- **Falling:** tip sideways; when it hits the ground the legs go limp and the head drops — no stiff legs sticking up.
-- **Bigfoot and Yeti:** only on XL and XXL maps, still rare. Mysterious: sometimes follow you at 100–250 m, freeze when you look, slip behind trees, vanish if you walk toward them, never come close.
-- Open questions asked: how often legends show up (most XL/XXL maps or ~1 in 3); whether animals get a daily routine (drink in the morning, rest in cover at midday).
+### Next ideas (not built)
+- Bigfoot/Yeti mysterious behaviour: sometimes follow you at 100–250 m, freeze when you look, slip behind trees, vanish if you walk toward them, never come close.
+- Maybe a daily routine for animals (drink in the morning, rest in cover at midday) — asked, no answer yet.
 
 ### Offered, not asked for yet
 - Hit boxes on players: legs below ~0.3 m above the feet can't be hit; the body capsule sits under the head instead of the drawn body; arms can't be hit.
