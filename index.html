@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.52</title>
+<title>JUST TREES 1.53</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.52";              // Just Trees 1.52
+const VERSION = "1.53";              // Just Trees 1.53
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4199,7 +4199,8 @@ function bing() {
 /* ---------------- VR (WebXR): head and hands tracked, a two-handed rifle, lens scopes, wrist HUD ---------------- */
 const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gunOut: true, two: false, scoped: false, binos: false, zoom: 0, kick: 0,
   prev: {}, mark: null, markT: 0, wristT: 0, avatar: null, gun: null, gunKind: "", head: new THREE.Vector3(0, 1.6, 0), headQ: new THREE.Quaternion(), gp: new THREE.Vector3(), gq: new THREE.Quaternion(),
-  readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6 };
+  readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6, hOff: 0, hCal: false };
+try { const hs = parseFloat(localStorage.getItem("jt-height-off")); if (isFinite(hs)) vr.hOff = hs; } catch (_) {}
 const scopeFovs = () => ZOOM_FOV[vr.gunKind === "hunt" ? "hunt" : "pvp"].slice(1);      // the same zoom steps as the PC scope
 const XRV = { ok: false };
 renderer.xr.enabled = true;
@@ -4339,15 +4340,15 @@ function vrTick(dt) {
   vr.head.copy(I.head); vr.headQ.copy(I.headQ);
   // where the head is in the play space, before this frame's movement
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
-  const hl = [dx * cy - dz * sy, I.head.y - vr.oy, dx * sy + dz * cy];      // rotate by -yaw
+  const hl = [dx * cy - dz * sy, I.head.y - vr.oy + vr.hOff, dx * sy + dz * cy];      // rotate by -yaw (height: your eyes above your feet in the game, after the height setting)
   if (vr.placeAt) {
     vr.placeAt = false; vr.goodX = undefined;
     const nh = new THREE.Vector3(P.x, P.y + hl[1], P.z), d = nh.clone().sub(I.head);
     I.head.copy(nh); for (const k in I.hands) { I.hands[k].pos.add(d); I.hands[k].rayPos.add(d); }
-    const c0 = Math.cos(vr.yaw), s0 = Math.sin(vr.yaw); vr.ox = P.x - (hl[0] * c0 + hl[2] * s0); vr.oz = P.z - (-hl[0] * s0 + hl[2] * c0); vr.oy = P.y;
+    const c0 = Math.cos(vr.yaw), s0 = Math.sin(vr.yaw); vr.ox = P.x - (hl[0] * c0 + hl[2] * s0); vr.oz = P.z - (-hl[0] * s0 + hl[2] * c0); vr.oy = P.y + vr.hOff;
   }
   vr.headLocalY = hl[1];
-  vr.stand = Math.max(1.2, Math.max(vr.stand - dt * .01, hl[1]));            // standing height, learned as you stand up straight
+  vr.stand = vr.hCal ? EYE : Math.max(1.2, Math.max(vr.stand - dt * .01, hl[1]));   // standing height: set by the height check (sitting counts as standing), else learned as you stand up straight
   vr.crouchK += (Math.max(0, Math.min(1, (vr.stand - hl[1]) / (vr.stand * .35))) - vr.crouchK) * Math.min(1, dt * 8);
   P.crouch = vr.crouchK > .45 && gameMode !== "hike"; P.ck = 0;            // crouch for real
   const fwd = _v1.set(0, 0, -1).applyQuaternion(I.headQ); P.yaw = Math.atan2(-fwd.x, -fwd.z); P.pitch = 0;
@@ -4468,7 +4469,7 @@ function vrAfterMove(dt) {                                // carry the play spac
   const hx = dx * cy - dz * sy, hz = dx * sy + dz * cy;                    // head in the play space
   vr.yaw += vr.pendTurn || 0;
   const c2 = Math.cos(vr.yaw), s2 = Math.sin(vr.yaw);
-  vr.ox = P.x - (hx * c2 + hz * s2); vr.oz = P.z - (-hx * s2 + hz * c2); vr.oy = P.y;
+  vr.ox = P.x - (hx * c2 + hz * s2); vr.oz = P.z - (-hx * s2 + hz * c2); vr.oy = P.y + vr.hOff;
   if (vr.base && typeof XRRigidTransform !== "undefined") {
     const q = _q1.setFromAxisAngle(_UPv, -vr.yaw), p = _v1.set(-vr.ox, -vr.oy, -vr.oz).applyQuaternion(q);
     renderer.xr.setReferenceSpace(vr.base.getOffsetReferenceSpace(new XRRigidTransform({ x: p.x, y: p.y, z: p.z, w: 1 }, { x: q.x, y: q.y, z: q.z, w: q.w })));
@@ -4693,7 +4694,7 @@ function climbTick(dt, I) {                               // returns true while 
   if (C.hold) {                                            // hanging: your body moves so the holding hand stays put
     const h = sides[C.hold]; if (!h) { C.hold = null; return false; }
     const d = C.anchor.clone().sub(h.pos);
-    let nx = I.head.x + d.x, nz = I.head.z + d.z, ny = vr.oy + d.y;
+    let nx = I.head.x + d.x, nz = I.head.z + d.z, ny = vr.oy - vr.hOff + d.y;
     const hy = vr.headLocalY;
     if (headBlocked(nx, ny + hy, nz)) {                                     // pulling yourself into it: your face stops at the surface
       if (!headBlocked(P.x, ny + hy, P.z)) { nx = P.x; nz = P.z; }          // still climb up or down along it
@@ -4977,12 +4978,24 @@ function vruiParts() {
     g.textAlign = "center"; g.font = "bold 40px sans-serif"; g.fillStyle = "rgba(232,243,223," + (.55 + .35 * Math.sin(VRUI.t * 3)) + ")"; g.fillText("PULL THE TRIGGER TO CONTINUE", 800, 760);
   };
   // ---- choose your way ----
-  const M = uiPanel("mode", 1400, 900, 2.0, 74, 1.45);
+  const Hp = uiPanel("height", 1300, 520, 2.0, 50, 1.3);       // ---- set your height: stand or sit how you'll play, hold still while the meter fills
+  Hp.paint = (g, P) => {
+    uiBg(g, P, "SET YOUR HEIGHT"); g.textAlign = "center"; g.font = "34px sans-serif"; g.fillStyle = UIC.text;
+    g.fillText("Stand or sit the way you'll play, look ahead and hold still", 650, 160);
+    g.fillStyle = "rgba(0,0,0,.3)"; uiRound(g, 150, 220, 1000, 60, 30); g.fill();
+    g.fillStyle = UIC.sun; uiRound(g, 150, 220, Math.max(60, 1000 * Math.min(1, VRUI.hk || 0)), 60, 30); g.fill();
+    g.font = "30px sans-serif"; g.fillStyle = UIC.dim; const y = VRUI.hy || 0;
+    g.fillText(y ? "Your eyes: " + y.toFixed(2) + " m · " + (y < 1.35 ? "sitting" : "standing") : "Looking for your headset…", 650, 345);
+    g.fillText("Sitting is fine: you'll stand tall in the game, and only ducking down crouches", 650, 400);
+  };
+  uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
+  const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
   [["hike", "Hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
    ["hunt", "Hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
    ["pvp", "PvP · online", "Play up to 7 friends in VR: same guns, climbing and gliding. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
     uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { setMode(m); renderSetup(); vruiOpen(m === "pvp" ? "mp" : "setup"); }, { sub, fs: 54 }));
+  uiBtn(M, 90, 870, 1220, 90, "Set my height (standing or sitting)", () => vrHeightCheck("mode"), { fs: 36, personal: true });
   // ---- online PvP: host a game (you get a code) or join one (type the code) ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -5102,10 +5115,10 @@ function vruiOpen(stage) {
   if (!inWorld && renderer.xr.isPresenting && vr.base) { renderer.xr.setReferenceSpace(vr.base); vr.ox = vr.oy = vr.oz = 0; vr.yaw = 0; }
   if (world) world.visible = inWorld;
   VRUI.env.visible = !inWorld;
-  VRUI.root.position.copy(hp); VRUI.root.rotation.set(0, fy, 0);
+  VRUI.root.position.copy(hp); if (!inWorld) VRUI.root.position.y -= vr.hOff; VRUI.root.rotation.set(0, fy, 0);
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
   for (const k in VRUI.panels) VRUI.panels[k].mesh.visible = false;
-  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"] }[stage] || [];
+  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"], height: ["height"] }[stage] || [];
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
   for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m, CAPT && CAPT.ring, CAPT && CAPT.flag]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
@@ -5115,6 +5128,16 @@ function vruiOpen(stage) {
   if (stage === "pause") { const W = VRUI.panels.pause.widgets, pv = gameMode === "pvp"; W[1].label = pv ? "End round · new map" : "New map, same settings"; W[2].label = pv ? "End round · change settings" : "Change settings"; uiDraw(VRUI.panels.pause); }
   if (stage !== "pause" && state !== "play") state = "vrmenu";
   mpHostStage(stage);
+}
+function vrHeightCheck(after) { VRUI.afterH = after; VRUI.hk = 0; VRUI.hy = 0; vruiOpen("height"); }
+function vrHeightDone(measured) {
+  if (measured && VRUI.hy > .6) {
+    vr.hOff = Math.max(-.4, Math.min(1, EYE - VRUI.hy)); vr.hCal = true; vr.stand = EYE;
+    try { localStorage.setItem("jt-height-off", String(vr.hOff)); } catch (_) {}
+    buzz("L", .4, 40); buzz("R", .4, 40);
+  } else if (isFinite(vr.hOff)) vr.hCal = vr.hOff !== 0;
+  const a = VRUI.afterH; VRUI.afterH = null;
+  if (a === "intro") vruiOpen("intro"); else if (a === "start") startNew(); else vruiOpen("mode");
 }
 function vrHeadLocal(I) {                                        // the head in the bare play space (undoing our walking offset)
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
@@ -5150,6 +5173,13 @@ function vruiTick(dt) {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
     if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
   } else if (st === "title") uiDraw(VRUI.panels.title);
+  else if (st === "height") {                                      // your eye height, measured while you hold still
+    const y = I.head.y - vr.oy;
+    if (!VRUI.hy || Math.abs(y - VRUI.hy) > .05) { VRUI.hy = y; VRUI.hk = Math.max(0, (VRUI.hk || 0) - .35); }
+    else { VRUI.hy += (y - VRUI.hy) * Math.min(1, dt * 3); VRUI.hk = (VRUI.hk || 0) + dt / 2.5; }
+    uiDraw(VRUI.panels.height);
+    if (VRUI.hk >= 1) vrHeightDone(true);
+  }
   if (VRUI.dio && !VRUI.dioHold) VRUI.dio.children[0].rotation.y += dt * .22;   // stops turning while you point at it
   VRUI.dioHold = false;
   // point and click
@@ -5270,7 +5300,7 @@ async function enterVR(menu) {
       if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
       if (state === "play") pause();
     });
-    if (menu === true) vruiOpen("intro"); else startNew();
+    vrHeightCheck(menu === true ? "intro" : "start");          // first: set your height (standing or sitting)
   } catch (e) { flashHint("Couldn't start VR: " + (e && e.message ? e.message : e)); }
 }
 

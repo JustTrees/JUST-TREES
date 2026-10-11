@@ -397,3 +397,8 @@ Read this first. It carries over the project, the person, the way we work, and e
 ## 1.52
 - Pause menu in PvP: "End round · change settings" (and "End round · new map"). Host/solo only (guests have them locked). `pvpEndRound()` stops the round (clock 0, state out of play) for the host, and for every guest when the host's settings/new-map message arrives (`mpGuestUi`, `mpGuestGen`), so nobody keeps playing behind the menus. Labels switch per mode when the pause menu opens.
 - test_lobby: host ends the round from pause → all 4 on settings, round stopped; guests can't end it; then a new round runs to the board.
+
+## 1.53 — height check (sit or stand)
+- Entering VR now opens a "Set your height" panel first (`vrHeightCheck(after)`): stand or sit how you'll play and hold still; a meter fills over ~2.5 s of a steady head (moving drains it). `vrHeightDone` sets `vr.hOff` = EYE (1.65) − your eye height (clamped −0.4…+1 m), saved in localStorage "jt-height-off"; Skip keeps the saved one. Then the intro / new map continues as before. "Set my height" button on the Choose your way panel (now 1000 tall) redoes it.
+- How it works: the play space is lifted by `vr.hOff` (`vr.oy = P.y + vr.hOff`, head height `hl[1]` adds it back; climbing subtracts it), so a seated player's eyes are at standing height in the world. Crouch uses `vr.stand = EYE` once calibrated, so only ducking below your set height crouches. Menus come down by the same amount for seated players.
+- Test: dev/test_height.py (seated 1.12 m → offset 0.53, game eye 1.65, no crouch; ducking to 0.72 crouches).
