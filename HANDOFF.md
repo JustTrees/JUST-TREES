@@ -409,3 +409,19 @@ Read this first. It carries over the project, the person, the way we work, and e
 ## 1.54 — VR Hunting finds its guns too
 - `lootMode()` = VR and (PvP or Hunting). In both: start with a 1-star pistol (`pvpLoadout` from `resetArms`), other guns greyed on the wheel until found, star-rated gun drops on the jittered grid, upgrades by stars. Hunting has no health/shield crosses and none of the PvP rules (no health, round clock, spilling, drowning penalty). PC/phone Hunting unchanged.
 - Tests that need every gun in Hunting call `D.allGuns()` (debug helper) after generate.
+
+## Planned: more Hunting animals + dino maps (notes only, Oct 10)
+- New animals by biome (NOT jackalope, NOT chupacabra):
+  - Tropical: elephant, giraffe, zebra, rhino, lion, crocodile (water edges), parrots (flocks, like birds).
+  - Temperate / mountain: mountain goat (cliffs), wild horse (herds), elk / moose, boar, coyote / fox, turkey, eagle (circles like birds).
+  - Cold: caribou (herds), musk ox, arctic fox, snowy owl.
+  - Legends: Bigfoot (forest), Yeti (snowy mountains) — rare, about one per map, huge points, leave tracks / hints.
+- Dino maps: every once in a while a Hunting map is dinosaurs only (no normal animals). Big variety:
+  - Big hunters: T. rex, Allosaurus, Carnotaurus, Spinosaurus (near water), Dilophosaurus.
+  - Pack hunters: Velociraptor (packs), Compsognathus (tiny swarms).
+  - Plant eaters: Triceratops, Stegosaurus, Ankylosaurus, Pachycephalosaurus (head-butt charge), Parasaurolophus (herds, calls), Iguanodon, Gallimimus (fast herds).
+  - Giants: Brachiosaurus, Diplodocus (slow, huge, low points per meter).
+  - Fliers: Pteranodon, Quetzalcoatlus (circle like birds).
+  - Water: Mosasaurus / Plesiosaur in lakes.
+- Open question: how often the dino map comes up (e.g. 1 in 10 maps, or a host/menu setting).
+- Build notes: builders follow the `finish({...})` contract; add to SCORE, BEAST_NAME, NATIVE; 2-leg walkers (T. rex, raptors) need a 2-leg gait in updateAnimals (now only 4 legs animate).
