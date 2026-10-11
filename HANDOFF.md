@@ -1,451 +1,142 @@
 # Just Trees: handoff for the next chat
 
-Read this first. It carries over the project, the person, the way we work, and every open idea, so a new chat can pick up mid-stride instead of starting cold.
+Read this first. It's the current state of the game, how Ron likes to work, and what's next. (Version history lives in the git log.)
 
 ---
 
-## 1. The person and the vibe (read this part twice)
+## 1. Ron and how to talk to him
 
-- The owner (Ron) is **not a programmer**. He is a designer with a strong feel for games, especially **VR**, and especially **Population: One** (Pop: One), which he uses as the reference for how VR should *feel*. He describes things by feel: "the gun should buffer the movement but not shake", "high gravity and a mediocre fling". Your job is to turn that into code and then say back, in plain words, what you did.
-- **Talk plainly and briefly.** No jargon, no code in replies unless asked, no long recaps. Short bullet lists are good. Say honestly what you could and could not test. You can never test in a real headset; say so.
-- He thinks out loud and sends **notes in bursts**, often with typos and voice-to-text. Read generously and work out the intent. If one detail genuinely changes what you build, ask **one** short question.
-- He's excited about what this is becoming, and rightly so. Match that energy, but stay honest: if something costs frame rate, can't be done for free, or wasn't tested, say it.
+- Ron is **not a programmer**. He's a designer with a strong feel for games, especially **VR**, and uses **Population: One** as the reference for how VR should feel. He describes things by feel; turn that into code and say back in plain words what you did.
+- **Keep replies short and simple.** No jargon, no code, no long recaps ("too much mumbo"). Short lists are fine. On websites, go one click at a time.
+- He sends ideas in bursts with typos and voice-to-text. Read generously. Ask at most one short question, and only if it changes what you build.
+- Be honest: say what was only tested in simulation (you can never test in a real headset), what costs frame rate, what isn't free.
 
-### What he is building (the essence)
-**Just Trees** is a procedurally generated wilderness you *inhabit*: endless natural forests, mountains, lakes, weather and real animals, in your browser, on **VR first**, then PC and phone. Every map is new. The feeling to protect:
-
-- **A beautiful, believable, naturalistic place.** Real biomes by latitude, real seasons, a real sun position, weather that shifts. Native animals only. Calm, not arcade.
-- **VR that feels like Pop: One.** Hands pass through things; you climb anything you can see (trees, branches, rocks, cliffs); you fling yourself and glide with arms spread; a two-handed rifle with a real scope; binoculars by bringing both hands to your face. Physical, embodied, no buttons where a gesture will do.
-- **Three ways to play:**
-  - **Hiking:** explore and look. It needs things to *look at*: birdwatching and lookouts are next.
-  - **Hunting:** long-range, patient sniping; the score grows with distance.
-  - **PvP:** on hold, to be rebuilt around VR, then multiplayer.
-- **Long views.** Seeing far and sniping far is part of the magic. Protect view distance; cut detail far away before cutting distance.
-- **Free and simple to share.** One HTML file on GitHub Pages; multiplayer planned with no paid server at first.
+### What the game is
+**Just Trees** is a procedurally generated wilderness in the browser: forests, mountains, lakes, weather and real animals, **VR first** (Meta Quest browser), then PC and phone. Every map is new. Protect:
+- A beautiful, believable, calm place: real biomes by latitude, seasons, sun position, native animals only.
+- VR that feels like Pop: One: climb anything you see, fling and glide, two-handed guns with real scopes, binoculars by bringing both hands to your face. Gestures over buttons.
+- Long views. Cut far detail before cutting view distance.
+- Free and simple: one HTML file on GitHub Pages, peer-to-peer multiplayer.
 
 ---
 
-## 2. How we work (his rules)
+## 2. How we work
 
-1. **Notes first, build on "go".** When he sends ideas, log them as **numbered notes** (continue the numbering, currently up to **43**). **Don't log notes until he says to take notes.**, restate each in a line or two of plain words, and list what's waiting. **Do not build until he says "go"** (or "do it", "lets do 1.x", or similar). If he narrows it ("just 1–8 plus 11"), build only those.
-2. **Keep PC and phone exactly as they are** unless he says otherwise. Most new work is **VR only**; check before changing shared behaviour. Anything visual (tracers, fog, speed) gets a VR-only branch.
-3. **Versions:** 1 → 1.1 → 1.12 → 1.2 → 1.21 → 1.22 (rolled back for a few hours) → 1.23 → 1.24 → 1.25 → 1.26 → 1.27 → 1.28 → 1.29 → 1.30 → 1.31 → 1.32 → 1.33 (first online multiplayer) → 1.34 → **1.35** (live). If he just says go, pick the next small step (1.36). He's building toward **2.0 = multiplayer**. He names versions; if he just says go, pick the next small step (1.23) and mention it. He may ask you to build but hold: build and test, send the file, don't push until he says push.
-4. **After building:**
-   - Run the tests (section 5).
-   - Push `index.html` to the repo, which makes the game live on his link.
-   - Send him a backup copy of the file (`just-trees-1-xx.html`).
-   - Reply with a short list of what changed, matching his note numbers, plus honest notes on what was only tested in simulation.
-   - Offer a screenshot when something visual changed.
-5. **Never upload the debug build.** `index.html` must contain no `window.D` and no `window.FREEZE`.
-6. He tests on a **Meta Quest in the built-in Quest browser** (he hasn't said which Quest). He reports "no real missed frames" so far, even with the long view on XXL maps.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.56**.
+- **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
+- **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
+- **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
+- **Never put secrets** (TURN keys etc.) in the repo, the game, or chat.
 
 ---
 
 ## 3. Where things are
 
-- **Repo:** `JustTrees/JUST-TREES` on GitHub (created as `just-trees`, later renamed; the old name redirects). Branch `main`. A new chat must request repo access, and he clicks **allow**.
-- **The game:** `index.html`, a single self-contained file of about 1.08 MB and 6,300 lines. Three.js **r149** is inlined (minified) at the top; all game code is in one big function after it.
-- **Live link:** GitHub Pages for this repo, probably https://justtrees.github.io/JUST-TREES/. He opens it via Settings → Pages → Visit site.
-- He does **not** own justtrees.com; we removed the custom domain.
-- **Test tools:** `dev/` (section 5).
-- **This file:** `HANDOFF.md`. Update it when big things change.
+- **Repo:** `github.com/JustTrees/JUST-TREES`, branch `main` (the old name redirects; the push prints a "repository moved" notice, that's fine). A new chat must request repo access.
+- **Live:** https://justtrees.github.io/JUST-TREES/ (1–2 min after a push; tell him to refresh, the menu shows the version).
+- **The game:** `index.html`, one file (~1.3 MB). Three.js r149 and PeerJS 1.5.4 inlined at the top, then the game script. A table of contents at the top of the script lists search words for each part. **Tuning block** right after `VERSION`: guns (`WEAP`), ammo, bullets, grenades, star tiers, loot counts, PvP timings, zone and capture numbers — change numbers there.
+- **Commits:** author `JustTrees`, email `ron@mountainstylemusic.org`.
 
 ---
 
-## 4. What exists now (v1.24)
+## 4. What exists now (v1.55)
 
-### World and generation (all modes)
-- **Settings:**
-  - Latitude 0–85°, North or South: sets the biome (tropical, temperate, boreal, tundra, polar).
-  - Terrain roughness.
-  - Time of day, with a real sun position.
-  - Month: sets the season.
-  - Tree density.
-  - Map size: XS 250 m, S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km.
-  - Edges: Island (ocean) or Endless (borderland terrain and forest fade into the haze).
-  - Landscape: Natural or Dramatic (one landmark per map).
-  - Weather: random, clear, rain, fog, snow (with styles, including blizzard) or storm. Hiking never gets fog.
-- **Terrain:** generated heightfield with erosion and worn-down summits. `H(x,z)` is the exact triangle surface the player stands on.
-- **Trees:** trunk plus textured branch cards, Pop: One style; variants include pruned, odd and giant trees, and one tallest tree per map. **Big limbs** you can stand on (`limbGrid`) and hold (`limbHold`). Baked soft tree shadows.
-- **Rocks:** boulders, slabs, cliff sections (crag/spine/shelf), outcrops, logs and bushes. Rock shapes are stamped onto a 1 m height grid (`rockGrid`, `rockTopAt`, `rockAround`).
-- **Far-away trees:** every tile has full-detail and simpler tree groups. Beyond about 270 m (further when zoomed), the simpler trees show: one card per branch, alternating flat and upright, with a 4-sided trunk. On XXL that's about 4.2 million triangles instead of 10 million.
-- **Look:** ACES tone mapping; `grade()` shader with split-toning, saturation, and a VR-only shadow lift (`GRADE.uLift`); ground fog in valleys; sky with sun, moon and stars.
-- **Sound:** fully synthesized, no audio files. Footsteps are slow and soft, wind and trees are quiet, and the gunshot, bolt and kill "bing" are synthesized too.
+### World (all modes)
+- **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
+- **Terrain:** heightfield with erosion and rounded summits. `H(x,z)` is the exact surface. Dramatic maps get one landmark from a generator (`makeFeature`: crevasses, canyons, rifts, walls, cliffs, mesas, buttes, terraces, craters, sinkholes, volcanoes in many shapes).
+- **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
+- **Rocks:** boulders, slabs, cliffs, outcrops, logs, bushes on a 1 m height grid (`rockGrid`, `rockTopAt`, `rockAround`). Overhangs work: you can stand under a rock with a gap below it (`rockLow`).
+- **Look and sound:** ACES tone mapping, `grade()` colour shader, valley fog, sky with sun/moon/stars, lightning storms with distance-delayed thunder. All sound is synthesized.
 
-### Animals (Hunting; birds everywhere)
-- **Species:** buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, birds and monkeys, all native to the biome.
-  - Built from code: smooth swept-spine bodies with animated legs.
-  - Score per metre of shot distance: bird 1, monkey .6, baboon .5, rabbit .5, panther .3, wolf .2, buck .1, seal .1, bear .05, polar bear .05.
-  - A hit means a kill: the animal tips over and you hear a bing. No blood.
-- **Behaviour:**
-  - Animals wander, graze, notice movement, and ease away or bolt.
-  - A shot empties the area: animals flee 140–340 m along dry, walkable ground, sprint then trot, and settle there (`fleeFar`).
-  - If an animal is stuck while trying to walk, it squeezes out to the nearest open ground (`unstick`).
-  - A still hunter slowly draws animals closer.
+### Animals (Hunting)
+- **32 kinds**, native per biome (`NATIVE`): buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, monkeys, big birds, plus (1.55) elephant, giraffe, zebra, rhino, lion, crocodile, parrots, mountain goat, wild horse, elk, moose, boar, coyote, fox, turkey, eagle, caribou, musk ox, arctic fox, snowy owl, and the legends Bigfoot and Yeti.
+- Built from code: `buildQuad(r, QSPEC[kind])` makes most four-legged animals from a spec; separate builders for buck, bear, wolf (also coyote/fox/arctic fox), turkey, Bigfoot/Yeti (`buildApe`), birds (`buildBird` with colours), monkeys.
+- Behaviour (`updateAnimals`): wander, graze, notice your movement and ease away or bolt; a shot empties the area (`fleeFar`); stuck animals squeeze free (`unstick`); standing still slowly draws them in (`lureTarget`). Birds circle; parrots fly in flocks; monkeys swing through trees.
+- Scoring: a hit is a kill (tip over, bing, no blood); points = distance × `SCORE[kind]` (big easy animals low, small/flying high, legends 3).
 
-### PC and phone (unchanged, keep as is)
-- **PC:** WASD to move, mouse to look, left click fires, scroll zooms or uses the binoculars, Shift runs, Space jumps, C crouches, Esc for the menu.
-- **Phone:** joystick, drag to look, and on-screen buttons.
-- **Zoom steps:** Hunting 18°, 9° and 6°; Hiking binoculars 11°.
-- **Other features:** a minimap and full map, and a 30-second drone flyover before each map.
+### PC and phone (keep as is)
+- PC: WASD, mouse look, click to fire, scroll to zoom/binoculars, Shift run, Space jump, C crouch, Esc menu. Phone: joystick, drag to look, buttons. Minimap, full map, drone flyover before each map. PC/phone PvP is the old bots version (on hold).
 
-### VR (most of the recent work)
-- **Getting in:**
-  - On the black first screen, a gold **PLAY IN VR** button (headset browsers only) goes straight into VR.
-  - In VR, the pixel intro and logo, Choose Your Way, and the full settings appear as **curved panels around you**. Point with either controller laser and pull the trigger; sliders drag while you hold it.
-  - The panels show the same descriptions as the flat menu: biome, sun angle, Twilight or Night, and so on.
-  - The flat setup page also has an Enter VR button. Its VR section sits below Month: hand choice and the fling slider.
-- **Before each map:**
-  - A "Growing trees…" panel, then a **floating mini-map model** turns in front of you at table height: land, lakes, every tree as a tiny cone, and a yellow pin at your start.
-  - Buttons: New map (grow another), Settings, Play this map (fade and drop in). Your real position is placed on the spawn point (`vr.placeAt`).
-- **Pause:** **tap Y** (the top button on your off hand): Resume, New map, Change settings, Main menu, Exit VR.
-- **Controls** (right-handed by default; a left-handed option swaps everything):
-  - **Off-hand stick:** walk where you look, at 8.5 m/s. **Click it to sprint** for 6 s at 12.5 m/s.
-  - **Gun-hand stick:** snap turn 30°. While scoped or using the binoculars, it zooms instead.
-  - **Gun hand:** A takes the gun out or puts it away; B marks where you aim (a yellow beam for 45 s); the trigger fires.
-  - **Off hand:** the trigger raises the map; the grip snaps to the rifle's front grip (two-handed). The off hand never steers the aim.
-  - **Crouch for real** (measured from your standing height). There are no jump or crouch buttons in VR.
-- **Rifle:**
-  - Heavy, damped feel: small shakes are soaked up and deliberate swings are followed (`vr.gq`/`vr.gp` with an adaptive rate).
-  - Less kick with two hands.
-  - Bullet in VR: a thin streak at 1,100 m/s; shots count out to 2.4 km when scoped, 900 m otherwise.
-  - In Hunting the bolt is worked by hand (see the guns section below).
-- **Scope:** both hands on the gun, eyepiece within about 14 cm of your eye and aimed roughly where you look. The **whole view zooms** (about 4.6×, 9× and 14×, matching the PC steps) with a black surround and crosshair.
-  - One mono view (both eyes see the same image) for comfort.
-  - The **horizon stays level** whatever your wrist does (`levelQ`).
-  - Fog and animal draw distance stretch while zoomed.
-- **Binoculars:** with empty hands, hold both grips near your face. The view zooms (about 6.6× or 11×) with two circles, follows your head (smoothed), and stays level. This works in every mode.
-- **Climbing** (`climbableAt`, `climbTick`, Pop: One style):
-  - You can only grab what you see: the tapering trunk, each branch card, big limbs, rocks and cliffs, steep mountain faces, bushes and the ground.
-  - Your hand passes through things, and the **hand glows x-ray blue** while inside something grabbable.
-  - Grab with grip, or arrive already gripping and you catch. One hand holds at a time, and your body moves with the holding hand.
-  - Let go mid-pull to **fling**. The Fling setting runs Gentle to Wild, default 4.5, which takes about 5 flings to reach a treetop.
-  - Gravity is high (`CLIMB_G` = 22). No fall damage. You land on the ground, a rock or a big limb.
-  - The gun must be put away to climb.
-- **Your face can't go inside** trunks, big limbs, rocks or the mountain (`headBlocked`). This also applies while climbing, and the world slides back instead. Right up against a rock face is allowed, so you can climb it.
-- **Gliding:** spread your arms wide while airborne. You fly forward at 90° to the line between your hands, on the side they face (`vr.glideDir`), not where you look. Tilting your hands banks you. On really steep ground (over ~52°, long slopes) you **skip** downhill; on ground over ~40°, spreading your arms lifts you off into a glide. No shooting while gliding.
-- **Body:**
-  - A skinned soldier avatar (green camo). Its head is hidden from you; arms reach your real wrists by IK.
-  - **Gloves** are drawn separately on the controllers, in WebXR grip space: the wrist toward +Y and the back of the hand toward +X on the right hand.
-  - Fingers curl with grip, and the index finger follows the trigger.
-- **Look and performance in VR:**
-  - View distance 1.5 km (the base fog), with the forest outside the map reaching that far.
-  - Shadows brightened; tone mapping exposure 1.08.
-  - Tree sway frozen (less leaf shimmer).
-  - Leaf edges smoothed (alpha-to-coverage on foliage, set when the map is generated in VR).
-  - Render scale 0.8 and maximum foveation. He found Smooth looked best, so the resolution option was removed.
-- **1.23 fixes (notes 35–39):** the gun's weight-smoothing runs in play-space coordinates (`vr.gpL/gqL`), so walking, sprinting, snap turns and climbing no longer drag the gun off the hand; the gun hand's glove and arm are locked to the gun grip (`handPose`); gliding never turns the world (banking removed) and the glide direction keeps its side with straight arms and eases into new headings (it used to flip every frame); gloves are one skinned mesh per hand (fuller fingers that bend without gaps, longer cuff); the arm IK uses the body's real (unscaled) arm length and stretches the forearm (`foreArm.scale.y`) so the sleeve always reaches the glove; magazine hovers ~6 cm out, shows 1.35x while out, snap radius 22 cm.
-- **1.24 (notes 40–43):** scope/binocular zoom view aims with the gun (or head) but takes its tilt from the head (`zoomViewQ`), so the horizon stays level in the real world whatever hands or head do; the raised VR map's unexplored area is 50% see-through and the map texture is only re-uploaded when the minimap redraws (`mapDirty`), which should fix the frame drop; no tall spike stones (old "spire" extreme rocks become split boulders; nothing else changes); **Landscape setting: Natural (default, maps unchanged) or Dramatic**: one landmark per map (`makeFeature`, `FEAT`): crater lake, mesa, canyon or great cliff, sized to the map, placed inside the map, applied before erosion and then 55% of its shape added back after erosion; water/snow/tree lines and the lake/steepness fixer ignore the feature area. Monoliths/spikes are disliked: never add them. Test: `dev/test_landscape.py`.
-- **1.25:** the off hand snaps to a rifle's front grip from anywhere along the gun (within 17 cm of the line from the trigger hand to the front grip, `nearGunLine`), so hands held close together still get the two-hand grip and the scope. The pistol keeps its own small snap.
-- **1.26:** buttons in VR Hunting are now **tap A = gun in/out, hold A = gun wheel, tap B = mark** (other modes: A toggles the gun). Bolt/charging handle/slide pulls doubled (sniper 14 cm, rifle 12, SMG 10, pistol 7). The assault rifle, SMG and pistol sit 8.5° nose-down in the hand (`IRON_DIP`) so they don't shoot high; the glove keeps the controller's angle (`vr.gunHandQ`); the sniper is unchanged. The wrist is now the body's sleeve: the avatar's hand bones are re-parented to the root and follow the glove each frame, so the camo sleeve bends and stretches at the wrist; the glove's cuff is a slim wristband inside the sleeve.
-- **1.27:** new gun models built from code with rounded parts and side-profile extrusions (`GUNMODEL` in `buildGuns`): **AKM** (yellow furniture, curved banana magazine, gas tube, slant brake, charging handle on the right), **UMP** (orange polymer lower and grip, black upper, rail, straight magazine, skeleton stock, charging handle on the left front), **PX4** (blue frame, steel slide with serrations, exposed hammer). Colours (wheel and ammo cans only): sniper red, assault yellow, SMG orange, pistol blue. While racking, the glove follows the handle's named "knob" part; the sniper bolt lifts smoothly when grabbed.
-- **1.28:** guns are **woodland camo** (not coloured); the four colours are only for the ammo cans and the wheel. A **floating red crosshair** (4 short lines with a gap in the middle) sits 25 m out along the gun's line whenever a gun is out and not scoped (`vrCross`, `CROSS_D`). The gun wheel now travels with the play space, so you can switch guns while walking or sprinting.
-- **1.29:** the scope crosshair and binocular circles are turned against the head's tilt (`uRoll` in the zoom overlay), so view and crosshair both stay level with the real horizon. Heavy motion damping on the gun (unscoped 2.4+ang·30, scoped 1.0+ang·14; binoculars rate 3): shake reaching the gun halved, big swings catch up in ~0.4 s. No bouncing over eroded crests: the downhill skip needs a slope steeper than ~52° that keeps dropping for 5 m while you move down it (`skipVR`); in VR you also stay on the ground over small ledges up to 1 m. Gliding lift-off from steep ground (over ~40°) is unchanged.
-- **1.30:** the gun wheel opens the instant A goes down; on release a highlighted gun is picked, and a quick tap (<0.35 s) with nothing picked toggles the gun. **Big-map headset savings** (`PERF()`): XXL: full-detail trees to 205 m (was 270), through scope/binoculars at most 2.5x that (was 270 × full zoom ≈ 3.8 km, the cause of the zoom frame drops), 18% fewer trees, borderland forest 40% of before, rain/snow 60%; XL gets a lighter version; smaller maps and PC/phone unchanged. Measured on XXL endless, max trees, rain: −24% triangles normally, −42% scoped.
-- **1.31 (notes 44–47):** **lightning** rebuilt (`STORM`, `spawnStrike`, `stormTick`, `thunderAt`): ground strikes with branching ribbon bolts and a violet glow, sheet lightning (cloud glow) and faint horizon flicker; uneven timing with bursts; each strike flickers 2–5 times; flash strength falls with distance and lights the land from the bolt's side by briefly swinging the sun/moon light (`SUNB` restores it); thunder is delayed by distance/343 m/s, sharp crack when close, low long rumble far, silent past 5.5 km. **Night floor** (`GRADE.uFloor`): VR only, a faint blue-grey added to near-black pixels at night, stronger in storms (he had his headset's night mode on when it looked too dark). **Tap Y** opens the game menu. **VR preview** now has buttons **New map** (regenerate with the same settings, as many times as you like), **Settings** and **Play this map**; a trigger pull anywhere no longer drops you in. Tests: `dev/test_storm.py`.
-- **1.32:** **under water (VR only)**: `groundAt` returns the real lake/sea bed in VR (no surface swimming), walking speed is normal, you sink at most 2.5 m/s; with the head under water (`UW`, `uwTick`): murky teal overlay and fog (near .5, far 26), muffled wobbling sound (`SND.uw` lowpass between master and output, with an LFO) and bubbles, and an edge pulse that grows stronger and faster over 5 s (`UW.LIMIT`); at 5 s it fades to black and you respawn at a random dry spot (`uwRespawn`); out of the water your breath recovers at 2x. Water surface is double-sided in VR. **Pick your spawn** on the preview: point at the floating map and pull the trigger; it snaps to the nearest `okSpot` within 80 m and moves the yellow pin (`pickSpawn`); the map stops spinning while pointed at. PC/phone keep surface swimming. Test: `dev/test_water.py`.
-- **1.33: online PvP, 1v1, VR (first multiplayer).** In VR, PvP now plays exactly like Hunting (`ARMED()`: guns, wheel, reload, ammo cans, climbing) with **no animals, bots, zone or grenades**, against a real player. PC/phone PvP (bots) is unchanged.
-  - **Connection:** PeerJS 1.5.4 is bundled inline (MIT) and uses the **free public PeerJS server** (no account) with Google/Cloudflare STUN. Host gets a 4-digit code (peer id `justtrees-v1-<code>`); the guest types it on a keypad panel. ~10% of networks may fail without a TURN relay.
-  - **Flow:** Mode → "PvP · 1v1 online" → `mp` panel (Host a game / Join a game / keypad / Choose the map / Back). Host picks settings → preview → **Play this map** sends `{t:"start", seed, set, hx, hz}`; the guest builds the same map from the seed (generation is deterministic; ammo cans are now seeded too) and spawns away from the host. A guest joining mid-game gets the start straight away.
-  - **Messages** (`mpRecv`): `s` state 20/s (head, hands, feet, gun pose, alive, gliding, hp), `f` shot (tracer + sound), `hit` (damage = gun's `dmg`, head ×2), `die` (shooter +1 kill), `can` (ammo can taken), `bye`. Shooter decides hits (`mpHitTest`: head sphere + body capsule); no cheat protection.
-  - **Other player:** brown-camo soldier posed from their head and hands with arm IK, their gun in hand, shown 110 ms behind with smoothing (`mpSample`). Hidden while dead.
-  - **Health/death:** 100 hp, red flash when hit, at 0 the screen goes dark for 5 s and you respawn somewhere random; wrist shows health, kills/deaths, friend status.
-  - **Voice:** mic asked when hosting/joining; the other player's voice is positional (HRTF panner at their head). If the mic is refused, voice is just off.
-  - **Tests:** `dev/test_mp.py` runs two windows against a local PeerJS server (`node dev/peer_server.js <node_modules dir>`, 127.0.0.1:9000/jt; needs `npm i peer express`), with `D.MP.peerOpts` pointing at it and the render loop switched off.
-  - **Next stages:** his Cloudflare account (being made) for our own matchmaking + TURN relay, public lobbies, Quick join, 8 players; the **shared preview lobby (note 48)**: everyone sees the preview, picks spawns live, voice in the lobby, host places capture points / team bases, only the host can change map and press Play; then PvP rules (teams, bases, capture points).
-- **1.34, online hardening:** best-effort free TURN relay (Open Relay shared-secret login computed in the browser, `mpRelay`; skipped silently if gone); version check on connect (both told to refresh, no start on mismatch); clear messages + back to Host/Join for a wrong code, an unreachable service, or a connection that never opens (20–25 s timeouts); ICE failure closes the link; 2 s heartbeat, 12 s silence = connection lost (host keeps the code so someone can rejoin); host auto-reconnects to the PeerJS server; mic prompt times out after 12 s without blocking. Test: `dev/test_mp_fail.py`.
-- **1.35, Cloudflare (in progress):** removed in 1.39 (Ron, Oct 10): the `server/` Worker and `wrangler.toml` are gone from the repo and `MP_ICE_URL` is out of the game. Online stays peer to peer with the free PeerJS server + Open Relay until more testing. The old Worker may still exist in his Cloudflare account (its GitHub builds will now fail; he can delete it). If it comes back: never put TURN secrets in the repo, and make a fresh TURN key (the old one was pasted in chat).
-- **Cloudflare status (paused by Ron, Oct 9):** removed in 1.39 (Ron, Oct 10): the `server/` Worker and `wrangler.toml` are gone from the repo and `MP_ICE_URL` is out of the game. Online stays peer to peer with the free PeerJS server + Open Relay until more testing. The old Worker may still exist in his Cloudflare account (its GitHub builds will now fail; he can delete it). If it comes back: never put TURN secrets in the repo, and make a fresh TURN key (the old one was pasted in chat).
-- **Workflow right now:** he asked that every prompt for a while gets built, tested and pushed live straight away, for a fast test loop. Test: `dev/test_vr_hold_glide.py`.
-- **Wrist HUD:** a small panel on the off-hand wrist showing info and score (and "+24 Pistol ammo" when you loot).
+### VR
+- **Getting in:** PLAY IN VR button → **height check** first (sit or stand; `vr.hOff` saved in localStorage, so seated players see from standing height) → intro → curved menu panels (laser + trigger).
+- **Before each map:** a floating mini-map you can spin; point and pull the trigger to pick your start; New map / Settings / Play this map.
+- **Pause:** tap Y. Includes End round (PvP host/solo).
+- **Controls** (right-handed default, left-handed option): off-hand stick walks (click to sprint), gun-hand stick snap-turns 30° (zooms while scoped); tap A = gun in/out, hold A = gun wheel, tap B = mark; off-hand trigger = map; off-hand grip = two-handed grip. Real crouching, no jump/crouch buttons.
+- **Guns:** sniper (bolt each shot, the only scope), assault rifle, SMG, pistol, plus grenades (5th wheel slice, up to 10). Real bullets with travel time and **no drop** (you lead moving targets). Steady fire rate, no recoil. Reload by hand: pull the magazine, push a new one, rack the bolt. Ammo cans and grenade boxes as loot.
+- **Find your guns (VR Hunting and PvP):** every spawn starts with a 1-star pistol; other guns are greyed on the wheel until you find one. Guns lie on a jittered grid all over the map with a neon glow in their star colour (1★ white, 2 blue, 3 purple, 4 gold, 5 red; rarer the higher). A higher star upgrades the gun.
+- **Scope:** two hands, eyepiece near your eye; the whole view zooms and the horizon stays level. **Binoculars:** empty hands, both grips at your face.
+- **Climbing:** grab anything you see (trunks, branches, limbs, rocks, cliffs); fling on release; glide by spreading your arms; high gravity, no fall damage. The gun must be away to climb.
+- **Under water:** walk on the bed, murky view, 5 s of breath, then respawn. Bullets go 1.5 m into water.
+- **Body:** camo soldier avatar with arm IK and gloves on the controllers.
 
-### VR Hunting guns (1.22–1.23, notes 26–34 and 37; VR Hunting only, PC and phone unchanged)
-- **Gun wheel:** pressing A opens a wheel instantly; point the gun-hand ray at a gun and let go. Tap A holsters/draws; tap B marks.
-- **Guns (`WEAP`, models in `GUNMODEL` plus the sniper):** sniper (5 rounds, bolt after every shot, the only scope), assault rifle (30, full auto ~8/s), SMG (32, full auto ~12/s, less accurate, 350 m reach), pistol (12, semi-auto, 250 m, two-handed grip optional). Damage numbers are for future PvP; in Hunting a hit is still a kill.
-- **Reload, one step at a time, off-hand grip only** (`reloadTick`, `arms[kind].phase`: 0 ready, 1 magazine out, 2 bolt due): the empty magazine pops out and hovers glowing yellow; a squeeze within 22 cm (`SNAP_R`) snaps the glove onto it, push it in along its slot; then the bolt / charging handle / slide glows, squeeze to snap onto it, pull back, let go. Only then can the off hand snap to the front grip. Gun-hand stick click drops the magazine early (its rounds go back to spare). Dry trigger clicks.
-- **Scope:** only two-handing the sniper with the back of the gun within ~30 cm of your face, roughly pointing where you look. Letting go to work the bolt drops it; re-grip brings it back.
-- **Ammo counter** on the gun's side (magazine | spare), mirrored for left-handed. **Ammo cans** (instanced, one colour per gun) around the map, a few near spawn; walk over or touch to pick up; up to 300 spare each (`AMMO_CAP`).
-- **Shoot while hanging:** with the gun out, the off hand can still climb; the gun hand can't grab, and A won't draw the gun while the gun hand is holding on. No scope while hanging.
-- Test: `dev/test_vr_guns.py` on the debug copy.
-
-### PvP (on hold; code kept, menu button disabled)
-- Five bots hunt you; shield 100 and health 100; the green zone mist in 10-minute rounds; grenades.
-- **Grenades are pre-tuned** for the VR rebuild: `NADE_SPEED` 28, lift 7, 250 damage within 8 m (via `blastBots`).
-- Unconfirmed: whether grenades should hurt the thrower, and whether "10× damage" meaning 250 is right.
-- Soldier avatars: hood, full skull mask, sunglasses, baggy camo (black, brown, green, snow or mixed). Masks were meant to be achievements only.
+### Online (VR PvP)
+- Peer to peer, **up to 8 players** (PeerJS free server + free Open Relay TURN). Host gets a 4-digit code.
+- **Shared lobby:** everyone sees the host's settings and the map preview; each picks a start; coloured flags show for 3 s, then everyone drops in.
+- **PvP rules:** health + shield bars (green cross = health, blue cross = shield), kill counter, round clock (5–20 min), dying spills your loot, body falls and vanishes in 3 s; drowning = no kill, lose loot and a kill, respawn with no guns.
+- **Closing zone** (optional): hold and speed settings, stages, never faster than sprint, small final circle; respawns go inside the next circle.
+- **Capture point** (optional): hidden smart spot, floating flag, +1 point every 20 s held alone.
+- **Voice:** connects on join, positional.
+- **Known problem:** some friends can't connect (strict home networks; the free relay didn't carry it). Fix later: our own relay — Cloudflare TURN behind a small Worker (make a fresh key; keep it out of the repo), or Metered. Ron will do this "another time".
 
 ---
 
 ## 5. How to build and test
 
-- **Edit by exact-string replacement.** Write a small Python patch script that does `src.replace(old, new)`, **asserting each old string appears exactly once**, then apply it to a copy of `index.html`. This stays safe in a 1 MB file. Keep a backup of the previous version first.
-- **Test tools** (in `dev/`; they use Playwright with Chromium and SwiftShader, already installed in Claude's workspace):
-  - `python3 dev/make_debug.py index.html /tmp/dbg.html` makes a debug copy with `window.FREEZE` (stop the clock and step frames by hand) and `window.D` (handles to internals). If a test needs more internals, add them to `window.D` in `make_debug.py`.
-  - `python3 dev/test_load.py index.html`: Hiking and Hunting load with no errors and show the version. **Always run this on the clean file before pushing.**
-  - The VR tests run on the debug copy, by faking controllers through `vr.readInputs`:
-    - `dev/test_vr_moves.py`: walk and sprint speed, level scope, bullet speed and width, rock and cliff grabs, face blocking, downhill skips, lifting off into a glide.
-    - `dev/test_vr_climb_scope.py`: trunk, branch and limb grabs, the blue hand, pulling up, landing on limbs, scope zoom steps, the zoomed render.
-    - `dev/test_vr_glide_gun.py`: sprint, glide direction, climbing face block, rifle steadiness (shake in vs out), far-tree switching.
-    - `dev/test_vr_guns.py`: magazines, the reload steps and snapping, bolt per sniper shot, scope on/off, gun wheel, fire rates, early magazine drop, ammo cans, shooting while hanging.
-    - `dev/test_vr_menus.py`: the whole VR menu flow, from intro to settings to loading, preview, drop-in and pause. It saves screenshots to `/tmp/`.
-  - Other checks:
-    - `dev/test_animals.py`: stuck episodes and flee distance (run it on two builds to compare).
-    - `dev/test_solid_ground.py`: finds visible surfaces that aren't solid.
-    - `dev/test_far_trees.py`: triangle counts with and without the lighter far trees.
-- **Pushing:**
-  - `cp` the build to `index.html`, then `git fetch origin main`, `git add index.html`, commit (author `JustTrees`) and `git push origin main`.
-  - The push prints a "repository moved" notice; that's fine.
-  - It's live 1–2 minutes later. Tell him to refresh, and say the menu shows the new version.
+- **Edit with a Python patch script** that replaces exact strings in a copy of `index.html`, **asserting each old string appears exactly once**. Write builds to the scratchpad, then copy to `index.html` when tests pass. Bump `VERSION` and `<title>`.
+- **Tools in `dev/`** (Playwright + Chromium/SwiftShader):
+  - `check_code.py [file] [--unused]`: parses, no function declared twice, no debug hooks.
+  - `make_debug.py index.html dbg.html`: debug copy with `window.FREEZE` (step frames by hand) and `window.D` (handles to internals; add more there when a test needs them).
+  - `run_all.py [file] --nm <node_modules> --jobs 4 [--only a,b]`: code check + every test. Takes ~17 min, longer than a tool call allows, so run it in the background (`setsid nohup … &`) and check the log. Online tests need a local PeerJS server (`node dev/peer_server.js <node_modules>`; `npm i peer express`).
+  - Tests by area: load, landscape, water, storm, overhang, solid ground, far trees; VR moves/climb/scope/glide/guns/menus/height; bullets, grenades; animals, zoo (every biome spawns all its kinds; give a folder to get lineup pictures); online: mp, mp_fail, lobby, pvploot, zone, capture, round.
+- **Push:** `git add`, commit (author `JustTrees`), `git push origin main`.
 
-### Gotchas we already hit (don't relearn these)
-- The renderer outputs **linear** colour (three's default output encoding is linear). **Don't mark canvas textures as sRGB**, or menus come out dark.
-- **Inside an XR session, `window.requestAnimationFrame` doesn't run.** Drive everything from the `renderer.setAnimationLoop(loop)` loop. The VR intro paints its canvas from `vruiTick`.
-- **VR movement model:**
-  - `vr.readInputs()` returns **world-space** head and hand poses.
-  - Walking moves the play space through an offset reference space (`vr.ox/oy/oz/yaw`, applied with `XRRigidTransform` in `vrAfterMove`).
-  - The menus switch back to the base space and reset the offset to zero; `vr.placeAt` re-anchors you on a new map.
-- **Full-view zoom** (`vrZoomRender`): set `renderer.xr.cameraAutoUpdate = false`, call `updateCamera`, scale both eye projections (`e[0], e[1], e[4], e[5]`) by the zoom, give both eyes the same steadied pose, render, then restore.
-- **VR-specific world settings are read when the map is generated:** fog base, forest reach outside the map, smooth leaf edges. `VR_ON` must be set before `generate()`.
-- **Raycasts:** call `updateMatrixWorld` first when objects moved this frame and nothing has rendered yet; the VR menu does this.
-- **`obstacles` is replaced by every `generate()`.** Expose it through a getter in debug hooks.
-- **Tile culling** is manual (`cullTiles`). Instanced meshes have `frustumCulled = false`. In VR, a wide 118° culling camera is used.
-- **Is the Quest a touch device?** Unknown. `isTouch` (coarse pointer) lowers some counts. Don't assume either way.
+### Gotchas (don't relearn these)
+- Renderer outputs linear colour: **don't mark canvas textures as sRGB** or menus go dark.
+- **Inside a VR session `requestAnimationFrame` doesn't run.** Everything goes through `renderer.setAnimationLoop(loop)`.
+- VR movement: `vr.readInputs()` gives world-space poses; walking moves the play space (`vr.ox/oy/oz/yaw`); `vr.placeAt` re-anchors on a new map.
+- VR world settings are read at generate: `VR_ON` must be set before `generate()`.
+- `obstacles` is replaced by every `generate()`: use a getter in debug hooks.
+- Two functions with the same name: the later one silently wins (that bit us with grenades). `check_code.py` catches it.
+- Call `updateMatrixWorld` before raycasts if things moved this frame.
+- Is the Quest a "touch" device (`isTouch`)? Unknown. Don't assume.
 
 ---
 
-## 6. Open notes and the backlog
+## 6. His standing preferences (don't undo these)
 
-### Logged, not built yet (his note numbers)
-- **25, birdwatching in Hiking** (VR, PC and phone): his newest idea.
-  - **More birds** to suit biome and season: songbirds in the trees, hawks and eagles circling, ducks and herons on lakes, owls at dusk, woodpeckers tapping. Each has its own song, so you hear them first.
-  - **Take photos through the binoculars:** the trigger in VR, a click on PC, a Photo button on phone, with a shutter flash.
-  - **A saved field log:** species, your photo, date, time and map number. You can flip through it from the menu, or a VR panel. It counts how many of each biome's birds you've found, with rare birds tied to place, season or time.
-  - **Open question:** birds only, or every animal you photograph? Ask him.
-  - He also said "Hiking needs things to look at", so this is the priority direction for Hiking.
-- **9, never see inside your own body:** only see your body when looking down. Hide anything that would clip into your view while gliding, climbing or crouching.
-- **10, flying pose:** while gliding, the body sits below and behind your head, chest down, feet trailing back. Right now the body floats in front of the head while gliding.
-- Scope and binoculars feel "a little weird"; he'll describe the details later.
-- Climbing is "close to correct"; details later.
-
-### Bigger backlog (from earlier sessions)
-- **Hiking:**
-  - Trails (a ribbon path), a trailhead sign, and oval dirt **lookouts** with events and easter eggs (no people), including a **Morse code tower**.
-  - Plants, and a journal you fill **only by watching**. Birdwatching should become the first part of this journal.
-- **Multiplayer** (planned, not started; section 7).
-- **PvP rebuilt around VR first** (started in 1.33: 1v1 online with the Hunting guns), Then PC PvP and phone PvP get redone separately. **No cross-play:** VR plays VR, PC plays PC, phone plays phone.
-- Settings menu and personal bests; deserts and savanna; bloom; soldier shadows; blending biomes by latitude.
-- The VR rifle bolt animation.
-- Optionally turn off the sway math entirely in VR for a small speed-up (right now it's only frozen).
+- **No resource gathering or building.** Fights are about aim, movement and terrain.
+- No camera bob; slow soft footsteps; quiet wind/trees/rain. No light shafts.
+- Rounded peaks, no spikes or monoliths. Long views. Hiking has no fog.
+- Native animals only; hit = kill with a bing, no blood; score per metre; animals react to your movement, not sound.
+- VR: no jump/crouch buttons; off hand never steers the aim; snap turn 30°; heavy gun smoothing; two-handed scoping; binoculars at your face; glide with arms out; Pop: One climbing (high gravity, medium fling); smooth resolution; no tree sway.
+- Avatars: soldiers in baggy camo with hoods; masks are achievements only.
+- Shelved for now: teams, battle royale, capture zone (players could start right next to it).
 
 ---
 
-## 7. Multiplayer plan (agreed in principle)
+## 7. Next up and backlog
 
-- **Peer-to-peer WebRTC.** Everyone generates the same world from the shared map number, so only players, shots and animals are sent. One player hosts: runs the animals, decides hits, and forwards updates.
-- **Finding games:** a **private code** like `PINE-42` to share with friends, plus a **public lobby list** showing mode, map size and players (for example 3/8), with **Join** and **Quick join**. Hosts choose Public or Private, and the list shows ping or region.
-- **Free backend on Cloudflare:**
-  - The lobby list and matchmaking on Workers and Durable Objects: the free plan, then $5 a month if it grows.
-  - The connection relay (TURN) for the 10–20% of players behind strict networks: 1,000 GB a month free, then $0.05 per GB.
-- **Sizes:** start with 2 (VR against VR, by code), then 8 (lobby list, Quick join, automatic host handoff so a sleeping Quest doesn't end the match), then 12 (Cloudflare forwards traffic so no headset carries the whole match).
-- **Voice chat:**
-  - Positional proximity voice (voices come from each player's head) plus team radio. This matches his earlier Teams and Open comms idea.
-  - Push to talk, or always on.
-  - Mute buttons, which matter for public lobbies.
-  - At 12 players, route voice through Cloudflare's relay; it's still effectively free.
-- **Caveats to keep telling him:**
-  - No cheat protection without a real server.
-  - Only mute, no moderation.
-  - Testing needs him plus friends on different networks.
-  - A full game server (for anti-cheat or 16+ players) costs about $20 a month in the US.
-
----
-
-## 8. His standing preferences (don't undo these)
-
-- **Camera and sound:** no camera bob; slow, soft footsteps; quiet wind, trees and rain.
-- **Lighting:** no light shafts or light bounce, and no "Full day" mode.
-- **Terrain and views:** peaks rounded, not spiky. Long view distance. Hiking has no fog.
-- **Animals and scoring:**
-  - Native animals only; a hit is a kill with a bing and no blood; score per metre.
-  - Birds bigger and slower; easier to hit.
-  - Animals scatter based on your movement, not your sound.
-- **VR controls:**
-  - No jump or crouch buttons in VR.
-  - The off hand never steers the aim.
-  - Snap turn 30°; a left-handed option.
-  - Heavy motion damping on the gun; less kick with two hands.
-  - Scoping is two-handed, eye to the eyepiece; binoculars are both grips at your face.
-  - Gliding by spreading your arms.
-- **VR climbing:**
-  - Pop: One-style, with high gravity and a medium fling; no fall damage.
-  - The gun must be away to climb.
-  - Climbing works in all VR modes; never on PC or phone (they have jump and crouch).
-- **VR look:** smooth resolution; no tree sway; long views with lighter far trees rather than shorter views.
-- **Avatars:** masks are achievements only, never full skins. Avatars are soldiers in baggy camo with hoods.
-
----
-
-*Last updated at v1.22 (October 2026). He asked to set the old backlog aside and only work on what he brings up; his stated direction is VR mechanics, how the characters look, climbing and gliding feel, and later a PC VR high-quality setting chosen automatically by device.*
-
-*Earlier note: The next chat: read this, check the repo (`index.html`, `dev/`), then ask Ron what he wants to start with. Birdwatching (note 25) and the body notes (9 and 10) are waiting, and multiplayer is the big next chapter.*
-
-## 1.36
-- Bullets go 1.5 m into water in VR (`WATER_PEN` in `castShot`). Someone standing chest-deep can still be shot; dive deeper to escape. You can shoot out from just under the surface. PC/phone unchanged.
-
-## 1.37
-- VR guns fire real bullets (`makeBullet`/`bulletStep`, stepped in the tracer loop). Speeds in `WEAP.spd`: sniper 850, AR 715, SMG 400, pistol 360 m/s. Gravity `BULLET_G`, sights zeroed at `BULLET_ZERO` = 100 m. Hits count when the bullet arrives (animals, bots, online player via `mpHitTest` per frame segment). Online "f" message now sends origin + velocity; the other side flies a show-only bullet.
-- Steady fire rate: `vr.cool` keeps leftover time while the trigger is held. No recoil (`vr.kick = 0`) and no spread in VR for now (`WEAP.kick/spread` still there to bring back).
-- Test: dev/test_bullets.py. test_mp frames now call `updateGun`.
-
-## 1.38
-- VR grenades (Hunting + VR PvP). Wheel now has 5 slices (`WHEEL` + `WSTEP`), 5th = Grenade. `vr.nadeMode` / `vr.nades` (max `NADE.MAX` 10, start 0). Holding one shows a dotted arc + orange 7 m blast ring (`nadeTickArc`); trigger throws (`vrThrowNade`). Lands, 0.9 s fuse, boom (`nadeBoom`): kills animals within 7 m, damages bots, online sends a "hit" scaled by distance. Tap A goes back to the gun.
-- Loot: green-banded grenade boxes (`spawnNadeLoot`, seeded), +2 each, left alone when you have 10. Online sync: "nade" (box taken) and "g" (throw, the other side flies a show-only grenade).
-- PC already had its own `throwNade`/`clearNades` — the VR ones are named `vrThrowNade`/`vrClearNades` on purpose.
-- Test: dev/test_nades.py.
-
-## 1.39
-- Cloudflare removed (see above). Peer to peer only.
-- Online now holds up to 8 (`MP_MAX`): everyone connects to everyone. `MP.links` (Map peerId → link with conn, call, R avatar, rx, idx colour, spawn). Host hands out colours (`MP_COL`/`MP_COLN`, host = 0 Yellow) and introduces newcomers (`welcome` with peer list → `mpMeet`). Hits go only to the player hit (`mpHitTest` returns `.L`); "die" carries `by` so only the killer counts it. `MP.R`/`MP.conn`/`MP.call` are getters for the first link (kept for old tests).
-- Shared lobby: the others mirror the host's settings panel (`ui`/`set` messages, `mpHostSetSync` from `renderSetup`, `mpHostStage` from `vruiOpen`) and can only change Hand/Fling (`mpLocked`, `personal` widgets). Host Start → `gen` → everyone grows the same map and sees the same preview; each player starts with a random spot already picked (`mpRandomSpawn`), pick on the diorama sends `spawn` to the host. Host "Play this map" → `reveal` with everyone's spots → coloured flags on everyone's diorama for 3 s (`mpRevealStart`) → `mpRevealEnd` drops each in at their own flag. Joining mid-game still uses `start` (spawn away from everyone). Main menu = leave.
-- Tests: dev/test_lobby.py (3 players + a late 4th), test_mp, test_mp_fail still pass.
-
-## Notes from Ron (Oct 10) — BUILT in 1.40 (kept for reference)
-- PvP: health + shield bars (small low HUD in view + wrist), kill counter.
-- Much more loot everywhere (ammo cans ~2-3x, grenade boxes ~2x).
-- Floating pickups, instant effect when grabbed: GREEN floating cross = health, BLUE floating cross = shield. Seeded, synced, respawn ~40 s. Shield soaks damage first; each life starts with 0 shield.
-- Gun loot (PvP): guns start greyed out on the wheel; picking one up unlocks it and you carry all of them. No dropping or swapping. Finding a higher tier of a gun you have upgrades it (lower/equal tier: just ammo).
-- Tiers low to high: normal = 1 star, blue = 2, purple = 3, gold = 4, red = 5 (top). Tier raises magazine size, fire rate and damage.
-- The wheel keeps each gun's own colour; the tier shows only as stars under the gun's name, in the tier's colour (2 star = 2 blue stars, gold = 4 gold stars, normal = 1 white/grey star). The gun lying on the ground glows in its tier colour so you can tell before grabbing.
-- Dying (PvP): you lose your loot. Everything you carried (unlocked guns at their tier, spare ammo, grenades) scatters on the ground around where you died, for anyone to grab.
-- Death, seen by others: your avatar falls/collapses, then disappears within 3 seconds.
-- Death, seen by you: your view does NOT fall; it stays frozen where you died while the screen goes a bit red, then you respawn.
-- Every spawn (round start and each respawn) = a 1-star pistol only. Hunting keeps all guns as now.
-
-## 1.40 — PvP loot, shield, round clock (VR PvP only; Hunting unchanged)
-- Every spawn = 1-star pistol (`pvpLoadout`, called from `resetArms` in PvP and on death). `vr.own` = gun → stars (0 = locked). `tierOf`/`magOf`, `TIER` multipliers (mag, rate, dmg) for 1..5 stars; `TIER_COL` white/blue/purple/gold/red.
-- Wheel: locked guns greyed ("not found"), `pickGun` refuses them; stars in tier colour under the name.
-- `DROPS` map (string ids): seeded gun drops ("g#", glowing beam in tier colour, model shown < 70 m) and crosses ("c#": green = +30 health, blue = +35 shield, back after 40 s), plus spilled loot ("peerId:n"). `dropsTick` animates + picks up (walk over or touch), `dropUse` applies, "take"/"drop" messages sync.
-- More loot: ammo cans 30 + HALF/4, grenade boxes 12 + HALF/11.
-- Shield `MP.sh` soaks damage first; 0 each life. Death: `pvpSpill` scatters guns (except a 1-star pistol), ammo and grenades; `MP.dead` = 4 s, view held at the death spot (`mpDeadHold` in `vrAfterMove`), red tint then quick fade. Others see the body fall back and vanish within 3 s.
-- HUD (`pvpHud`): clock, kills, shield and health bars, low in view, follows the head gently. Wrist shows the same.
-- Round length `set.roundMin` 5–20 (slider on settings in PvP, synced). `MP.roundLeft` starts at drop-in; at 0 → `mpRoundOver` → "over" panel with everyone's kills/deaths ("s" messages now carry k/dd). Host: New map / Settings; others wait; Leave for all.
-- `mpTick` now also runs offline in VR PvP (for dying/respawning).
-- Tests: dev/test_pvploot.py; test_mp and test_lobby extended (falling body, spilled loot, round clock, round over → next map).
-
-## 1.41
-- Gun drops: no more beam or boxy glow. `gunGlow` spreads ~220 soft dots over the gun's surface (cached per gun kind) in `NEON_COL` (saturated star colours), size .3 / opacity .36: a neon glow ~10 cm round the gun's outline. Gun + glow shown within 120 m.
-
-## 1.42 — code cleanup (no change in play)
-- Removed dead code: an old second `spawnAnimals`/`updateAnimals` (silently overridden), the old animal species tables and builder, rivers and fog-bank builders, `vrLens`/`lensView`, `skullTex`, `zoneCenterFor`, `shadowDir`, heap helpers, unused constants, `mpCansReset`/`MP.cansTaken`, `MP.startT`.
-- A "what's where" table of contents at the top of the game script (search words for each part).
-- Tuning block right after `VERSION`: `WEAP`, `AMMO_CAP`, bullets, `WATER_PEN`, `NADE`, `TIER`, `TIER_COL`, `NEON_COL`, `TIER_ODDS`, `PICK`, `LOOT` (counts per map), `PVP` (respawn / body / flag seconds). Change numbers there.
-- `dev/check_code.py`: the game parses, no function declared twice, no debug hooks; `--unused` lists dead names.
-- `dev/run_all.py [file] --nm <node_modules>`: code check + every test (online ones with the local PeerJS server), pass/fail list. All 19 tests pass on 1.42.
-- `dev/make_debug.py`: duplicate entries removed.
-
-## Idea on hold (Ron, Oct 10): capture zone for PvP
-- Host turns on a round capture zone on the map preview; white circle on the diorama (host moves it, size slider up to ~100 ft / 30 m); a plain white circle on the ground in game (no wall).
-- Score while you're in it alone. A small flag on your screen points to it through trees and hills (plus distance), coloured by who holds it.
-- Placing: a switch on the host's preview "Place: My start | Capture zone" so the trigger doesn't do both.
-- Why it's on hold: players could just put their start right next to the zone. Needs a rule first (e.g. starts must be far from the zone, or random starts when a zone is on).
-
-## 1.43 — closing zone in VR PvP
-- Settings (PvP): Zone Off/On, Hold 15–120 s, Speed 1–5 (`ZONE_SPEEDS` = shrink seconds), synced to everyone (in `MP_SET`). Settings panel is now 1090 tall for this row.
-- `vrZonePlan`: stages = round / (hold + shrink), max `ZONE_STAGES_MAX` 5; first circle covers the map, each next circle smaller (down to `ZONE_FINAL`) and inside the last, on dry land, seeded so everyone gets the same. Timeline: hold, shrink, hold, shrink… then final.
-- Online, `zoneSeek` puts the zone where the shared round clock says (no drift between players, late joiners match). Offline it steps on its own.
-- Same look and sound as PC: green mist wall, green fog and muffled sound outside, damage ticks (VR: health only, shield doesn't help) after 2 s outside. Map (and wrist map) shows the live edge and the next circle dashed; the one after is hidden until that shrink finishes.
-- Respawns and late joiners start inside the zone (`zoneSpawnInside`). Headset bar shows "Zone in 0:45" / "Zone closing" / "Final zone" / "OUTSIDE ZONE".
-- Test: dev/test_zone.py; test_lobby checks everyone has the same zone at the same time.
-
-## 1.44
-- Zone edge speed cap: `ZONE_EDGE_MAX` = 11 m/s (sprint is 12.5). `vrZonePlan` stretches any shrink whose edge would move faster (big maps); if the stages then don't fit the round it uses one fewer stage. Medium at speed 5 stays ~5 m/s; XXL now tops out at 11.
-
-## 1.45 — capture point (VR PvP)
-- Settings: "Capture point" Off/On (PvP, synced, `set.capture`). Settings panel now 1170 tall.
-- `startCapture` (after `startZone` in generate): seeded spot scored by height above its surroundings (45 m ring) + trees within 18 m; inside the final zone circle when the zone is on. Not shown on the preview.
-- In the round: white band ring on the ground (radius `CAPTURE.r` 12 m) + a floating flag (sprite, no depth test, kept 24 m out at a steady size) with distance / "Holding 12s" / "Contested". Colour: white free, your colour when yours, theirs when theirs, flashing red when contested. Dot on the wrist map.
-- `captScore` (in mpTick): +1 point (`MP.pts`) every `CAPTURE.every` 20 s held alone; contested pauses; leaving resets. Points ride in "s" messages; round-over board sorts by points first when a capture point is on.
-- Test: dev/test_capture.py; test_lobby checks everyone has the same point.
-- Note: run_all takes ~17 min now; run it in the background (setsid nohup … &) since a tool call times out at 10 min.
-
-## 1.46 — drowning in PvP
-- `pvpDrowned` (called from `uwTick` after the drown respawn, PvP + VR only): nobody gets a kill, your loot is gone (not spilled), kills −1 (not below 0), shield 0, and you come back with NO weapons at all (`vr.own = {}`); hands stay empty until you pick up a gun (the first gun you grab is put in your hand). Respawns inside the zone if it's on. Hiking/Hunting drowning unchanged.
-
-## Design rules (Ron)
-- No resource gathering and no building (no walls/ramps/tiles like Population: One). Fights are about aim, movement and terrain: climbing, gliding, cover from trees, hills and water.
-
-## 1.47
-- `zoneSpawnInside`: respawns (death, drowning, late join) go inside the circle the zone is heading to, at least `ZONE_SAFE` 15 m (or a quarter of its radius) in from its edge; falls back to looser rings, then any dry ground. Test: 344 respawns across a whole round, closest 15.3 m inside the next edge, none outside the current zone.
-
-## 1.48
-- Guns: `LOOT.gun` [24, 5] (small ~64, medium ~80, XXL ~184 guns per map, before only 18–48); `TIER_ODDS` [.5, .78, .92, .98] = 50% 1★, 28% 2★, 14% 3★, 6% 4★, 2% 5★.
-- Overhangs: `rockLow` grid (underside of rocks, filled in `stampSolid`). `rockTopAt(x, z, y, head)` / `rockAround(…, y, head)`: a rock with a real gap under it doesn't count while you're under it. Used for walking (head 1.6), standing/landing, climbing, head blocking, bullets and grenades. Test: dev/test_overhang.py.
-- Dramatic features are now a generator (`makeFeature`): SHAPE (paths: winding, fork Y, cross X, zigzag, horseshoe, twin, star; blobs: round, long, lobed, crescent, ring, cluster) × ACT (paths: crevasse, canyon, rift valley, ridge wall, cliff; blobs: mesa, butte, terraced hill, crater lake, sinkhole, volcano), random sizes; raised blobs sometimes split by a crevasse. Name built from the parts ("Forked crevasse", "Ring mesa", "Split triple terraced hills"…). Low ground is lifted into tableland before a cut so cuts read instead of flooding. FEAT keeps {type, shape, name, x, z, R, mask, apply}.
-
-## 1.49
-- No bullet drop: `BULLET_G` = 0 (bullets fly dead straight at the gun's speed, travel time stays, so you still lead). Grenades use their own `VR_NADE_G` = 9.81 for their arc.
-
-## 1.50 — lots of guns, spread evenly
-- Guns now sit on a jittered grid: one per square of `LOOT.gunGrid` = 22 + 0.02 × half-width metres (~29 m on medium). Counts: small ~208, medium ~365, XXL ~1600. Tier odds unchanged (50/28/14/6/2%).
-- Performance: each gun on the ground is just its glow (Points) until you're within 55 m; the gun model is cloned from `gunTemplate(kind)` then and removed past 75 m. Scene has fewer objects than 1.49 even with 4–6× the guns.
-
-## 1.51
-- Round clock fix: it only started after the online flag reveal, so playing alone (or as a host before anyone joined) it stayed 0 and the round never ended. Now `pvpRoundStart()` runs on every VR PvP drop-in from the preview (alone too) and from the reveal; late joiners keep the clock the host sent (no longer call vruiDropIn). Round-over buttons show for anyone who isn't a guest (so solo players get New map / Settings).
-- Zone: smaller last circle, `ZONE_LAST` = 0.1 × half-width, kept 18–55 m radius (medium 28 m, was ~61). Capture point now sits fully inside the last circle.
-- Test: dev/test_round.py.
-
-## 1.52
-- Pause menu in PvP: "End round · change settings" (and "End round · new map"). Host/solo only (guests have them locked). `pvpEndRound()` stops the round (clock 0, state out of play) for the host, and for every guest when the host's settings/new-map message arrives (`mpGuestUi`, `mpGuestGen`), so nobody keeps playing behind the menus. Labels switch per mode when the pause menu opens.
-- test_lobby: host ends the round from pause → all 4 on settings, round stopped; guests can't end it; then a new round runs to the board.
-
-## 1.53 — height check (sit or stand)
-- Entering VR now opens a "Set your height" panel first (`vrHeightCheck(after)`): stand or sit how you'll play and hold still; a meter fills over ~2.5 s of a steady head (moving drains it). `vrHeightDone` sets `vr.hOff` = EYE (1.65) − your eye height (clamped −0.4…+1 m), saved in localStorage "jt-height-off"; Skip keeps the saved one. Then the intro / new map continues as before. "Set my height" button on the Choose your way panel (now 1000 tall) redoes it.
-- How it works: the play space is lifted by `vr.hOff` (`vr.oy = P.y + vr.hOff`, head height `hl[1]` adds it back; climbing subtracts it), so a seated player's eyes are at standing height in the world. Crouch uses `vr.stand = EYE` once calibrated, so only ducking below your set height crouches. Menus come down by the same amount for seated players.
-- Test: dev/test_height.py (seated 1.12 m → offset 0.53, game eye 1.65, no crouch; ducking to 0.72 crouches).
-
-## Online connection note (Oct 10)
-- Ron hit "A friend tried to join but your networks couldn't connect" (signalling worked, direct WebRTC failed, the free Open Relay didn't carry it). Plan: set up our own relay later — Cloudflare TURN behind a small Worker (keys hidden, 1000 GB/mo free; the old Worker/secret setup from 1.35 was removed in 1.39, rebuild it and make a fresh TURN key), or Metered free API key (20 GB/mo, key visible in game) as a quick option. Until then: try a phone hotspot on one side.
-
-## 1.54 — VR Hunting finds its guns too
-- `lootMode()` = VR and (PvP or Hunting). In both: start with a 1-star pistol (`pvpLoadout` from `resetArms`), other guns greyed on the wheel until found, star-rated gun drops on the jittered grid, upgrades by stars. Hunting has no health/shield crosses and none of the PvP rules (no health, round clock, spilling, drowning penalty). PC/phone Hunting unchanged.
-- Tests that need every gun in Hunting call `D.allGuns()` (debug helper) after generate.
-
-## Planned: more Hunting animals + dino maps (notes only, Oct 10)
-- New animals by biome (NOT jackalope, NOT chupacabra):
-  - Tropical: elephant, giraffe, zebra, rhino, lion, crocodile (water edges), parrots (flocks, like birds).
-  - Temperate / mountain: mountain goat (cliffs), wild horse (herds), elk / moose, boar, coyote / fox, turkey, eagle (circles like birds).
-  - Cold: caribou (herds), musk ox, arctic fox, snowy owl.
-  - Legends: Bigfoot (forest), Yeti (snowy mountains) — rare, about one per map, huge points, leave tracks / hints.
-- Dino maps: every once in a while a Hunting map is dinosaurs only (no normal animals). Big variety:
-  - Big hunters: T. rex, Allosaurus, Carnotaurus, Spinosaurus (near water), Dilophosaurus.
-  - Pack hunters: Velociraptor (packs), Compsognathus (tiny swarms).
-  - Plant eaters: Triceratops, Stegosaurus, Ankylosaurus, Pachycephalosaurus (head-butt charge), Parasaurolophus (herds, calls), Iguanodon, Gallimimus (fast herds).
-  - Giants: Brachiosaurus, Diplodocus (slow, huge, low points per meter).
-  - Fliers: Pteranodon, Quetzalcoatlus (circle like birds).
-  - Water: Mosasaurus / Plesiosaur in lakes.
-- Open question: how often the dino map comes up (e.g. 1 in 10 maps, or a host/menu setting).
-- Build notes: builders follow the `finish({...})` contract; add to SCORE, BEAST_NAME, NATIVE; 2-leg walkers (T. rex, raptors) need a 2-leg gait in updateAnimals (now only 4 legs animate).
-
-## 1.55 — 22 more Hunting animals (no dinos, no tracks)
-- Ron: add all the brainstormed animals, skip the dinos, no footprints for the legends.
-- `buildQuad(r, q)` — one shared four-legged builder; each kind is a spec in `QSPEC` (body size, legs, neck, head, ears, tail, coat pattern, extra parts like trunk/tusks/horns/antlers): elephant, giraffe, zebra, rhino, lion (half have manes), crocodile (near water, long tail), mountain goat (spawns high up), wild horse (5 coats), elk, moose, boar, caribou, musk ox (fur skirt).
-- `buildWolf` takes a palette + tail tip: coyote, fox, arctic fox (white in cold/polar, brown-grey otherwise). Sizes in `BEAST_SCALE`.
-- `buildTurkey` and `buildApe` (Bigfoot brown, Yeti white) walk on two legs — new 2-leg gait in updateAnimals (arms swing too). Legends: exactly 1 per map (Bigfoot temperate/boreal, Yeti tundra/polar), spawn 150 m+ away, notice you from 1.6× further (`wary`), 3 points per metre.
-- Flyers (`FLY`): big bird, eagle, snowy owl circle like before (`buildBird(r, cols)`); parrots fly in small fast flapping flocks, lower down.
-- Spawning goes a round at a time over the biome list (`spawnKind`), so every kind shows up before the animal cap. `HERD` kinds keep their group together. New SCORE / BEAST_NAME / NATIVE entries.
-- Test: dev/test_zoo.py (every biome spawns all its kinds, nothing broken; lineup shots with a shot dir).
-
-## Plan (notes only, Oct 11): animal walking, habitat map, falling, legends
-- Clumping, likely causes: (1) `lureTarget` — when you stand still, every animal within 260 m walks toward a ring around you, so they bunch up; (2) after a shot, `fleeFar` sends everything the same way to similar spots; (3) wandering `home` drifts to wherever they end up, so over time they pile into the same open patches.
-- Fix ideas: each animal/herd keeps its own home area and spacing from other groups; lure only pulls the few closest, slowly; fleeing spreads out (different headings, own new home); walking at real pace with stops, not constant shuffling.
-- Habitat map built at generate: tag the land into zones — open grass/savanna, forest edge, deep forest, water edge, high rocky ground, snow fields. Each kind has places it likes:
-  - Open: zebra, horse, giraffe, elephant, caribou, musk ox, rhino, lion (near herds).
+### Next: animal walking and where they live (Ron, Oct 11 — build this)
+- **They clump.** Likely causes: when you stand still, every animal within 260 m walks to a ring around you (`lureTarget`); after a shot they all flee the same way to similar spots (`fleeFar`); wandering homes drift into the same open patches.
+  - Fix: each herd keeps its own home area and spacing from other groups; only the nearest few drift toward you, slowly; fleeing spreads out in different directions; real walking pace with pauses.
+- **Habitat map** built at generate, so you can scan with binoculars and read the land ("that meadow by the lake should have horses"):
+  - Open grass: zebra, horse, giraffe, elephant, rhino, caribou, musk ox, lions near the herds.
   - Forest edge: buck, elk, turkey, fox, coyote, boar.
-  - Deep forest: bear, moose (near water), panther, monkeys, Bigfoot.
-  - Water edge: crocodile, seal, moose, polar bear, elephants come to drink.
-  - High rocks / cliffs: mountain goat, eagles circle over them.
-  - Snow: arctic fox, owl, Yeti.
-  - Daily rhythm (later?): drink at water, graze in open, rest in cover.
-  - Goal: scan with binos and read the land — "that meadow by the lake should have horses".
-- Falling: tip sideways, and when it hits the ground the legs go limp (fold down/relax toward the ground, no stiff legs sticking up); head drops.
-- Bigfoot/Yeti: only on XL and XXL maps, still rare (maybe not every map). Mysterious: sometimes follows you at a far distance (100–250 m), stops when you look/scope at it, slips behind trees, never comes close, vanishes if you push toward it.
+  - Deep forest: bear, panther, monkeys, moose.
+  - Water edge: crocodile, seal, polar bear; moose and elephants come to drink.
+  - High rocks: mountain goats, eagles circling above.
+  - Snow: arctic fox, snowy owl.
+- **Falling:** tip sideways; when it hits the ground the legs go limp and the head drops — no stiff legs sticking up.
+- **Bigfoot and Yeti:** only on XL and XXL maps, still rare. Mysterious: sometimes follow you at 100–250 m, freeze when you look, slip behind trees, vanish if you walk toward them, never come close.
+- Open questions asked: how often legends show up (most XL/XXL maps or ~1 in 3); whether animals get a daily routine (drink in the morning, rest in cover at midday).
+
+### Offered, not asked for yet
+- Hit boxes on players: legs below ~0.3 m above the feet can't be hit; the body capsule sits under the head instead of the drawn body; arms can't be hit.
+- Voice at the same volume regardless of distance; player list; gamer tags saved without logging in.
+
+### Older backlog
+- **Birdwatching in Hiking:** more birds with their own songs, photos through the binoculars, a saved field log. ("Hiking needs things to look at.")
+- Never see inside your own body; a proper flying pose while gliding.
+- Hiking trails, lookouts, a journal you fill by watching.
+- Scope/binoculars feel "a little weird" and climbing is "close to correct" — he'll give details.
+- PC and phone PvP redone separately later (no cross-play).
