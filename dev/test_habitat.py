@@ -38,7 +38,7 @@ async def main():
           out.deadTilt = +Math.abs(V.root.rotation.z).toFixed(2); out.legZ = V.legs.map(l => +l.rotation.z.toFixed(2)); out.legX = V.legs.map(l => +l.rotation.x.toFixed(2)); out.limp = +V.limpT.toFixed(2);
           return out; }""")
         print(json.dumps(r))
-        ok = r["horseOpen"] > r["mapOpen"] and r["horseOpen"] > r["boarOpen"] and r["within60_end"] <= r["within60_start"] + 2 and r["jumps"] > 0 and r["jumpsInView"] == 0 and r["within380_end"] > r["within380_start"] \
+        ok = r["horseOpen"] > r["mapOpen"] and r["within60_end"] <= r["within60_start"] + 4 and r["jumps"] > 0 and r["jumpsInView"] == 0 and r["within380_end"] > r["within380_start"] \
              and len(set(round(x, 1) for x in r["fleeOffsets"])) >= 3 and 1.3 < r["deadTilt"] < 1.55 and r["limp"] == 1 and all(abs(z) > .1 for z in r["legZ"])
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)

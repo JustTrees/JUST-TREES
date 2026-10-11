@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.59</title>
+<title>JUST TREES 1.60</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.59";              // Just Trees 1.59
+const VERSION = "1.60";              // Just Trees 1.60
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1173,7 +1173,7 @@ function holdShape(parts, tr, th, lean) {
 }
 // Every variant is built from its own recipe: proportions, droop, gaps, a bare side, scragginess.
 // `pruned` = grown in a crowded stand (bare lower trunk), `odd` = one of the ~10% with a broken, flat or double top.
-function treeVariant(kind, pruned, odd) {
+function treeVariant(kind, pruned, odd, opt) {
   const parts = [], low = []; let Ht, tr, Lmax, hb, lean = 0, ls = 0, le = 0;   // low: the far-away version
   const oddType = odd ? (kind === "palm" ? "dead" : kind === "fir" ? pickS(["broken", "double", "flat"]) : pickS(["broken", "flat"])) : null;
   const gapsOf = () => Array.from({ length: Math.floor(rnd() * 3) }, () => [.1 + rnd() * .75, .04 + rnd() * .08]);
@@ -1217,7 +1217,7 @@ function treeVariant(kind, pruned, odd) {
   } else if (kind === "broad" || kind === "bare") {
     Ht = 7.5 + rnd() * 6; tr = .26 + rnd() * .16;
     const shape = rnd(); Lmax = lerp(2.6, 5, shape) * (.85 + rnd() * .3);           // tall and narrow ... wide and round
-    lean = rnd() < .3 ? (rnd() - .5) * 1.4 : 0;
+    lean = rnd() < .3 ? (rnd() - .5) * 1.4 : 0; if (opt && opt.noLean) lean = 0;
     const lx = y => { const t = Math.max(0, y) / Ht; return t * t * lean; };
     hb = pruned ? Ht * (.42 + rnd() * .15) : .8 + rnd() * 1.4;
     const n = Math.round((pruned ? 12 : 18) + rnd() * 16), gaps = gapsOf();
@@ -1252,6 +1252,12 @@ function treeVariant(kind, pruned, odd) {
     }
     parts.push(shadeGeo(trunk(tr, Ht, lean), () => [.92, .92, .92]));
     return { geo: mergeUV(parts), r: tr + .2, h: Ht, pruned: true, hold: holdShape(parts, tr, Ht, lean) };
+  }
+  const clr = opt && opt.clearAt && opt.clearAt(Ht);
+  if (clr) {                                    // the giant's porch: no branches anywhere near its height, for a clear 360° view
+    const [y0, y1] = clr, keep = g => { g.computeBoundingBox(); const b = g.boundingBox; return b.max.y < y0 || b.min.y > y1; };
+    const br = parts.slice(ls, le).filter(keep); parts.splice(ls, le - ls, ...br); le = ls + br.length;
+    const lo = low.filter(keep); low.length = 0; low.push(...lo);
   }
   parts.push(shadeGeo(trunk(tr, Ht + .6, lean), () => [.9, .9, .9]));
   return { geo: mergeUV(parts), geoLow: mergeUV([...low, ...parts.slice(le).filter(g => g.attributes.position.count === 4), shadeGeo(trunkLow(tr, Ht + .6, lean), () => [.9, .9, .9])]), r: tr + .2, h: Ht, pruned, hold: holdShape(parts, tr, Ht + .6, lean) };
@@ -2629,9 +2635,13 @@ function generate() {
     if (!cand.length) cand = allTrees.filter(t => !t.peak);
     if (cand.length) {
       giant = cand[Math.floor(rand() * cand.length)];
-      giant.vi = pickVar(giant.kind, true, true); giant.sx = giant.sy = 1;       // bare lower trunk so the coin is easy to see
-      let maxH = 0; for (const t of allTrees) if (t !== giant) maxH = Math.max(maxH, hOf(t));
-      giant.s = maxH * 1.2 / kinds[giant.kind].vars[giant.vi].h; giant.giant = true; setTreeSize(giant);
+      if (giant.kind === "palm") giant.kind = "broad";                          // palms lean and have no trunk for a porch
+      const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
+      let maxT = 0; for (const t of allTrees) if (t !== giant) maxT = Math.max(maxT, topOf(kinds[t.kind].vars[t.vi]) * t.s * t.sy);
+      const GT = Math.max(16, maxT * 1.2, maxT + 9), pH = maxT + 1.5;                     // the giant towers over the rest; the porch sits just above every other treetop
+      const gv = treeVariant(giant.kind, true, false, { noLean: true, clearAt: Ht => { const s0 = GT / (Ht + 1.4), y = pH / s0; return [y - 2.6 / s0, y + 4.2 / s0]; } });
+      kinds[giant.kind].vars.push(gv); recs[giant.kind].push([]); giant.vi = kinds[giant.kind].vars.length - 1;   // its own one-off shape
+      giant.sx = giant.sy = 1; giant.tx = giant.tz = 0; giant.s = GT / topOf(gv); giant.giant = true; giant.porchH = pH; setTreeSize(giant);
     }
   }
   for (const t of allTrees) { recs[t.kind][t.vi].push(t); if (t.ob) { t.ob.t = t; t.hold = kinds[t.kind].vars[t.vi].hold; } }
@@ -2955,6 +2965,40 @@ function generate() {
     const [x, z] = rpos(), h = H(x, z);
     if (h < water + .5 || h > treeLine || slopeNy(x, z) < .85) continue;
     soundSpots.crickets.push({ x, y: h + .2, z, f: 3900 + rand() * 900, timer: rand() }); n++;
+  }
+
+  // The porch in the tallest tree: a doughnut deck with no railing, braced to the trunk; you climb up through the middle (not on the map: you have to find it)
+  PORCH = null;
+  if (giant) {
+    const gv = kinds[giant.kind].vars[giant.vi], s = giant.s, Ht = gv.h, tr0 = gv.r - .2, yv = giant.porchH / s;
+    const trunkAt = y => tr0 * (1 - .7 * (y + 1.3) / (Ht + 1.6)) * s;          // trunk radius at a height (variant units → metres)
+    const top = giant.y + yv * s, tR = trunkAt(yv), rIn = tR + 1.4, rOut = rIn + 2.6, th = .14;
+    const bag = new Bag(), N = 44, pr = mulberry32(seed * 7 + 5);
+    const wedge = (r0, r1, a0, a1, y0, y1, col) => {
+      const p = (r, a, y) => [Math.cos(a) * r, y, Math.sin(a) * r], A = p(r0, a0, y1), B = p(r1, a0, y1), C2 = p(r1, a1, y1), D2 = p(r0, a1, y1), E = p(r0, a0, y0), F = p(r1, a0, y0), G = p(r1, a1, y0), Hh = p(r0, a1, y0);
+      const tri = [A, C2, B, A, D2, C2, E, F, G, E, G, Hh, B, C2, G, B, G, F, A, E, Hh, A, Hh, D2, A, B, F, A, F, E, D2, G, C2, D2, Hh, G];
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(tri.flat(), 3)); bag.add(g, col);
+    };
+    for (let i = 0; i < N; i++) {                                               // planks, each a slightly different brown, small gaps between
+      const a0 = i / N * 6.2832, a1 = (i + .9) / N * 6.2832, v = .85 + pr() * .3;
+      wedge(rIn, rOut, a0, a1, -th, 0, new THREE.Color(.55 * v, .41 * v, .27 * v));
+    }
+    for (let i = 0; i < N; i++) wedge(rOut - .05, rOut + .02, i / N * 6.2832, (i + 1) / N * 6.2832, -th - .2, -th + .02, 0x5a4230);   // a rim board round the edge
+    for (let i = 0; i < 8; i++) {                                               // joists under the planks, and a brace from each down to the trunk
+      const a = i / 8 * 6.2832 + .2, c = Math.cos(a), sn = Math.sin(a);
+      bag.seg([c * (rIn - .3), -th - .09, sn * (rIn - .3)], [c * rOut, -th - .09, sn * rOut], .08, .08, 0x5e4630);
+      const yb = -3.2, rb = trunkAt(yv - 3.2 / s) - .05;
+      bag.seg([c * (rIn + 1.5), -th - .15, sn * (rIn + 1.5)], [c * rb, yb, sn * rb], .1, .1, 0x5a4230);
+      bag.seg([c * (rIn - .2), -th - .12, sn * (rIn - .2)], [c * (tR - .05), -th - .5, sn * (tR - .05)], .08, .08, 0x5a4230);   // short arm into the trunk
+    }
+    const m = bag.mesh(grade(new THREE.MeshLambertMaterial({ vertexColors: true }))); m.position.set(giant.x, top, giant.z); world.add(m);
+    if (rockGrid) for (let x = Math.floor(giant.x - rOut - 1); x <= giant.x + rOut + 1; x++) for (let z = Math.floor(giant.z - rOut - 1); z <= giant.z + rOut + 1; z++) {
+      const i = Math.floor(x + HALF), j = Math.floor(z + HALF); if (i < 0 || j < 0 || i >= rockN || j >= rockN) continue;
+      const px = i + .5 - HALF, pz = j + .5 - HALF, d = Math.hypot(px - giant.x, pz - giant.z), k = j * rockN + i;
+      if (d >= rIn + .3 && d <= rOut && rockGrid[k] < -1e8) { rockGrid[k] = top; rockLow[k] = top - th - .1; }   // stand on it; walk (or climb) under it
+    }
+    const ra = pr() * 6.2832;
+    PORCH = { x: giant.x, z: giant.z, top, rIn, rOut, mesh: m, gun: [giant.x + Math.cos(ra) * (rIn + 1.3), giant.z + Math.sin(ra) * (rIn + 1.3)] };
   }
 
   // Grenade pickup at the foot of the tallest tree: walk onto it for 5 grenades
@@ -4143,7 +4187,7 @@ function animalSpot(minFromPlayer, ok, extra) {
   }
   return null;
 }
-function beastGround(A, x, z) { const g = groundY(x, z); return A.kind === "seal" && iced ? Math.max(g, water) : g; }
+function beastGround(A, x, z) { const g = Math.max(groundAt(x, z), rockAround(x, z, .12, A.y, 1)); return A.kind === "seal" && iced ? Math.max(g, water) : g; }
 function targetOk(A, x, z) {                            // somewhere it could stand (trees and logs are handled while walking)
   if (A.kind === "seal") return sealOk(x, z);
   return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4;   // any slope: they can climb
@@ -4477,8 +4521,8 @@ const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gun
   prev: {}, mark: null, markT: 0, wristT: 0, avatar: null, gun: null, gunKind: "", head: new THREE.Vector3(0, 1.6, 0), headQ: new THREE.Quaternion(), gp: new THREE.Vector3(), gq: new THREE.Quaternion(),
   readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6, hOff: 0, hCal: false };
 try { const hs = parseFloat(localStorage.getItem("jt-height-off")); if (isFinite(hs)) vr.hOff = hs; } catch (_) {}
-const VR_SCOPE_FOV = [18, 9, 6, 4, 2.7, 2], VR_BINO_FOV = [11, 7, 4.6, 3];   // VR sniper ≈ 4.6×, 9×, 14×, 21×, 31×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
-const scopeFovs = () => vr.gunKind === "hunt" ? VR_SCOPE_FOV : ZOOM_FOV.pvp.slice(1);
+const VR_SCOPE_FOV = [18, 9, 5, 3, 2], VR_BINO_FOV = [11, 7, 4.6, 3];   // VR sniper ≈ 4.6×, 9×, 17×, 28×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
+const scopeFovs = () => vr.gunKind !== "hunt" ? ZOOM_FOV.pvp.slice(1) : lootMode() ? VR_SCOPE_FOV.slice(0, Math.max(1, Math.min(5, vr.own.hunt || 1))) : VR_SCOPE_FOV;   // better stars, more zoom steps (red = all 5)
 const XRV = { ok: false };
 renderer.xr.enabled = true;
 if (navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported("immersive-vr").then(ok => { XRV.ok = ok; if (ok) { $("vrRow").style.display = ""; if (intro.stage !== "done") $("introVR").classList.remove("hidden"); } }).catch(() => {});
@@ -6897,7 +6941,7 @@ vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 };
 const lootMode = () => VR_ON && (gameMode === "pvp" || gameMode === "hunt");   // guns are found on the map, with stars
 const tierOf = k => lootMode() ? (vr.own[k] || 0) : 1;
 const magOf = k => Math.max(1, Math.round(WEAP[k].mag * TIER.mag[Math.max(1, tierOf(k))]));
-const DROPS = new Map(); let dropSeq = 0;
+const DROPS = new Map(); let dropSeq = 0, PORCH = null;
 function pvpLoadout() {                                     // every spawn: a 1-star pistol and nothing else
   vr.own = { pistol: 1 };
   for (const k in WEAP) { const A = arms[k]; A.phase = 0; A.k = 0; A.popping = false; A.mag = k === "pistol" ? magOf("pistol") : 0; A.res = k === "pistol" ? WEAP.pistol.start : 0; }
@@ -6947,7 +6991,7 @@ function dropObj(d) {
   }
   g.position.set(d.x, d.y, d.z); scene.add(g); return g;
 }
-function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
+function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; if (d.y === undefined) d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
 function dropTake(id) {
   const d = DROPS.get(id); if (!d || d.got) return;
   if (d.type === "hp" || d.type === "sh") { d.got = true; d.back = PICK.back; d.obj.visible = false; return; }   // crosses come back after a while
@@ -6961,9 +7005,10 @@ function spawnPvpLoot() {                                   // seeded: everyone 
   for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
     let sp = null; for (let k = 0; k < 14 && !sp; k++) { const x = gx + (R() - .5) * cell * .85, z = gz + (R() - .5) * cell * .85; if (okSpot(x, z)) sp = [x, z]; }
     if (!sp) continue;
-    const r = R(), tier = 1 + TIER_ODDS.filter(o => r >= o).length;
-    dropAdd({ id: "g" + (gi++), type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: sp[0], z: sp[1] });
+    const r = R(), kind = kinds[Math.floor(R() * kinds.length)], tier = Math.min(kind === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);   // red sniper: only one, up the tallest tree
+    dropAdd({ id: "g" + (gi++), type: "gun", kind, tier, x: sp[0], z: sp[1] });
   }
+  if (PORCH) dropAdd({ id: "gRed", type: "gun", kind: "hunt", tier: 5, x: PORCH.gun[0], z: PORCH.gun[1], y: PORCH.top });
   if (gameMode === "pvp") for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
 }
 function dropsTick(I, dt) {
