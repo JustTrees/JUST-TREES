@@ -425,3 +425,12 @@ Read this first. It carries over the project, the person, the way we work, and e
   - Water: Mosasaurus / Plesiosaur in lakes.
 - Open question: how often the dino map comes up (e.g. 1 in 10 maps, or a host/menu setting).
 - Build notes: builders follow the `finish({...})` contract; add to SCORE, BEAST_NAME, NATIVE; 2-leg walkers (T. rex, raptors) need a 2-leg gait in updateAnimals (now only 4 legs animate).
+
+## 1.55 — 22 more Hunting animals (no dinos, no tracks)
+- Ron: add all the brainstormed animals, skip the dinos, no footprints for the legends.
+- `buildQuad(r, q)` — one shared four-legged builder; each kind is a spec in `QSPEC` (body size, legs, neck, head, ears, tail, coat pattern, extra parts like trunk/tusks/horns/antlers): elephant, giraffe, zebra, rhino, lion (half have manes), crocodile (near water, long tail), mountain goat (spawns high up), wild horse (5 coats), elk, moose, boar, caribou, musk ox (fur skirt).
+- `buildWolf` takes a palette + tail tip: coyote, fox, arctic fox (white in cold/polar, brown-grey otherwise). Sizes in `BEAST_SCALE`.
+- `buildTurkey` and `buildApe` (Bigfoot brown, Yeti white) walk on two legs — new 2-leg gait in updateAnimals (arms swing too). Legends: exactly 1 per map (Bigfoot temperate/boreal, Yeti tundra/polar), spawn 150 m+ away, notice you from 1.6× further (`wary`), 3 points per metre.
+- Flyers (`FLY`): big bird, eagle, snowy owl circle like before (`buildBird(r, cols)`); parrots fly in small fast flapping flocks, lower down.
+- Spawning goes a round at a time over the biome list (`spawnKind`), so every kind shows up before the animal cap. `HERD` kinds keep their group together. New SCORE / BEAST_NAME / NATIVE entries.
+- Test: dev/test_zoo.py (every biome spawns all its kinds, nothing broken; lineup shots with a shot dir).

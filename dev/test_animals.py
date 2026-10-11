@@ -11,7 +11,7 @@ async def main():
         r = await pg.evaluate("""() => { window.FREEZE = true; const out = [];
           for (const [lat, rough] of [[45, .9], [30, .5], [60, .8]]) {
           D.setMode('hunt'); D.set.size = 'medium'; D.set.weather = 'clear'; D.set.lat = lat; D.set.rough = rough; D.generate(); D.state = 'play';
-          const ground = D.beasts.filter(A => !A.dead && A.kind !== 'bird' && A.kind !== 'monkey');
+          const ground = D.beasts.filter(A => !A.dead && !A.wings && A.kind !== 'monkey');
           // calm wandering for 60 s: count jitter (trying to walk but not moving)
           let jitter = 0, walkWin = 0, longStuck = 0; const last = new Map(), run = new Map();
           for (let i = 0; i < 1800; i++) { D.updateAnimals(1 / 30);

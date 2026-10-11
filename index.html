@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.54</title>
+<title>JUST TREES 1.55</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.54";              // Just Trees 1.54
+const VERSION = "1.55";              // Just Trees 1.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3768,11 +3768,11 @@ function buildPanther(r, black) {
     .map(([x, y, z, rh, rk], i) => makeLeg(body, mat, x, y, z, i < 2 ? [.28, .075, .055] : [.32, .085, .055], [.26, .05, .045], pal, "paw", rh, rk));
   return finish({ root, body, head, legs, w: .2, rad: .3, step: .9, hit: [[0, .62, .3, .26], [0, .62, -.3, .26], [0, .05, .2, .14, 1]], walk: 1.2, run: 6, stride: 1.4, swing: .5, graze: .4 });
 }
-function buildWolf(r, pale) {
+function buildWolf(r, pale, palIn, tip) {
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
-  const pal = pale ? [0xb4ad9f, 0xd0cbc0, 0xeeeae2, 0xc8c2b4] : [0x46423e, 0x6e6a64, 0xc8c2b8, 0x8a857c];
+  const pal = palIn || (pale ? [0xb4ad9f, 0xd0cbc0, 0xeeeae2, 0xc8c2b4] : [0x46423e, 0x6e6a64, 0xc8c2b8, 0x8a857c]);
   const bb = new Bag().add(sweepGeo([[.76, -.56, .03, .04], [.78, -.5, .11, .14], [.8, -.3, .13, .18], [.8, 0, .14, .2], [.84, .22, .16, .23], [.9, .4, .13, .18], [.96, .5, .08, .1]], 22, 3, furCol(pal)));
-  bb.add(sweepGeo([[.78, -.54, .04, .05], [.68, -.66, .07, .08], [.55, -.74, .07, .08], [.45, -.78, .04, .04], [.42, -.79, .01, .01]], 10, 3, furCol(pal, (c, u) => { if (u > .8) c.set(0x1e1c1a); })));
+  bb.add(sweepGeo([[.78, -.54, .04, .05], [.68, -.66, .07, .08], [.55, -.74, .07, .08], [.45, -.78, .04, .04], [.42, -.79, .01, .01]], 10, 3, furCol(pal, (c, u) => { if (u > .8) c.set(tip || 0x1e1c1a); })));
   body.add(bb.mesh(mat));
   const head = new THREE.Group(); head.position.set(0, .93, .48); body.add(head);
   const hb = new Bag().add(sweepGeo([[0, 0, .1, .12], [.04, .08, .1, .11], [.06, .16, .095, .095], [.04, .24, .06, .06], [.02, .33, .04, .035], [.02, .37, .02, .02]], 18, 3,
@@ -3816,12 +3816,12 @@ function buildRabbit(r, white) {
     .map(([x, y, z, rh, rk], i) => makeLeg(body, mat, x, y, z, i < 2 ? [.08, .022, .018] : [.11, .05, .03], i < 2 ? [.08, .016, .014] : [.12, .025, .018], pal, i < 2 ? "paw" : "long", rh, rk));
   return finish({ root, body, head, legs, w: .14, rad: .15, step: .4, hit: [[0, .2, 0, .17], [0, 0, .06, .1, 1]], walk: 3, run: 4.5, stride: .8, swing: .7, range: 12, hop: true, graze: .5 });
 }
-function buildBird(r) {
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body);
-  const black = amat(0x16161a), white = amat(0xd8d8d8), skin = amat(0xb07a6a);
+function buildBird(r, cols) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); cols = cols || BIRD_COL.bird;
+  const black = amat(cols[0]), white = amat(cols[1]), skin = amat(cols[2]), beak = amat(cols[3]);
   aPart(body, roundBox(.32, .26, .95, .1), black, 0, 0, 0);
   aPart(body, new THREE.SphereGeometry(.09, 10, 8), skin, 0, .05, .55);
-  aPart(body, new THREE.ConeGeometry(.03, .1, 6), white, 0, .04, .66, Math.PI / 2);
+  aPart(body, new THREE.ConeGeometry(.03, .1, 6), beak, 0, .04, .66, Math.PI / 2);
   aPart(body, roundBox(.4, .04, .32, .02), black, 0, 0, -.6);
   const wings = [-1, 1].map(s => {
     const w = new THREE.Group(); w.position.set(s * .14, .04, 0); body.add(w);
@@ -3832,15 +3832,174 @@ function buildBird(r) {
   });
   return { root, body, wings, w: .15, hit: [[0, 0, 0, .45], [.8, 0, 0, .38], [-.8, 0, 0, .38], [1.35, 0, 0, .3], [-1.35, 0, 0, .3]] };
 }
-const SCORE = { buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6 };
-const BEAST_NAME = { buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey" };
+/* ---- more animals (1.55): one shared four-legged builder tuned per kind, plus a turkey and the two legends ---- */
+// q: pal [back, side, belly, lower leg], L body length, W/D half width/depth, leg (hind) height, frontK, hump,
+//    neck length / rise angle / thickness, head length / half width / half height / downward tilt, ear [r, len, splay], tail [len, r, droop, tuft]
+function buildQuad(r, q) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const { pal, L, W, D } = q, legB = q.leg, legF = q.leg * (q.frontK || 1), ycB = legB + D * .55, ycF = legF + D * .55;
+  const Y = z => ycB + (ycF - ycB) * (z / L + .5), hump = q.hump || 0;
+  const secs = [[-.5, .12, .12], [-.45, .7, .8], [-.3, 1, 1], [0, 1.02, 1.02], [.28, .98, 1.06], [.42, .8, .92], [.5, .45, .55]]
+    .map(([k, w, h]) => [Y(k * L) + (k > .1 ? hump * D * smooth(.1, .3, k) : 0), k * L, W * w, D * h]);
+  const bb = new Bag().add(sweepGeo(secs, 24, 3, furCol(pal, q.coat)));
+  if (q.tail) { const [tl, tr, td, tuft] = q.tail, t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - tl * Math.sin(td), t0[2] - tl * Math.cos(td)];
+    bb.seg(t0, t1, tr, tr * .55, q.tailC || pal[0]); if (tuft) bb.add(new THREE.SphereGeometry(1, 8, 6).scale(tr * 1.6, tr * 3, tr * 1.6), tuft, t1[0], t1[1] - tr, t1[2]); }
+  const ntk = q.nt, nb = [Y(L * .36) + D * .25 + hump * D, L * .36], nt = [nb[0] + q.neck * Math.sin(q.na), nb[1] + q.neck * Math.cos(q.na)];
+  const nm = [(nb[0] + nt[0]) / 2, (nb[1] + nt[1]) / 2];
+  bb.add(sweepGeo([[nb[0] - D * .3, nb[1] - .05, ntk * 1.35, ntk * 1.6], [nb[0], nb[1], ntk * 1.3, ntk * 1.45], [nm[0], nm[1], ntk * 1.05, ntk * 1.1], [nt[0], nt[1], ntk * .9, ntk * .95]], 16, 3, furCol(q.neckPal || pal, q.coat)));
+  if (q.skirt) bb.add(sweepGeo([[Y(-L * .45) - D * .35, -L * .45, W * .9, D * .5], [Y(-L * .2) - D * .45, -L * .2, W * 1.12, D * .6], [Y(L * .2) - D * .45, L * .2, W * 1.12, D * .62], [Y(L * .42) - D * .35, L * .42, W * .9, D * .55]], 18, 2, furCol(q.skirt)));
+  body.add(bb.mesh(mat));
+  const head = new THREE.Group(); head.position.set(0, nt[0], nt[1]); body.add(head);
+  const { hl, hw, hh } = q, dy = -Math.sin(q.ht), dz = Math.cos(q.ht), at = t => [dy * t * hl, dz * t * hl], muz = q.muz || .5;
+  const noseC = new THREE.Color(q.noseC || 0x16110e);
+  const hb = new Bag().add(sweepGeo([[-.15, .8, .85], [.1, 1, 1], [.4, .92, .9], [.7, .7, .72], [.95, muz, muz * 1.05], [1, .15, .15]].map(([t, w, h]) => [...at(t), hw * w, hh * h]),
+    18, 3, furCol(q.headPal || q.neckPal || pal, (c, u, cy, cx) => { if (q.face) q.face(c, u, cy, cx); if (u > .93) c.copy(noseC); })));
+  for (const s of [-1, 1]) {
+    const e = at(.3); hb.add(new THREE.SphereGeometry(Math.max(.012, hh * .13), 8, 6), 0x0a0806, s * hw * .86, e[0] + hh * .3, e[1]);
+    if (q.ear) { const [er, el, sp] = q.ear; hb.add(new THREE.ConeGeometry(er, el, 8).scale(1, 1, .45), q.earC || pal[0], s * hw * .7, hh * .85, -hh * .1, -.4, 0, -s * sp); }
+  }
+  const P = { hb, bb, at, hl, hw, hh, L, W, D, Y, nb, nt, ntk, pal };
+  if (q.extra) q.extra(P);
+  head.add(hb.mesh(mat));
+  const hipF = Y(L * .36) - D * .25, hipB = Y(-L * .36) - D * .2, lw = q.lw, pillar = q.pillar;
+  const legs = [[1, hipF, L * .36, 0, 0], [-1, hipF, L * .36, 0, 0], [1, hipB, -L * .36, q.bend ? -.2 : 0, q.bend ? .4 : 0], [-1, hipB, -L * .36, q.bend ? -.2 : 0, q.bend ? .4 : 0]]
+    .map(([s, hy, z, rh, rk], i) => { const tot = hy - .05, l1 = tot * .48, l2 = tot * .52, k = i < 2 ? 1 : 1.2;
+      return makeLeg(body, mat, s * W * (q.legX || .6), hy, z, [l1, lw * k, lw * .72 * k], pillar ? [l2, lw * .85, lw * .8] : [l2, lw * .6, lw * .4], pal, q.foot || "hoof", rh, rk); });
+  const R = Math.max(W, D) * 1.15, hit = [[0, Y(L * .25), L * .25, R], [0, Y(-L * .25), -L * .25, R], [0, ...at(.45), Math.max(hw, hh) * 1.4, 1]];
+  if (q.neck > .5) { const n = Math.ceil(q.neck / (ntk * 2.6)); for (let i = 1; i < n; i++) { const t = i / n; hit.push([0, nb[0] + (nt[0] - nb[0]) * t, nb[1] + (nt[1] - nb[1]) * t, ntk * 1.6]); } }
+  if (q.leg > .9) for (const z of [L * .36, -L * .36]) hit.push([0, q.leg * .5, z, W * .85]);   // tall legs can be hit too
+  return finish({ root, body, head, legs, w: W, rad: q.rad || W * 1.1, step: q.step || .8, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
+}
+const horns = (hb, s, pts, r0, r1, col) => { for (let i = 0; i < pts.length - 1; i++) { const t0 = i / (pts.length - 1), t1 = (i + 1) / (pts.length - 1); hb.seg(pts[i].map((v, k) => k ? v : v * s), pts[i + 1].map((v, k) => k ? v : v * s), r0 + (r1 - r0) * t0, r0 + (r1 - r0) * t1, col); } };
+const pickR = (r, a) => a[Math.floor(r() * a.length)];
+const QSPEC = {
+  elephant: r => ({ pal: [0x6a6662, 0x77736e, 0x6a6560, 0x625e5a], L: 3.2, W: .78, D: .9, leg: 1.75, frontK: 1.06, hump: .05, neck: .35, na: .35, nt: .5, hl: .85, hw: .42, hh: .5, ht: .55, muz: .6,
+    lw: .24, pillar: true, foot: "paw", noseC: 0x6a6662, tail: [1, .04, 1.3, 0x2a2622], ear: null, legX: .55,
+    extra: P => { const { hb, at, hw, hh } = P, e = at(1);
+      for (const s of [-1, 1]) {
+        hb.add(new THREE.SphereGeometry(1, 12, 8).scale(.06, .62, .5), 0x6e6a66, s * (hw + .1), .02, -.05, 0, s * .35, 0);              // big ears
+        horns(hb, s, [[.14, e[0] + .05, e[1] - .15], [.2, e[0] - .4, e[1] + .25], [.16, e[0] - .55, e[1] + .65]], .065, .03, 0xe8e0cc);      // tusks
+      }
+      hb.add(sweepGeo([[e[0] + .05, e[1] - .1, .17, .17], [e[0] - .4, e[1] + .1, .13, .13], [e[0] - .9, e[1] + .16, .1, .1], [e[0] - 1.35, e[1] + .1, .075, .075], [e[0] - 1.6, e[1] + .2, .06, .06]], 12, 3, furCol([0x6a6662, 0x6e6a66, 0x5e5a56])));   // the trunk
+    }, walk: 1.3, run: 4.5, stride: 2.6, swing: .3, graze: .25, rad: .8, step: .9, range: 45 }),
+  giraffe: r => { const dark = new THREE.Color(0x7a4a22), coat = (c, u, cy, cx) => { const a = u * 16 + hash1(Math.floor((cx + 1) * 2.5) * 7.1) * .6, b = (cx + 1) * 2 + cy * 1.6; if (a % 1 > .16 && b - Math.floor(b) > .16) c.lerp(dark, .85); };
+    return { pal: [0xd8be8e, 0xe0c898, 0xeee2c8, 0xd8c8a8], L: 1.6, W: .32, D: .42, leg: 1.85, frontK: 1.15, neck: 2.0, na: 1.05, nt: .15, hl: .55, hw: .1, hh: .13, ht: .7, lw: .085, bend: true,
+      coat, ear: [.04, .14, 1.2], tail: [.85, .025, 1.35, 0x1e1410],
+      extra: P => { for (const s of [-1, 1]) horns(P.hb, s, [[.04, P.hh * .8, .02], [.05, P.hh + .14, -.01]], .022, .028, 0x3a2a1e); },
+      walk: 1.4, run: 6, stride: 3, swing: .4, graze: .15, rad: .5, step: .9, range: 40 }; },
+  zebra: r => ({ pal: [0xefefea, 0xf0f0ea, 0xf4f4f0, 0xe6e6e0], L: 1.45, W: .28, D: .36, leg: .82, neck: .65, na: .95, nt: .15, hl: .55, hw: .1, hh: .13, ht: .95, lw: .07, bend: true,
+    coat: (c, u, cy) => { if (Math.sin(u * 52 + cy * 1.2) > .05 && cy > -.65) c.set(0x15151a); }, face: (c, u) => { if (Math.sin(u * 40) > .3) c.set(0x15151a); },
+    ear: [.04, .15, .3], earC: 0x2a2a2a, noseC: 0x1a1a1a, tail: [.6, .03, 1.2, 0x15151a],
+    extra: P => P.bb.seg([0, P.nb[0] + P.ntk * 1.3, P.nb[1] - .06], [0, P.nt[0] + P.ntk * 1.05, P.nt[1] - .03], P.ntk * .5, P.ntk * .35, 0x15151a),
+    walk: 1.5, run: 7, stride: 2.4, swing: .5, graze: 1.1, rad: .35, range: 40 }),
+  horse: r => { const pal = pickR(r, [[0x5a3a22, 0x6e4a2c, 0x7a5a3c, 0x1e1612], [0x8a4a22, 0x9a5a2e, 0xa8704a, 0x7a4a2a], [0x1e1a18, 0x26201c, 0x2e2824, 0x1a1614], [0x9a948a, 0xb0aa9e, 0xc8c2b6, 0x6a6660], [0xc8a86a, 0xd4b67a, 0xe6d4aa, 0x8a7050]]), mane = r() < .5 ? 0x1a1410 : pal[0];
+    return { pal, L: 1.6, W: .3, D: .38, leg: .92, neck: .72, na: .95, nt: .16, hl: .6, hw: .1, hh: .14, ht: .9, lw: .075, bend: true, ear: [.04, .15, .25], noseC: 0x2a221e, tail: [.75, .05, 1.2, null], tailC: mane,
+      face: r() < .4 ? (c, u, cy, cx) => { if (Math.abs(cx) < .3 && cy > -.2 && u > .25) c.set(0xf0ece4); } : null,
+      extra: P => P.bb.seg([0, P.nb[0] + P.ntk * 1.3, P.nb[1] - .06], [0, P.nt[0] + P.ntk * 1.05, P.nt[1] - .03], P.ntk * .55, P.ntk * .4, mane),
+      walk: 1.6, run: 8, stride: 2.6, swing: .5, graze: 1.15, rad: .38, range: 45 }; },
+  rhino: r => ({ pal: [0x6e6a64, 0x7a766e, 0x8a857c, 0x6a665e], L: 2.3, W: .55, D: .6, leg: .62, hump: .1, neck: .3, na: .2, nt: .42, hl: .75, hw: .25, hh: .3, ht: .45, muz: .6, lw: .16, pillar: true, foot: "paw",
+    noseC: 0x5a5650, ear: [.06, .18, .3], tail: [.5, .03, 1.4, 0x2a2622],
+    extra: P => { const { hb, at, hh } = P, a = at(.88), b = at(.6);
+      hb.seg([0, a[0] + hh * .4, a[1]], [0, a[0] + hh * .4 + .5, a[1] + .14], .11, .012, 0xb0a898); hb.seg([0, b[0] + hh * .55, b[1]], [0, b[0] + hh * .55 + .24, b[1] + .04], .08, .012, 0xb0a898); },
+    walk: 1.1, run: 6, stride: 2, swing: .35, graze: .6, rad: .65, range: 40 }),
+  lion: r => { const male = r() < .5;
+    return { pal: [0xb08a52, 0xc49a60, 0xe0caa0, 0xb89060], L: 1.5, W: .25, D: .3, leg: .58, neck: .3, na: .5, nt: .19, hl: .38, hw: .15, hh: .16, ht: .25, muz: .6, lw: .085, foot: "paw", bend: true,
+      ear: [.045, .08, .3], noseC: 0x3a2622, tail: [.85, .03, .9, 0x2a1e14],
+      extra: P => { if (male) P.hb.add(new THREE.SphereGeometry(1, 14, 10).scale(.26, .3, .24), 0x7a5028, 0, .02, -.06); },
+      walk: 1.3, run: 7, stride: 1.6, swing: .5, graze: .4, rad: .32, range: 35 }; },
+  crocodile: r => ({ pal: [0x3a4228, 0x4a5232, 0xb4ac80, 0x3a4228], L: 1.4, W: .32, D: .17, leg: .2, neck: .12, na: 0, nt: .2, hl: .75, hw: .17, hh: .1, ht: .04, muz: .45, lw: .05, foot: "paw", legX: .95,
+    coat: (c, u, cy) => { if (cy > .55 && (u * 36) % 1 < .45) c.multiplyScalar(.7); }, noseC: 0x2a3020,
+    extra: P => { const { bb, Y, L, W, D } = P; const y = Y(-L / 2);
+      bb.add(sweepGeo([[y, -L * .45, W * .7, D * .85], [y - .02, -L * .5 - .6, W * .45, D * .6], [y - .05, -L * .5 - 1.2, W * .25, D * .4], [y - .07, -L * .5 - 1.7, .03, .03]], 12, 3, furCol([0x3a4228, 0x4a5232, 0xb4ac80], (c, u, cy) => { if (cy > .5 && (u * 20) % 1 < .45) c.multiplyScalar(.7); })));
+      for (const s of [-1, 1]) P.hb.add(new THREE.SphereGeometry(.035, 8, 6), 0x3a4228, s * .09, P.hh * .9, .12); },
+    walk: .6, run: 3.2, stride: .9, swing: .5, graze: 0, rad: .35, step: .35, range: 10 }),
+  goat: r => ({ pal: [0xeeeae0, 0xf2eee6, 0xe6e0d4, 0xe0dace], L: .95, W: .2, D: .27, leg: .5, hump: .12, neck: .3, na: .9, nt: .11, hl: .3, hw: .07, hh: .09, ht: .95, lw: .055, bend: true,
+    ear: [.025, .1, .9], tail: [.1, .03, 1, null], noseC: 0x2a2622,
+    extra: P => { const { hb, at, hh } = P, c = at(.8);
+      for (const s of [-1, 1]) horns(hb, s, [[.035, hh * .8, .04], [.045, hh + .14, -.04], [.05, hh + .17, -.13]], .018, .006, 0x16130f);
+      hb.seg([0, c[0] - hh * .6, c[1]], [0, c[0] - hh * .6 - .14, c[1] - .02], .03, .008, 0xf2eee6); },          // beard
+    walk: 1.1, run: 5, stride: 1.2, swing: .45, graze: 1, rad: .25, step: 1.4, range: 25 }),
+  elk: r => ({ pal: [0x7a5a3a, 0x9a7a52, 0x5a4030, 0x3a2a1e], neckPal: [0x3e2a1c, 0x4a3222, 0x3a2618], L: 1.6, W: .32, D: .42, leg: .95, neck: .65, na: .85, nt: .17, hl: .55, hw: .1, hh: .13, ht: 1.0, lw: .075, bend: true,
+    ear: [.045, .16, 1.0], tail: [.1, .04, 1, null], tailC: 0xd8c8a8,
+    extra: P => { const { hb, hh } = P, c = 0xd8ccb0;
+      for (const s of [-1, 1]) { horns(hb, s, [[.05, hh * .8, 0], [.18, hh + .25, -.15], [.32, hh + .55, -.3], [.4, hh + .85, -.36], [.38, hh + 1.05, -.26]], .03, .012, c);
+        for (const [p, q] of [[[.12, hh + .14, -.08], [.2, hh + .18, .25]], [[.15, hh + .2, -.12], [.22, hh + .3, .18]], [[.28, hh + .45, -.25], [.36, hh + .66, .02]], [[.37, hh + .7, -.34], [.47, hh + .9, -.12]]]) hb.seg([p[0] * s, p[1], p[2]], [q[0] * s, q[1], q[2]], .018, .005, c); } },
+    walk: 1.4, run: 6.5, stride: 2.4, swing: .45, graze: 1.2, rad: .4, range: 40 }),
+  moose: r => ({ pal: [0x2a1e16, 0x3a2a1e, 0x4a3a2a, 0x8a7a64], L: 1.9, W: .38, D: .5, leg: 1.12, frontK: 1.08, hump: .18, neck: .5, na: .55, nt: .24, hl: .75, hw: .13, hh: .17, ht: 1.15, muz: .75, lw: .085, bend: true,
+    ear: [.05, .2, 1.1], tail: [.1, .04, 1, null],
+    extra: P => { const { hb, hh, at } = P, c = 0xc8b898, t = at(.5);
+      hb.seg([0, t[0] - hh * .8, t[1] - .05], [0, t[0] - hh * .8 - .3, t[1] - .02], .05, .02, 0x2a1e16);                               // the bell under the throat
+      for (const s of [-1, 1]) { hb.seg([s * .05, hh * .8, -.02], [s * .25, hh + .1, -.05], .04, .035, c);
+        hb.add(new THREE.BoxGeometry(.6, .035, .38), c, s * .5, hh + .2, -.03, 0, 0, s * .35);                                        // wide flat antlers
+        for (let k = 0; k < 5; k++) hb.seg([s * (.3 + k * .1), hh + .17 + k * .035, .14], [s * (.34 + k * .12), hh + .32 + k * .05, .2], .02, .004, c); } },
+    walk: 1.2, run: 6, stride: 2.6, swing: .45, graze: 1.0, rad: .45, range: 40 }),
+  boar: r => ({ pal: [0x2e2620, 0x3e342a, 0x4a3e32, 0x221c18], L: 1.1, W: .22, D: .3, leg: .36, hump: .15, neck: .14, na: .1, nt: .2, hl: .45, hw: .12, hh: .15, ht: .5, muz: .55, lw: .055,
+    ear: [.04, .1, .5], tail: [.25, .015, 1.4, 0x1a1410], noseC: 0x4a3a34,
+    extra: P => { const e = P.at(.9); for (const s of [-1, 1]) horns(P.hb, s, [[.06, e[0] - .02, e[1] - .04], [.1, e[0] + .05, e[1] + .02], [.08, e[0] + .1, e[1] - .02]], .016, .005, 0xeee6d4); },
+    walk: 1.2, run: 5.5, stride: 1, swing: .5, graze: 1.0, rad: .28, step: .7, range: 25 }),
+  caribou: r => ({ pal: [0x6a5a48, 0x8a7a64, 0xe8e2d6, 0x5a4a3a], neckPal: [0xd0c8b8, 0xdcd4c4, 0xf0ece4], L: 1.45, W: .3, D: .38, leg: .85, neck: .55, na: .8, nt: .15, hl: .45, hw: .1, hh: .12, ht: 1.0, lw: .07, bend: true,
+    ear: [.035, .12, 1.0], tail: [.1, .04, 1, null], tailC: 0xf0ece4,
+    extra: P => { const { hb, hh } = P, c = 0xd8ccb0;
+      for (const s of [-1, 1]) { horns(hb, s, [[.05, hh * .8, 0], [.2, hh + .3, -.2], [.3, hh + .65, -.25], [.28, hh + .9, -.05], [.22, hh + 1.0, .12]], .025, .01, c);
+        hb.add(new THREE.BoxGeometry(.02, .12, .2), c, s * .06, hh + .2, .18, .4, 0, 0);                                                   // the shovel over the face
+        hb.seg([s * .3, hh + .7, -.24], [s * .38, hh + .82, -.05], .015, .005, c); } },
+    walk: 1.5, run: 7, stride: 2.2, swing: .45, graze: 1.1, rad: .35, range: 40 }),
+  muskox: r => ({ pal: [0x2a2018, 0x3a2c20, 0x2e241a, 0xc8bca8], L: 1.55, W: .4, D: .5, leg: .45, hump: .2, neck: .2, na: .3, nt: .32, hl: .5, hw: .17, hh: .2, ht: .9, muz: .65, lw: .08,
+    skirt: [0x2e241a, 0x2a2018, 0x241c14], ear: null, tail: null,
+    extra: P => { const { hb, hh } = P; for (const s of [-1, 1]) horns(hb, s, [[.04, hh + .03, .04], [.18, hh - .02, .02], [.26, -.12, .08], [.22, -.06, .25]], .07, .02, 0xd8ccb4); },
+    walk: .9, run: 5, stride: 1.4, swing: .3, graze: 1.0, rad: .45, range: 35 })
+};
+function buildTurkey(r) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const pal = [0x2a2420, 0x3a3028, 0x241e1a, 0x9a7a6a];
+  const bb = new Bag().add(sweepGeo([[.56, -.3, .05, .05], [.56, -.25, .16, .18], [.56, -.05, .22, .24], [.6, .15, .18, .2], [.7, .26, .08, .08]], 18, 3, furCol(pal, (c, u, cy, cx) => { if (Math.abs(cx) > .7 && (u * 14) % 1 < .3) c.multiplyScalar(1.6); })));
+  for (const ry of [0, Math.PI]) bb.add(new THREE.CircleGeometry(.42, 16, 0, Math.PI).rotateY(ry), 0x4a3a2a, 0, .62, -.3 - (ry ? .01 : 0));          // the fan tail (both faces)
+  bb.add(new THREE.TorusGeometry(.4, .02, 4, 16, Math.PI), 0xc8b090, 0, .62, -.305);
+  body.add(bb.mesh(mat));
+  const head = new THREE.Group(); head.position.set(0, .86, .32); body.add(head);
+  const hb = new Bag().add(sweepGeo([[-.16, -.02, .04, .04], [-.06, 0, .035, .035], [0, .02, .045, .045], [.01, .06, .035, .03], [.0, .09, .01, .01]], 10, 2, furCol([0x7aa0c8, 0x8ab0d0, 0xc84040])));
+  hb.add(new THREE.ConeGeometry(.014, .05, 6), 0xc8b088, 0, .0, .1, Math.PI / 2).seg([0, -.01, .07], [0, -.09, .06], .018, .01, 0xc02828);
+  for (const s of [-1, 1]) hb.add(new THREE.SphereGeometry(.009, 6, 6), 0x080606, s * .035, .02, .04);
+  head.add(hb.mesh(mat));
+  const legs = [-1, 1].map(s => makeLeg(body, mat, s * .08, .44, 0, [.2, .04, .03], [.22, .02, .015], [0x9a7a6a, 0xa88a7a, 0, 0xa88a7a], "paw", 0, 0));
+  return finish({ root, body, head, legs, w: .2, rad: .2, step: .5, hit: [[0, .58, 0, .3], [0, 0, .04, .09, 1]], walk: 1.1, run: 4.5, stride: .7, swing: .5, graze: 1.0, range: 18 });
+}
+function buildApe(r, yeti) {                                // Bigfoot and the Yeti: big, upright, long arms
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const pal = yeti ? [0xe8e6e2, 0xf0eeea, 0xdcdad4, 0xd0cec8] : [0x3a2618, 0x4a3020, 0x3a281a, 0x2e1e14], face = yeti ? 0x6a7280 : 0x2a1e18;
+  const bb = new Bag().add(sweepGeo([[.9, 0, .27, .2], [1.2, .02, .36, .27], [1.55, .05, .45, .32], [1.85, .08, .5, .32], [2.0, .1, .36, .26], [2.12, .12, .16, .15], [2.16, .13, .06, .06]], 20, 3, furCol(pal)));
+  body.add(bb.mesh(mat));
+  const head = new THREE.Group(); head.position.set(0, 2.18, .16); body.add(head);
+  const hb = new Bag().add(new THREE.SphereGeometry(1, 14, 10).scale(.15, .18, .16), pal[1], 0, 0, 0).add(new THREE.SphereGeometry(1, 12, 8).scale(.1, .1, .06), face, 0, -.02, .12);
+  hb.add(new THREE.SphereGeometry(1, 10, 6).scale(.16, .05, .09), pal[0], 0, .1, .02).add(new THREE.ConeGeometry(.13, .16, 10), pal[1], 0, .18, -.03);   // brow and pointed crown                     // heavy brow
+  for (const s of [-1, 1]) hb.add(new THREE.SphereGeometry(.014, 6, 6), 0x0a0806, s * .045, .02, .175);
+  head.add(hb.mesh(mat));
+  const legs = [-1, 1].map(s => makeLeg(body, mat, s * .19, 1.02, 0, [.5, .17, .13], [.5, .13, .1], pal, "long", 0, 0));
+  const arms = [-1, 1].map(s => makeLeg(body, mat, s * .54, 1.92, .08, [.55, .14, .11], [.55, .11, .09], pal, "paw", .05, -.25));
+  return finish({ root, body, head, legs, arms, w: .38, rad: .38, step: .8, hit: [[0, 1.55, .05, .42], [0, 1.05, 0, .32], [0, .5, 0, .24], [0, 0, 0, .2, 1]], walk: 1.4, run: 6.5, stride: 1.7, swing: .5, graze: .2, range: 60, wary: 1.6 });
+}
+const BIRD_COL = { bird: [0x16161a, 0xd8d8d8, 0xb07a6a, 0xd8d8d8], eagle: [0x3a2a1c, 0x4a3624, 0xf2f0ea, 0xe0b030], owl: [0xeceae4, 0xd8d4cc, 0xf2f0ec, 0x2a2622] };
+const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c020, 0x2a62d8, 0x2a2622], [0x2aa040, 0xd83020, 0x3ab050, 0xe8e0d0], [0xe8c020, 0x2aa040, 0xe8a020, 0x2a2622]];
+const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
+const HERD = { baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1 };
+const BEAST_SCALE = { polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
+const SCORE = { buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
+  elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
+  coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 3, yeti: 3 };
+const BEAST_NAME = { buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
+  elephant: "Elephant", giraffe: "Giraffe", zebra: "Zebra", rhino: "Rhino", lion: "Lion", crocodile: "Crocodile", parrot: "Parrot", goat: "Mountain goat", horse: "Wild horse",
+  elk: "Elk", moose: "Moose", boar: "Boar", coyote: "Coyote", fox: "Fox", turkey: "Turkey", eagle: "Eagle", caribou: "Caribou", muskox: "Musk ox", arcticfox: "Arctic fox",
+  owl: "Snowy owl", bigfoot: "BIGFOOT", yeti: "YETI" };
 // what lives where: [kind, how many on a 640 m map, group size]
 const NATIVE = {
-  tropical:  [["monkey", 6, [4, 7]], ["baboon", 5, [4, 8]], ["panther", 4], ["bird", 8]],
-  temperate: [["buck", 8, [2, 6]], ["bear", 6], ["panther", 3], ["rabbit", 25], ["bird", 8]],
-  boreal:    [["buck", 7, [2, 6]], ["bear", 6], ["wolf", 4, [4, 7]], ["rabbit", 25], ["bird", 6]],
-  tundra:    [["wolf", 4, [4, 7]], ["rabbit", 25], ["polar", 5], ["seal", 10, [2, 5]], ["bird", 6]],
-  polar:     [["polar", 7], ["seal", 14, [2, 5]], ["bird", 5]]
+  tropical:  [["elephant", 3, [2, 5]], ["giraffe", 3, [2, 4]], ["zebra", 3, [4, 7]], ["rhino", 3], ["lion", 2, [2, 4]], ["crocodile", 5], ["monkey", 4, [3, 6]],
+              ["baboon", 3, [4, 7]], ["panther", 3], ["parrot", 3, [4, 6]], ["bird", 4]],
+  temperate: [["buck", 6, [2, 5]], ["bear", 4], ["horse", 3, [4, 7]], ["boar", 4, [2, 5]], ["coyote", 3, [2, 4]], ["fox", 4], ["turkey", 4, [3, 6]], ["goat", 3, [2, 5]],
+              ["panther", 2], ["rabbit", 18], ["eagle", 3], ["bird", 4], ["bigfoot", 1]],
+  boreal:    [["buck", 5, [2, 5]], ["bear", 4], ["elk", 4, [2, 5]], ["moose", 4], ["caribou", 3, [4, 7]], ["wolf", 3, [4, 6]], ["fox", 3], ["goat", 2, [2, 4]],
+              ["rabbit", 18], ["eagle", 3], ["owl", 2], ["bird", 3], ["bigfoot", 1]],
+  tundra:    [["caribou", 4, [4, 8]], ["muskox", 3, [3, 6]], ["wolf", 3, [4, 6]], ["arcticfox", 5], ["polar", 4], ["seal", 8, [2, 5]], ["rabbit", 18], ["owl", 4], ["bird", 3], ["yeti", 1]],
+  polar:     [["polar", 6], ["seal", 12, [2, 5]], ["arcticfox", 3], ["owl", 3], ["bird", 3], ["yeti", 1]]
 };
 const BEAST_CAP = isTouch ? 90 : 170, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
 const beastDraw = () => vr.on ? 750 * Math.min(3, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
@@ -3941,34 +4100,48 @@ function walkable(A, x, z) {                              // logs and small rock
 }
 function addGround(kind, x, z, home) {
   const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
-  const b = kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
+  const b = QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
+          : kind === "coyote" ? buildWolf(r, false, [0x7a6448, 0x9a8466, 0xd8ccb4, 0x8a7458]) : kind === "fox" ? buildWolf(r, false, [0xa84a1e, 0xc0602a, 0xeee6da, 0x2a1e16], 0xf4f0ea)
+          : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
+          : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
           : kind === "panther" ? buildPanther(r, biomeOf(lat) === "tropical") : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
-  const sc = kind === "polar" ? 1.15 : 1; b.root.scale.setScalar(sc);
+  const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc;
   const A = Object.assign({ range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
   A.y = beastGround(A, x, z);
   animalGroup.add(A.root); beasts.push(A); return A;
 }
+function spawnKind(kind, grp, peak) {
+  if (kind === "monkey") { spawnMonkeys(grp); return; }
+  if (FLY[kind]) {                                           // birds circling on the thermals (parrots in small fast flocks)
+    const parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : 1.6;
+    const cx = (Math.random() * 2 - 1) * HALF * .6, cz = (Math.random() * 2 - 1) * HALF * .6, rad = (parrot ? 25 : 35) + Math.random() * 55, ang = Math.random() * 6.28;
+    const w = (Math.random() < .5 ? 1 : -1) * (parrot ? .1 + Math.random() * .05 : .03 + Math.random() * .03), m = grp ? grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1)) : 1;
+    for (let j = 0; j < m && beasts.length < BEAST_CAP; j++) {
+      const bd = buildBird(Math.random, parrot ? PARROT_COL[Math.floor(Math.random() * PARROT_COL.length)] : BIRD_COL[kind]); bd.root.scale.setScalar(sc);
+      const A = Object.assign(bd, { kind, scale: sc, cx, cz, rad, ang: ang + (j ? (Math.random() - .5) * .3 : 0), rOff: j ? (Math.random() - .5) * 6 : 0, altOff: parrot ? -12 + (Math.random() - .5) * 4 : 0, flappy: parrot,
+        w, alt: 0, altUp: 0, flapT: Math.random() * 8, x: 0, y: 0, z: 0, vy: 0, dead: false, deadT: 0, landed: false });
+      A.alt = birdAlt(A); animalGroup.add(A.root); beasts.push(A);
+    }
+    return;
+  }
+  const ok = kind === "seal" ? sealOk : okSpot;
+  const extra = kind === "polar" ? nearWater : kind === "crocodile" ? (x, z) => nearWater(x, z) && H(x, z) < water + 4
+              : kind === "goat" ? (x, z) => H(x, z) > water + (peak - water) * .5 : null;
+  const s = animalSpot(LEGEND[kind] ? 150 : kind === "rabbit" ? 25 : 45, ok, extra); if (!s) return;
+  if (grp) {                                                 // packs, herds and troops stay together
+    const home = [s[0], s[1]], m = grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1)), sp = kind === "elephant" || kind === "giraffe" ? 16 : 8;
+    for (let j = 0; j < m; j++) { const x = s[0] + (Math.random() - .5) * sp, z = s[1] + (Math.random() - .5) * sp; if (ok(x, z)) addGround(kind, x, z, home); }
+  } else addGround(kind, s[0], s[1]);
+}
 function spawnAnimals() {
   clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
   const k = Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
-  for (const [kind, base, grp] of NATIVE[biome] || NATIVE.temperate) {
-    if (kind === "monkey") { for (let i = 0; i < n(base); i++) spawnMonkeys(grp); continue; }
-    for (let i = 0; i < n(base) && beasts.length < BEAST_CAP; i++) {
-      if (kind === "bird") {                                  // big birds, circling slowly on the thermals
-        const bd = buildBird(Math.random), sc = 1.6; bd.root.scale.setScalar(sc);
-        const A = Object.assign(bd, { kind, scale: sc, cx: (Math.random() * 2 - 1) * HALF * .6, cz: (Math.random() * 2 - 1) * HALF * .6, rad: 35 + Math.random() * 55, ang: Math.random() * 6.28,
-          w: (Math.random() < .5 ? 1 : -1) * (.03 + Math.random() * .03), alt: 0, altUp: 0, flapT: Math.random() * 8, x: 0, y: 0, z: 0, vy: 0, dead: false, deadT: 0, landed: false });
-        A.alt = birdAlt(A); animalGroup.add(A.root); beasts.push(A); continue;
-      }
-      const ok = kind === "seal" ? sealOk : okSpot, extra = kind === "polar" ? nearWater : null;
-      const s = animalSpot(kind === "rabbit" ? 25 : 45, ok, extra); if (!s) continue;
-      if (grp) {                                             // packs and troops stay together
-        const home = [s[0], s[1]], m = grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1));
-        for (let j = 0; j < m; j++) { const x = s[0] + (Math.random() - .5) * 8, z = s[1] + (Math.random() - .5) * 8; if (ok(x, z)) addGround(kind, x, z, home); }
-      } else addGround(kind, s[0], s[1]);
-    }
+  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? 1 : n(base) }));
+  for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
+    more = false;
+    for (const p of plan) { if (p.left <= 0 || beasts.length >= BEAST_CAP) continue; p.left--; more = true; spawnKind(p.kind, p.grp, peak); }
   }
   hunt.score = 0; hunt.kills = 0; hunt.longest = 0; showHuntScore(); sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
   updateAnimals(0);
@@ -3998,7 +4171,7 @@ function senseTick(dt) {
 }
 function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0;
   for (const A of beasts) { if (A.dead) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
-    if (A.kind === "bird") { A.altUp = 25; A.scared = 10; continue; }
+    if (FLY[A.kind]) { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
     if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
 function fleeFrom(A, ox, oz, speed, secs, dist) {         // head directly away, bending round water and cliffs
@@ -4046,15 +4219,16 @@ function updateAnimals(dt) {
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
-    if (A.kind === "bird") { updateBird(A, dt, T); A.root.visible = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < far * 1.4; continue; }
+    if (FLY[A.kind]) { updateBird(A, dt, T); A.root.visible = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < far * 1.4; continue; }
     if (A.dead) {                                         // tips over onto its side and lies still
       A.deadT = Math.min(1, A.deadT + dt * 2.2); const e = A.deadT * A.deadT * (3 - 2 * A.deadT), a = e * Math.PI / 2 * A.side;
       A.root.rotation.set(0, A.yaw, a); A.root.position.set(A.x, A.y + Math.abs(Math.sin(a)) * A.w, A.z); continue;
     }
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const pd = Math.hypot(A.x - P.x, A.z - P.z);
-    if (sense.R > 0 && pd < sense.R) {                     // you're moving and close enough: ease away, or bolt if you're near
-      const k = 1 - pd / sense.R, sp = k > .55 ? A.run : A.walk * 1.5;
+    const sR = sense.R * (A.wary || 1);                     // the legends notice you from further off
+    if (sR > 0 && pd < sR) {                               // you're moving and close enough: ease away, or bolt if you're near
+      const k = 1 - pd / sR, sp = k > .55 ? A.run : A.walk * 1.5;
       if (A.trek && pd > 25) {}                                                      // already leaving for somewhere else
       else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, P.x, P.z, sp, 70, 160)) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
       else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k);
@@ -4069,9 +4243,9 @@ function updateAnimals(dt) {
       else { A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = (A.hop ? 1 : 3) + Math.random() * (A.hop ? 3 : 8); }
     } else if (A.mode === "walk" && (A.timer <= 0 || Math.hypot(A.target[0] - A.x, A.target[1] - A.z) < 1.5)) {
       A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = 3 + Math.random() * 9; A.trek = false;   // arrived: settle down here
-      if (A.kind !== "baboon" && A.kind !== "wolf" && Math.random() < .4) A.home = [A.x, A.z];        // wanders on across the map over time
+      if (!HERD[A.kind] && Math.random() < .4) A.home = [A.x, A.z];        // wanders on across the map over time
     }
-    if ((A.kind === "baboon" || A.kind === "wolf") && A.mode === "walk" && Math.random() < dt * .02) A.home = [A.home[0] + (Math.random() - .5) * 30, A.home[1] + (Math.random() - .5) * 30];   // the troop drifts
+    if (HERD[A.kind] && A.mode === "walk" && Math.random() < dt * .02) A.home = [A.home[0] + (Math.random() - .5) * 30, A.home[1] + (Math.random() - .5) * 30];   // the troop drifts
     let want = 0;
     if (A.trek && !(A.fleeT > 0)) A.want = Math.max(A.walk * 1.8, A.run * .5);   // after the first sprint, a steady trot the rest of the way
     // not getting anywhere while trying to walk? work free instead of shaking on the spot
@@ -4133,6 +4307,10 @@ function updateAnimals(dt) {
         A.legs.forEach((l, i) => { const s = i === 0 || i === 3 ? 1 : -1; l.rotation.x = l.userData.rest + s * sw; l.userData.knee.rotation.x = l.userData.kneeRest + Math.max(0, -s * fl) * .9 * amt; });
         A.body.position.y = Math.abs(fl) * .03 * amt;
       }
+    } else if (A.legs.length === 2) {                      // two legs: the turkey, Bigfoot, the Yeti
+      A.legs.forEach((l, i) => { const s = i ? 1 : -1; l.rotation.x = l.userData.rest + s * sw; l.userData.knee.rotation.x = l.userData.kneeRest + Math.max(0, s * fl) * .9 * amt; });
+      if (A.arms) A.arms.forEach((a, i) => { a.rotation.x = a.userData.rest - (i ? 1 : -1) * sw * .8; });
+      A.body.position.y = Math.abs(fl) * .04 * amt;
     } else A.body.position.y = Math.abs(Math.sin(A.phase)) * .05 * Math.min(1, A.speed * 2);   // seals hump along
     A.head.rotation.x = A.grazeK * A.graze + Math.sin(T * .7 + A.phase) * .04;                  // head down to graze, up to look around
     A.head.rotation.y = (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);
@@ -4151,12 +4329,12 @@ function updateBird(A, dt, T) {
   A.ang += A.w * dt * (A.scared > 0 ? 3 : 1); A.scared = Math.max(0, (A.scared || 0) - dt); A.cx += Math.sin(T * .02 + A.rad) * dt * .8; A.cz += Math.cos(T * .017 + A.rad) * dt * .8;   // the circle drifts slowly
   const lim = Math.max(0, HALF * .92 - A.rad); A.cx = Math.max(-lim, Math.min(lim, A.cx)); A.cz = Math.max(-lim, Math.min(lim, A.cz));   // stays over the map
   if ((A.altT = (A.altT || 0) - dt) <= 0) { A.altT = 3; A.alt = birdAlt(A); }
-  A.altUp = Math.max(0, A.altUp - dt * 2); A.y += ((A.alt + A.altUp + Math.sin(T * .2 + A.rad) * 2) - (A.y || A.alt)) * Math.min(1, dt * .5);
-  A.x = A.cx + Math.cos(A.ang) * A.rad; A.z = A.cz + Math.sin(A.ang) * A.rad; if (!A.y) A.y = A.alt;
+  A.altUp = Math.max(0, A.altUp - dt * 2); A.y += ((A.alt + (A.altOff || 0) + A.altUp + Math.sin(T * .2 + A.rad) * 2) - (A.y || A.alt)) * Math.min(1, dt * .5);
+  A.x = A.cx + Math.cos(A.ang) * (A.rad + (A.rOff || 0)); A.z = A.cz + Math.sin(A.ang) * (A.rad + (A.rOff || 0)); if (!A.y) A.y = A.alt;
   const hx = -Math.sin(A.ang) * Math.sign(A.w), hz = Math.cos(A.ang) * Math.sign(A.w);
   A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, Math.atan2(hx, hz), Math.sign(A.w) * .28);   // banked into the turn
   A.flapT -= dt; if (A.flapT < -1.6) A.flapT = 6 + Math.random() * 6;
-  const flap = A.flapT < 0 ? Math.sin(T * 7) * .45 : .12 + Math.sin(T * .9) * .03;                          // mostly gliding, a few slow flaps
+  const flap = A.flappy ? Math.sin(T * 16 + A.rOff) * .5 : A.flapT < 0 ? Math.sin(T * 7) * .45 : .12 + Math.sin(T * .9) * .03;                          // mostly gliding, a few slow flaps
   A.wings[0].rotation.z = -flap; A.wings[1].rotation.z = flap;
 }
 const _ao = new THREE.Vector3();
@@ -4167,7 +4345,7 @@ function animalRay(o, dir, minT = .5) {                              // the near
     A.root.updateMatrixWorld();
     for (const [x, y, z, r, onHead] of A.hit) {
       _aq.set(x, y, z).applyMatrix4(onHead ? A.head.matrixWorld : A.root.matrixWorld); _ao.copy(o).sub(_aq);       // head boxes follow the head as it grazes
-      const rr = r * (A.scale || 1) * (A.kind === "bird" ? 2.2 : A.kind === "monkey" ? 1.5 : 1),   // birds and monkeys get generous hit boxes
+      const rr = r * (A.scale || 1) * (FLY[A.kind] ? 2.2 : A.kind === "monkey" ? 1.5 : 1),   // birds and monkeys get generous hit boxes
  b = _ao.dot(dir), c = _ao.lengthSq() - rr * rr, disc = b * b - c;
       if (disc < 0) continue; const t = -b - Math.sqrt(disc);   // (radius scaled below)
       if (t > minT && t < best) { best = t; who = A; }
