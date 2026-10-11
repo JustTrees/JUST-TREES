@@ -125,8 +125,19 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 7. Next up and backlog
 
+### Do first: finish 1.62 (Ron, Oct 11 — built, Bigfoot test passed, NOT pushed)
+Ron's rules for Bigfoot / Yeti and the giant:
+- **Always 1 per map**, every size (tropical gets a Bigfoot too; tundra/polar get the Yeti).
+- **Hidden and unhittable until you pick up the red sniper** (`legendSeen()` = holding a 5★ sniper; on PC, with no loot, = you've found the porch).
+- **The one shot = a bullet that really goes near him:** passing or landing within 15 m (`legendShot(o, dir, reach, speed)`, called from `vrFire` and PC `fire`; uses `castShot` so terrain stops it). He waits for the bullet (a hit lands first and counts), then sprints off and **can't be hit while running** (`animalRay` skips `A.bolting`), gone for the map. Nothing else spooks him: other shots, or shots before you have the red sniper, do nothing. (Removes the old 900 m / aimed-within-6° rule from `scatterBeasts`.)
+- "Findable but rare" — the red sniper is the gate.
+- **Giant tree branches:** bare trunk all the way up to the porch, branches start again 3 m above it (clear band `[-5, porch + 3 m]` instead of −2.6/+6.5).
+- Files: `dev/wip/patch162.py` (apply to 1.61 index.html: `python3 dev/wip/patch162.py index.html out.html`, then bump VERSION/title to 1.62), `dev/wip/test_legend_162.py` (replaces dev/test_legend.py), `dev/wip/make_debug_162.py` (replaces dev/make_debug.py; adds `legendShot`, `legendSeen` to `window.D`).
+- Still to do: run dev/test_porch.py (band changed), look at the giant from afar (bare trunk to the porch), run the full suite, push, then delete dev/wip/.
+
 ### Next ideas (not built)
-- Bigfoot/Yeti mysterious behaviour: sometimes follow you at 100–250 m, freeze when you look, slip behind trees, vanish if you walk toward them, never come close.
+- Bigfoot/Yeti mysterious behaviour (maybe): sometimes follow you at 100–250 m, freeze when you look, slip behind trees, never come close.
+- The giant's twin crown is subtle; could be bulked up.
 - Maybe a daily routine for animals (drink in the morning, rest in cover at midday) — asked, no answer yet.
 
 ### Offered, not asked for yet
