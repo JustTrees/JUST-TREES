@@ -1,4 +1,4 @@
-"""VR bullets (1.37): even fire rate, no recoil, bullets fly at the gun's speed and drop, hit lands when the bullet arrives.
+"""VR bullets (1.37): even fire rate, no recoil, bullets fly at the gun's speed (no drop since 1.49), hit lands when the bullet arrives.
 Usage: python3 dev/make_debug.py index.html /tmp/dbg.html && python3 dev/test_bullets.py /tmp/dbg.html"""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright

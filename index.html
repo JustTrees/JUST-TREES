@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.48</title>
+<title>JUST TREES 1.49</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.48";              // Just Trees 1.48
+const VERSION = "1.49";              // Just Trees 1.49
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -328,7 +328,8 @@ const WEAP = {                     // mag = rounds per magazine, start = spare r
   smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
   pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
 const AMMO_CAP = 300;                                       // most spare rounds you can carry for one gun
-const BULLET_G = 9.81, BULLET_ZERO = 100;                  // VR bullets: gravity, and the distance the sights are set for
+const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no drop (they fly dead straight, just take time to arrive); sight distance if drop ever comes back
+const VR_NADE_G = 9.81;                                    // VR grenades still fall in an arc
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
 const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per box
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
@@ -6399,7 +6400,7 @@ function nadeTickArc(main, head) {
   const [p, v] = nadeLaunch(main), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
   let n = 0, hit = null; const step = .02;
   for (let i = 0; i < 400 && !hit; i++) {
-    p.addScaledVector(v, step); v.y -= BULLET_G * step; hit = nadeStop(p);
+    p.addScaledVector(v, step); v.y -= VR_NADE_G * step; hit = nadeStop(p);
     if (i % 4 === 3 && n < 60) { const s = .01 + p.distanceTo(head) * .0025; m4.compose(p, q, sc.set(s, s, s)); A.dots.setMatrixAt(n++, m4); }
   }
   A.dots.count = n; A.dots.instanceMatrix.needsUpdate = true;
@@ -6421,7 +6422,7 @@ function nadeTick(dt) {
     const N = NADES[i]; N.t += dt;
     if (N.fuse < 0) {
       for (let s = 0, n = Math.ceil(dt / .02); s < n; s++) {
-        const h = dt / n; N.p.addScaledVector(N.v, h); N.v.y -= BULLET_G * h;
+        const h = dt / n; N.p.addScaledVector(N.v, h); N.v.y -= VR_NADE_G * h;
         const hit = nadeStop(N.p);
         if (hit === "tree") { N.v.x = N.v.z = 0; }          // bounced off a trunk: drops straight down
         else if (hit) { if (hit === "ground") N.p.y = Math.max(groundAt(N.p.x, N.p.z), iced ? -1e9 : water, rockTopAt(N.p.x, N.p.z)) + .04; N.fuse = NADE.FUSE; break; }
