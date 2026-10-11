@@ -393,3 +393,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 - Round clock fix: it only started after the online flag reveal, so playing alone (or as a host before anyone joined) it stayed 0 and the round never ended. Now `pvpRoundStart()` runs on every VR PvP drop-in from the preview (alone too) and from the reveal; late joiners keep the clock the host sent (no longer call vruiDropIn). Round-over buttons show for anyone who isn't a guest (so solo players get New map / Settings).
 - Zone: smaller last circle, `ZONE_LAST` = 0.1 × half-width, kept 18–55 m radius (medium 28 m, was ~61). Capture point now sits fully inside the last circle.
 - Test: dev/test_round.py.
+
+## 1.52
+- Pause menu in PvP: "End round · change settings" (and "End round · new map"). Host/solo only (guests have them locked). `pvpEndRound()` stops the round (clock 0, state out of play) for the host, and for every guest when the host's settings/new-map message arrives (`mpGuestUi`, `mpGuestGen`), so nobody keeps playing behind the menus. Labels switch per mode when the pause menu opens.
+- test_lobby: host ends the round from pause → all 4 on settings, round stopped; guests can't end it; then a new round runs to the board.

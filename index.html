@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.51</title>
+<title>JUST TREES 1.52</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.51";              // Just Trees 1.51
+const VERSION = "1.52";              // Just Trees 1.52
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5084,7 +5084,7 @@ function vruiParts() {
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 145, 1000, 34); };
-  [["Resume", () => vruiResume(), true], ["New map, same settings", () => startNew()], ["Change settings", () => vruiOpen("setup")], ["Main menu", () => vruiOpen("mode")],
+  [["Resume", () => vruiResume(), true], ["New map, same settings", () => { pvpEndRound(); startNew(); }], ["Change settings", () => { pvpEndRound(); vruiOpen("setup"); }], ["Main menu", () => vruiOpen("mode")],
    ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42, personal: i === 0 || i >= 3 }));
 }
 // open a menu stage: the menus are placed in front of wherever you are looking
@@ -5112,6 +5112,7 @@ function vruiOpen(stage) {
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
+  if (stage === "pause") { const W = VRUI.panels.pause.widgets, pv = gameMode === "pvp"; W[1].label = pv ? "End round · new map" : "New map, same settings"; W[2].label = pv ? "End round · change settings" : "Change settings"; uiDraw(VRUI.panels.pause); }
   if (stage !== "pause" && state !== "play") state = "vrmenu";
   mpHostStage(stage);
 }
@@ -6954,9 +6955,10 @@ function mpHostPlay() {                                     // the host's "Play 
   mpSend({ t: "reveal", list }); mpRevealStart(list);
 }
 // ---- the others' side
-function mpGuestUi(o) { mpApplySet(o.set); MP.revealT = 0; MP.pendingReveal = null; if (vr.on) vruiOpen("setup"); }
+function pvpEndRound() { if (gameMode === "pvp") { MP.roundLeft = 0; if (state === "play" || state === "pause" || state === "over") state = "vrmenu"; } }   // the round stops (clock, sending, scoring) when anyone heads back to the menus
+function mpGuestUi(o) { mpApplySet(o.set); MP.revealT = 0; MP.pendingReveal = null; pvpEndRound(); if (vr.on) vruiOpen("setup"); }
 function mpGuestGen(o) {
-  mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true;
+  mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true; pvpEndRound();
   $("loading").classList.remove("hidden"); if (vr.on) vruiOpen("loading");
   setTimeout(() => {
     generate(); MP.genBusy = false;

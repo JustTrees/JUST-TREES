@@ -72,10 +72,24 @@ async def main():
         out["lateJoinerPlaying"] = await wait(Dp, "() => D.state === 'play' && D.MP.links.size >= 3", 30)
         out["lateJoinerSameMap"] = (await Dp.evaluate("() => D.seed")) == seeds[0]
         out["lateJoinerColour"] = await Dp.evaluate("() => D.MP.idx")
+        # host pauses mid-round and picks "End round · change settings": everyone goes back to the settings, the round stops
+        await A.evaluate("() => { D.state = 'pause'; D.vruiOpen('pause'); return 1; }")
+        out["pauseButtonSays"] = await A.evaluate("() => D.VRUI.panels.pause.widgets[2].label")
+        await A.evaluate("() => { D.VRUI.panels.pause.widgets[2].on(); return 1; }")
+        for pg in (B, C, Dp): await wait(pg, "() => D.VRUIstage === 'setup'", 10)
+        out["endRoundAllOnSettings"] = [await pg.evaluate("() => D.VRUIstage + '/' + D.state + '/' + Math.round(D.MP.roundLeft)") for pg in (A, B, C, Dp)]
+        out["guestCantEndRound"] = await B.evaluate("() => { D.vruiOpen('pause'); const P = D.VRUI.panels.pause; return D.mpLocked(P, P.widgets[2]); }")
+        # back into a round so the clock-runs-out check below still works
+        await A.evaluate("() => { D.startNew(); return 1; }")
+        for pg in (A, B, C, Dp): await wait(pg, "() => D.VRUIstage === 'preview'", 20)
+        await A.evaluate("() => { D.vruiDropIn(); return 1; }")
+        for pg in (A, B, C, Dp): await wait(pg, "() => D.state === 'play'", 15)
+        out["afterRestart"] = [await pg.evaluate("() => D.VRUIstage + '/' + D.state + '/' + D.MP.links.size") for pg in (A, B, C, Dp)]
         # the clock runs out: everyone sees the round-over board
         for pg in (A, B, C, Dp): await pg.evaluate("() => { D.MP.roundLeft = .5; return 1; }")
         for pg in (A, B, C, Dp): await wait(pg, "() => D.VRUIstage === 'over'", 10)
         out["roundOverAll"] = [await pg.evaluate("() => D.VRUIstage") for pg in (A, B, C, Dp)]
+        out["dStatus"] = await Dp.evaluate("() => D.MP.status + ' | links ' + D.MP.links.size + ' | ' + D.state")
         out["boardRows"] = await A.evaluate("() => D.MP.board.length")
         await A.evaluate("() => { D.startNew(); return 1; }")
         out["nextMapPreviewForGuests"] = [await wait(pg, "() => D.VRUIstage === 'preview'", 20) for pg in (B, C)]
