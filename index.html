@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.61</title>
+<title>JUST TREES 1.62</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.61";              // Just Trees 1.61
+const VERSION = "1.62";              // Just Trees 1.62
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2680,7 +2680,7 @@ function generate() {
         return { flare: 1 + gr[5] * .7, fh: (2.4 + gr[6] * 1.6) / s0, lobes: 5 + Math.floor(gr[7] * 3), lobA: .45 + gr[8] * .25, tint: bark[1],
           lean: lean ? [Math.cos(la) * GT * (.08 + gr[9] * .08) / s0, Math.sin(la) * GT * (.08 + gr[9] * .08) / s0] : [0, 0], wob: gnarl ? GT * (.012 + gr[10] * .015) / s0 : Ht * .005,
           split: split ? { y: (pH + 7.5) / s0, a: la + 2.2 } : null }; };
-      const gv = treeVariant(giant.kind, true, false, { noLean: true, thick: 1.45, giant: gtrait, clearAt: Ht => { const s0 = GT / (Ht + 1.4), y = pH / s0; return [y - 2.6 / s0, y + 6.5 / s0]; } });
+      const gv = treeVariant(giant.kind, true, false, { noLean: true, thick: 1.45, giant: gtrait, clearAt: Ht => { const s0 = GT / (Ht + 1.4), y = pH / s0; return [y - .3 / s0, y + 3 / s0]; } });
       kinds[giant.kind].vars.push(gv); recs[giant.kind].push([]); giant.vi = kinds[giant.kind].vars.length - 1;   // its own one-off shape
       giant.name = [lean ? "Leaning" : roots, gnarl ? "gnarled" : "", gv.split ? "twin-crowned" : "", bark[0] ? bark[0].toLowerCase() : "", "giant"].filter(Boolean).join(" ");
       giant.name = giant.name[0].toUpperCase() + giant.name.slice(1);
@@ -4075,6 +4075,28 @@ function buildApe(r, yeti) {                                // Bigfoot and the Y
 const BIRD_COL = { bird: [0x16161a, 0xd8d8d8, 0xb07a6a, 0xd8d8d8], eagle: [0x3a2a1c, 0x4a3624, 0xf2f0ea, 0xe0b030], owl: [0xeceae4, 0xd8d4cc, 0xf2f0ec, 0x2a2622] };
 const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c020, 0x2a62d8, 0x2a2622], [0x2aa040, 0xd83020, 0x3ab050, 0xe8e0d0], [0xe8c020, 0x2aa040, 0xe8a020, 0x2a2622]];
 const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
+const legendName = () => { const A = beasts.find(a => LEGEND[a.kind]); return A ? (A.kind === "yeti" ? "a Yeti" : "a Bigfoot") : null; };
+const VBAN = { m: null, t: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
+function vrBanner(text, secs) {                            // a big message floating in front of you (VR), fades after a few seconds
+  if (!VBAN.m) {
+    const cv = document.createElement("canvas"); cv.width = 768; cv.height = 120;
+    VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.48, .075), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    VBAN.m.renderOrder = 997; VBAN.m.frustumCulled = false; VBAN.m.userData.cv = cv; VBAN.m.visible = false; scene.add(VBAN.m);
+  }
+  const g = VBAN.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 768, 120);
+  g.fillStyle = "rgba(8,12,10,.7)"; uiRound(g, 4, 4, 760, 112, 26); g.fill();
+  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffd65a"; g.font = "bold 46px sans-serif"; g.fillText(text, 384, 62);
+  VBAN.m.material.map.needsUpdate = true; VBAN.t = secs; VBAN.init = false;
+}
+function bannerTick(I, dt) {
+  if (!VBAN.m) return;
+  VBAN.t -= dt; const show = VBAN.t > 0 && vr.on && state === "play" && !VRUI.on; VBAN.m.visible = show; if (!show) return;
+  const want = _v1.set(0, .06, -.8).applyQuaternion(I.headQ).add(I.head);                  // just above the middle of your view
+  if (!VBAN.init) { VBAN.p.copy(want); VBAN.q.copy(I.headQ); VBAN.init = true; }
+  VBAN.p.lerp(want, 1 - Math.exp(-dt * 6)); VBAN.q.slerp(I.headQ, 1 - Math.exp(-dt * 6));
+  VBAN.m.position.copy(VBAN.p); VBAN.m.quaternion.copy(VBAN.q); VBAN.m.material.opacity = Math.min(1, VBAN.t / .8);
+}
+const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
 const HERD = { baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1 };
 const BEAST_SCALE = { polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
 const SCORE = { buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
@@ -4087,7 +4109,7 @@ const BEAST_NAME = { buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bi
 // what lives where: [kind, how many on a 640 m map, group size]
 const NATIVE = {
   tropical:  [["elephant", 3, [2, 5]], ["giraffe", 3, [2, 4]], ["zebra", 3, [4, 7]], ["rhino", 3], ["lion", 2, [2, 4]], ["crocodile", 5], ["monkey", 4, [3, 6]],
-              ["baboon", 3, [4, 7]], ["panther", 3], ["parrot", 3, [4, 6]], ["bird", 4]],
+              ["baboon", 3, [4, 7]], ["panther", 3], ["parrot", 3, [4, 6]], ["bird", 4], ["bigfoot", 1]],
   temperate: [["buck", 6, [2, 5]], ["bear", 4], ["horse", 3, [4, 7]], ["boar", 4, [2, 5]], ["coyote", 3, [2, 4]], ["fox", 4], ["turkey", 4, [3, 6]], ["goat", 3, [2, 5]],
               ["panther", 2], ["rabbit", 18], ["eagle", 3], ["bird", 4], ["bigfoot", 1]],
   boreal:    [["buck", 5, [2, 5]], ["bear", 4], ["elk", 4, [2, 5]], ["moose", 4], ["caribou", 3, [4, 7]], ["wolf", 3, [4, 6]], ["fox", 3], ["goat", 2, [2, 4]],
@@ -4312,8 +4334,8 @@ function spawnAnimals() {
   const k = Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12;
-  const bigMap = set.size === "xl" || set.size === "xxl";
-  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap && Math.random() < .5 ? 1 : 0) : n(base) }));
+  const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
+  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
     for (const p of plan) { if (p.left <= 0 || beasts.length >= BEAST_CAP) continue; p.left--; more = true; spawnKind(p.kind, p.grp, peak); }
@@ -4346,15 +4368,19 @@ function senseTick(dt) {
 }
 const _lf = new THREE.Vector3();
 function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0; HAB.flee++;
-  camera.getWorldDirection(_lf);
-  for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
-    const dx = A.x - o.x, dy = A.y + 1.4 - o.y, dz = A.z - o.z, d = Math.hypot(dx, dy, dz), aimed = (dx * _lf.x + dy * _lf.y + dz * _lf.z) / d > .994;   // within ~6° of where you look
-    if (d < 900 || (aimed && d < 2600)) A.boltIn = Math.max(.6, d / 700 + .3);       // waits for the bullet: you always get your one shot
-  }
   for (const A of beasts) { if (A.dead || LEGEND[A.kind]) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
     if (FLY[A.kind]) { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
     if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
+function legendShot(o, dir, reach, speed) {                // a shot at Bigfoot: the bullet passing (or landing) within 15 m of him is your one shot
+  if (gameMode !== "hunt" || !legendSeen()) return;
+  for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
+    const h = castShot(o, dir, reach), maxD = h && h.p ? h.p.distanceTo(o) + 2 : reach;          // where the bullet actually stops
+    const cx = A.x - o.x, cy = A.y + 1.2 - o.y, cz = A.z - o.z, t = Math.max(0, Math.min(maxD, cx * dir.x + cy * dir.y + cz * dir.z));
+    const d = Math.hypot(cx - dir.x * t, cy - dir.y * t, cz - dir.z * t);
+    if (d < 15) A.boltIn = t / speed + .15;                  // he bolts the moment it goes by (a hit lands first and counts)
+  }
+}
 function legendBolt(A) {                                  // Bigfoot / Yeti: sprints off like a runner, arms pumping, and is never seen again on this map
   A.bolting = true; A.run = 9.5; A.stride = 2.8 * (A.scale || 1); A.swing = .9; A.wary = 99; A.goneT = 9;
   if (!fleeFar(A, P.x, P.z, A.run, 200, 420)) fleeFrom(A, P.x, P.z, A.run, 10, 120);
@@ -4465,7 +4491,7 @@ function updateAnimals(dt) {
     }
     const gy = beastGround(A, A.x, A.z); A.y += (gy - A.y) * Math.min(1, dt * (gy > A.y ? 12 : 7));          // hops up onto logs, settles down off them
     A.grazeK += ((A.mode === "graze" ? 1 : 0) - A.grazeK) * Math.min(1, dt * 2);
-    const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), vis = cd < Math.min(far, beastDraw());
+    const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), vis = cd < Math.min(far, beastDraw()) && (!LEGEND[A.kind] || legendSeen());
     A.root.visible = vis; A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
     if (!vis) continue;
     A.phase += dt * A.speed / A.stride * Math.PI * 2;
@@ -4527,7 +4553,7 @@ const _ao = new THREE.Vector3();
 function animalRay(o, dir, minT = .5) {                              // the nearest animal hit box along the shot
   let best = 1e9, who = null;
   for (const A of beasts) {
-    if (A.dead || !A.root.visible) continue;
+    if (A.dead || !A.root.visible || A.bolting) continue;
     A.root.updateMatrixWorld();
     for (const [x, y, z, r, onHead] of A.hit) {
       _aq.set(x, y, z).applyMatrix4(onHead ? A.head.matrixWorld : A.root.matrixWorld); _ao.copy(o).sub(_aq);       // head boxes follow the head as it grazes
@@ -4796,7 +4822,7 @@ function vrTick(dt) {
     vr.binoQ.slerp(I.headQ, 1 - Math.exp(-dt * 3));                                      // binoculars: your head, smoothed
   } else vr.zoomK = 1;
   vr.zoomWas = zoomOn;
-  pvpHud(I, dt); captTick(I);
+  pvpHud(I, dt); bannerTick(I, dt); captTick(I);
   // arms spread wide while falling: glide (PvP), leaning your arms to steer
   input.glide = !!main && !!off && main.pos.distanceTo(off.pos) > 1.05 && main.pos.y > I.head.y - .65 && off.pos.y > I.head.y - .65;
   if (I.hands.left && I.hands.right) {
@@ -4929,6 +4955,7 @@ function vrFire() {
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
   const online = gameMode === "pvp" && MP.on && !!W;
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, online });
+  legendShot(from, v.clone().normalize(), vr.scoped ? 3200 : W ? W.reach : 900, v.length());
   if (online) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
   gunshot(huntM ? vr.gunKind : undefined);
 }
@@ -7091,6 +7118,7 @@ function dropUse(d) {                                       // what grabbing it 
   else if (d.type === "gun") {
     const k = d.kind, A = arms[k], had = vr.own[k] || 0;
     A.res = Math.min(AMMO_CAP, A.res + WEAP[k].can);
+    if (k === "hunt" && d.tier >= 5 && had < 5 && gameMode === "hunt" && legendName()) vrBanner("There's " + legendName() + " in these woods", 6);
     if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } if (!(vr.own[vr.weapon] > 0)) { vr.weapon = k; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = false; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
     else msg = "+" + WEAP[k].can + " " + WEAP[k].name + " ammo";
     if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
@@ -7839,7 +7867,7 @@ function fire() {
   if (GUN.auto) P.yaw += (Math.random() - .5) * .004;
   camera.updateMatrixWorld();
   const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  const hit = castShot(camera.position, dir); hit.dist = camera.position.distanceTo(hit.p);
+  const hit = castShot(camera.position, dir); hit.dist = camera.position.distanceTo(hit.p); legendShot(camera.position, dir, hit.dist + 2, 2000);
   // start exactly where the barrel tip is on screen: project the muzzle through the gun view, then out into the world
   const from = new THREE.Vector3();
   if (GUN.ads > .5) from.copy(camera.position).addScaledVector(dir, 1.5).addScaledVector(new THREE.Vector3(0, -1, 0).applyQuaternion(camera.quaternion), .12);
@@ -8160,7 +8188,7 @@ function loop(now) {
     updateNades(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
-      PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + ".");
+      PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + "." + (gameMode === "hunt" && legendName() ? " There's " + legendName() + " in these woods." : ""));
     }
     if ((mapT += dt) > .25) { mapT = 0; reveal(); drawMap($("miniMap")); if (mapOpen) drawMap($("bigMapCanvas")); }
     updateRunner(dt, now);

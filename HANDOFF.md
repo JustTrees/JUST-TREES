@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.62**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.63**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,14 +39,14 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.61)
+## 4. What exists now (v1.62)
 
 ### World (all modes)
 - **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
 - **Terrain:** heightfield with erosion and rounded summits. `H(x,z)` is the exact surface. Dramatic maps get one landmark from a generator (`makeFeature`: crevasses, canyons, rifts, walls, cliffs, mesas, buttes, terraces, craters, sinkholes, volcanoes in many shapes).
 - **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
 - **Trunks (1.61):** `trunkNice` — flared base with root buttresses that run into the ground (lobes), 8 sides, same taper; every trunk has a gentle natural bend (`bend(y)` applied to the whole variant, firs straighter than broadleaf). Climbing/head-blocking follow the bend and flare (`treeHit` uses `hold.bend`, `hold.fl`). Far trees keep the 4-sided trunk. (Also fixed: animals were updated twice a frame — they moved at double speed.)
-- **The tallest tree (1.60–1.61):** one per map, not on any map — you find it. Built like the Dramatic landmarks: random features from a seeded roll (`GR`): huge buttressed root base (always), leaning (55%), gnarled bends (40%), a twin crown split above the porch (45%, only when there's room), bark: plain / redwood / silverbark / blackbark (trunk tint), thicker trunk. It gets a name ("Leaning gnarled redwood giant"), shown the first time you step on the porch (wrist in VR, hint on PC). Size: porch at the tallest real treetop + 2.5 m, the giant ≈ 1.65× that, so the porch is ~2/3 up with a real crown above. Its own one-off variant (`treeVariant(…, {giant, clearAt, thick, noLean})`, `giant.ry = 0`). **Porch:** doughnut wooden deck (planks, rim board, joists, braces to the trunk, no railing), centred on the trunk at that height (follows the lean), no leaves in a band from 2.6 m below to 6.5 m above it (clear 360° view), solid via the rock grid (stand on it, walk/climb under it, animals walk under it), open middle to climb through. `PORCH` = {x, z, top, rIn, rOut, name, tree}. The **only red (5★) sniper** lies on the deck (`gRed`); ground loot never has a red sniper. Test: dev/test_porch.py (5 seeds; give a folder for pictures).
+- **The tallest tree (1.60–1.61):** one per map, not on any map — you find it. Built like the Dramatic landmarks: random features from a seeded roll (`GR`): huge buttressed root base (always), leaning (55%), gnarled bends (40%), a twin crown split above the porch (45%, only when there's room), bark: plain / redwood / silverbark / blackbark (trunk tint), thicker trunk. It gets a name ("Leaning gnarled redwood giant"), shown the first time you step on the porch (wrist in VR, hint on PC). Size: porch at the tallest real treetop + 2.5 m, the giant ≈ 1.65× that, so the porch is ~2/3 up with a real crown above. **Branches (1.62):** normal below the porch, none from the deck up 3 m (`clearAt` = `[porch − 0.3 m, porch + 3 m]`; any branch card overlapping that band is dropped), normal above. Its own one-off variant (`treeVariant(…, {giant, clearAt, thick, noLean})`, `giant.ry = 0`). **Porch:** doughnut wooden deck (planks, rim board, joists, braces to the trunk, no railing), centred on the trunk at that height (follows the lean), no branches from the deck to 3 m above it (clear 360° view), solid via the rock grid (stand on it, walk/climb under it, animals walk under it), open middle to climb through. `PORCH` = {x, z, top, rIn, rOut, name, tree}. The **only red (5★) sniper** lies on the deck (`gRed`); ground loot never has a red sniper. Test: dev/test_porch.py (5 seeds; give a folder for pictures).
 - **Rocks:** boulders, slabs, cliffs, outcrops, logs, bushes on a 1 m height grid (`rockGrid`, `rockTopAt`, `rockAround`). Overhangs work: you can stand under a rock with a gap below it (`rockLow`).
 - **Look and sound:** ACES tone mapping, `grade()` colour shader, valley fog, sky with sun/moon/stars, lightning storms with distance-delayed thunder. All sound is synthesized.
 
@@ -57,10 +57,10 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Movement:** no slope limit (they climb anything; only big boulders/cliff rocks turn them), so they don't get stuck or bunch up. Groups spawn ≥55 m apart. Wander targets favour liked ground. A shot: each herd/loner flees on its own line (`HAB.flee`), not all the same way. Stuck animals squeeze free (`unstick`).
 - **No gathering round you.** Standing still, `appearTick` every ~10–35 s moves a far, out-of-sight group to liked ground 90–380 m around you (never in view, not in a ring, never on top of another group); stops when plenty are already near. Moving around, nothing new turns up.
 - **Falling (`deadPose`):** topples sideways (speeding up), then the legs and head go limp on the ground.
-- **Legends:** only on XL/XXL maps, on half of them.
+- **Legends (1.62):** Bigfoot (Yeti on tundra/polar) on **every Large, XL and XXL map, one each; never on Small/Medium** (`bigMap` in the spawn plan; tropical gets a Bigfoot too). **Hidden and unhittable until you hold the red sniper** (`legendSeen()`; on PC with no loot: once you've found the porch). Picking up the red sniper puts **"There's a Bigfoot in these woods"** (or Yeti) in front of you for 6 s (`vrBanner` / `bannerTick`, `VBAN`); on PC it's added to the porch-found hint.
 - Scoring: a hit is a kill (tip over, bing, no blood); points = distance × `SCORE[kind]` (big easy animals low, small/flying high, legends 5).
 - **Hit boxes (1.59):** `neckHits` adds spheres from the chest up the neck to the head, plus spheres fitted along each head's real shape (antlers/horns/ears left out). Test: dev/test_hitbox.py (rays across every head and neck; all kinds 88–100%).
-- **One shot at a legend (1.57):** any shot within 900 m of Bigfoot/Yeti (or aimed at one, up to 2.6 km) makes it wait until the bullet lands (`boltIn`, so the shot is always fair), then sprint off like a runner, leaning, elbows bent, arms pumping (`legendBolt`), and vanish for the rest of the map (`A.gone`). Back only on a new map. Test: dev/test_legend.py.
+- **One shot at a legend (1.62):** only a bullet that really passes or lands within 15 m of him counts (`legendShot(o, dir, reach, speed)`, called from `vrFire` and PC `fire`; `castShot` so trees/terrain stop it). Other shots, or shots before you have the red sniper, do nothing. He waits for the bullet (`boltIn`; a hit lands first and counts), then sprints off like a runner, arms pumping (`legendBolt`), **can't be hit while running** (`animalRay` skips `A.bolting`), and vanishes for the map (`A.gone`). Test: dev/test_legend.py (picks a clear line of fire, since trees rightly stop the bullet).
 
 ### PC and phone (keep as is)
 - PC: WASD, mouse look, click to fire, scroll to zoom/binoculars, Shift run, Space jump, C crouch, Esc menu. Phone: joystick, drag to look, buttons. Minimap, full map, drone flyover before each map. PC/phone PvP is the old bots version (on hold).
@@ -124,16 +124,6 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 ---
 
 ## 7. Next up and backlog
-
-### Do first: finish 1.62 (Ron, Oct 11 — built, Bigfoot test passed, NOT pushed)
-Ron's rules for Bigfoot / Yeti and the giant:
-- **Always 1 per map**, every size (tropical gets a Bigfoot too; tundra/polar get the Yeti).
-- **Hidden and unhittable until you pick up the red sniper** (`legendSeen()` = holding a 5★ sniper; on PC, with no loot, = you've found the porch).
-- **The one shot = a bullet that really goes near him:** passing or landing within 15 m (`legendShot(o, dir, reach, speed)`, called from `vrFire` and PC `fire`; uses `castShot` so terrain stops it). He waits for the bullet (a hit lands first and counts), then sprints off and **can't be hit while running** (`animalRay` skips `A.bolting`), gone for the map. Nothing else spooks him: other shots, or shots before you have the red sniper, do nothing. (Removes the old 900 m / aimed-within-6° rule from `scatterBeasts`.)
-- "Findable but rare" — the red sniper is the gate.
-- **Giant tree branches:** bare trunk all the way up to the porch, branches start again 3 m above it (clear band `[-5, porch + 3 m]` instead of −2.6/+6.5).
-- Files: `dev/wip/patch162.py` (apply to 1.61 index.html: `python3 dev/wip/patch162.py index.html out.html`, then bump VERSION/title to 1.62), `dev/wip/test_legend_162.py` (replaces dev/test_legend.py), `dev/wip/make_debug_162.py` (replaces dev/make_debug.py; adds `legendShot`, `legendSeen` to `window.D`).
-- Still to do: run dev/test_porch.py (band changed), look at the giant from afar (bare trunk to the porch), run the full suite, push, then delete dev/wip/.
 
 ### Next ideas (not built)
 - Bigfoot/Yeti mysterious behaviour (maybe): sometimes follow you at 100–250 m, freeze when you look, slip behind trees, never come close.
