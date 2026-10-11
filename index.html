@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.53</title>
+<title>JUST TREES 1.54</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.53";              // Just Trees 1.53
+const VERSION = "1.54";              // Just Trees 1.54
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6146,7 +6146,7 @@ const WHEEL = ["hunt", "ar", "smg", "pistol", "gren"];  // five slices, clockwis
 const WSTEP = Math.PI * 2 / 5;
 const arms = {};
 function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
-  if (gameMode === "pvp") pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }
+  if (VR_ON && (gameMode === "pvp" || gameMode === "hunt")) pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }   // VR PvP and Hunting: start with a 1-star pistol, find the rest
 vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
 resetArms();
 // the other three guns, built from code like the sniper (each has a "mag" and a "charge" part for reloading)
@@ -6275,7 +6275,7 @@ function drawWheel(sel) {
   WHEEL.forEach((k, i) => {
     const a0 = -Math.PI / 2 + (i - .5) * WSTEP, a1 = a0 + WSTEP, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === vr.weapon && !vr.nadeMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
-    const lock = k !== "gren" && gameMode === "pvp" && !(vr.own[k] > 0), pv = k !== "gren" && gameMode === "pvp";
+    const lock = k !== "gren" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && lootMode();
     g.fillStyle = on && !lock ? "rgba(255,214,90,.92)" : lock ? "rgba(14,20,15,.45)" : "rgba(14,20,15,.82)"; g.fill();
     g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
     const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165 - (pv ? 12 : 0), A = arms[k];
@@ -6319,7 +6319,7 @@ function wheelTick(dt, main, I) {
 }
 function pickGun(k) {
   if (k === "gren") { vr.nadeMode = true; vr.gunOut = false; gunFoley(SFX.swap); return; }
-  if (gameMode === "pvp" && !(vr.own[k] > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }   // not found yet
+  if (lootMode() && !(vr.own[k] > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }   // not found yet
   vr.nadeMode = false;
   if (k !== vr.weapon) { vr.weapon = k; vr.gunInit = false; vr.rl.grab = null; vr.cool = Math.max(vr.cool, .25); gunFoley(SFX.swap); }
   vr.gunOut = true;
@@ -6617,7 +6617,8 @@ function drawCaptOnMap(ctx, W, Hh) {
         ammo and grenades; a better gun upgrades the one you have; when you die it all spills on the ground where you fell ---- */
 const GUN_NAME = { hunt: "Sniper", ar: "Assault rifle", smg: "SMG", pistol: "Pistol" };
 vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 };
-const tierOf = k => gameMode === "pvp" ? (vr.own[k] || 0) : 1;
+const lootMode = () => VR_ON && (gameMode === "pvp" || gameMode === "hunt");   // guns are found on the map, with stars
+const tierOf = k => lootMode() ? (vr.own[k] || 0) : 1;
 const magOf = k => Math.max(1, Math.round(WEAP[k].mag * TIER.mag[Math.max(1, tierOf(k))]));
 const DROPS = new Map(); let dropSeq = 0;
 function pvpLoadout() {                                     // every spawn: a 1-star pistol and nothing else
@@ -6686,7 +6687,7 @@ function spawnPvpLoot() {                                   // seeded: everyone 
     const r = R(), tier = 1 + TIER_ODDS.filter(o => r >= o).length;
     dropAdd({ id: "g" + (gi++), type: "gun", kind: kinds[Math.floor(R() * kinds.length)], tier, x: sp[0], z: sp[1] });
   }
-  for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
+  if (gameMode === "pvp") for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
 }
 function dropsTick(I, dt) {
   if (!DROPS.size) return;
@@ -6806,7 +6807,7 @@ function spawnAmmo() {
     band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
   });
   body.frustumCulled = band.frustumCulled = false; scene.add(body, band); canMesh = { body, band };
-  spawnNadeLoot(); if (gameMode === "pvp") spawnPvpLoot();
+  spawnNadeLoot(); if (lootMode()) spawnPvpLoot();
 }
 function lootTick(I) {
   if (!canMesh || !ammoCans.length) return;

@@ -51,6 +51,10 @@ async def main():
           if (lake) { go(lake[0], lake[1]); for (let i = 0; i < 60 * 8; i++) frames(1);
             out.drowned = { own: JSON.stringify(V.own), arAmmo: D.arms.ar.mag + D.arms.ar.res, nades: V.nades, kills: D.MP.kills, spilled: D.DROPS.size - nd, gunShown: !!(V.gun && V.gun.visible), onLand: D.H(D.P.x, D.P.z) > D.water };
             const gd2 = [...D.DROPS.values()].find(d => d.type === 'gun' && !d.got); go(gd2.x, gd2.z); out.afterPickup = { weapon: V.weapon, gunShown: !!(V.gun && V.gun.visible) }; }
+          // Hunting in VR: 1-star pistol, guns with stars on the map (no health crosses)
+          D.setMode('hunt'); D.generate(); D.state = 'play';
+          const hd = [...D.DROPS.values()]; out.hunt = { own: JSON.stringify(V.own), weapon: V.weapon, guns: hd.filter(d => d.type === 'gun').length, crosses: hd.filter(d => d.type === 'hp' || d.type === 'sh').length };
+          const hg = hd.find(d => d.type === 'gun' && d.kind !== 'pistol'); go(hg.x, hg.z); out.hunt.picked = [hg.kind, hg.tier, V.own[hg.kind] || 0];
           return out; }""")
         d = await pg.evaluate("() => window._wheel"); open(SHOT, 'wb').write(base64.b64decode(d.split(',')[1]))
         print(json.dumps(r)); print("errors:", errs[:8] or "none")

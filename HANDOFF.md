@@ -405,3 +405,7 @@ Read this first. It carries over the project, the person, the way we work, and e
 
 ## Online connection note (Oct 10)
 - Ron hit "A friend tried to join but your networks couldn't connect" (signalling worked, direct WebRTC failed, the free Open Relay didn't carry it). Plan: set up our own relay later — Cloudflare TURN behind a small Worker (keys hidden, 1000 GB/mo free; the old Worker/secret setup from 1.35 was removed in 1.39, rebuild it and make a fresh TURN key), or Metered free API key (20 GB/mo, key visible in game) as a quick option. Until then: try a phone hotspot on one side.
+
+## 1.54 — VR Hunting finds its guns too
+- `lootMode()` = VR and (PvP or Hunting). In both: start with a 1-star pistol (`pvpLoadout` from `resetArms`), other guns greyed on the wheel until found, star-rated gun drops on the jittered grid, upgrades by stars. Hunting has no health/shield crosses and none of the PvP rules (no health, round clock, spilling, drowning penalty). PC/phone Hunting unchanged.
+- Tests that need every gun in Hunting call `D.allGuns()` (debug helper) after generate.

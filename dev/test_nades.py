@@ -11,7 +11,7 @@ async def main():
         pg.on("console", lambda m: errs.append("CON " + m.text) if m.type == "error" else None)
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         r = await pg.evaluate("""() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); const out = {};
-          D.setVR(true); D.setMode('hunt'); D.set.size = 'small'; D.set.weather = 'clear'; D.set.lat = 45; D.set.hour = 13; D.generate(); D.state = 'play';
+          D.setVR(true); D.setMode('hunt'); D.set.size = 'small'; D.set.weather = 'clear'; D.set.lat = 45; D.set.hour = 13; D.generate(); D.allGuns();   /* (1.54: VR Hunting starts with a pistol; these tests want every gun) */ D.state = 'play';
           const T = D.THREE, V = D.vr; V.on = true; V.yaw = 0; V.cl = null; V.goodX = undefined; V.ox = D.P.x; V.oz = D.P.z; V.oy = D.P.y;
           const L = { head: new T.Vector3(0, 1.7, 0), R: new T.Vector3(.2, 1.35, -.35), Lh: new T.Vector3(-.25, 1.2, -.3) };
           const pad = { R: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 }, L: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 } };
