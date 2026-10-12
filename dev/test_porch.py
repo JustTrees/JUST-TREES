@@ -19,7 +19,7 @@ async def main():
               D.scene.traverse(m => { if (!m.isInstancedMesh) return; });
               o.standOnDeck = +D.rockTopAt(Pc.x + Pc.rIn + 1.3, Pc.z, Pc.top + .05, 1.6).toFixed(1);
               o.underDeck = D.rockTopAt(Pc.x + Pc.rIn + 1.3, Pc.z, D.H(Pc.x + Pc.rIn + 1.3, Pc.z), 1.6) < -1e8;
-              o.holeOpen = D.rockTopAt(Pc.x + Pc.rIn - .5, Pc.z, Pc.top + .05, 1.6) < -1e8;
+              o.holeOpen = D.rockTopAt(Pc.x + Pc.rIn - .5, Pc.z, Pc.top + .05, 1.6) < Pc.top - 2;   // nothing solid up at the deck (a log on the ground far below is fine)
               const red = [...D.DROPS.values()].filter(d => d.type === 'gun' && d.tier === 5 && d.kind === 'hunt');
               o.redSnipers = red.length; o.redOnDeck = red.length === 1 && Math.abs(red[0].y - Pc.top) < .01 && red[0].id === 'gRed';
               // an animal walking under it stays on the ground
