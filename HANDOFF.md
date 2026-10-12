@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.63**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.64**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,7 +39,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.62)
+## 4. What exists now (v1.63)
 
 ### World (all modes)
 - **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
@@ -47,6 +47,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
 - **Trunks (1.61):** `trunkNice` — flared base with root buttresses that run into the ground (lobes), 8 sides, same taper; every trunk has a gentle natural bend (`bend(y)` applied to the whole variant, firs straighter than broadleaf). Climbing/head-blocking follow the bend and flare (`treeHit` uses `hold.bend`, `hold.fl`). Far trees keep the 4-sided trunk. (Also fixed: animals were updated twice a frame — they moved at double speed.)
 - **The tallest tree (1.60–1.61):** one per map, not on any map — you find it. Built like the Dramatic landmarks: random features from a seeded roll (`GR`): huge buttressed root base (always), leaning (55%), gnarled bends (40%), a twin crown split above the porch (45%, only when there's room), bark: plain / redwood / silverbark / blackbark (trunk tint), thicker trunk. It gets a name ("Leaning gnarled redwood giant"), shown the first time you step on the porch (wrist in VR, hint on PC). Size: porch at the tallest real treetop + 2.5 m, the giant ≈ 1.65× that, so the porch is ~2/3 up with a real crown above. **Branches (1.62):** normal below the porch, none from the deck up 3 m (`clearAt` = `[porch − 0.3 m, porch + 3 m]`; any branch card overlapping that band is dropped), normal above. Its own one-off variant (`treeVariant(…, {giant, clearAt, thick, noLean})`, `giant.ry = 0`). **Porch:** doughnut wooden deck (planks, rim board, joists, braces to the trunk, no railing), centred on the trunk at that height (follows the lean), no branches from the deck to 3 m above it (clear 360° view), solid via the rock grid (stand on it, walk/climb under it, animals walk under it), open middle to climb through. `PORCH` = {x, z, top, rIn, rOut, name, tree}. The **only red (5★) sniper** lies on the deck (`gRed`); ground loot never has a red sniper. Test: dev/test_porch.py (5 seeds; give a folder for pictures).
+- **Lava (1.63):** a volcano (Dramatic maps) with a crater holds a glowing lava pool (`LAVA`, `findLava` / `buildLava`). Level = 60% of the way from the crater floor to where it would spill (priority flood from the lowest crater point; `LAVA.mask` = the basin it fills, 3 m cells). After erosion the volcano's rim is mended (notches filled) so the crater holds. Round/oval/lobed volcanoes get lava; crescent and twin/triple ones have no crater, so none. Dark basalt crater walls. No trees, rocks, logs, bushes, loot, spawns or animals in it (`inLava(x, z, pad)`; `okSpot` and `targetOk` refuse it). Stepping in: VR = red fade + respawn like drowning (`UW.red`; PvP "Burned: lost your gear and a kill"); PC/phone = red flash + respawn (`pcLavaTick`). A hiss (`lavaHiss`). Volcanoes are rare (about 1 in 15 Dramatic maps). Test: dev/test_lava.py.
 - **Rocks:** boulders, slabs, cliffs, outcrops, logs, bushes on a 1 m height grid (`rockGrid`, `rockTopAt`, `rockAround`). Overhangs work: you can stand under a rock with a gap below it (`rockLow`).
 - **Look and sound:** ACES tone mapping, `grade()` colour shader, valley fog, sky with sun/moon/stars, lightning storms with distance-delayed thunder. All sound is synthesized.
 
@@ -54,6 +55,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **32 kinds**, native per biome (`NATIVE`): buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, monkeys, big birds, plus (1.55) elephant, giraffe, zebra, rhino, lion, crocodile, parrots, mountain goat, wild horse, elk, moose, boar, coyote, fox, turkey, eagle, caribou, musk ox, arctic fox, snowy owl, and the legends Bigfoot and Yeti.
 - Built from code (legs have rounded haunches and knees, 1.56): `buildQuad(r, QSPEC[kind])` makes most four-legged animals from a spec; separate builders for buck, bear, wolf (also coyote/fox/arctic fox), turkey, Bigfoot/Yeti (`buildApe`), birds (`buildBird` with colours), monkeys.
 - **Where they live (1.58, Ron: "a natural world with some tweaks"):** `habInit` builds a 24 m habitat grid at spawn (open, forest edge, deep forest, water's edge, high ground). `PREF[kind]` = what each kind likes; each also gets 2 home ranges per map, so different parts of a map hold different animals (explore to find them). `likeN` = liking compared with the best spot on this map. It's a liking, not a wall: bears, wolves, rabbits etc. roam everywhere, and anything can run anywhere.
+- **Animals everywhere (1.63):** the map is cut into ~200 m squares (`STOCK`, `secOf`, 2×2 on XS up to 8×8 on XXL); new groups go to the emptiest squares first (`spawnKind(…, onlySec)`), and `stockTick` (every 4–7 s) refills a square with no huntable animals, far (>200 m) and out of sight: shot kinds come back first (old unseen bodies are cleared to make room), otherwise a group walks over from the most crowded square. Rabbits, birds, monkeys, seals, crocodiles and legends aren't counted. Shots still empty the area (they run 140–340 m off). **VR walking (8.5 m/s) now counts as walking** (animals notice you at 60 m); only sprinting is 150 m (before, every VR walk counted as a sprint, which is likely why animals felt hard to find). Test: dev/test_spread.py.
 - **Movement:** no slope limit (they climb anything; only big boulders/cliff rocks turn them), so they don't get stuck or bunch up. Groups spawn ≥55 m apart. Wander targets favour liked ground. A shot: each herd/loner flees on its own line (`HAB.flee`), not all the same way. Stuck animals squeeze free (`unstick`).
 - **No gathering round you.** Standing still, `appearTick` every ~10–35 s moves a far, out-of-sight group to liked ground 90–380 m around you (never in view, not in a ring, never on top of another group); stops when plenty are already near. Moving around, nothing new turns up.
 - **Falling (`deadPose`):** topples sideways (speeding up), then the legs and head go limp on the ground.
@@ -124,6 +126,16 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 ---
 
 ## 7. Next up and backlog
+
+### Plan (Ron, Oct 11): one step per version
+Ron: "each time just lmk how it goes in tests and send pics each time and I'll just tell you to keep going." So after each build: push, then a short test report + pictures, and wait for "keep going".
+- 1.63 animals everywhere + lava in volcano craters (only in the crater, no flows) — done
+- 1.64 **Desert:** dunes, red rock, cactus, Joshua trees; coyote, oryx, camel, roadrunner; heat shimmer
+- 1.65 **African savanna:** golden grass, flat-topped acacias, big open views; elephants, giraffes, zebras, lions
+- 1.66 **Swamp:** cypress in still water, mist, alligators, herons
+- 1.67 **Rainforest:** huge trees, vines, waterfalls, jaguar, tapir
+- 1.68 **Volcanic island:** black sand, palms, lava fields
+- Then: northern lights (easy), hot springs and geysers, rivers and waterfalls, caves (hardest: the ground is a heightfield, no holes)
 
 ### Next ideas (not built)
 - Bigfoot/Yeti mysterious behaviour (maybe): sometimes follow you at 100–250 m, freeze when you look, slip behind trees, never come close.

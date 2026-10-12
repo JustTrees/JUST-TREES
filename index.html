@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.62</title>
+<title>JUST TREES 1.63</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.62";              // Just Trees 1.62
+const VERSION = "1.63";              // Just Trees 1.63
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1798,6 +1798,60 @@ function erode(map, N, drops, rand) {
 /* Binary min-heap used to fill pits so water can always find a way downhill */
 // Rivers: route rain over the eroded ground, find where lots of water gathers, carve channels there
 let FEAT = null;
+let LAVA = null;                                            // a volcano's crater holds glowing lava: { x, z, y, r, sd, cut, mesh }
+function inLava(x, z, pad = 0) {                            // over the lava (pad: this close to it)
+  if (!LAVA || Math.hypot(x - LAVA.x, z - LAVA.z) > LAVA.r + pad || H(x, z) > LAVA.y + .5 + pad * .5) return false;
+  const st = LAVA.st, n = LAVA.n, ci = Math.round((x - LAVA.gx) / st), cj = Math.round((z - LAVA.gz) / st), rr = Math.ceil(pad / st) + 1;
+  for (let j = cj - rr; j <= cj + rr; j++) for (let i = ci - rr; i <= ci + rr; i++) if (i >= 0 && j >= 0 && i < n && j < n && LAVA.mask[j * n + i] && Math.hypot(LAVA.gx + i * st - x, LAVA.gz + j * st - z) < st * 1.2 + pad) return true;
+  return false;
+}
+const lavaHit = () => !!LAVA && state === "play" && inLava(P.x, P.z) && P.y < LAVA.y + .35;   // standing (or falling) in it
+let lavaTex = null;
+function lavaTexture() {                                    // dark crust with glowing cracks (linear colour: not marked sRGB)
+  if (lavaTex) return lavaTex;
+  const N = 256, cv = document.createElement("canvas"); cv.width = cv.height = N; const g = cv.getContext("2d"), im = g.createImageData(N, N), r = mulberry32(77), nz = makeNoise(r);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const u = i / N * 6.283, v = j / N * 6.283, f = (a, b, s) => nz(Math.cos(a) * s + Math.sin(b) * s * .7, Math.sin(a) * s + Math.cos(b) * s * .7);   // tiles seamlessly
+    const n = f(u, v, 1.6) * .6 + f(u + 1, v + 2, 3.4) * .3 + f(u + 3, v + 1, 7) * .15, crack = Math.pow(1 - Math.min(1, Math.abs(n) * 3.2), 3), hot = Math.min(1, crack * 1.4 + .12);
+    const o = (j * N + i) * 4; im.data[o] = 255 * Math.min(1, .16 + hot * 1.1); im.data[o + 1] = 255 * Math.min(1, .03 + hot * hot * .62); im.data[o + 2] = 255 * (.02 + hot * hot * hot * .16); im.data[o + 3] = 255;
+  }
+  g.putImageData(im, 0, 0); lavaTex = new THREE.CanvasTexture(cv); lavaTex.wrapS = lavaTex.wrapT = THREE.RepeatWrapping; return lavaTex;
+}
+function findLava() {                                       // a volcano: lava fills the crater partway up to where it would spill over
+  LAVA = null; if (!FEAT || FEAT.type !== "volcano" || !FEAT.sd) return;
+  const R = FEAT.R, cut = R * .55, st = 3, x0g = FEAT.x - R * 1.6, z0g = FEAT.z - R * 1.6, n = Math.ceil(R * 3.2 / st) + 1;
+  const hs = new Float32Array(n * n), ds = new Float32Array(n * n); let start = -1;
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x = x0g + i * st, z = z0g + j * st, k = j * n + i, out = Math.abs(x) > HALF - 8 || Math.abs(z) > HALF - 8;
+    hs[k] = out ? -1e9 : H(x, z); ds[k] = out ? 1e9 : FEAT.sd(x, z); if (ds[k] < -R * .62 && (start < 0 || hs[k] < hs[start])) start = k; }
+  if (start < 0) return;                                    // this shape has no crater
+  // priority flood from the lowest point of the crater: the level rises until it reaches outside the crater (that's the spill height)
+  const heap = [], push = k => { heap.push(k); let c = heap.length - 1; while (c > 0) { const p = (c - 1) >> 1; if (hs[heap[p]] <= hs[heap[c]]) break; [heap[p], heap[c]] = [heap[c], heap[p]]; c = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let c = 0; for (;;) { const l = c * 2 + 1, r = l + 1; let m = c; if (l < heap.length && hs[heap[l]] < hs[heap[m]]) m = l; if (r < heap.length && hs[heap[r]] < hs[heap[m]]) m = r; if (m === c) break; [heap[m], heap[c]] = [heap[c], heap[m]]; c = m; } } return top; };
+  const seen = new Uint8Array(n * n), popped = [], lvAt = []; let level = hs[start], spill = null; push(start); seen[start] = 1;
+  while (heap.length) { const k = pop(); level = Math.max(level, hs[k]); if (ds[k] > -R * .4) { spill = level; break; } popped.push(k); lvAt.push(level);
+    const i = k % n, j = (k / n) | 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue; const q = jj * n + ii; if (!seen[q]) { seen[q] = 1; push(q); } } }
+  if (spill === null || spill - hs[start] < 3) return;      // a shallow dip: no lava
+  const lo = hs[start], y = Math.max(lo + (spill - lo) * .6, water + 1), mask = new Uint8Array(n * n);
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, cnt = 0;
+  for (let q = 0; q < popped.length; q++) { const k = popped[q]; if (lvAt[q] > y || hs[k] >= y) continue;   // only the basin the lava really fills
+    mask[k] = 1; cnt++; const x = x0g + (k % n) * st, z = z0g + ((k / n) | 0) * st; x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  if (cnt < 40) return;                                     // too small to bother
+  LAVA = { x: (x0 + x1) / 2, z: (z0 + z1) / 2, y, r: Math.hypot(x1 - x0, z1 - z0) / 2 + 6, sd: FEAT.sd, cut, mask, n, st, gx: x0g, gz: z0g };
+}
+function buildLava() {                                      // a flat glowing surface over the basin (the crater walls hide its edge)
+  if (!LAVA) return;
+  const { n, st, gx, gz, mask } = LAVA, P3 = [], UV = [];
+  const put = (i, j) => { const x = gx + (i - .5) * st, z = gz + (j - .5) * st; P3.push(x, LAVA.y, z); UV.push(x / 22, z / 22); };
+  const near = (i, j) => { for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const ii = i + a, jj = j + b; if (ii >= 0 && jj >= 0 && ii < n && jj < n && mask[jj * n + ii]) return true; } return false; };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { if (!near(i, j)) continue; put(i, j); put(i, j + 1); put(i + 1, j); put(i + 1, j); put(i, j + 1); put(i + 1, j + 1); }
+  if (!P3.length) { LAVA = null; return; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(P3, 3)); geo.setAttribute("uv", new THREE.Float32BufferAttribute(UV, 2)); geo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({ map: lavaTexture(), color: 0xffffff, toneMapped: false });
+  const m = new THREE.Mesh(geo, mat);
+  m.onBeforeRender = () => { const t = performance.now() / 1000; mat.map.offset.set(t * .006, t * .0035); const k = .85 + .15 * Math.sin(t * .7) * Math.sin(t * .23 + 1); mat.color.setRGB(k, k, k); };
+  world.add(m); LAVA.mesh = m;
+}
+
 // Dramatic landscape: a feature generator. Every map builds its own landform from two choices, each with its own random sizes:
 //  a SHAPE — paths that wind, fork into a Y, cross in an X, zigzag, bend into a horseshoe, run side by side or burst out like a star;
 //            or a blob that is round, long, lobed, a crescent, a ring or a little cluster;
@@ -1898,7 +1952,7 @@ function makeFeature(r, base, wGuess) {
   const words = { round: "", oval: "Long ", lobed: "Lobed ", crescent: "Crescent ", ring: "Ring ", cluster: subs.length === 2 ? "Twin " : "Triple " };
   const nouns = { mesa: "mesa", butte: "butte", terrace: "terraced hill", crater: "crater lake", sink: "sinkhole", volcano: "volcano" };
   let name = words[shape] + nouns[act] + (shape === "cluster" ? "s" : ""); if (split) name = "Split " + name.toLowerCase(); name = name[0].toUpperCase() + name.slice(1);
-  return { type: act, shape, name, x: cx, z: cz, R,
+  return { type: act, shape, name, x: cx, z: cz, R, sd: sdf,
     mask: (x, z) => { if (box(x, z, ext + R)) return 0; return sm(R * .75, R * .45, sdf(x, z)); },
     apply: (x, z, h) => {
       if (box(x, z, ext + R)) return h;
@@ -2469,7 +2523,7 @@ function generate() {
       return sea + (rawH(x, z) - sea) * m;
     };
   }
-  FEAT = null;
+  FEAT = null; LAVA = null;
   if (set.land === "dramatic") {                       // one main feature, placed once, then eroded along with everything else
     const base = shapedH, ws = [];
     for (let i = 0; i < 32; i++) for (let j = 0; j < 32; j++) { const x = -HALF + (i + .5) * S / 32, z = -HALF + (j + .5) * S / 32; if (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) ws.push(base(x, z)); }
@@ -2482,6 +2536,13 @@ function generate() {
   if (FEAT) {                                          // erosion softens it like everything else; then part of its shape comes back, so it stays dramatic but keeps its gullies
     const m = baked.map, N = baked.N, G = baked.G;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = -HALF + i * G, z = -HALF + j * G; if (FEAT.mask(x, z) <= 0) continue; const b0 = FEAT.base(x, z); m[j * N + i] += (FEAT.apply(x, z, b0) - b0) * .55; }
+    if (FEAT.type === "volcano") {                     // keep the crater rim whole (erosion notches it), so the crater can hold its lava
+      const R = FEAT.R, rim = [], cells = [];
+      for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const x = -HALF + i * G, z = -HALF + j * G; if (Math.abs(x - FEAT.x) > R * 1.7 || Math.abs(z - FEAT.z) > R * 1.7) continue; const d = FEAT.sd(x, z);
+        if (d > -R * .66 && d < -R * .56) rim.push(m[j * N + i]); if (d > -R * .78 && d < -R * .42) cells.push([j * N + i, d]); }
+      if (rim.length > 20) { rim.sort((a, b) => a - b); const tgt = rim[Math.floor(rim.length * .5)] * .97 + rim[Math.floor(rim.length * .2)] * .03;
+        for (const [k, d] of cells) { const w = Math.exp(-Math.pow((d + R * .6) / (R * .09), 2)); if (m[k] < tgt) m[k] += (tgt - m[k]) * w * .9; } }
+    }
   }
   const H0 = baked.H; H = H0;
   const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand);
@@ -2562,6 +2623,7 @@ function generate() {
   }
   const tileOf = (x, z) => Math.min(NT - 1, Math.max(0, Math.floor((x + HALF) / TILE))) * NT + Math.min(NT - 1, Math.max(0, Math.floor((z + HALF) / TILE)));
 
+  findLava();                                          // volcano: lava in the crater (nothing grows or lies in it)
   // Tree materials and variants
   const leafCols = season === "tropical" ? LEAVES.tropical : (LEAVES[season] || LEAVES.summer);
   const kinds = {
@@ -2600,7 +2662,7 @@ function generate() {
   const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
   for (let k = 0; k < attempts && dens > 0 && allTrees.length < maxTrees; k++) {
     const x = (rand() - .5) * (S - 30), z = (rand() - .5) * (S - 30), h = H0(x, z);
-    if (h < water + .6 || h > treeLine) continue;
+    if (h < water + .6 || h > treeLine || inLava(x, z, 3)) continue;
     if (slopeNy(x, z) < .78 || nearRiver(x, z, 3)) continue;
     if (rand() > (densN(x * .012, z * .012) + .35 + (DM - 1) * .25) * dens * 1.4) continue;
     const rel = (h - water) / span, sp = spN(x * .018, z * .018) + spN(x * .06, z * .06) * .3;
@@ -2633,7 +2695,7 @@ function generate() {
       const px = -HALF + (i + .5) * PS, pz = -HALF + (j + .5) * PS, want = rand() < .45 ? 1 : 2 + Math.floor(rand() * 3);
       for (let q = 0, placed = 0; q < 40 && placed < want; q++) {
         const r = placed === 0 ? rand() * 4 : 2 + rand() * 12, an = rand() * 6.28, x = px + Math.cos(an) * r, z = pz + Math.sin(an) * r;
-        if (Math.abs(x) > HALF - 20 || Math.abs(z) > HALF - 20 || slopeNy(x, z) < .55 || H0(x, z) < water + 2) continue;
+        if (Math.abs(x) > HALF - 20 || Math.abs(z) > HALF - 20 || slopeNy(x, z) < .55 || H0(x, z) < water + 2 || inLava(x, z, 3)) continue;
         let kind = biome === "tropical" ? "broad" : "fir"; if (kind === "broad" && season === "winter") kind = "bare";
         const s = (.3 + rand() * .3) * (biome === "tundra" ? .8 : 1), vi = pickVar(kind, false), v = .78 + rand() * .4;
         const t = { x, y: 0, z, s, ry: rand() * Math.PI * 2, c: new THREE.Color(v, v, v), vi, kind, peak: true };
@@ -2787,7 +2849,7 @@ function generate() {
 
   // Terrain mesh, with rock blended in on steep and high ground
   const g = Array.isArray(GRASS[biome]) ? GRASS[biome] : GRASS[biome][season];
-  const gA = C(g[0]), gB = C(g[1]), rockC = C("#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040");
+  const gA = C(g[0]), gB = C(g[1]), rockC = C("#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040"), basalt = C("#2a2624"), scorch = C("#7a2a12");
   const geo = new THREE.PlaneGeometry(S, S, SEG, SEG); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, col = new Float32Array(pos.count * 3), rocky = new Float32Array(pos.count), c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -2801,6 +2863,7 @@ function generate() {
     let sn = 0;
     if (winterSnow || h > snowLine + (v - .5) * span * .1) { sn = smooth(.5, .72, ny); c.lerp(snow, sn); }
     if (!iced && h < water - .3) c.lerp(bed, .5);
+    if (LAVA && Math.hypot(x - LAVA.x, z - LAVA.z) < LAVA.r + 40) { const ins = smooth(-LAVA.cut + 30, -LAVA.cut, LAVA.sd(x, z)); if (ins > 0) { c.lerp(basalt, ins * .9); c.lerp(scorch, ins * smooth(LAVA.y + 6, LAVA.y, h) * .55); } }
     rocky[i] = rk * (1 - sn);
     col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
@@ -2865,6 +2928,7 @@ function generate() {
   const wMat = iced ? phong("#cfe6f0", { shininess: 60, specular: 0x666666 }) : waterMaterial(WATERC[biome]); if (VR_ON) wMat.side = THREE.DoubleSide;   // you can see the surface from below
   const wMesh = new THREE.Mesh(new THREE.PlaneGeometry(S + 2 * (edgeShape.island ? 6000 : BORDER_EXT()), S + 2 * (edgeShape.island ? 6000 : BORDER_EXT())), wMat);
   wMesh.rotation.x = -Math.PI / 2; wMesh.position.y = water; world.add(wMesh);
+  buildLava();
   if (riverW) {
     const rMat = iced ? phong("#d8eaf2", { shininess: 60, specular: 0x666666 })
                       : new THREE.MeshPhongMaterial({ color: biome === "tropical" ? "#2aa0b0" : "#3a7090", shininess: 90, specular: 0x8899aa, transparent: true, opacity: .82 });
@@ -2877,7 +2941,7 @@ function generate() {
   const RG = { ...rockGeos(), ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
   const tone = { tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[biome];
   const rc = () => { const v = .8 + rand() * .35; return new THREE.Color(v * tone[0], v * tone[1], v * tone[2]); };
-  const rockAt = (k, x, z, s, sink, extra = {}) => rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
+  const rockAt = (k, x, z, s, sink, extra = {}) => inLava(x, z, s + 1) ? 0 : rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
   const rpos = () => [(rand() - .5) * (S - 30), (rand() - .5) * (S - 30)];
   const grad = (x, z) => { const e = 2; return [(H(x + e, z) - H(x - e, z)) / (2 * e), (H(x, z + e) - H(x, z - e)) / (2 * e)]; };
   // big rugged sections: cliffs, ledges and broken ridges that follow the slope
@@ -2890,6 +2954,7 @@ function generate() {
     let s = 2.5 + rand() * 3 + steep * 10 + Math.max(0, rel - .5) * 8; if (rand() < .08) s *= 1.8;
     const [gx, gz] = grad(x, z), gl = Math.hypot(gx, gz) + 1e-6;
     const type = steep > .3 ? (rand() < .5 ? "crag" : "spine") : (rand() < .55 ? "shelf" : "crag");
+    if (inLava(x, z, s * 1.5 + 2)) continue;
     rr[type].push({ x, y: seat(x, z, s * 1.2, s * .42), z, s, ry: Math.atan2(-gx, -gz), tx: Math.atan(gl) * .7, tz: (rand() - .5) * .15, ord: "YXZ", c: rc() });
     sections.push([x, z]);
     addObstacleSoft(x, z, s * 1.5);
@@ -2951,7 +3016,7 @@ function generate() {
   for (let k = 0; k < nLogs * 6 && logs.length < nLogs && allTrees.length; k++) {
     const t = allTrees[Math.floor(rand() * allTrees.length)], a = rand() * 6.28, d = 2 + rand() * 5;
     const x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d;
-    if (H(x, z) < water + .4 || slopeNy(x, z) < .75 || nearRiver(x, z, 2)) continue;
+    if (H(x, z) < water + .4 || slopeNy(x, z) < .75 || nearRiver(x, z, 2) || inLava(x, z, 4)) continue;
     const L = 4 + rand() * 7, r = .22 + rand() * .3, ry = rand() * 6.28, cx = Math.cos(ry), cz = -Math.sin(ry);
     const h1 = H(x - cx * L / 2, z - cz * L / 2), h2 = H(x + cx * L / 2, z + cz * L / 2);
     const moss = rand() < .45, v = .7 + rand() * .3;
@@ -2978,7 +3043,7 @@ function generate() {
     else if (r < .85 && outcrops.length) { const o = outcrops[Math.floor(rand() * outcrops.length)], a = rand() * 6.28, d = 3 + rand() * 5; x = o[0] + Math.cos(a) * d; z = o[1] + Math.sin(a) * d; }
     else [x, z] = rpos();
     const h = H(x, z);
-    if (h < water + .3 || slopeNy(x, z) < .7 || Math.abs(x) > HALF - 5 || Math.abs(z) > HALF - 5 || nearRiver(x, z, 1)) continue;
+    if (h < water + .3 || slopeNy(x, z) < .7 || Math.abs(x) > HALF - 5 || Math.abs(z) > HALF - 5 || nearRiver(x, z, 1) || inLava(x, z, 3)) continue;
     const kind = bushKind(), vi = Math.floor(rand() * BUSHV), v = .78 + rand() * .4;
     const s = (biome === "tundra" || biome === "polar") ? .45 + rand() * .45 : .7 + rand() * .6;
     bushRecs[kind][vi].push({ x, y: seat(x, z, s * .5, .06), z, s, ry: rand() * 6.28, c: new THREE.Color(v, v, v), tile: tileOf(x, z) });
@@ -4245,9 +4310,9 @@ function appearTick(dt) {
     return;
   }
 }
-function animalSpot(minFromPlayer, ok, extra) {
+function animalSpot(minFromPlayer, ok, extra, box) {
   for (let k = 0; k < 300; k++) {
-    const x = (Math.random() * 2 - 1) * (EDGE - 10), z = (Math.random() * 2 - 1) * (EDGE - 10);
+    const x = box ? box[0] + Math.random() * (box[1] - box[0]) : (Math.random() * 2 - 1) * (EDGE - 10), z = box ? box[2] + Math.random() * (box[3] - box[2]) : (Math.random() * 2 - 1) * (EDGE - 10);
     if (Math.hypot(x - P.x, z - P.z) < minFromPlayer) continue;
     if (ok(x, z) && (!extra || extra(x, z) || k > 240)) return [x, z];
   }
@@ -4256,7 +4321,7 @@ function animalSpot(minFromPlayer, ok, extra) {
 function beastGround(A, x, z) { const g = Math.max(groundAt(x, z), rockAround(x, z, .12, A.y, 1)); return A.kind === "seal" && iced ? Math.max(g, water) : g; }
 function targetOk(A, x, z) {                            // somewhere it could stand (trees and logs are handled while walking)
   if (A.kind === "seal") return sealOk(x, z);
-  return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4;   // any slope: they can climb
+  return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4 && !inLava(x, z, 3);   // any slope: they can climb (never into lava)
 }
 function trunkNear(x, z, pad) {                            // trees and other solid things it must go round
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
@@ -4304,7 +4369,25 @@ function addGround(kind, x, z, home) {
   A.y = beastGround(A, x, z);
   animalGroup.add(A.root); beasts.push(A); return A;
 }
-function spawnKind(kind, grp, peak) {
+// Every part of the map has animals: the map is cut into sections (about 200 m), new groups go to the emptiest sections,
+// and through the round a section that has emptied out (shot out, or everything ran off) is quietly filled again, out of sight.
+const STOCK = { G: 2, land: [], n0: {}, t: 8 };
+const STOCKED = A => !A.dead && !A.gone && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && A.kind !== "crocodile" && !LEGEND[A.kind] && !FLY[A.kind];
+const secOf = (x, z) => { const w = S / STOCK.G, i = Math.max(0, Math.min(STOCK.G - 1, Math.floor((x + HALF) / w))), j = Math.max(0, Math.min(STOCK.G - 1, Math.floor((z + HALF) / w))); return i * STOCK.G + j; };
+const secBox = q => { const w = S / STOCK.G, i = Math.floor(q / STOCK.G), j = q % STOCK.G, x0 = -HALF + i * w, z0 = -HALF + j * w; return [Math.max(-EDGE + 10, x0 + 4), Math.min(EDGE - 10, x0 + w - 4), Math.max(-EDGE + 10, z0 + 4), Math.min(EDGE - 10, z0 + w - 4)]; };
+function stockInit() {
+  STOCK.G = Math.max(2, Math.min(8, Math.round(S / 200))); STOCK.land = []; STOCK.n0 = {}; STOCK.t = 8;
+  for (let q = 0; q < STOCK.G * STOCK.G; q++) { const b = secBox(q); let n = 0; for (let k = 0; k < 25; k++) { const x = b[0] + (k % 5 + .5) / 5 * (b[1] - b[0]), z = b[2] + (Math.floor(k / 5) + .5) / 5 * (b[3] - b[2]); if ((!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 8) && H(x, z) > water + .4 && !inLava(x, z, 3)) n++; } if (n >= 5) STOCK.land.push(q); }
+}
+function stockCounts(skipRabbits) {
+  const cnt = new Map(); for (const q of STOCK.land) cnt.set(q, 0);
+  const seen = new Set(); for (const A of beasts) { if (!STOCKED(A) || (skipRabbits && A.kind === "rabbit")) continue; const key = A.grp + ":" + secOf(A.x, A.z); if (seen.has(key)) continue; seen.add(key); const q = secOf(A.x, A.z); if (cnt.has(q)) cnt.set(q, cnt.get(q) + 1); }
+  return cnt;                                               // groups per land section
+}
+function stockOrder(skipRabbits) {                          // land sections, emptiest first (ties in random order)
+  const cnt = stockCounts(skipRabbits); return [...STOCK.land].map(q => [q, cnt.get(q) + Math.random() * .5]).sort((a, b) => a[1] - b[1]).map(a => a[0]);
+}
+function spawnKind(kind, grp, peak, onlySec) {
   if (kind === "monkey") { spawnMonkeys(grp); return; }
   if (FLY[kind]) {                                           // birds circling on the thermals (parrots in small fast flocks)
     const parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : 1.6;
@@ -4322,7 +4405,11 @@ function spawnKind(kind, grp, peak) {
   const extra = kind === "polar" ? nearWater : kind === "crocodile" ? (x, z) => nearWater(x, z) && H(x, z) < water + 4
               : kind === "goat" ? (x, z) => H(x, z) > water + (peak - water) * .5 : null;
   const apart = kind === "rabbit" ? 20 : 55, like = (x, z) => (!extra || extra(x, z)) && Math.random() < likeN(kind, x, z) && !HAB.homes.some(h => Math.hypot(h[0] - x, h[1] - z) < apart);
-  const s = animalSpot(LEGEND[kind] ? 150 : kind === "rabbit" ? 25 : 45, ok, like); if (!s) return;
+  const minP = LEGEND[kind] ? 150 : kind === "rabbit" ? 25 : 45, spread = !extra && kind !== "seal" && !LEGEND[kind] && STOCK.land.length;
+  let s = null;
+  if (onlySec !== undefined) { const b = secBox(onlySec); s = animalSpot(minP, ok, like, b) || animalSpot(minP, ok, (x, z) => !extra || extra(x, z), b); }
+  else if (spread) for (const q of stockOrder(kind === "rabbit").slice(0, 6)) { const b = secBox(q); s = animalSpot(minP, ok, like, b); if (s) break; }   // the emptiest parts of the map first
+  if (!s && onlySec === undefined) s = animalSpot(minP, ok, like); if (!s) return;
   HAB.homes.push(s); const gid = ++HAB.gid;
   if (grp) {                                                 // packs, herds and troops stay together
     const home = [s[0], s[1]], m = grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1)), sp = kind === "elephant" || kind === "giraffe" ? 16 : 8;
@@ -4333,13 +4420,16 @@ function spawnAnimals() {
   clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
   const k = Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
-  habInit(peak); appear.t = 12;
+  habInit(peak); appear.t = 12; stockInit();
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
   const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
     for (const p of plan) { if (p.left <= 0 || beasts.length >= BEAST_CAP) continue; p.left--; more = true; spawnKind(p.kind, p.grp, peak); }
   }
+  for (const A of beasts) if (STOCKED(A)) { STOCK.n0[A.kind] = STOCK.n0[A.kind] || new Set(); STOCK.n0[A.kind].add(A.grp); }
+  for (const k in STOCK.n0) STOCK.n0[k] = STOCK.n0[k].size;     // how many groups of each kind the map started with
+  STOCK.peak = peak;
   hunt.score = 0; hunt.kills = 0; hunt.longest = 0; showHuntScore(); sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
   updateAnimals(0);
 }
@@ -4362,7 +4452,7 @@ function senseTick(dt) {
   const v = dt > 0 ? Math.hypot(P.x - sense.px, P.z - sense.pz) / dt : 0; sense.px = P.x; sense.pz = P.z;
   sense.v += (v - sense.v) * Math.min(1, dt * 8);
   const moving = sense.v > .3 || !P.onGround;
-  sense.R = !moving ? 0 : !P.onGround ? 60 : P.crouch ? 20 : sense.v > 6 ? 150 : 60;     // how far away they notice you
+  sense.R = !moving ? 0 : !P.onGround ? 60 : P.crouch ? 20 : sense.v > (vr.on ? 10.5 : 6) ? 150 : 60;     // how far away they notice you (VR walks at 8.5 m/s: that's walking, not sprinting)
   sense.calm = moving ? 0 : sense.calm + dt;
   sense.shotT = Math.max(0, sense.shotT - dt);
 }
@@ -4417,9 +4507,44 @@ function unstick(A) {
   }
   return false;
 }
+function stockTick(dt) {                                    // keep every part of the map stocked: refill an empty section far from you, out of sight
+  if (!STOCK.land.length || state !== "play" || (STOCK.t -= dt) > 0) return;
+  STOCK.t = 4 + Math.random() * 3;
+  camera.getWorldDirection(_lf); const fw = Math.hypot(_lf.x, _lf.z) || 1;
+  const hidden = (x, z) => { const d = Math.hypot(x - P.x, z - P.z); return d > 200 && (d > Math.max(900, beastDraw()) || ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (d * fw) < .3); };
+  const cnt = stockCounts(true), empty = STOCK.land.filter(q => cnt.get(q) === 0).filter(q => { const b = secBox(q); return hidden((b[0] + b[1]) / 2, (b[2] + b[3]) / 2); });
+  if (!empty.length) return;
+  const q = empty[Math.floor(Math.random() * empty.length)], b = secBox(q);
+  // kinds that have lost groups (shot) come back first
+  const live = {}; for (const A of beasts) if (STOCKED(A)) (live[A.kind] = live[A.kind] || new Set()).add(A.grp);
+  const plan = (NATIVE[biomeOf(set.lat * set.hemi)] || NATIVE.temperate).filter(([k]) => STOCK.n0[k] && k !== "rabbit"), short = plan.filter(([k]) => (live[k] ? live[k].size : 0) < STOCK.n0[k]);
+  if (short.length) {
+    if (beasts.length >= BEAST_CAP) {                       // make room: clear away an old body nobody can see
+      const i = beasts.findIndex(A => A.dead && !A.wings && A.deadT >= 1 && hidden(A.x, A.z)); if (i < 0) return;
+      animalGroup.remove(beasts[i].root); beasts.splice(i, 1);
+    }
+    const [k, , grp] = short[Math.floor(Math.random() * short.length)], n0 = beasts.length;
+    spawnKind(k, grp, STOCK.peak, q);
+    for (let i = n0; i < beasts.length; i++) { const A = beasts[i]; if (!hidden(A.x, A.z)) { animalGroup.remove(A.root); beasts.splice(i, 1); i--; } }   // never pops up in view
+    return;
+  }
+  // nobody's been shot: walk over a group from the most crowded part of the map, one that's far away and out of sight
+  let best = -1, bq = -1; for (const [s0, c] of cnt) if (c > best) { best = c; bq = s0; }
+  if (best < 2) return;
+  const cand = beasts.filter(A => STOCKED(A) && A.kind !== "rabbit" && secOf(A.x, A.z) === bq && !A.trek && !(A.fleeT > 0) && hidden(A.x, A.z));
+  if (!cand.length) return;
+  const lead = cand[Math.floor(Math.random() * cand.length)], grpA = beasts.filter(A => A.grp === lead.grp && STOCKED(A));
+  for (let k = 0; k < 80; k++) {
+    const x = b[0] + Math.random() * (b[1] - b[0]), z = b[2] + Math.random() * (b[3] - b[2]);
+    if (!hidden(x, z) || !targetOk(lead, x, z) || (k < 50 && Math.random() > likeN(lead.kind, x, z) + .2)) continue;
+    for (const A of grpA) { const px = x + (Math.random() - .5) * 10, pz = z + (Math.random() - .5) * 10, ok = targetOk(A, px, pz);
+      A.x = ok ? px : x; A.z = ok ? pz : z; A.y = beastGround(A, A.x, A.z); A.home = [x, z]; A.mode = "idle"; A.timer = 2 + Math.random() * 6; A.trek = false; A.fleeT = 0; A.speed = 0; }
+    return;
+  }
+}
 function updateAnimals(dt) {
   if (!animalGroup) return;
-  senseTick(dt); appearTick(dt);
+  senseTick(dt); appearTick(dt); stockTick(dt);
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -4881,22 +5006,38 @@ function vrAfterMove(dt) {                                // carry the play spac
   uwTick(dt, I);
 }
 /* ---- under water (VR): walk the bottom like normal for 5 seconds, then you drown and wake somewhere else ---- */
-const UW = { t: 0, under: false, mesh: null, drown: 0, fogC: new THREE.Color(), fogN: 0, bubbleT: 0, LIMIT: 5 };
+const UW = { t: 0, under: false, mesh: null, drown: 0, red: 0, fogC: new THREE.Color(), fogN: 0, bubbleT: 0, LIMIT: 5 };
 function uwOverlay() {
   if (UW.mesh) return UW.mesh;
   UW.mesh = new THREE.Mesh(new THREE.SphereGeometry(.28, 24, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false,
-    uniforms: { uFwd: { value: new THREE.Vector3(0, 0, -1) }, uTint: { value: 0 }, uPulse: { value: 0 }, uBlack: { value: 0 } },
+    uniforms: { uFwd: { value: new THREE.Vector3(0, 0, -1) }, uTint: { value: 0 }, uPulse: { value: 0 }, uBlack: { value: 0 }, uRed: { value: 0 } },
     vertexShader: "varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: `uniform vec3 uFwd; uniform float uTint; uniform float uPulse; uniform float uBlack; varying vec3 vD;
+    fragmentShader: `uniform vec3 uFwd; uniform float uTint; uniform float uPulse; uniform float uBlack; uniform float uRed; varying vec3 vD;
       void main(){ float e = smoothstep(0.15, 0.85, 1.0 - dot(normalize(vD), uFwd));
         vec3 c = mix(vec3(0.03, 0.16, 0.19), vec3(0.0), e * uPulse);
         float a = uTint * (0.38 + 0.35 * e) + e * uPulse * 0.75;
-        gl_FragColor = vec4(mix(c, vec3(0.0), uBlack), max(min(a, 0.97), uBlack)); }` }));
+        gl_FragColor = vec4(mix(c, mix(vec3(0.0), vec3(0.75, 0.05, 0.0) * (1.0 - e * 0.5), uRed), uBlack), max(min(a, 0.97), uBlack)); }` }));
   UW.mesh.renderOrder = 998; UW.mesh.frustumCulled = false; UW.mesh.visible = false; scene.add(UW.mesh); return UW.mesh;
+}
+function lavaHiss() {                                      // a short hiss as you go in
+  if (!SND.ctx || !SND.on) return;
+  const c = SND.ctx, t = c.currentTime, n = c.sampleRate * .9, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+  const src = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(); src.buffer = b; f.type = "highpass"; f.frequency.value = 2400; g.gain.value = .22;
+  src.connect(f).connect(g).connect(SND.master); src.start(t);
+}
+const PCLAVA = { t: 0, el: null };
+function pcLavaTick(dt) {                                   // PC and phone: stepping in lava flashes the screen red and puts you back on safe ground
+  if (vr.on) return;
+  if (PCLAVA.t <= 0 && lavaHit()) {
+    if (!PCLAVA.el) { const e = document.createElement("div"); e.style.cssText = "position:fixed;inset:0;background:#b01000;pointer-events:none;opacity:0;transition:opacity .25s;z-index:40"; document.body.appendChild(e); PCLAVA.el = e; }
+    PCLAVA.t = 1.4; PCLAVA.el.style.opacity = .85; lavaHiss();
+  }
+  if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
 function uwRespawn() {                                      // wake up somewhere random on dry ground
   let s = null;
-  for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2) s = [x, z]; }
+  for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30)) s = [x, z]; }
   if (!s) s = [P.x, P.z];
   P.x = s[0]; P.z = s[1]; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
 }
@@ -4920,10 +5061,11 @@ function uwTick(dt, I) {                                     // runs after you'v
   UW.under = under;
   if (UW.drown > 0) {                                        // fading out, moving you, fading back in
     UW.drown += dt;
-    if (UW.drown > 1.2 && UW.drown - dt <= 1.2) { uwRespawn(); UW.t = 0; if (gameMode === "pvp" && VR_ON) pvpDrowned(); }
+    if (UW.drown > 1.2 && UW.drown - dt <= 1.2) { uwRespawn(); UW.t = 0; if (gameMode === "pvp" && VR_ON) pvpDrowned(UW.red > 0); }
     const b = UW.drown < 1.2 ? UW.drown / 1.2 : Math.max(0, 1 - (UW.drown - 1.6) / .8);
-    ov.material.uniforms.uBlack.value = b; if (UW.drown > 2.4) { UW.drown = 0; ov.material.uniforms.uBlack.value = 0; }
-  } else if (under) { UW.t += dt; if (UW.t >= UW.LIMIT) UW.drown = .001; }
+    ov.material.uniforms.uBlack.value = b; ov.material.uniforms.uRed.value = UW.red; if (UW.drown > 2.4) { UW.drown = 0; UW.red = 0; ov.material.uniforms.uBlack.value = 0; }
+  } else if (lavaHit()) { UW.drown = .001; UW.red = 1; lavaHiss(); }
+  else if (under) { UW.t += dt; if (UW.t >= UW.LIMIT) UW.drown = .001; }
   else UW.t = Math.max(0, UW.t - dt * 2);                    // catch your breath
   const k = Math.min(1, UW.t / UW.LIMIT), sp = 2 + k * 9;     // the pulse gets stronger and faster as your breath runs out
   ov.material.uniforms.uTint.value += ((under ? 1 : 0) - ov.material.uniforms.uTint.value) * Math.min(1, dt * 8);
@@ -5735,6 +5877,7 @@ const GLIDE_SPEED = 11, GLIDE_SINK = 2.2;   // m/s forward at full stick, m/s ge
 const CLIMB = 1.5, CLIFF = 5.67;   // anything below eye level (1.5 m) can be walked up onto; walkable up to 80 degrees (tan 80)
 const keys = {};
 function update(dt) {
+  pcLavaTick(dt);
   let mx = input.jx, my = input.jy;
   if (keys.KeyW || keys.ArrowUp) my += 1; if (keys.KeyS || keys.ArrowDown) my -= 1;
   if (keys.KeyD || keys.ArrowRight) mx += 1; if (keys.KeyA || keys.ArrowLeft) mx -= 1;
@@ -6277,7 +6420,7 @@ function disposeSoldier(S) {
 const squad = [];
 function clearSquad() { for (const S of squad) disposeSoldier(S); squad.length = 0; }
 function okSpot(x, z) {
-  return Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && Math.hypot(x, z) < edgeR(x, z) - 8 && H(x, z) > water + .4 && slopeNy(x, z) > .8 && !nearObstacle(x, z, 1.2) && rockAround(x, z, .5) < H(x, z) + .3;
+  return !inLava(x, z, 4) && Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && Math.hypot(x, z) < edgeR(x, z) - 8 && H(x, z) > water + .4 && slopeNy(x, z) > .8 && !nearObstacle(x, z, 1.2) && rockAround(x, z, .5) < H(x, z) + .3;
 }
 /* ---- PvP: five enemy soldiers roam the map hunting you ---- */
 const BOT = { bodyDmg: 25, headDmg: 60, hitDmg: 10 };
@@ -7126,13 +7269,13 @@ function dropUse(d) {                                       // what grabbing it 
   gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = msg; vr.lootT = 2.5; vr.wristT = 0;
   return true;
 }
-function pvpDrowned() {                                     // PvP: drowning costs you everything you carried (it's gone, not spilled), one kill, and you come back empty-handed
+function pvpDrowned(burned) {                                     // PvP: drowning costs you everything you carried (it's gone, not spilled), one kill, and you come back empty-handed
   vr.own = {};
   for (const k in WEAP) { const A = arms[k]; A.mag = 0; A.res = 0; A.phase = 0; A.k = 0; A.popping = false; }
   vr.nades = 0; vr.nadeMode = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null;
   MP.kills = Math.max(0, MP.kills - 1); MP.sh = 0;
   if (zone && zone.vr) zoneSpawnInside();
-  vr.lootMsg = "Drowned: lost your gear and a kill"; vr.lootT = 4; vr.wristT = 0;
+  vr.lootMsg = burned ? "Burned: lost your gear and a kill" : "Drowned: lost your gear and a kill"; vr.lootT = 4; vr.wristT = 0;
 }
 function pvpSpill() {                                       // you died: everything you carried scatters round you
   const items = [], put = o => { const a = Math.random() * 6.283, r = .8 + Math.random() * 2.2; o.x = P.x + Math.cos(a) * r; o.z = P.z + Math.sin(a) * r; o.id = mpMyId() + ":" + (++dropSeq); items.push(o); };
