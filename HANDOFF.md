@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.64**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.65**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,10 +39,12 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.63)
+## 4. What exists now (v1.64)
 
 ### World (all modes)
-- **Settings:** latitude (sets the biome: tropical, temperate, boreal, tundra, polar), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
+- **Settings:** latitude (sets the climate; each map then picks one of the environments that occur there, see below), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
+- **Environments by latitude (1.64, Ron: "when certain latitudes have varied environments those are all options the map may or may not choose"):** `climateOf(lat)` = the old latitude bands (tropical <23°, temperate <50, boreal <62, tundra <72, polar). `envOptions(lat)` lists what really occurs there with weights: 15–23° tropical .55 / desert .45; 23–35° desert .5 / climate .5; 35–45° climate .8 / desert .2 (cold desert); else just the climate. `rollEnv()` picks one per map from the map number (`MAPENV`), so a map always comes back the same; `biomeOf(lat)` returns this map's pick. `set.env` = "auto" (default, the roll), "climate" (old behaviour; the debug build defaults to this so old tests stay stable), or a name to force one. The settings line under latitude shows the options ("Desert or forest: each map picks"). **Every new environment must be added to every per-biome table** (`GRASS`, `WATERC`, `SKYTOP`, water fraction ×3, snow/tree lines, `dens`, rock tone/moss, logs, bushes, clouds, haze, weather, flocks, `NATIVE`) and to `envOptions`.
+- **Desert (1.64):** warm sand ground (two tones), red rock on slopes (`rockC`) and reddish rocks (`tone`), extra outcrops, dunes on low flat ground (added to the baked heightfield after erosion: long gentle slopes, steep lee faces, ~60 m apart, 2.5–6 m high), little water (5% fraction), mostly clear weather (6% storm, 6% rain), warm haze. Plants: `cactusVariant` (saguaro: ribbed column, 0–4 arms that turn up; small ones have no arms) and `joshuaVariant` (shaggy trunk that forks, spiky tufts at the tips), scrub bushes (`kinds.scrub`). The giant tree in a desert is an old cottonwood (broadleaf). Animals: coyote, oryx, camel (`hump2` in `buildQuad`: a hump mid-back), roadrunner (`buildRoadrunner`), jackrabbit, vultures (`FLY`), birds, Bigfoot on large maps ("There's a Bigfoot out here"). Test: dev/test_desert.py (+ zoo and hitbox include the desert).
 - **Terrain:** heightfield with erosion and rounded summits. `H(x,z)` is the exact surface. Dramatic maps get one landmark from a generator (`makeFeature`: crevasses, canyons, rifts, walls, cliffs, mesas, buttes, terraces, craters, sinkholes, volcanoes in many shapes).
 - **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
 - **Trunks (1.61):** `trunkNice` — flared base with root buttresses that run into the ground (lobes), 8 sides, same taper; every trunk has a gentle natural bend (`bend(y)` applied to the whole variant, firs straighter than broadleaf). Climbing/head-blocking follow the bend and flare (`treeHit` uses `hold.bend`, `hold.fl`). Far trees keep the 4-sided trunk. (Also fixed: animals were updated twice a frame — they moved at double speed.)
@@ -52,7 +54,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Look and sound:** ACES tone mapping, `grade()` colour shader, valley fog, sky with sun/moon/stars, lightning storms with distance-delayed thunder. All sound is synthesized.
 
 ### Animals (Hunting)
-- **32 kinds**, native per biome (`NATIVE`): buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, monkeys, big birds, plus (1.55) elephant, giraffe, zebra, rhino, lion, crocodile, parrots, mountain goat, wild horse, elk, moose, boar, coyote, fox, turkey, eagle, caribou, musk ox, arctic fox, snowy owl, and the legends Bigfoot and Yeti.
+- **36 kinds** (1.64 added oryx, camel, roadrunner, vulture), native per biome (`NATIVE`): buck, bear, polar bear, baboon, panther, wolf, seal, rabbit, monkeys, big birds, plus (1.55) elephant, giraffe, zebra, rhino, lion, crocodile, parrots, mountain goat, wild horse, elk, moose, boar, coyote, fox, turkey, eagle, caribou, musk ox, arctic fox, snowy owl, and the legends Bigfoot and Yeti.
 - Built from code (legs have rounded haunches and knees, 1.56): `buildQuad(r, QSPEC[kind])` makes most four-legged animals from a spec; separate builders for buck, bear, wolf (also coyote/fox/arctic fox), turkey, Bigfoot/Yeti (`buildApe`), birds (`buildBird` with colours), monkeys.
 - **Where they live (1.58, Ron: "a natural world with some tweaks"):** `habInit` builds a 24 m habitat grid at spawn (open, forest edge, deep forest, water's edge, high ground). `PREF[kind]` = what each kind likes; each also gets 2 home ranges per map, so different parts of a map hold different animals (explore to find them). `likeN` = liking compared with the best spot on this map. It's a liking, not a wall: bears, wolves, rabbits etc. roam everywhere, and anything can run anywhere.
 - **Animals everywhere (1.63):** the map is cut into ~200 m squares (`STOCK`, `secOf`, 2×2 on XS up to 8×8 on XXL); new groups go to the emptiest squares first (`spawnKind(…, onlySec)`), and `stockTick` (every 4–7 s) refills a square with no huntable animals, far (>200 m) and out of sight: shot kinds come back first (old unseen bodies are cleared to make room), otherwise a group walks over from the most crowded square. Rabbits, birds, monkeys, seals, crocodiles and legends aren't counted. Shots still empty the area (they run 140–340 m off). **VR walking (8.5 m/s) now counts as walking** (animals notice you at 60 m); only sprinting is 150 m (before, every VR walk counted as a sprint, which is likely why animals felt hard to find). Test: dev/test_spread.py.
@@ -130,7 +132,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 ### Plan (Ron, Oct 11): one step per version
 Ron: "each time just lmk how it goes in tests and send pics each time and I'll just tell you to keep going." So after each build: push, then a short test report + pictures, and wait for "keep going".
 - 1.63 animals everywhere + lava in volcano craters (only in the crater, no flows) — done
-- 1.64 **Desert:** dunes, red rock, cactus, Joshua trees; coyote, oryx, camel, roadrunner; heat shimmer
+- 1.64 **Desert** — done (heat shimmer is a warm haze, not a wobble)
 - 1.65 **African savanna:** golden grass, flat-topped acacias, big open views; elephants, giraffes, zebras, lions
 - 1.66 **Swamp:** cypress in still water, mist, alligators, herons
 - 1.67 **Rainforest:** huge trees, vines, waterfalls, jaguar, tapir

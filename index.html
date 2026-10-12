@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.63</title>
+<title>JUST TREES 1.64</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.63";              // Just Trees 1.63
+const VERSION = "1.64";              // Just Trees 1.64
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -385,16 +385,38 @@ const ROUND_SEC = 600, ZONE_WAIT = 120;
 const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
 
-function biomeOf(lat) {
+function climateOf(lat) {
   const a = Math.abs(lat);
   return a < 23 ? "tropical" : a < 50 ? "temperate" : a < 62 ? "boreal" : a < 72 ? "tundra" : "polar";
+}
+// the environments that occur at a latitude, with how often each comes up (1.64: deserts sit mostly at 15-35°, cold deserts a bit further out)
+function envOptions(lat) {
+  const a = Math.abs(lat), c = climateOf(lat);
+  if (a >= 15 && a < 23) return [["tropical", .55], ["desert", .45]];
+  if (a >= 23 && a < 35) return [["desert", .5], [c, .5]];
+  if (a >= 35 && a < 45) return [[c, .8], ["desert", .2]];
+  return [[c, 1]];
+}
+let MAPENV = null;                                          // this map's environment: { lat, b }
+function rollEnv() {                                        // picked from the map number, so a map always comes back the same
+  const lat = set.lat * set.hemi, o = envOptions(lat); let b = o[o.length - 1][0];
+  if (set.env && set.env !== "auto") b = set.env === "climate" ? climateOf(lat) : set.env;
+  else { const r = mulberry32(seed * 131 + 7)(); let acc = 0; for (const [k, w] of o) { acc += w; if (r < acc) { b = k; break; } } }
+  MAPENV = { lat, b }; return b;
+}
+function biomeOf(lat) { return MAPENV && MAPENV.lat === lat ? MAPENV.b : climateOf(lat); }
+const ENV_NAME = { tropical: "jungle", desert: "desert", temperate: "forest", boreal: "spruce forest", tundra: "tundra", polar: "polar ice" };
+function envNote(lat) {                                     // the settings line under latitude
+  const o = envOptions(lat); if (o.length === 1) return BIOME_TEXT[o[0][0]];
+  const t = o.map(([k]) => ENV_NAME[k]).join(" or "); return t[0].toUpperCase() + t.slice(1) + ": each map picks";
 }
 const BIOME_TEXT = {
   tropical: "Tropical: palms and jungle",
   temperate: "Temperate: oaks, maples, pines",
   boreal: "Boreal: dense spruce forest",
   tundra: "Tundra: stunted trees, scrub",
-  polar: "Polar: ice, rock, snow"
+  polar: "Polar: ice, rock, snow",
+  desert: "Desert: sand, red rock, cactus"
 };
 function seasonOf(lat, month) {
   if (Math.abs(lat) < 23) return "tropical";
@@ -484,7 +506,7 @@ function renderSetup() {
   document.querySelectorAll("#weathers button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === set.weather));
   $("weatherVal").textContent = set.weather === "random" ? "Surprise me" : WEATHERS.find(w => w[0] === set.weather)[1];
   $("latVal").textContent = `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`;
-  $("biomeNote").textContent = BIOME_TEXT[biomeOf(lat)];
+  $("biomeNote").textContent = envNote(lat);
   $("roughVal").textContent = roughText(set.rough);
   $("hourVal").textContent = hourText(set.hour);                       // follows the slider as you drag
   document.querySelectorAll("[data-zone]").forEach(b => b.setAttribute("aria-pressed", b.dataset.zone === set.zone));
@@ -781,13 +803,14 @@ const LEAVES = {
 };
 const GRASS = {
   tropical: ["#3f962c", "#2c7a22"],
+  desert: ["#c99a62", "#b0744a"],
   temperate: { spring: ["#74c043", "#58a234"], summer: ["#4d9430", "#3a7b26"], fall: ["#8f9440", "#76782f"], winter: ["#7c8a52", "#687545"] },
   boreal: { spring: ["#5f8a3a", "#4a7330"], summer: ["#46772f", "#386326"], fall: ["#7d7a3a", "#666330"], winter: ["#5f6e4a", "#4f5d3e"] },
   tundra: { spring: ["#7d8450", "#6b7246"], summer: ["#7f8b4c", "#6a7640"], fall: ["#9a7a44", "#82673a"], winter: ["#8a8a6a", "#77775c"] },
   polar: { spring: ["#8b8f80", "#77796d"], summer: ["#8a8f70", "#75795f"], fall: ["#8a8070", "#75695c"], winter: ["#8b8f80", "#77796d"] }
 };
-const WATERC = { tropical: "#22b0bd", temperate: "#2f6f8f", boreal: "#2a5a70", tundra: "#35607a", polar: "#3a6a86" };
-const SKYTOP = { tropical: "#1f7fd6", temperate: "#3478c9", boreal: "#4a7fb8", tundra: "#6188b0", polar: "#7aa2c8" };
+const WATERC = { desert: "#2e8c9c", tropical: "#22b0bd", temperate: "#2f6f8f", boreal: "#2a5a70", tundra: "#35607a", polar: "#3a6a86" };
+const SKYTOP = { desert: "#3a86d8", tropical: "#1f7fd6", temperate: "#3478c9", boreal: "#4a7fb8", tundra: "#6188b0", polar: "#7aa2c8" };
 
 function mergeGeos(list) {
   const parts = list.map(g => g.index ? g.toNonIndexed() : g);
@@ -951,8 +974,14 @@ function makeAtlas(kind, cols, snowy, barkCol) {
   g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
   for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(0,0,0,${.08 + rnd() * .15})`; g.fillRect(rnd() * 256, 200, 2 + rnd() * 5, 56); }
   if (kind === "palm") for (let y = 204; y < 256; y += 7) { g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(0, y, 256, 2); }
-  if (kind === "fir") drawFir(g, cols, snowy);
-  else if (kind === "broad") drawBroad(g, cols);
+  if (kind === "cactus") {                                 // ribs running up the stem, pale spines along them
+    g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
+    for (let x = 0; x < 256; x += 16) { g.fillStyle = "rgba(0,0,0,.28)"; g.fillRect(x, 200, 5, 56); g.fillStyle = "rgba(255,255,230,.12)"; g.fillRect(x + 8, 200, 3, 56); }
+    for (let i = 0; i < 260; i++) { g.fillStyle = "rgba(240,235,200,.55)"; g.fillRect(Math.floor(rnd() * 16) * 16 + 9, 200 + rnd() * 56, 1.5, 1.5); }
+  }
+  if (kind === "cactus") {}
+  else if (kind === "fir") drawFir(g, cols, snowy);
+  else if (kind === "broad" || kind === "scrub") drawBroad(g, cols);
   else if (kind === "bare") drawBare(g, snowy);
   else drawFrond(g, cols);
   const t = new THREE.CanvasTexture(cv);
@@ -1184,7 +1213,42 @@ function holdShape(parts, tr, th, lean, ex) {
 }
 // Every variant is built from its own recipe: proportions, droop, gaps, a bare side, scragginess.
 // `pruned` = grown in a crowded stand (bare lower trunk), `odd` = one of the ~10% with a broken, flat or double top.
+function cactusVariant(odd) {                              // a saguaro: a ribbed column, arms that turn up; small ones have no arms yet
+  const parts = [], Ht = 3.2 + rnd() * 6.5, tr = .2 + rnd() * .14, gc = () => [.95 + rnd() * .1, 1, .95];
+  const col = [0, .3, .6, .88, 1].map(t => new THREE.Vector3(0, t * Ht, 0));
+  parts.push(shadeGeo(tubeGeo(col, [tr * .92, tr, tr * .98, tr * .93, tr * .7], 12), gc));
+  const nArms = odd ? 5 + Math.floor(rnd() * 3) : Ht < 4.5 ? (rnd() < .3 ? 1 : 0) : 1 + Math.floor(rnd() * 4);
+  for (let k = 0; k < nArms; k++) {
+    const a = rnd() * 6.283, y0 = Ht * (.32 + rnd() * .33), out = tr + .35 + rnd() * .45, up = .8 + rnd() * Math.min(2.6, Math.max(.4, Ht - y0 - .3)), ar = tr * (.55 + rnd() * .2), ca = Math.cos(a), sa = Math.sin(a);
+    const pts = [[0, y0, 0], [ca * out * .55, y0 + .02, sa * out * .55], [ca * out * .95, y0 + .22, sa * out * .95], [ca * out, y0 + .7, sa * out], [ca * out, y0 + up, sa * out]].map(p => new THREE.Vector3(...p));
+    parts.push(shadeGeo(tubeGeo(pts, [ar, ar, ar, ar * .97, ar * .75], 10), gc));
+  }
+  return { geo: mergeUV(parts), r: tr + .2, h: Ht + tr * .5, pruned: true, hold: holdShape(parts, tr, Ht, 0, { fl: 0, fh: 1, la: 0 }) };
+}
+function joshuaVariant(odd) {                              // a Joshua tree: a shaggy trunk that forks and forks again, spiky leaf tufts at the tips
+  const parts = [], H0 = 1.6 + rnd() * 2.2, tr = .15 + rnd() * .08; let top = H0;
+  parts.push(shadeGeo(trunkNice(tr, H0 + .3, 0, .18, .5, 3, .1, 8, rnd() * 6), () => [.9, .9, .9]));
+  const tuft = (p, d) => {
+    const n = 9 + Math.floor(rnd() * 4), base = Math.atan2(-d.z, d.x);
+    for (let k = 0; k < n; k++) { const L = .55 + rnd() * .35, ang = base + k / n * 6.283 + rnd() * .4, dr = -1.1 + rnd() * 1.7;
+      parts.push(shadeCard(card(L, L * .45, p.y, ang, dr, (rnd() - .5) * .6).translate(p.x, 0, p.z), 1, p.y - 1, p.y + 1, () => 0, cardTint(), false)); }
+  };
+  const branch = (p, d, len, r, depth) => {
+    const e = p.clone().addScaledVector(d, len), m = p.clone().addScaledVector(d, len * .5).add(new THREE.Vector3((rnd() - .5) * .15, .08, (rnd() - .5) * .15));
+    parts.push(shadeGeo(tubeGeo([p, m, e], [r, r * .88, r * .72], 6), () => [.88, .88, .88])); top = Math.max(top, e.y + .6);
+    const kids = depth >= (odd ? 3 : 2) || rnd() < .2 * depth ? 0 : rnd() < .25 ? 3 : 2;
+    if (!kids) { tuft(e, d); return; }
+    for (let k = 0; k < kids; k++) { const a = rnd() * 6.283, sp = .45 + rnd() * .45;
+      const nd = d.clone().add(new THREE.Vector3(Math.cos(a) * sp, .25 + rnd() * .35, Math.sin(a) * sp)).normalize();
+      branch(e, nd, len * (.7 + rnd() * .25), r * .75, depth + 1); }
+  };
+  const n0 = 2 + Math.floor(rnd() * 2);
+  for (let k = 0; k < n0; k++) { const a = k / n0 * 6.283 + rnd() * .8, sp = .5 + rnd() * .5; branch(new THREE.Vector3(0, H0, 0), new THREE.Vector3(Math.cos(a) * sp, .75, Math.sin(a) * sp).normalize(), .9 + rnd() * .8, tr * .7, 1); }
+  return { geo: mergeUV(parts), r: tr + .2, h: top, pruned: true, hold: holdShape(parts, tr, H0, 0, { fl: .18, fh: .5, la: .1 }) };
+}
 function treeVariant(kind, pruned, odd, opt) {
+  if (kind === "cactus") return cactusVariant(odd);
+  if (kind === "joshua") return joshuaVariant(odd);
   const parts = [], low = []; let Ht, tr, Lmax, hb, lean = 0, ls = 0, le = 0;   // low: the far-away version
   const oddType = odd ? (kind === "palm" ? "dead" : kind === "fir" ? pickS(["broken", "double", "flat"]) : pickS(["broken", "flat"])) : null;
   const gapsOf = () => Array.from({ length: Math.floor(rnd() * 3) }, () => [.1 + rnd() * .75, .04 + rnd() * .08]);
@@ -1716,7 +1780,7 @@ function updateRunner(dt, now) {
 
 /* ---------------- Birds ---------------- */
 function spawnBirds(rand, biome) {
-  const flocks = { tropical: 4, temperate: 3, boreal: 3, tundra: 2, polar: 1 }[biome], per = 6, n = flocks * per;
+  const flocks = { desert: 1, tropical: 4, temperate: 3, boreal: 3, tundra: 2, polar: 1 }[biome], per = 6, n = flocks * per;
   const bodyG = new THREE.ConeGeometry(.12, .7, 4).rotateZ(-Math.PI / 2);
   const wing = sd => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(sd > 0 ? [.15, 0, 0, -.22, 0, 0, -.08, 0, .95] : [-.22, 0, 0, .15, 0, 0, -.08, 0, -.95]), 3)); g.computeVertexNormals(); return g; };
   const mat = phong(0xffffff, { side: THREE.DoubleSide });
@@ -2045,6 +2109,7 @@ function pickWeather(rand, biome, season, cold) {
   if (type === "random") {
     const r = rand();
     if (cold) type = r < .35 ? "snow" : r < .5 ? "fog" : "clear";
+    else if (biome === "desert") type = r < .06 ? "storm" : r < .12 ? "rain" : "clear";
     else if (biome === "tropical") type = r < .3 ? "rain" : r < .4 ? "storm" : r < .5 ? "fog" : "clear";
     else type = r < .2 ? "rain" : r < .27 ? "storm" : r < .42 ? "fog" : "clear";
   }
@@ -2506,7 +2571,7 @@ function generate() {
   if (groundDetail) { groundDetail.dispose(); groundDetail = null; }
   if (rockTex) { rockTex.dispose(); rockTex = null; }
   obstacles = new Map(); limbGrid = null; limbHold = new Map(); animals = []; birds = null; runner = null; precipFx = null;
-  const lat = set.lat * set.hemi, biome = biomeOf(lat), season = seasonOf(lat, set.month);
+  const lat = set.lat * set.hemi, biome = rollEnv(), season = seasonOf(lat, set.month);
   hourNow = set.hour;
   const rand = mulberry32(seed);
   edgeShape = makeEdgeShape(mulberry32(seed * 11 + 5));
@@ -2516,7 +2581,7 @@ function generate() {
     const hs0 = [];
     for (let i = 0; i < 40; i++) for (let j = 0; j < 40; j++) { const x = -HALF + i * S / 39, z = -HALF + j * S / 39; if (Math.hypot(x, z) < edgeR(x, z) - 30) hs0.push(rawH(x, z)); }
     hs0.sort((a, b) => a - b);
-    const wPre = hs0[Math.floor(hs0.length * { tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])] || 0;
+    const wPre = hs0[Math.floor(hs0.length * { desert: .05, tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])] || 0;
     shapedH = (x, z) => {
       const d = Math.hypot(x, z), R = edgeShape.f(Math.atan2(z, x)), m = smooth(R + 12, R - 75, d);    // 1 inland, 0 at sea
       const sea = wPre - 2.5 - 13 * smooth(R - 10, R + 90, d);                                         // shelves away into deep water
@@ -2528,7 +2593,7 @@ function generate() {
     const base = shapedH, ws = [];
     for (let i = 0; i < 32; i++) for (let j = 0; j < 32; j++) { const x = -HALF + (i + .5) * S / 32, z = -HALF + (j + .5) * S / 32; if (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) ws.push(base(x, z)); }
     ws.sort((a, b) => a - b);
-    const wGuess = ws[Math.floor(ws.length * { tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])] || 0;
+    const wGuess = ws[Math.floor(ws.length * { desert: .05, tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])] || 0;
     FEAT = makeFeature(mulberry32(seed * 41 + 9), base, wGuess);
     if (FEAT) { FEAT.base = base; shapedH = (x, z) => FEAT.apply(x, z, base(x, z)); }
   }
@@ -2544,6 +2609,16 @@ function generate() {
         for (const [k, d] of cells) { const w = Math.exp(-Math.pow((d + R * .6) / (R * .09), 2)); if (m[k] < tgt) m[k] += (tgt - m[k]) * w * .9; } }
     }
   }
+  if (biome === "desert") {
+    const m = baked.map, N = baked.N, G = baked.G, dr = mulberry32(seed * 23 + 11), dn = makeNoise(dr), th = dr() * 6.283, cx = Math.cos(th), cz = Math.sin(th);
+    const vals = Array.from(m).sort((a, b) => a - b), lo = vals[Math.floor(vals.length * .1)], hi = vals[Math.floor(vals.length * .9)];
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const k = j * N + i, x = -HALF + i * G, z = -HALF + j * G, rel = (m[k] - lo) / (hi - lo + 1e-6);
+      const w = smooth(.5, .12, rel) * smooth(-.2, .2, fbm(dn, x * .004 + 3, z * .004, 2)); if (w <= 0) continue;
+      const u = (x * cx + z * cz) / 62 + dn(x * .011, z * .011) * 1.3 + dn(x * .03 + 5, z * .03) * .25, f = u - Math.floor(u), p = f < .78 ? f / .78 : (1 - f) / .22;
+      m[k] += p * p * (3 - 2 * p) * (2.5 + 3.5 * (dn(x * .008 + 9, z * .008) + 1) / 2) * w;
+    }
+  }
   const H0 = baked.H; H = H0;
   const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand);
 
@@ -2551,7 +2626,7 @@ function generate() {
   const hs = [];
   for (let i = 0; i < 48; i++) for (let j = 0; j < 48; j++) { const x = -HALF + i * S / 47, z = -HALF + j * S / 47; if ((!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) && !(FEAT && FEAT.mask(x, z) > .2)) hs.push(H0(x, z)); }   // islands: only the land counts
   hs.sort((a, b) => a - b);
-  water = hs[Math.floor(hs.length * { tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])];
+  water = hs[Math.floor(hs.length * { desert: .05, tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[biome])];
   const span = Math.max(6, hs[hs.length - 1] - water);
 
   // Playable ground in every eighth of the map: no section may be mostly lake or mostly too steep to move through.
@@ -2602,9 +2677,9 @@ function generate() {
     }
   }
   const winterSnow = (season === "winter" && Math.abs(lat) >= 32) || biome === "polar";
-  const snowF = { tropical: .95, temperate: .72, boreal: .55, tundra: .38, polar: 0 }[biome] + (season === "summer" ? .08 : 0);
-  const snowLine = water + Math.max(span * snowF, { tropical: 999, temperate: 55, boreal: 32, tundra: 16, polar: 0 }[biome]);
-  const treeLine = water + Math.max(span * { tropical: .85, temperate: .72, boreal: .6, tundra: .35, polar: 0 }[biome], { tropical: 90, temperate: 45, boreal: 28, tundra: 10, polar: 0 }[biome]);
+  const snowF = { desert: .88, tropical: .95, temperate: .72, boreal: .55, tundra: .38, polar: 0 }[biome] + (season === "summer" ? .08 : 0);
+  const snowLine = water + Math.max(span * snowF, { desert: 70, tropical: 999, temperate: 55, boreal: 32, tundra: 16, polar: 0 }[biome]);
+  const treeLine = water + Math.max(span * { desert: .8, tropical: .85, temperate: .72, boreal: .6, tundra: .35, polar: 0 }[biome], { desert: 70, tropical: 90, temperate: 45, boreal: 28, tundra: 10, polar: 0 }[biome]);
   iced = biome === "polar" || (winterSnow && Math.abs(lat) >= 40);
   const sandy = biome === "tropical" || (biome === "temperate" && !winterSnow);
   pickWeather(rand, biome, season, winterSnow || (biome === "tundra" && season !== "summer"));
@@ -2632,6 +2707,10 @@ function generate() {
     bare:  { cols: [[], []], bark: "#5e4c3f" },
     palm:  { cols: [LEAVES.tropical, LEAVES.tropical], bark: "#8a6f4a" }
   };
+  if (biome === "desert") Object.assign(kinds, {
+    cactus: { cols: [[], []], bark: "#4e7a3e" },
+    joshua: { cols: [["#6c7e44", "#7d8c50", "#5c6c38", "#8a9458"], ["#76864a", "#66763e", "#869256", "#5a6a36"]], bark: "#6e6252" },
+    scrub:  { cols: [["#8f9a72", "#a2a982", "#7d8962", "#b0ad88"], ["#98a07a", "#86906a", "#aaa884", "#7a8460"]], bark: "#5e5244" } });
   const NV = isTouch ? 3 : 5, BUSHV = 4, recs = {}, bushRecs = {};
   for (const k in kinds) {
     kinds[k].mats = kinds[k].cols.map(cols => windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })));   // in a headset: soft, smooth leaf edges
@@ -2658,7 +2737,7 @@ function generate() {
 
   // Trees: slight species groupings with overlap, plus random loners, and more size variety
   const allTrees = [];
-  const dens = { tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[biome];
+  const dens = { desert: .11, tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[biome];
   const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
   for (let k = 0; k < attempts && dens > 0 && allTrees.length < maxTrees; k++) {
     const x = (rand() - .5) * (S - 30), z = (rand() - .5) * (S - 30), h = H0(x, z);
@@ -2669,10 +2748,11 @@ function generate() {
     const cl = v => Math.min(.97, Math.max(.03, v));
     let kind, s;
     if (biome === "tropical") { kind = rand() < cl(.3 + sp * .45 + (rel < .2 ? .45 : 0)) ? "palm" : "broad"; s = .75 + rand() * .5; }
+    else if (biome === "desert") { kind = rand() < cl(.66 - rel * .6 + sp * .4) ? "cactus" : "joshua"; s = .6 + rand() * .6; }
     else if (biome === "temperate") { kind = rand() < cl(.25 + rel * .9 + sp * .5) ? "fir" : "broad"; s = .75 + rand() * .55; }
     else if (biome === "boreal") { kind = rand() < cl(.84 + sp * .3) ? "fir" : "broad"; s = .7 + rand() * .6; }
     else { kind = "fir"; s = .3 + rand() * .3; }
-    if (rand() < .05 && biome !== "tundra") kind = kind === "fir" ? "broad" : kind === "palm" ? "broad" : "fir";
+    if (rand() < .05 && biome !== "tundra" && biome !== "desert") kind = kind === "fir" ? "broad" : kind === "palm" ? "broad" : "fir";
     if (kind === "broad" && season === "winter") kind = "bare";
     s *= (.78 + rand() * .5) * (rand() < .06 ? 1.35 : 1);            // wider spread of sizes, the odd giant
     s *= 1 - Math.min(.4, Math.max(0, rel - .5) * .8);
@@ -2696,7 +2776,7 @@ function generate() {
       for (let q = 0, placed = 0; q < 40 && placed < want; q++) {
         const r = placed === 0 ? rand() * 4 : 2 + rand() * 12, an = rand() * 6.28, x = px + Math.cos(an) * r, z = pz + Math.sin(an) * r;
         if (Math.abs(x) > HALF - 20 || Math.abs(z) > HALF - 20 || slopeNy(x, z) < .55 || H0(x, z) < water + 2 || inLava(x, z, 3)) continue;
-        let kind = biome === "tropical" ? "broad" : "fir"; if (kind === "broad" && season === "winter") kind = "bare";
+        let kind = biome === "tropical" ? "broad" : biome === "desert" ? "joshua" : "fir"; if (kind === "broad" && season === "winter") kind = "bare";
         const s = (.3 + rand() * .3) * (biome === "tundra" ? .8 : 1), vi = pickVar(kind, false), v = .78 + rand() * .4;
         const t = { x, y: 0, z, s, ry: rand() * Math.PI * 2, c: new THREE.Color(v, v, v), vi, kind, peak: true };
         stretch(t); allTrees.push(t);
@@ -2731,7 +2811,7 @@ function generate() {
     if (!cand.length) cand = allTrees.filter(t => !t.peak);
     if (cand.length) {
       giant = cand[Math.floor(rand() * cand.length)];
-      if (giant.kind === "palm") giant.kind = "broad";                          // palms lean and have no trunk for a porch
+      if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
       const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
       let maxT = 0; for (const t of allTrees) if (t !== giant) maxT = Math.max(maxT, topOf(kinds[t.kind].vars[t.vi]) * t.s * t.sy);
       const pH = maxT + 2.5, GT = Math.max(22, pH * 1.65, maxT + 16); /* the porch about two thirds of the way up */                     // the giant towers over the rest; the porch sits just above every other treetop
@@ -2849,7 +2929,7 @@ function generate() {
 
   // Terrain mesh, with rock blended in on steep and high ground
   const g = Array.isArray(GRASS[biome]) ? GRASS[biome] : GRASS[biome][season];
-  const gA = C(g[0]), gB = C(g[1]), rockC = C("#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040"), basalt = C("#2a2624"), scorch = C("#7a2a12");
+  const gA = C(g[0]), gB = C(g[1]), rockC = C(biome === "desert" ? "#a8623e" : "#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040"), basalt = C("#2a2624"), scorch = C("#7a2a12");
   const geo = new THREE.PlaneGeometry(S, S, SEG, SEG); geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, col = new Float32Array(pos.count * 3), rocky = new Float32Array(pos.count), c = new THREE.Color();
   for (let i = 0; i < pos.count; i++) {
@@ -2939,7 +3019,7 @@ function generate() {
   rockN = Math.ceil(S) + 1; rockGrid = new Float32Array(rockN * rockN).fill(-1e9); rockLow = new Float32Array(rockN * rockN).fill(1e9);
   // Rocks
   const RG = { ...rockGeos(), ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
-  const tone = { tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[biome];
+  const tone = { desert: [1.14, .8, .6], tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[biome];
   const rc = () => { const v = .8 + rand() * .35; return new THREE.Color(v * tone[0], v * tone[1], v * tone[2]); };
   const rockAt = (k, x, z, s, sink, extra = {}) => inLava(x, z, s + 1) ? 0 : rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
   const rpos = () => [(rand() - .5) * (S - 30), (rand() - .5) * (S - 30)];
@@ -2974,7 +3054,7 @@ function generate() {
     rockAt(kind, x, z, s, .32); n++;
     if (s > .75) addObstacleSoft(x, z, s * .95);
   }
-  const outcrops = [...sections], nOut = Math.round((8 + terrR() * 14 + (biome === "tundra" || biome === "polar" ? 8 : 0)) * AREA);
+  const outcrops = [...sections], nOut = Math.round((8 + terrR() * 14 + (biome === "tundra" || biome === "polar" ? 8 : 0) + (biome === "desert" ? 22 : 0)) * AREA);
   for (let o = 0; o < nOut; o++) {
     let best = null, bestNy = 2;
     for (let t = 0; t < 30; t++) {
@@ -3003,8 +3083,8 @@ function generate() {
     break;
   }
   const rMat = rockMaterial(
-    { tropical: .85, temperate: .6, boreal: .5, tundra: .2, polar: 0 }[biome],
-    { tropical: .2, temperate: .35, boreal: .7, tundra: .9, polar: .3 }[biome],
+    { desert: 0, tropical: .85, temperate: .6, boreal: .5, tundra: .2, polar: 0 }[biome],
+    { desert: .08, tropical: .2, temperate: .35, boreal: .7, tundra: .9, polar: .3 }[biome],
     winterSnow ? 1 : 0,
     biome === "tropical" ? "#3f7a2a" : season === "fall" ? "#6a7a30" : "#4a6a2c", biome === "tundra" ? "#c8a040" : "#b8b878",
     snowLine, Math.max(1, span * .05), weather.wet);
@@ -3012,7 +3092,7 @@ function generate() {
   for (const k in RG) if (k !== "pebble") stampSolid(RG[k], rr[k]);   // rocks are solid: their real shape blocks you
 
   // Fallen logs in the forest
-  const logs = [], nLogs = Math.round({ tropical: 50, temperate: 90, boreal: 110, tundra: 25, polar: 0 }[biome] * (isTouch ? .7 : 1) * AREA);
+  const logs = [], nLogs = Math.round({ desert: 8, tropical: 50, temperate: 90, boreal: 110, tundra: 25, polar: 0 }[biome] * (isTouch ? .7 : 1) * AREA);
   for (let k = 0; k < nLogs * 6 && logs.length < nLogs && allTrees.length; k++) {
     const t = allTrees[Math.floor(rand() * allTrees.length)], a = rand() * 6.28, d = 2 + rand() * 5;
     const x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d;
@@ -3029,8 +3109,9 @@ function generate() {
   stampSolid(LG, logs);
 
   // Bushes: just a few, mostly near trees and rocks
-  const bushN = Math.round({ tropical: 220, temperate: 170, boreal: 140, tundra: 260, polar: 25 }[biome] * (isTouch ? .8 : 1) * AREA);
+  const bushN = Math.round({ desert: 190, tropical: 220, temperate: 170, boreal: 140, tundra: 260, polar: 25 }[biome] * (isTouch ? .8 : 1) * AREA);
   const bushKind = () => {
+    if (biome === "desert") return "scrub";
     if (biome === "tropical") return "broad";
     if (biome === "polar") return "fir";
     if (biome === "temperate") return season === "winter" ? "bare" : "broad";
@@ -3184,6 +3265,7 @@ function makeSkyStyle(rand, biome) {            // every map gets its own sky pe
       tropical: ["puffs", "scattered", "towering", "puffs", "mixed", "clear", "wisps"],
       temperate: ["clear", "puffs", "scattered", "wisps", "mackerel", "veil", "broken", "mixed", "puffs"],
       boreal: ["broken", "mixed", "scattered", "veil", "wisps", "clear", "mackerel"],
+      desert: ["clear", "clear", "wisps", "puffs", "clear", "scattered"],
       tundra: ["veil", "broken", "wisps", "clear", "mixed"], polar: ["clear", "veil", "wisps", "wisps", "broken"] }[biome];
   const pick = () => CLOUD_STYLES[pool[Math.floor(rand() * pool.length)]];
   let st = pick().slice(); if (rand() < .3) { const b = pick(); st = st.map((v, i) => lerp(v, b[i], .5)); }
@@ -3198,7 +3280,7 @@ function makeSkyStyle(rand, biome) {            // every map gets its own sky pe
   const halo = (cold || st[4] > .05) ? (rand() < .8 ? .55 + rand() * .45 : 0) : (rand() < .3 ? .4 : 0);         // cold or thin high cloud: halos and sun dogs
   const bow = w === "rain" || w === "storm" ? .9 + rand() * .3 : rand() < .6 ? .45 + rand() * .45 : 0;          // after showers, and often from a passing drizzle far off
   return { st, odd, aur, aurHue: rand(), rays: .55 + rand() * .45, halo, bow, meteor: .8 + rand() * .4, oddAmt: .25 + rand() * .3, hue: (rand() - .5) * .07, glow: .7 + rand() * 1.1,
-           haze: { tropical: .35, temperate: .1, boreal: .06, tundra: .15, polar: .2 }[biome] + rand() * .25,
+           haze: { desert: .42, tropical: .35, temperate: .1, boreal: .06, tundra: .15, polar: .2 }[biome] + rand() * .25,
            pale: biome === "polar" ? .3 : biome === "tundra" ? .18 : 0, wind: [(rand() - .5) * .012, (rand() - .5) * .012],
            lean, spread: wow ? 1 : .45 + rand() * .3, wow, mw: [Math.cos(mwA) * Math.sin(mwT), Math.cos(mwT), Math.sin(mwA) * Math.sin(mwT)], mwAmt: .5 + rand() * .5 };
 }
@@ -3998,7 +4080,7 @@ function buildQuad(r, q) {
   const { pal, L, W, D } = q, legB = q.leg, legF = q.leg * (q.frontK || 1), ycB = legB + D * .55, ycF = legF + D * .55;
   const Y = z => ycB + (ycF - ycB) * (z / L + .5), hump = q.hump || 0;
   const secs = [[-.5, .12, .12], [-.45, .7, .8], [-.3, 1, 1], [0, 1.02, 1.02], [.28, .98, 1.06], [.42, .8, .92], [.5, .45, .55]]
-    .map(([k, w, h]) => [Y(k * L) + (k > .1 ? hump * D * smooth(.1, .3, k) : 0), k * L, W * w, D * h]);
+    .map(([k, w, h]) => [Y(k * L) + (k > .1 ? hump * D * smooth(.1, .3, k) : 0) + (q.hump2 ? q.hump2 * D * Math.exp(-Math.pow((k + .03) / .17, 2)) : 0), k * L, W * w, D * h * (q.hump2 ? 1 + .25 * Math.exp(-Math.pow((k + .03) / .17, 2)) : 1)]);
   const bb = new Bag().add(sweepGeo(secs, 24, 3, furCol(pal, q.coat)));
   if (q.tail) { const [tl, tr, td, tuft] = q.tail, t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - tl * Math.sin(td), t0[2] - tl * Math.cos(td)];
     bb.seg(t0, t1, tr, tr * .55, q.tailC || pal[0]); if (tuft) bb.add(new THREE.SphereGeometry(1, 8, 6).scale(tr * 1.6, tr * 3, tr * 1.6), tuft, t1[0], t1[1] - tr, t1[2]); }
@@ -4032,6 +4114,15 @@ function buildQuad(r, q) {
 const horns = (hb, s, pts, r0, r1, col) => { for (let i = 0; i < pts.length - 1; i++) { const t0 = i / (pts.length - 1), t1 = (i + 1) / (pts.length - 1); hb.seg(pts[i].map((v, k) => k ? v : v * s), pts[i + 1].map((v, k) => k ? v : v * s), r0 + (r1 - r0) * t0, r0 + (r1 - r0) * t1, col); } };
 const pickR = (r, a) => a[Math.floor(r() * a.length)];
 const QSPEC = {
+  oryx: r => ({ pal: [0xd8d0c2, 0xe2dacc, 0xf0ece4, 0xd0c6b6], L: 1.35, W: .26, D: .34, leg: .82, hump: .04, neck: .5, na: .85, nt: .13, hl: .42, hw: .085, hh: .11, ht: .9, lw: .06, bend: true,
+    coat: (c, u, cy) => { if (cy < -.45 && cy > -.62) c.set(0x3a2c24); if (cy < -.85) c.set(0x5a4a3e); },          // the dark side stripe and dark legs
+    face: (c, u, cy, cx) => { if (Math.abs(cx) > .45 && u > .2) c.set(0x2a201a); if (Math.abs(cx) < .2 && u > .45) c.set(0x2a201a); },
+    ear: [.03, .12, .5], noseC: 0x2a221e, tail: [.5, .025, 1.25, 0x1e1814],
+    extra: P => { for (const s of [-1, 1]) horns(P.hb, s, [[.035, P.hh * .8, .02], [.045, P.hh + .4, -.22], [.05, P.hh + .78, -.5]], .022, .006, 0x1a1612); },   // long straight horns
+    walk: 1.4, run: 7.5, stride: 2.2, swing: .5, graze: 1.05, rad: .32, range: 45 }),
+  camel: r => ({ pal: [0xc49a66, 0xcfa874, 0xdcbc8e, 0xb88e5c], L: 1.85, W: .36, D: .5, leg: 1.25, frontK: 1.02, hump: 0, hump2: .7, neck: .95, na: .72, nt: .16, hl: .55, hw: .1, hh: .14, ht: .2, muz: .5, lw: .075, bend: true,
+    ear: [.03, .08, .4], noseC: 0x3a2a1e, tail: [.55, .03, 1.3, 0x5a4026],
+    walk: 1.3, run: 5.5, stride: 2.6, swing: .55, graze: .6, rad: .55, step: 1, range: 50 }),
   elephant: r => ({ pal: [0x6a6662, 0x77736e, 0x6a6560, 0x625e5a], L: 3.2, W: .78, D: .9, leg: 1.75, frontK: 1.06, hump: .05, neck: .35, na: .35, nt: .5, hl: .85, hw: .42, hh: .5, ht: .55, muz: .6,
     lw: .24, pillar: true, foot: "paw", noseC: 0x6a6662, tail: [1, .04, 1.3, 0x2a2622], ear: null, legX: .55,
     extra: P => { const { hb, at, hw, hh } = P, e = at(1);
@@ -4123,6 +4214,21 @@ function buildTurkey(r) {
   const legs = [-1, 1].map(s => makeLeg(body, mat, s * .08, .44, 0, [.2, .04, .03], [.22, .02, .015], [0x9a7a6a, 0xa88a7a, 0, 0xa88a7a], "paw", 0, 0));
   return finish({ root, body, head, legs, w: .2, rad: .2, step: .5, hit: [[0, .58, 0, .3], [0, 0, .04, .09, 1]], walk: 1.1, run: 4.5, stride: .7, swing: .5, graze: 1.0, range: 18 });
 }
+function buildRoadrunner(r) {                              // a fast ground bird: streaky brown, a crest, a long tail held up
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const pal = [0x5a4632, 0x6e5a42, 0xd8ccb4, 0x4a3a2a], streak = (c, u, cy, cx) => { if ((u * 18 + cx * 3) % 1 < .35) c.multiplyScalar(.6); if (cy < -.3) c.set(0xd8ccb4); };
+  const bb = new Bag().add(sweepGeo([[.5, -.3, .04, .04], [.5, -.2, .11, .12], [.52, .02, .15, .16], [.58, .2, .12, .12], [.68, .3, .05, .05]], 16, 3, furCol(pal, streak)));
+  bb.seg([0, .56, -.24], [0, .78, -.62], .05, .02, 0x3a2e22);                                       // the long tail, held up
+  body.add(bb.mesh(mat));
+  const head = new THREE.Group(); head.position.set(0, .82, .33); body.add(head);
+  const hb = new Bag().add(new THREE.SphereGeometry(1, 10, 8).scale(.055, .055, .07), 0x5a4632, 0, 0, 0);
+  hb.add(new THREE.ConeGeometry(.018, .14, 6), 0x2a2620, 0, -.005, .12, Math.PI / 2);              // long bill
+  hb.add(new THREE.ConeGeometry(.03, .1, 6), 0x3a2e22, 0, .06, -.03, -.5);                           // shaggy crest
+  for (const s of [-1, 1]) { hb.add(new THREE.SphereGeometry(.01, 6, 6), 0x080606, s * .04, .015, .04); hb.add(new THREE.SphereGeometry(.014, 6, 6), 0x3a8ad0, s * .042, .005, .0); }
+  head.add(hb.mesh(mat));
+  const legs = [-1, 1].map(s => makeLeg(body, mat, s * .06, .44, 0, [.2, .03, .025], [.22, .018, .014], [0x6a6a6a, 0x7a7a7a, 0, 0x7a7a7a], "paw", 0, 0));
+  return finish({ root, body, head, legs, w: .15, rad: .16, step: .5, hit: [[0, .57, -.1, .2], [0, .6, .12, .19], [0, 0, .04, .07, 1]], walk: 1.6, run: 7.5, stride: .9, swing: .7, graze: 1.0, range: 22 });
+}
 function buildApe(r, yeti) {                                // Bigfoot and the Yeti: big, upright, long arms
   const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
   const pal = yeti ? [0xe8e6e2, 0xf0eeea, 0xdcdad4, 0xd0cec8] : [0x3a2618, 0x4a3020, 0x3a281a, 0x2e1e14], face = yeti ? 0x6a7280 : 0x2a1e18;
@@ -4137,9 +4243,9 @@ function buildApe(r, yeti) {                                // Bigfoot and the Y
   const arms = [-1, 1].map(s => makeLeg(body, mat, s * .54, 1.92, .08, [.55, .14, .11], [.55, .11, .09], pal, "paw", .05, -.25));
   return finish({ root, body, head, legs, arms, w: .38, rad: .38, step: .8, hit: [[0, 1.55, .05, .42], [0, 1.05, 0, .32], [0, .5, 0, .24], [0, 0, 0, .2, 1]], walk: 1.4, run: 6.5, stride: 1.7, swing: .5, graze: .2, range: 60, wary: 1.6 });
 }
-const BIRD_COL = { bird: [0x16161a, 0xd8d8d8, 0xb07a6a, 0xd8d8d8], eagle: [0x3a2a1c, 0x4a3624, 0xf2f0ea, 0xe0b030], owl: [0xeceae4, 0xd8d4cc, 0xf2f0ec, 0x2a2622] };
+const BIRD_COL = { vulture: [0x221c1a, 0x2e2622, 0xa85a4a, 0xd8c8a8], bird: [0x16161a, 0xd8d8d8, 0xb07a6a, 0xd8d8d8], eagle: [0x3a2a1c, 0x4a3624, 0xf2f0ea, 0xe0b030], owl: [0xeceae4, 0xd8d4cc, 0xf2f0ec, 0x2a2622] };
 const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c020, 0x2a62d8, 0x2a2622], [0x2aa040, 0xd83020, 0x3ab050, 0xe8e0d0], [0xe8c020, 0x2aa040, 0xe8a020, 0x2a2622]];
-const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
+const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1, vulture: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
 const legendName = () => { const A = beasts.find(a => LEGEND[a.kind]); return A ? (A.kind === "yeti" ? "a Yeti" : "a Bigfoot") : null; };
 const VBAN = { m: null, t: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
 function vrBanner(text, secs) {                            // a big message floating in front of you (VR), fades after a few seconds
@@ -4162,17 +4268,18 @@ function bannerTick(I, dt) {
   VBAN.m.position.copy(VBAN.p); VBAN.m.quaternion.copy(VBAN.q); VBAN.m.material.opacity = Math.min(1, VBAN.t / .8);
 }
 const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
-const HERD = { baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1 };
-const BEAST_SCALE = { polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
-const SCORE = { buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
+const HERD = { oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1 };
+const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
+const SCORE = { oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
   coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5 };
-const BEAST_NAME = { buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
+const BEAST_NAME = { oryx: "Oryx", camel: "Camel", roadrunner: "Roadrunner", vulture: "Vulture", buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
   elephant: "Elephant", giraffe: "Giraffe", zebra: "Zebra", rhino: "Rhino", lion: "Lion", crocodile: "Crocodile", parrot: "Parrot", goat: "Mountain goat", horse: "Wild horse",
   elk: "Elk", moose: "Moose", boar: "Boar", coyote: "Coyote", fox: "Fox", turkey: "Turkey", eagle: "Eagle", caribou: "Caribou", muskox: "Musk ox", arcticfox: "Arctic fox",
   owl: "Snowy owl", bigfoot: "BIGFOOT", yeti: "YETI" };
 // what lives where: [kind, how many on a 640 m map, group size]
 const NATIVE = {
+  desert:    [["coyote", 4, [2, 4]], ["oryx", 4, [3, 6]], ["camel", 3, [2, 4]], ["roadrunner", 6], ["rabbit", 14], ["vulture", 3], ["bird", 2], ["bigfoot", 1]],
   tropical:  [["elephant", 3, [2, 5]], ["giraffe", 3, [2, 4]], ["zebra", 3, [4, 7]], ["rhino", 3], ["lion", 2, [2, 4]], ["crocodile", 5], ["monkey", 4, [3, 6]],
               ["baboon", 3, [4, 7]], ["panther", 3], ["parrot", 3, [4, 6]], ["bird", 4], ["bigfoot", 1]],
   temperate: [["buck", 6, [2, 5]], ["bear", 4], ["horse", 3, [4, 7]], ["boar", 4, [2, 5]], ["coyote", 3, [2, 4]], ["fox", 4], ["turkey", 4, [3, 6]], ["goat", 3, [2, 5]],
@@ -4260,6 +4367,7 @@ function updateMonkey(A, dt, T) {
    It's a liking, not a wall: they can wander or run anywhere. Kinds not in PREF (bears, wolves, rabbits…) roam everywhere. */
 // [open grass, forest edge, deep forest, water's edge, high ground]
 const PREF = {
+  oryx: [1, .3, 0, .2, .1], camel: [1, .2, 0, .5, 0], roadrunner: [.8, .9, .1, .2, 0],
   zebra: [1, .4, 0, .3, 0], horse: [1, .5, 0, .3, .1], giraffe: [.9, .7, .1, .2, 0], elephant: [.8, .6, .3, .8, 0], rhino: [.9, .5, .1, .5, 0], lion: [.9, .6, .1, .3, 0],
   caribou: [1, .4, .1, .3, .2], muskox: [1, .3, 0, .2, .3], buck: [.4, 1, .5, .3, 0], elk: [.5, 1, .5, .3, .2], turkey: [.4, 1, .4, .2, 0], fox: [.6, 1, .4, .2, .1],
   coyote: [.8, .8, .3, .2, .1], boar: [.2, .8, 1, .4, 0], moose: [.2, .6, .9, 1, 0], panther: [.1, .6, 1, .3, .3], baboon: [.7, .8, .4, .3, .3],
@@ -4358,7 +4466,7 @@ function neckHits(b) {                                   // hit spheres along th
 }
 function addGround(kind, x, z, home) {
   const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
-  const b = QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
+  const b = QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
           : kind === "coyote" ? buildWolf(r, false, [0x7a6448, 0x9a8466, 0xd8ccb4, 0x8a7458]) : kind === "fox" ? buildWolf(r, false, [0xa84a1e, 0xc0602a, 0xeee6da, 0x2a1e16], 0xf4f0ea)
           : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
@@ -4390,7 +4498,7 @@ function stockOrder(skipRabbits) {                          // land sections, em
 function spawnKind(kind, grp, peak, onlySec) {
   if (kind === "monkey") { spawnMonkeys(grp); return; }
   if (FLY[kind]) {                                           // birds circling on the thermals (parrots in small fast flocks)
-    const parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : 1.6;
+    const parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : kind === "vulture" ? 1.8 : 1.6;
     const cx = (Math.random() * 2 - 1) * HALF * .6, cz = (Math.random() * 2 - 1) * HALF * .6, rad = (parrot ? 25 : 35) + Math.random() * 55, ang = Math.random() * 6.28;
     const w = (Math.random() < .5 ? 1 : -1) * (parrot ? .1 + Math.random() * .05 : .03 + Math.random() * .03), m = grp ? grp[0] + Math.floor(Math.random() * (grp[1] - grp[0] + 1)) : 1;
     for (let j = 0; j < m && beasts.length < BEAST_CAP; j++) {
@@ -5563,7 +5671,7 @@ function vruiParts() {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
     g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode], lx + 360, 92);
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
-    uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, BIOME_TEXT[biomeOf(lat)]);
+    uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
     uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
     uiLabel(g, lx, 468, "Time of day", hourText(set.hour)); note(g, lx, 504, $("sunNote").textContent);
     uiLabel(g, lx, 618, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees"); note(g, lx, 654, "From today's forest up to very thick woods.");
@@ -7261,7 +7369,7 @@ function dropUse(d) {                                       // what grabbing it 
   else if (d.type === "gun") {
     const k = d.kind, A = arms[k], had = vr.own[k] || 0;
     A.res = Math.min(AMMO_CAP, A.res + WEAP[k].can);
-    if (k === "hunt" && d.tier >= 5 && had < 5 && gameMode === "hunt" && legendName()) vrBanner("There's " + legendName() + " in these woods", 6);
+    if (k === "hunt" && d.tier >= 5 && had < 5 && gameMode === "hunt" && legendName()) vrBanner("There's " + legendName() + (biomeOf(set.lat * set.hemi) === "desert" ? " out here" : " in these woods"), 6);
     if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } if (!(vr.own[vr.weapon] > 0)) { vr.weapon = k; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = false; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
     else msg = "+" + WEAP[k].can + " " + WEAP[k].name + " ammo";
     if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
@@ -8331,7 +8439,7 @@ function loop(now) {
     updateNades(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
-      PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + "." + (gameMode === "hunt" && legendName() ? " There's " + legendName() + " in these woods." : ""));
+      PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + "." + (gameMode === "hunt" && legendName() ? " There's " + legendName() + (biomeOf(set.lat * set.hemi) === "desert" ? " out here." : " in these woods.") : ""));
     }
     if ((mapT += dt) > .25) { mapT = 0; reveal(); drawMap($("miniMap")); if (mapOpen) drawMap($("bigMapCanvas")); }
     updateRunner(dt, now);

@@ -9,7 +9,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         r = await pg.evaluate("""() => { window.FREEZE = true; D.setMode('hunt'); D.set.lat = 42; D.generate(); D.state = 'play';
-          const T = D.THREE, kinds = ['buck','bear','polar','baboon','panther','wolf','seal','rabbit','elephant','giraffe','zebra','rhino','lion','crocodile','horse','elk','moose','boar','goat','turkey','coyote','fox','caribou','muskox','arcticfox','bigfoot','yeti'];
+          const T = D.THREE, kinds = ['buck','bear','polar','baboon','panther','wolf','seal','rabbit','elephant','giraffe','zebra','rhino','lion','crocodile','horse','elk','moose','boar','goat','turkey','coyote','fox','caribou','muskox','arcticfox','bigfoot','yeti','oryx','camel','roadrunner'];
           const out = {}, rc = new T.Raycaster();
           for (const k of kinds) {
             for (const A of D.beasts) A.root.visible = false;
