@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.73</title>
+<title>JUST TREES 1.74</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.73";              // Just Trees 1.73
+const VERSION = "1.74";              // Just Trees 1.74
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -401,7 +401,7 @@ function envOptions(lat) {
   if (a >= 30 && a < 35) return [["desert", .3], ["badlands", .2], ["swamp", .15], [c, .35]];
   if (a >= 45 && a < 50) return [[c, .65], ["birchmaple", .35]];
   if (a >= 50 && a < 62) return [[c, .7], ["birchmaple", .3]];
-  if (a >= 35 && a < 45) return [[c, .65], ["badlands", .2], ["desert", .15]];
+  if (a >= 35 && a < 45) return [[c, .5], ["redwood", .22], ["badlands", .16], ["desert", .12]];
   return [[c, 1]];
 }
 let MAPENV = null;                                          // this map's environment: { lat, b }
@@ -414,9 +414,9 @@ function rollEnv() {                                        // picked from the m
 const JUNIPER = [["#4a5a3c", "#56664a", "#3e4e34", "#606c4a"], ["#50603e", "#44543a", "#5c6a48", "#3a4a30"]];   // badlands: squat juniper and pinyon
 const DRY = b => b === "desert" || b === "badlands";   // the dry lands share a few things
 const TROPIC = b => b === "tropical" || b === "rainforest";   // things the two warm wet forests share
-const TB = b => b === "birchmaple" ? (Math.abs(set.lat) >= 50 ? "boreal" : "temperate") : b;   // tables: the birch and maple forest takes the climate it sits in
+const TB = b => b === "birchmaple" ? (Math.abs(set.lat) >= 50 ? "boreal" : "temperate") : b === "redwood" ? "temperate" : b;   // tables: the birch and maple forest takes the climate it sits in
 function biomeOf(lat) { return MAPENV && MAPENV.lat === lat ? MAPENV.b : climateOf(lat); }
-const ENV_NAME = { birchmaple: "birch and maple forest", swamp: "swamp", badlands: "badlands", rainforest: "rainforest", tropical: "palm jungle", desert: "desert", temperate: "forest", boreal: "spruce forest", tundra: "tundra", polar: "polar ice" };
+const ENV_NAME = { redwood: "redwood forest", birchmaple: "birch and maple forest", swamp: "swamp", badlands: "badlands", rainforest: "rainforest", tropical: "palm jungle", desert: "desert", temperate: "forest", boreal: "spruce forest", tundra: "tundra", polar: "polar ice" };
 function envNote(lat) {                                     // the settings line under latitude
   const o = envOptions(lat); if (o.length === 1) return BIOME_TEXT[o[0][0]];
   const t = o.map(([k]) => ENV_NAME[k]).join(" or "); return t[0].toUpperCase() + t.slice(1) + ": each map picks";
@@ -431,7 +431,8 @@ const BIOME_TEXT = {
   rainforest: "Rainforest: giant trees, vines, deep shade",
   badlands: "Badlands: red rock, buttes, mesas",
   swamp: "Swamp: cypress in still water, mist",
-  birchmaple: "Birch and maple: white trunks, fall colour"
+  birchmaple: "Birch and maple: white trunks, fall colour",
+  redwood: "Redwoods: giant redwoods, sequoias, eucalyptus"
 };
 function seasonOf(lat, month) {
   if (Math.abs(lat) < 23) return "tropical";
@@ -992,6 +993,8 @@ function makeAtlas(kind, cols, snowy, barkCol) {
   g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
   for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(0,0,0,${.08 + rnd() * .15})`; g.fillRect(rnd() * 256, 200, 2 + rnd() * 5, 56); }
   if (kind === "aspen" || kind === "birch") for (let i = 0; i < 46; i++) { g.fillStyle = `rgba(24,22,20,${.55 + rnd() * .35})`; g.fillRect(rnd() * 256, 202 + rnd() * 50, 4 + rnd() * 12, 1.5 + rnd() * 3); }   // the black eyes on aspen bark
+  if (kind === "redwood" || kind === "sequoia") for (let i = 0; i < 40; i++) { const x = rnd() * 256, w = 2 + rnd() * 4; g.fillStyle = `rgba(30,12,6,${.35 + rnd() * .3})`; g.fillRect(x, 200, w, 56); g.fillStyle = `rgba(255,190,150,${.08 + rnd() * .1})`; g.fillRect(x + w + 1, 200, 2, 56); }   // deep stringy furrows
+  if (kind === "euc") for (let i = 0; i < 30; i++) { g.fillStyle = rnd() < .5 ? `rgba(150,140,120,${.4 + rnd() * .3})` : `rgba(240,236,224,${.4 + rnd() * .3})`; g.fillRect(rnd() * 256, 200 + rnd() * 40, 10 + rnd() * 30, 6 + rnd() * 14); }   // peeling patches
   if (kind === "palm") for (let y = 204; y < 256; y += 7) { g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(0, y, 256, 2); }
   if (kind === "cactus") {                                 // ribs running up the stem, pale spines along them
     g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
@@ -999,8 +1002,8 @@ function makeAtlas(kind, cols, snowy, barkCol) {
     for (let i = 0; i < 260; i++) { g.fillStyle = "rgba(240,235,200,.55)"; g.fillRect(Math.floor(rnd() * 16) * 16 + 9, 200 + rnd() * 56, 1.5, 1.5); }
   }
   if (kind === "cactus") {}
-  else if (kind === "fir" || kind === "pine") drawFir(g, cols, snowy);
-  else if (kind === "broad" || kind === "scrub" || kind === "juniper" || kind === "aspen" || kind === "maple" || kind === "birch") drawBroad(g, cols);
+  else if (kind === "fir" || kind === "pine" || kind === "redwood" || kind === "sequoia") drawFir(g, cols, snowy);
+  else if (kind === "broad" || kind === "scrub" || kind === "juniper" || kind === "aspen" || kind === "maple" || kind === "birch" || kind === "euc") drawBroad(g, cols);
   else if (kind === "bare") drawBare(g, snowy);
   else drawFrond(g, cols);
   const t = new THREE.CanvasTexture(cv);
@@ -1267,7 +1270,8 @@ function joshuaVariant(odd) {                              // a Joshua tree: a s
 }
 // How often each kind grows "fluffy" (forked limbs, puffs of leaves) — before crowding: loners and clearing edges spread out,
 // trees deep in a crowded stand grow tall and narrow. Firs and spruces never do (they stay cones). Tweak here.
-const FLUFFY = { temperate: { broad: .24, bare: .24, pine: .55 }, boreal: { broad: .05, bare: .05, pine: .3 }, tropical: { broad: .12 }, rainforest: { broad: .12 },
+const FLUFFY = { temperate: { broad: .3, bare: .3, pine: .55 }, boreal: { broad: .07, bare: .07, pine: .3 }, tropical: { broad: .14 }, rainforest: { broad: .12 },
+  redwood: { euc: .3, broad: .2, bare: .2 },   // redwoods and sequoias never: they stay tall spires
   birchmaple: { maple: .42, birch: .35, broad: .15, pine: .3 } };   // the birch and maple forest is fluffy on purpose
 function birchClump(pruned, opt) {                          // birch often grows as several stems from one root, leaning apart
   const n = 2 + Math.floor(rnd() * 3), parts = [], lows = [], a0 = rnd() * 6.283; let first = null, top = 0;
@@ -1344,6 +1348,8 @@ function fluffyVariant(kind, opt) {                       // a spreading tree: a
 }
 function treeVariant(kind, pruned, odd, opt) {
   if (kind === "aspen") return treeVariant("broad", pruned, odd, Object.assign({ aspen: true }, opt));
+  if (kind === "redwood" || kind === "sequoia") return treeVariant("fir", pruned, odd, Object.assign({ [kind]: true, buttress: true }, opt));   // giant conifers: a fir's build, much bigger
+  if (kind === "euc" && !(opt && opt.fluffy)) return treeVariant("broad", pruned, odd, Object.assign({ euc: true }, opt));
   if (kind === "birch" && opt && opt.fluffy) return birchClump(pruned, opt);          // a fluffy birch: 2-4 white stems from one base
   if (kind === "birch") return treeVariant("broad", pruned, odd, Object.assign({ aspen: true }, opt));
   if (kind === "maple" && !(opt && opt.fluffy)) return treeVariant("broad", pruned, odd, opt);
@@ -1356,10 +1362,13 @@ function treeVariant(kind, pruned, odd, opt) {
   const gapsOf = () => Array.from({ length: Math.floor(rnd() * 3) }, () => [.1 + rnd() * .75, .04 + rnd() * .08]);
   if (kind === "fir") {
     Ht = 9.5 + rnd() * 9; tr = .2 + rnd() * .15; if (opt && opt.thick) tr *= opt.thick;
+    if (opt && opt.redwood) { Ht = 25 + rnd() * 10; tr = (.6 + rnd() * .25) * (opt.thick || 1); }          // coast redwood: very tall, a straight red column
+    if (opt && opt.sequoia) { Ht = 20 + rnd() * 8; tr = (1.05 + rnd() * .4) * (opt.thick || 1); }          // giant sequoia: not as tall, but a massive trunk
     const form = rnd(); Lmax = lerp(2.2, 5, form) * (.85 + rnd() * .3);              // narrow spire ... broad cone
-    const prof = .6 + rnd() * .55, droop = lerp(.4, .95, rnd()), scrag = rnd() < .3 ? .3 + rnd() * .3 : .12;
-    hb = pruned ? Math.max(3.2, Ht * (.3 + rnd() * .22)) : .25 + rnd() * .6;
-    const n = Math.round((pruned ? 24 : 36) + rnd() * 22 * (.6 + form * .6)), gaps = gapsOf();
+    if (opt && opt.redwood) Lmax = 3 + rnd() * 1.4; if (opt && opt.sequoia) Lmax = 3.8 + rnd() * 1.4;
+    const prof = opt && opt.sequoia ? 1.8 + rnd() * .6 : .6 + rnd() * .55, droop = opt && opt.sequoia ? .15 + rnd() * .2 : opt && opt.redwood ? .3 + rnd() * .3 : lerp(.4, .95, rnd()), scrag = rnd() < .3 ? .3 + rnd() * .3 : .12;
+    hb = opt && (opt.redwood || opt.sequoia) ? Ht * ((pruned ? .42 : .3) + rnd() * .12) : pruned ? Math.max(3.2, Ht * (.3 + rnd() * .22)) : .25 + rnd() * .6;   // the big ones: a bare trunk a third to half way up
+    const n = Math.round((pruned ? 24 : 36) + rnd() * 22 * (.6 + form * .6) + (opt && (opt.redwood || opt.sequoia) ? 40 : 0)), gaps = gapsOf();
     const sideA = rnd() * 6.28, sideW = rnd() < .5 ? .5 + rnd() * .9 : 0, s0 = rnd() * .6, s1 = s0 + .2 + rnd() * .4;
     const topT = oddType === "broken" ? .7 + rnd() * .12 : 1, lx = () => 0; ls = parts.length;
     for (let k = 0; k < n; k++) {
@@ -1393,14 +1402,16 @@ function treeVariant(kind, pruned, odd, opt) {
     if (pruned) deadStubs(parts, hb, false);
   } else if (kind === "broad" || kind === "bare") {
     Ht = 7.5 + rnd() * 6; tr = .26 + rnd() * .16; if (opt && opt.thick) tr *= opt.thick;
-    if (opt && opt.aspen) { Ht = 11 + rnd() * 5; tr = .17 + rnd() * .05; }                              // aspen: tall and slender
+    if (opt && opt.aspen) { Ht = 11 + rnd() * 5; tr = .17 + rnd() * .05; }
+    if (opt && opt.euc) { Ht = 16 + rnd() * 9; tr = .3 + rnd() * .12; }                                 // eucalyptus: tall, pale, a thin open crown                              // aspen: tall and slender
     if (opt && opt.tall) { Ht *= opt.tall * (.85 + rnd() * .3); tr *= 1 + (opt.tall - 1) * .7; }        // rainforest: tall, thick trunks
     const shape = rnd(); Lmax = lerp(2.6, 5, shape) * (.85 + rnd() * .3);           // tall and narrow ... wide and round
     lean = rnd() < .3 ? (rnd() - .5) * 1.4 : 0; if (opt && opt.noLean) lean = 0;
-    if (opt && opt.aspen) { Lmax = 2.3 + rnd() * 1; lean = (rnd() - .5) * .5; }                            // short branches, a narrow crown
+    if (opt && opt.aspen) { Lmax = 2.3 + rnd() * 1; lean = (rnd() - .5) * .5; }
+    if (opt && opt.euc) { Lmax = 3 + rnd() * 1.8; lean = (rnd() - .5) * 1.6; }                            // short branches, a narrow crown
     const lx = y => { const t = Math.max(0, y) / Ht; return t * t * lean; };
-    hb = opt && opt.aspen ? Ht * (pruned ? .42 : .3) + rnd() * Ht * .1 : opt && opt.tall ? Ht * (.55 + rnd() * .15) : pruned ? Ht * (.42 + rnd() * .15) : .8 + rnd() * 1.4; const umb = !!(opt && opt.tall); if (umb) Lmax = 4.2 + rnd() * 2.8;
-    const n = Math.round((pruned ? 12 : 18) + rnd() * 16 + (opt && opt.tall ? 12 : 0) + (opt && opt.aspen ? 20 : 0)), gaps = gapsOf();
+    hb = opt && opt.euc ? Ht * (.4 + rnd() * .15) : opt && opt.aspen ? Ht * (pruned ? .42 : .3) + rnd() * Ht * .1 : opt && opt.tall ? Ht * (.55 + rnd() * .15) : pruned ? Ht * (.42 + rnd() * .15) : .8 + rnd() * 1.4; const umb = !!(opt && opt.tall); if (umb) Lmax = 4.2 + rnd() * 2.8;
+    const n = Math.round((pruned ? 12 : 18) + rnd() * 16 + (opt && opt.tall ? 12 : 0) + (opt && opt.aspen ? 20 : 0) - (opt && opt.euc ? 8 : 0)), gaps = gapsOf();
     const lopA = rnd() * 6.28, lop = rnd() < .5 ? .2 + rnd() * .35 : 0;                 // lopsided toward the light
     const sideA = rnd() * 6.28, sideW = rnd() < .4 ? .5 + rnd() * .8 : 0, s0 = rnd() * .5, s1 = s0 + .25 + rnd() * .4;
     const topT = oddType === "broken" ? .68 + rnd() * .1 : 1, flat = oddType === "flat"; ls = parts.length;
@@ -1412,7 +1423,7 @@ function treeVariant(kind, pruned, odd, opt) {
       const y = hb + t * (Ht - hb);
       let L = (umb ? Lmax * (.45 + .6 * Math.sin(Math.PI * Math.min(1, .25 + t * .85))) : lerp(Lmax, Lmax * lerp(.25, .55, shape), t)) * (.8 + rnd() * .4) * (1 + lop * Math.cos(ang - lopA)) * lm;
       if (flat && t > .7) L = Math.max(L, Lmax * .6);
-      const dr = (umb ? lerp(.05, -.25, t) : flat ? lerp(-.05, -.15, t) : lerp(-.05, -.6, t)) + (rnd() - .5) * .3, roll = (rnd() - .5) * .8;
+      const dr = (umb ? lerp(.05, -.25, t) : flat ? lerp(-.05, -.15, t) : lerp(-.05, -.6, t)) + (rnd() - .5) * .3 + (opt && opt.euc ? -.3 : 0), roll = (rnd() - .5) * .8;
       const tint = cardTint(), sh = g => shadeCard(g.translate(lx(y), 0, 0), Lmax, hb, Ht, lx, tint, false);
       if (opt && opt.leafless) { const ca = Math.cos(ang), sa = -Math.sin(ang); parts.push(shadeGeo(tubeGeo([new THREE.Vector3(lx(y), y, 0), new THREE.Vector3(lx(y) + ca * L * .6, y + L * .35, sa * L * .6)], [.035, .01], 3), () => [.92, .92, .9])); continue; }   // a winter aspen: bare twigs
       parts.push(sh(card(L, L * .8, y, ang, dr, roll)));
@@ -1452,7 +1463,7 @@ function treeVariant(kind, pruned, odd, opt) {
   }
   const G = opt && opt.giant ? opt.giant(Ht) : null, segs = [];
   const bt = opt && opt.buttress, fl = G ? G.flare : bt ? .7 + rnd() * .5 : .3 + rnd() * .35, fh = G ? G.fh : bt ? 1.6 + rnd() * 1.2 : .9 + rnd() * .8, nl = G ? G.lobes : bt ? 5 : 4, la = G ? G.lobA : bt ? .4 + rnd() * .2 : .25 + rnd() * .2;   // rainforest trees: big buttress roots
-  const bamp = G ? G.wob : Ht * (opt && opt.aspen ? .022 + rnd() * .014 : kind === "fir" ? .004 + rnd() * .008 : .01 + rnd() * .02), f1 = .6 + rnd() * .8, f2 = .6 + rnd() * .8, p1 = rnd() * 6.28, p2 = rnd() * 6.28, lv = G ? G.lean : [0, 0];
+  const bamp = G ? G.wob : Ht * (opt && (opt.aspen || opt.euc) ? .022 + rnd() * .014 : kind === "fir" ? .004 + rnd() * .008 : .01 + rnd() * .02), f1 = .6 + rnd() * .8, f2 = .6 + rnd() * .8, p1 = rnd() * 6.28, p2 = rnd() * 6.28, lv = G ? G.lean : [0, 0];
   const bend = y => { const t = Math.min(1.3, Math.max(0, y / Ht)); return [bamp * t * Math.sin(t * Math.PI * f1 + p1) + lv[0] * t * t, bamp * t * Math.cos(t * Math.PI * f2 + p2) * .7 + lv[1] * t * t]; };   // trunks are never quite straight
   const tint = G ? G.tint : [1, 1, 1], tc = (k) => () => [k * tint[0], k * tint[1], k * tint[2]];
   if (G && G.split && G.split.y < Ht * .98 - 2) {          // the giant splits into a second leader above the porch (when there's room)
@@ -2820,7 +2831,7 @@ function generate() {
   }
   const H0 = baked.H; H = H0;
   const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand), aspN = makeNoise(mulberry32(seed * 61 + 3)), fluN = makeNoise(mulberry32(seed * 67 + 1));
-  const fluffPatch = (x, z) => biome === "birchmaple" || biome === "rainforest" ? 1 : lerp(.1, 2.3, smooth(.02, .32, fbm(fluN, x * .006 + 2, z * .006 - 5, 2)));   // stands with almost none, stands with a few more
+  const fluffPatch = (x, z) => biome === "birchmaple" || biome === "rainforest" ? 1 : lerp(.07, 3.8, smooth(.07, .37, fbm(fluN, x * .006 + 2, z * .006 - 5, 2)));   // stands with almost none, stands with a few more
 
   // Height stats -> water level, snow line, tree line
   const hs = [];
@@ -2916,18 +2927,22 @@ function generate() {
     joshua: { cols: [["#6c7e44", "#7d8c50", "#5c6c38", "#8a9458"], ["#76864a", "#66763e", "#869256", "#5a6a36"]], bark: "#6e6252" },
     juniper: { cols: JUNIPER, bark: "#5a4a3a" },
     scrub:  { cols: [["#8f9a72", "#a2a982", "#7d8962", "#b0ad88"], ["#98a07a", "#86906a", "#aaa884", "#7a8460"]], bark: "#5e5244" } });
+  if (biome === "redwood") Object.assign(kinds, {
+    redwood: { cols: [["#2c5a2a", "#36662f", "#244e24", "#3f7036"], ["#305e2c", "#28522a", "#3a6a32", "#22482a"]], bark: "#7c3a24" },
+    sequoia: { cols: [["#3a6a34", "#46763a", "#325e2e", "#507e40"], ["#3e6e36", "#36622f", "#4a7a3c", "#2e5a2a"]], bark: "#a8582e" },
+    euc:     { cols: (c => [c, c])(["#7a9480", "#8aa290", "#6a8670", "#98ae9a"]), bark: "#d6ccb8" } });   // blue-grey eucalyptus leaves, evergreen
   const NV = isTouch ? 3 : 5, BUSHV = 4, recs = {}, bushRecs = {};
   for (const k in kinds) {
     kinds[k].mats = kinds[k].cols.map(cols => windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })));   // in a headset: soft, smooth leaf edges
     const v = [], pool = { full: [], fullOdd: [], pruned: [], prunedOdd: [] };
     const add = (pr, od, key) => { pool[key].push(v.length); v.push(treeVariant(k, pr, od, k === "aspen" || k === "maple" || k === "birch" ? { leafless: season === "winter" } : biome === "rainforest" && k === "broad" ? { tall: 1.55, vines: true, buttress: true } : biome === "swamp" && k === "broad" ? { tall: 1.25, moss: true, buttress: true } : undefined)); };
-    const nv = k === "pine" || k === "aspen" ? 2 : k === "maple" || k === "birch" ? 3 : (FLUFFY[biome] || {})[k] ? Math.max(2, NV - 2) : NV;                        // the pine shares the fir's look when young: fewer shapes, fewer draw calls
+    const nv = k === "pine" || k === "aspen" ? 2 : k === "maple" || k === "birch" || k === "redwood" || k === "sequoia" || k === "euc" ? 3 : (FLUFFY[biome] || {})[k] ? Math.max(2, NV - 2) : NV;                        // the pine shares the fir's look when young: fewer shapes, fewer draw calls
     for (let i = 0; i < nv; i++) add(false, false, "full");
     add(false, true, "fullOdd");
     if (k !== "palm") { for (let i = 0; i < nv; i++) add(true, false, "pruned"); add(true, true, "prunedOdd"); }
     else { pool.pruned = pool.full; pool.prunedOdd = pool.fullOdd; }
     pool.fluffy = []; pool.fluffyP = (FLUFFY[biome] || {})[k] || 0;
-    if (pool.fluffyP > 0) for (let i = 0, nf = isTouch ? 2 : k === "pine" ? 2 : 3; i < nf; i++) { pool.fluffy.push(v.length); v.push(treeVariant(k, false, false, Object.assign({ fluffy: true }, biome === "rainforest" && k === "broad" ? { tall: 1.55 } : {}, (k === "maple" || k === "birch") && season === "winter" ? { leafless: true } : {}))); }
+    if (pool.fluffyP > 0) for (let i = 0, nf = isTouch ? 2 : k === "pine" || k === "euc" ? 2 : 3; i < nf; i++) { pool.fluffy.push(v.length); v.push(treeVariant(k, false, false, Object.assign({ fluffy: true }, biome === "rainforest" && k === "broad" ? { tall: 1.55 } : k === "euc" ? { tall: 1.35 } : {}, (k === "maple" || k === "birch") && season === "winter" ? { leafless: true } : {}))); }
     kinds[k].vars = v; kinds[k].pool = pool;
     kinds[k].bush = Array.from({ length: BUSHV }, () => bushVariant());
     recs[k] = v.map(() => []);
@@ -2935,7 +2950,7 @@ function generate() {
   }
   const pickVar = (k, pruned, noOdd, open, high) => {      // high: 1 in the lowlands .. 0 near the snow line     // about 10% of trees get an odd top; open = 0 (crowded) .. 1 (a loner): how likely a fluffy one is
     const p = kinds[k].pool;
-    if (open !== undefined && p.fluffy.length && rand() < p.fluffyP * lerp(.3, 1.6, open) * (high === undefined ? 1 : high)) return p.fluffy[Math.floor(rand() * p.fluffy.length)];
+    if (open !== undefined && p.fluffy.length && rand() < p.fluffyP * lerp(.32, 1.75, open) * (high === undefined ? 1 : high)) return p.fluffy[Math.floor(rand() * p.fluffy.length)];
     const odd = !noOdd && rand() < .1, list = pruned ? (odd ? p.prunedOdd : p.pruned) : (odd ? p.fullOdd : p.full);
     return list[Math.floor(rand() * list.length)];
   };
@@ -2947,7 +2962,7 @@ function generate() {
 
   // Trees: slight species groupings with overlap, plus random loners, and more size variety
   const allTrees = [];
-  const dens = { swamp: .42, badlands: .035, rainforest: 1.1, desert: .11, tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[TB(biome)];
+  const dens = { swamp: .42, badlands: .035, rainforest: 1.1, desert: .11, tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[TB(biome)] * (biome === "redwood" ? 1.1 : 1);
   const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
   for (let k = 0; k < attempts && dens > 0 && allTrees.length < maxTrees; k++) {
     const x = (rand() - .5) * (S - 30), z = (rand() - .5) * (S - 30), h = H0(x, z);
@@ -2963,14 +2978,18 @@ function generate() {
     else if (biome === "badlands") { const c = rand() < .25; kind = c ? "cactus" : "broad"; s = c ? .3 + rand() * .25 : .28 + rand() * .2; }
     else if (biome === "rainforest") { kind = rand() < cl(.1 + sp * .15 + (rel < .12 ? .2 : 0)) ? "palm" : "broad"; s = .8 + rand() * .45; if (rand() < .07) s *= 1.55; }
     else if (biome === "temperate") { kind = rand() < cl(.25 + rel * .9 + sp * .5) ? "fir" : "broad"; s = .75 + rand() * .55; if (kind === "fir" && rand() < .16 + rel * .2) kind = "pine"; }
+    else if (biome === "redwood") { const eg = aspN(x * .009 + 7, z * .009 - 3) > .3 + rel * .4;   // eucalyptus groves, mostly low down
+      if (eg) { kind = "euc"; s = .7 + rand() * .4; }
+      else if (rand() < cl(.1 + rel * .55 + sp * .3)) { kind = "sequoia"; s = .75 + rand() * .3; }     // sequoias: more of them up the slopes
+      else { const r = rand(); kind = r < .7 ? "redwood" : r < .85 ? "fir" : "broad"; s = kind === "redwood" ? .65 + rand() * .35 : .6 + rand() * .4; } }
     else if (biome === "birchmaple") { const L = Math.abs(lat), mp = .7 * smooth(54, 47, L), fr = .06 + .3 * smooth(48, 58, L) + rel * .25;
       kind = rand() < fr ? (rand() < .25 ? "pine" : "fir") : rand() < mp ? "maple" : "birch"; s = .75 + rand() * .5; }
     else if (biome === "boreal") { kind = rand() < cl(.84 + sp * .3) ? "fir" : "broad"; s = .7 + rand() * .6; if (kind === "fir" && rand() < .08) kind = "pine"; }
     else { kind = "fir"; s = .3 + rand() * .3; }
-    if (rand() < .05 && biome !== "tundra" && !DRY(biome) && biome !== "rainforest" && biome !== "swamp" && biome !== "birchmaple") kind = kind === "fir" ? "broad" : kind === "palm" ? "broad" : "fir";
+    if (rand() < .05 && biome !== "tundra" && !DRY(biome) && biome !== "rainforest" && biome !== "swamp" && biome !== "birchmaple" && biome !== "redwood") kind = kind === "fir" ? "broad" : kind === "palm" ? "broad" : "fir";
     if ((biome === "temperate" || biome === "boreal") && aspN(x * .011, z * .011) > .5 - rel * .3 && h < snowLine + span * .05) kind = "aspen";   // aspen groves, more of them up the slopes
     if (kind === "broad" && season === "winter") kind = "bare";
-    s *= (.78 + rand() * .5) * (rand() < .06 ? 1.35 : 1);            // wider spread of sizes, the odd giant
+    s *= (.78 + rand() * .5) * (rand() < .06 && kind !== "redwood" && kind !== "sequoia" ? 1.35 : 1);   // (the redwoods are tall enough already)            // wider spread of sizes, the odd giant
     s *= 1 - Math.min(.4, Math.max(0, rel - .5) * .8);
     const vi = pickVar(kind, false), v = .78 + rand() * .4;
     const t = { x, y: 0, z, s, ry: rand() * Math.PI * 2, c: new THREE.Color(v, v, v), vi, kind };
@@ -3027,12 +3046,12 @@ function generate() {
     if (!cand.length) cand = allTrees.filter(t => !t.peak);
     if (cand.length) {
       giant = cand[Math.floor(rand() * cand.length)];
-      if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad"; if (giant.kind === "pine") giant.kind = "fir"; if (giant.kind === "aspen" || giant.kind === "birch" || giant.kind === "maple") giant.kind = "broad";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
+      if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad"; if (giant.kind === "pine") giant.kind = "fir"; if (giant.kind === "aspen" || giant.kind === "birch" || giant.kind === "maple") giant.kind = "broad"; if (biome === "redwood") giant.kind = "sequoia";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
       const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
       let maxT = 0; for (const t of allTrees) if (t !== giant) maxT = Math.max(maxT, topOf(kinds[t.kind].vars[t.vi]) * t.s * t.sy);
       const pH = maxT + 2.5, GT = Math.max(22, pH * 1.65, maxT + 16); /* the porch about two thirds of the way up */                     // the giant towers over the rest; the porch sits just above every other treetop
       const GR = mulberry32(seed * 13 + 7), gr = Array.from({ length: 12 }, GR);
-      const lean = gr[0] < .55, gnarl = gr[1] < .4, split = gr[2] < .45, bark = [["", [1, 1, 1]], ["Redwood", [1.18, .8, .66]], ["Silverbark", [1.08, 1.08, 1.12]], ["Blackbark", [.62, .6, .58]]][Math.floor(gr[3] * 4)];
+      const lean = gr[0] < .55, gnarl = gr[1] < .4, split = gr[2] < .45, bark = biome === "redwood" ? ["Sequoia", [1, 1, 1]] : [["", [1, 1, 1]], ["Redwood", [1.18, .8, .66]], ["Silverbark", [1.08, 1.08, 1.12]], ["Blackbark", [.62, .6, .58]]][Math.floor(gr[3] * 4)];
       const roots = ["Great-rooted", "Ancient", "Old"][Math.floor(gr[11] * 3)];
       const la = gr[4] * 6.2832, gtrait = Ht => { const s0 = GT / (Ht + 1.4);                // world metres → this variant's units
         return { flare: 1 + gr[5] * .7, fh: (2.4 + gr[6] * 1.6) / s0, lobes: 5 + Math.floor(gr[7] * 3), lobA: .45 + gr[8] * .25, tint: bark[1],
@@ -3144,7 +3163,7 @@ function generate() {
   });
 
   // Terrain mesh, with rock blended in on steep and high ground
-  const g = Array.isArray(GRASS[TB(biome)]) ? GRASS[TB(biome)] : GRASS[TB(biome)][season];
+  const g = biome === "redwood" ? ["#4c5e2e", "#5c4a30"] : Array.isArray(GRASS[TB(biome)]) ? GRASS[TB(biome)] : GRASS[TB(biome)][season];
   const BANDS = ["#a8402a", "#c0552e", "#d26c36", "#b44a2c", "#e0a462", "#9a3a26", "#c86034", "#e8c088"].map(C);   // sandstone: deep red to orange, a few gold and cream layers
   const gA = C(g[0]), gB = C(g[1]), rockC = C(biome === "desert" ? "#a8623e" : biome === "badlands" ? "#b04a2e" : "#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040"), basalt = C("#2a2624"), scorch = C("#7a2a12");
   const geo = new THREE.PlaneGeometry(S, S, SEG, SEG); geo.rotateX(-Math.PI / 2);
@@ -3169,7 +3188,7 @@ function generate() {
   geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
   geo.setAttribute("rocky", new THREE.BufferAttribute(rocky, 1));
   geo.computeVertexNormals();
-  const litter = season === "fall" && (biome === "temperate" || biome === "boreal" || biome === "birchmaple") ? 1 : biome === "rainforest" || biome === "swamp" ? .7 : season === "tropical" ? .35 : 0;
+  const litter = season === "fall" && (biome === "temperate" || biome === "boreal" || biome === "birchmaple") ? 1 : biome === "redwood" ? .6 : biome === "rainforest" || biome === "swamp" ? .7 : season === "tropical" ? .35 : 0;
   terrainMesh = new THREE.Mesh(geo, groundMaterial(litter, TROPIC(biome) ? "#5a4a2a" : "#b5642a", weather.wet)); world.add(terrainMesh);
 
   // Borderlands (endless maps): the same terrain carries on past the square, coarser further out, with forest on it
@@ -3328,12 +3347,13 @@ function generate() {
   stampSolid(LG, logs);
 
   // Bushes: just a few, mostly near trees and rocks
-  const bushN = Math.round({ swamp: 900, badlands: 520, rainforest: 6500, desert: 190, tropical: 220, temperate: 170, boreal: 140, tundra: 260, polar: 25 }[TB(biome)] * (isTouch ? .8 : 1) * AREA);
+  const bushN = Math.round({ swamp: 900, badlands: 520, rainforest: 6500, desert: 190, tropical: 220, temperate: 170, boreal: 140, tundra: 260, polar: 25 }[TB(biome)] * (biome === "redwood" ? 4 : 1) * (isTouch ? .8 : 1) * AREA);   // redwoods: ferns everywhere underneath
   const bushKind = () => {
     if (biome === "badlands") return rand() < .55 ? "juniper" : "scrub";
     if (DRY(biome)) return "scrub";
     if (TROPIC(biome) || biome === "swamp") return "broad";
     if (biome === "birchmaple") return season === "winter" ? "bare" : "broad";
+    if (biome === "redwood") return "broad";
     if (biome === "polar") return "fir";
     if (biome === "temperate") return season === "winter" ? "bare" : "broad";
     if (season === "winter") return "fir";
@@ -3363,7 +3383,7 @@ function generate() {
     return Math.min(1, Math.max(0, smooth(-.25, .3, n) * .75 + low * .45 - .1));
   };
   fogLocal = 0;
-  weather.mist = gameMode !== "hike" && weather.type === "clear" && hourNow >= 4.5 && hourNow <= 9.5 && biome !== "polar" && rand() < .6;   // morning mist in the valleys
+  weather.mist = gameMode !== "hike" && weather.type === "clear" && hourNow >= 4.5 && hourNow <= 9.5 && biome !== "polar" && rand() < (biome === "redwood" ? .9 : .6);   // morning mist in the valleys (redwood country: nearly always)
 
   // Birds sing from particular trees; crickets live in particular meadows
   soundSpots = { birds: [], crickets: [] };
@@ -4544,6 +4564,7 @@ const NATIVE = {
               ["baboon", 3, [4, 7]], ["panther", 3], ["parrot", 3, [4, 6]], ["bird", 4], ["bigfoot", 1]],
   temperate: [["buck", 6, [2, 5]], ["bear", 4], ["horse", 3, [4, 7]], ["boar", 4, [2, 5]], ["coyote", 3, [2, 4]], ["fox", 4], ["turkey", 4, [3, 6]], ["goat", 3, [2, 5]],
               ["panther", 2], ["rabbit", 18], ["eagle", 3], ["bird", 4], ["bigfoot", 1]],
+  redwood:   [["elk", 5, [3, 6]], ["buck", 5, [2, 4]], ["bear", 4], ["panther", 2], ["fox", 3], ["turkey", 3, [3, 6]], ["rabbit", 14], ["eagle", 2], ["bird", 4], ["bigfoot", 1]],
   birchmaple: [["buck", 6, [2, 5]], ["moose", 3], ["bear", 3], ["fox", 4], ["turkey", 4, [3, 6]], ["rabbit", 16], ["owl", 3], ["bird", 4], ["bigfoot", 1]],
   boreal:    [["buck", 5, [2, 5]], ["bear", 4], ["elk", 4, [2, 5]], ["moose", 4], ["caribou", 3, [4, 7]], ["wolf", 3, [4, 6]], ["fox", 3], ["goat", 2, [2, 4]],
               ["rabbit", 18], ["eagle", 3], ["owl", 2], ["bird", 3], ["bigfoot", 1]],

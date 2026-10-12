@@ -12,8 +12,8 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         r = await pg.evaluate("""() => { window.FREEZE = true; const out = {};
-          for (const [name, lat] of [['tropical', 10], ['temperate', 42], ['boreal', 56], ['tundra', 67], ['polar', 80], ['desert', 28], ['rainforest', 3], ['badlands', 38], ['swamp', 29], ['birchmaple', 48]]) {
-            D.set.env = ['desert', 'rainforest', 'badlands', 'swamp', 'birchmaple'].includes(name) ? name : 'climate'; D.setMode('hunt'); D.set.size = 'medium'; D.set.weather = 'clear'; D.set.lat = lat; D.set.month = 6; D.set.rough = .6; D.generate(); D.state = 'play';
+          for (const [name, lat] of [['tropical', 10], ['temperate', 42], ['boreal', 56], ['tundra', 67], ['polar', 80], ['desert', 28], ['rainforest', 3], ['badlands', 38], ['swamp', 29], ['birchmaple', 48], ['redwood', 40]]) {
+            D.set.env = ['desert', 'rainforest', 'badlands', 'swamp', 'birchmaple', 'redwood'].includes(name) ? name : 'climate'; D.setMode('hunt'); D.set.size = 'medium'; D.set.weather = 'clear'; D.set.lat = lat; D.set.month = 6; D.set.rough = .6; D.generate(); D.state = 'play';
             const want = D.NATIVE[name].map(k => k[0]).filter(k => !D.LEGEND[k]), count = {};
             for (const A of D.beasts) count[A.kind] = (count[A.kind] || 0) + 1;
             for (let i = 0; i < 600; i++) D.updateAnimals(1 / 30);

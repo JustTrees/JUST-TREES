@@ -5,6 +5,7 @@ temperate broadleaf ~20-40% fluffy, rainforest only the emergent giants, none in
 You can climb a fluffy tree's trunk and up into its big limbs. Drawing cost stays close to before.
 1.72: leaves along the limbs (no lollipops); fluffy trees fade out going up toward the snow line (none near it) and are rarer in the boreal;
 aspens (white crooked trunks, narrow leafy crowns) grow in groves in temperate and boreal country, more up the slopes.
+1.74 (Ron: "gone down slightly too far"): a little more again (~15% of temperate broadleaf, was ~11%), still at least half of every forest very low.
 1.73 (Ron: "still enough straight trunk trees"): fewer overall (~10-15% of temperate broadleaf) and patchy: at least half of every forest has
 very few; the birch and maple forest (45-62°) is fluffy on purpose (maples, multi-stem birches)."""
 import os, sys, asyncio, json
