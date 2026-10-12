@@ -41,7 +41,7 @@ async def main():
         print(json.dumps(out))
         R, M = out["roll"], out["map"]
         ok = set(R["5"]) == {"rainforest", "tropical"} and R["5"]["rainforest"] > 100 and set(R["18"]) == {"tropical", "desert"} and set(R["28"]) == {"desert", "temperate"} and 60 < R["28"]["desert"] < 140 \
-             and set(R["40"]) == {"temperate", "desert"} and R["40"]["desert"] < 70 and "desert" not in R["55"] and "desert" not in R["75"] and R["same"] \
+             and set(R["40"]) == {"temperate", "desert", "badlands"} and R["40"]["desert"] < 70 and "desert" not in R["55"] and "desert" not in R["75"] and R["same"] \
              and R["note28"] == "Desert or forest: each map picks" and R["note55"].startswith("Boreal") \
              and M["env"] == "desert" and not M["missing"] and not M["foreign"] and M["treeObstacles"] > 100 and M["water"] < .12 and M["porch"] and M["moving"] > 5
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
