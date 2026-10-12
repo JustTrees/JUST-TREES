@@ -2,7 +2,9 @@
 how many depends on the kind and on crowding (loners spread, crowded trees grow narrow). Firs and spruces never do.
 Old pines (about a fifth of the conifers in temperate country, about half of them old and spreading). Realistic, not everywhere:
 temperate broadleaf ~20-40% fluffy, rainforest only the emergent giants, none in swamps, deserts or badlands.
-You can climb a fluffy tree's trunk and up into its big limbs. Drawing cost stays close to before."""
+You can climb a fluffy tree's trunk and up into its big limbs. Drawing cost stays close to before.
+1.72: leaves along the limbs (no lollipops); fluffy trees fade out going up toward the snow line (none near it) and are rarer in the boreal;
+aspens (white crooked trunks, narrow leafy crowns) grow in groves in temperate and boreal country, more up the slopes."""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
 TARGET = 'file://' + os.path.abspath(sys.argv[1])
@@ -27,13 +29,19 @@ async def main():
             const m4 = new T.Matrix4().compose(new T.Vector3(t.x, t.y, t.z), new T.Quaternion().setFromEuler(new T.Euler(0, t.ry, 0)), new T.Vector3(t.s * (t.sx || 1), t.s * (t.sy || 1), t.s * (t.sx || 1)));
             const wp = lp.applyMatrix4(m4); out.limbClimbable = D.climbableAt ? !!D.climbableAt(wp) : null; out.limbSegs = v.hold.segs.length;
             out.noStandableLimbOnFluffy = true; }
+          // up high: fewer fluffy trees; aspens on the slopes
+          { D.set.rough = 1; D.set.land = 'natural'; gen('climate', 47, 6); D.set.rough = .6; const K = window.__kinds, Tr = window.__trees; let lo = [0, 0], hi = [0, 0], aLo = 0, aHi = 0, nLo = 0, nHi = 0;
+            const hs = Tr.map(t => D.H(t.x, t.z)).sort((a, b) => a - b), q1 = hs[Math.floor(hs.length * .3)], q9 = hs[Math.floor(hs.length * .9)];
+            for (const t of Tr) { const h = D.H(t.x, t.z), f = K[t.kind].vars[t.vi].fluffy ? 1 : 0; if (h <= q1) { nLo++; if (t.kind === 'aspen') aLo++; if (t.kind === 'broad') { lo[0]++; lo[1] += f; } } else if (h >= q9) { nHi++; if (t.kind === 'aspen') aHi++; if (t.kind === 'broad') { hi[0]++; hi[1] += f; } } }
+            out.fluffyLow = +(lo[1] / Math.max(1, lo[0])).toFixed(2); out.fluffyHigh = +(hi[1] / Math.max(1, hi[0])).toFixed(2); out.aspenLow = +(aLo / Math.max(1, nLo)).toFixed(2); out.aspenHigh = +(aHi / Math.max(1, nHi)).toFixed(2); }
           // drawing cost, temperate large
           let tri = 0; for (const yaw of [0, 1.57, 3.14, 4.71]) { D.camera.position.set(D.P.x, D.H(D.P.x, D.P.z) + 1.7, D.P.z); D.camera.rotation.set(0, yaw, 0, 'YXZ'); D.camera.updateMatrixWorld(); D.cullTiles && D.cullTiles(); D.renderer.info.reset(); D.renderer.render(D.scene, D.camera); tri += D.renderer.info.render.triangles; }
           out.trianglesK = Math.round(tri / 4000);
           D.set.env = 'climate'; return out; }""")
         print(json.dumps(r))
         t, w = r["climate-42-6"], r["climate-42-1"]
-        ok = .2 <= t["broad"]["fluffy"] <= .42 and t["fir"]["fluffy"] == 0 and "pine" in t and .1 < t["pine"]["n"] / (t["pine"]["n"] + t["fir"]["n"]) < .32 and .3 < t["pine"]["fluffy"] < .75 \
+        ok = r["fluffyHigh"] < r["fluffyLow"] * .5 and r["aspenHigh"] > r["aspenLow"] and t.get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"].get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"]["broad"]["fluffy"] < .15 \
+             and .15 <= t["broad"]["fluffy"] <= .42 and t["fir"]["fluffy"] == 0 and "pine" in t and .1 < t["pine"]["n"] / (t["pine"]["n"] + t["fir"]["n"]) < .32 and .3 < t["pine"]["fluffy"] < .75 \
              and .2 <= w["bare"]["fluffy"] <= .42 and r["climate-56-6"]["fir"]["fluffy"] == 0 and r["rainforest-3-6"]["broad"]["fluffy"] < .15 \
              and all(v["fluffy"] == 0 for k in ["swamp-29-6", "desert-28-6", "badlands-38-6"] for v in r[k].values()) \
              and r["loners"] > r["crowded"] + .15 and r["limbSegs"] >= 4 and r["limbClimbable"] is not False

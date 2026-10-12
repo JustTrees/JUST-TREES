@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.71</title>
+<title>JUST TREES 1.72</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.71";              // Just Trees 1.71
+const VERSION = "1.72";              // Just Trees 1.72
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -986,6 +986,7 @@ function makeAtlas(kind, cols, snowy, barkCol) {
   const g = cv.getContext("2d"); g.lineCap = "round";
   g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
   for (let i = 0; i < 70; i++) { g.fillStyle = `rgba(0,0,0,${.08 + rnd() * .15})`; g.fillRect(rnd() * 256, 200, 2 + rnd() * 5, 56); }
+  if (kind === "aspen") for (let i = 0; i < 46; i++) { g.fillStyle = `rgba(24,22,20,${.55 + rnd() * .35})`; g.fillRect(rnd() * 256, 202 + rnd() * 50, 4 + rnd() * 12, 1.5 + rnd() * 3); }   // the black eyes on aspen bark
   if (kind === "palm") for (let y = 204; y < 256; y += 7) { g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(0, y, 256, 2); }
   if (kind === "cactus") {                                 // ribs running up the stem, pale spines along them
     g.fillStyle = barkCol; g.fillRect(0, 200, 256, 56);
@@ -994,7 +995,7 @@ function makeAtlas(kind, cols, snowy, barkCol) {
   }
   if (kind === "cactus") {}
   else if (kind === "fir" || kind === "pine") drawFir(g, cols, snowy);
-  else if (kind === "broad" || kind === "scrub" || kind === "juniper") drawBroad(g, cols);
+  else if (kind === "broad" || kind === "scrub" || kind === "juniper" || kind === "aspen") drawBroad(g, cols);
   else if (kind === "bare") drawBare(g, snowy);
   else drawFrond(g, cols);
   const t = new THREE.CanvasTexture(cv);
@@ -1261,51 +1262,64 @@ function joshuaVariant(odd) {                              // a Joshua tree: a s
 }
 // How often each kind grows "fluffy" (forked limbs, puffs of leaves) — before crowding: loners and clearing edges spread out,
 // trees deep in a crowded stand grow tall and narrow. Firs and spruces never do (they stay cones). Tweak here.
-const FLUFFY = { temperate: { broad: .3, bare: .3, pine: .55 }, boreal: { broad: .2, bare: .2, pine: .45 }, tropical: { broad: .2 }, rainforest: { broad: .12 } };
-function fluffyVariant(kind, opt) {                       // a spreading tree: a short trunk, 2-4 big limbs (some fork again), leaf puffs at the ends
+const FLUFFY = { temperate: { broad: .3, bare: .3, pine: .55 }, boreal: { broad: .1, bare: .1, pine: .3 }, tropical: { broad: .2 }, rainforest: { broad: .12 } };
+function fluffyVariant(kind, opt) {                       // a spreading tree: a short trunk, 3-4 big limbs (most fork again), leaves all along their outer parts
   const bare = kind === "bare", pine = kind === "pine", tall = opt && opt.tall ? opt.tall : 1, V = (x, y, z) => new THREE.Vector3(x, y, z);
   const Ht = (pine ? 12 + rnd() * 6 : 8.5 + rnd() * 6) * tall, tr = (pine ? .26 + rnd() * .1 : .3 + rnd() * .16) * (1 + (tall - 1) * .7);
-  const hf = pine ? Ht * (.48 + rnd() * .14) : Ht * (tall > 1 ? .5 + rnd() * .12 : .24 + rnd() * .1);     // where the crown starts
-  const parts = [], low = [], segs = [], puffs = [], bark = () => [.88, .88, .88];
+  const hf = pine ? Ht * (.32 + rnd() * .12) : Ht * (tall > 1 ? .5 + rnd() * .12 : .24 + rnd() * .1);     // where the crown starts
+  const parts = [], low = [], segs = [], puffs = [], bark = () => [.88, .88, .88], dead = () => [.62, .58, .54];
   const fl = .3 + rnd() * .3, fh = .9 + rnd() * .8, nl = 4, la = .25 + rnd() * .2;
   const trunkTop = pine ? Ht * .93 : hf + .9;
   parts.push(shadeGeo(trunkNice(tr, trunkTop, 0, fl, fh, nl, la, 8, rnd() * 6), bark));
-  const limb = (p, dir, len, r, depth) => {
+  const limb = (p, dir, len, r, depth, side) => {
     const crook = pine ? .6 : .3, e = p.clone().addScaledVector(dir, len), m = p.clone().addScaledVector(dir, len * .5).add(V((rnd() - .5) * crook, .12 + rnd() * .2, (rnd() - .5) * crook));
     parts.push(shadeGeo(tubeGeo([p, m, e], [r, r * .86, r * .7], depth ? 4 : 6), bark));
     low.push(shadeGeo(tubeGeo([p, e], [r, r * .7], 3), bark));
     segs.push({ a: [p.x, p.y, p.z], b: [m.x, m.y, m.z], ra: r, rb: r * .86 }, { a: [m.x, m.y, m.z], b: [e.x, e.y, e.z], ra: r * .86, rb: r * .7 });
-    if (!pine && depth < 2 && rnd() < (depth ? .45 : .9)) {
+    const Rb = (pine ? 2.3 + rnd() * .9 : 2.5 + rnd() * 1) * Math.sqrt(tall);
+    // leaves along the outer part of every limb, not just a ball at the tip
+    for (const t of pine ? [.45, .75] : depth ? [.55] : [.5, .8]) { const q = t < .5 ? p.clone().lerp(m, t * 2) : m.clone().lerp(e, t * 2 - 1); puffs.push({ c: q, R: Rb * (pine ? .7 : .62), small: true }); }
+    if (!pine && !side && depth < 2 && rnd() < (depth ? .45 : .9)) {
       for (let k = 0; k < 2; k++) { const a = rnd() * 6.283, sp = .35 + rnd() * .35;
         limb(e, dir.clone().add(V(Math.cos(a) * sp, .15 + rnd() * .2, Math.sin(a) * sp)).normalize(), len * (.55 + rnd() * .2), r * .68, depth + 1); }
-    } else puffs.push({ c: e, R: (pine ? 2.6 + rnd() * 1 : 2.7 + rnd() * 1.1) * (depth > 1 ? .8 : 1) * Math.sqrt(tall), d: dir });
+    } else puffs.push({ c: e, R: Rb * (depth > 1 || side ? .8 : 1) });
   };
-  if (pine) {                                              // an old pine: limbs off the upper trunk, crooked and nearly level, needle puffs at the ends
-    const n = 6 + Math.floor(rnd() * 3);
-    for (let k = 0; k < n; k++) { const y = hf + (Ht * .9 - hf) * (k / (n - 1)) + (rnd() - .5) * .6, a = k * 2.39996 + rnd() * .7, out = 1 - k / n * .4, rr = tr * (1 - .7 * y / Ht) * .75;
-      limb(V(0, y, 0), V(Math.cos(a) * out, .3 + rnd() * .3, Math.sin(a) * out).normalize(), (2.6 + rnd() * 2) * out + .6, Math.max(.06, rr), 0); }
-    puffs.push({ c: V(0, Ht * .93 + .4, 0), R: 2.4 + rnd() * .8, d: V(0, 1, 0) });                         // and a puff on top
+  if (pine) {                                              // an old pine: crooked limbs off the upper two-thirds, needle tufts along them; a few dead stubs below
+    const n = 7 + Math.floor(rnd() * 3);
+    for (let k = 0; k < n; k++) { const y = hf + (Ht * .9 - hf) * (k / (n - 1)) + (rnd() - .5) * .6, a = k * 2.39996 + rnd() * .7, out = 1 - k / n * .45, rr = tr * (1 - .7 * y / Ht) * .75;
+      limb(V(0, y, 0), V(Math.cos(a) * out, .2 + rnd() * .3, Math.sin(a) * out).normalize(), (2.6 + rnd() * 2) * out + .6, Math.max(.06, rr), 0); }
+    puffs.push({ c: V(0, Ht * .93 + .4, 0), R: 2.4 + rnd() * .8 });
+    for (let k = 0, ns = 3 + Math.floor(rnd() * 3); k < ns; k++) {                                         // dead branch stubs on the lower trunk
+      const y = 2.2 + rnd() * (hf - 2.6), a = rnd() * 6.283, L = .4 + rnd() * .9, p0 = V(0, y, 0), p1 = V(Math.cos(a) * L, y - .1 + rnd() * .3, Math.sin(a) * L);
+      parts.push(shadeGeo(tubeGeo([p0, p1], [.06, .025], 3), dead));
+    }
+    if (rnd() < .7) { const y = hf * (.55 + rnd() * .25), a = rnd() * 6.283; limb(V(0, y, 0), V(Math.cos(a), .25, Math.sin(a)).normalize(), 1.8 + rnd() * 1.2, tr * .3, 1, true); }   // one live low branch
   } else {
     const nL = 3 + Math.floor(rnd() * 2), a0 = rnd() * 6.283, len = (Ht - hf) * (.4 + rnd() * .1);
-    puffs.push({ c: V((rnd() - .5) * .8, hf + (Ht - hf) * .78, (rnd() - .5) * .8), R: (3 + rnd()) * Math.sqrt(tall), d: V(0, 1, 0) });   // fill the middle of the crown
+    puffs.push({ c: V((rnd() - .5) * .8, hf + (Ht - hf) * .78, (rnd() - .5) * .8), R: (3 + rnd()) * Math.sqrt(tall) });     // fill the middle of the crown
+    puffs.push({ c: V((rnd() - .5) * .6, hf + (Ht - hf) * .38, (rnd() - .5) * .6), R: (2.3 + rnd() * .6) * Math.sqrt(tall), small: true });   // and the lower middle, just above the fork
     for (let k = 0; k < nL; k++) { const a = a0 + k / nL * 6.283 + (rnd() - .5) * .6, sp = .6 + rnd() * .4;
       limb(V(0, hf, 0), V(Math.cos(a) * sp, .75 + rnd() * .3, Math.sin(a) * sp).normalize(), len * (.8 + rnd() * .35), tr * (.62 + rnd() * .1), 0); }
+    if (tall === 1) for (let k = 0, ns = Math.floor(rnd() * 3); k < ns; k++) {                             // a low leafy side branch or two below the fork (trees in the open keep these)
+      const y = hf * (.5 + rnd() * .4), a = rnd() * 6.283;
+      limb(V(0, y, 0), V(Math.cos(a), .35 + rnd() * .25, Math.sin(a)).normalize(), 1.8 + rnd() * 1.4, tr * .32, 1, true); }
   }
   let top = trunkTop;
   for (const pf of puffs) {
     const { c, R } = pf, tint = cardTint(); top = Math.max(top, c.y + R * .8);
     const sh = (x, y, z) => { const d = Math.min(1, Math.hypot(x - c.x, (y - c.y) * 1.4, z - c.z) / (R * 1.6)), v = lerp(.5, 1.06, Math.pow(d, .7)) * lerp(.86, 1.08, Math.min(1, Math.max(0, (y - hf) / (Ht - hf + 1)))); return [v * tint[0], v * tint[1], v * tint[2]]; };
     if (bare) {                                            // winter: twigs where the leaves would be
+      if (pf.small) continue;
       for (let k = 0; k < 5; k++) { const a = rnd() * 6.283, e = c.clone().add(V(Math.cos(a) * R * .7, R * (.1 + rnd() * .5), Math.sin(a) * R * .7));
         parts.push(shadeGeo(tubeGeo([c, e], [.05, .015], 3), bark)); }
       continue;
     }
-    const n = pine ? 11 + Math.floor(rnd() * 3) : 11 + Math.floor(rnd() * 3);
+    const n = pf.small ? (pine ? 5 + Math.floor(rnd() * 2) : 6 + Math.floor(rnd() * 2)) : (pine ? 10 + Math.floor(rnd() * 3) : 10 + Math.floor(rnd() * 3));
     for (let k = 0; k < n; k++) {
       const L = R * (.95 + rnd() * .5), ang = k * 2.39996 + rnd() * .5, y = c.y + (rnd() - .4) * R * (pine ? .3 : .75);
       const dr = pine ? (rnd() - .5) * .35 : -.7 + rnd() * 1.1, roll = (rnd() - .5) * .8, ox = c.x - Math.cos(ang) * L * .25, oz = c.z + Math.sin(ang) * L * .25;
       const g = card(L, L * .8, y, ang, dr, roll).translate(ox, 0, oz); parts.push(shadeGeo(g, sh));
-      if (!pine && rnd() < .4) parts.push(shadeGeo(card(L * .85, L * .6, y, ang, dr, roll + Math.PI / 2).translate(ox, 0, oz), sh));
+      if (!pine && !pf.small && rnd() < .35) parts.push(shadeGeo(card(L * .85, L * .6, y, ang, dr, roll + Math.PI / 2).translate(ox, 0, oz), sh));
       if (k % 2 === 0) low.push(shadeGeo(card(L * 1.05, L * .9, y, ang, dr, roll).translate(ox, 0, oz), sh));
     }
   }
@@ -1313,6 +1327,7 @@ function fluffyVariant(kind, opt) {                       // a spreading tree: a
     hold: holdShape(parts, tr, trunkTop, 0, { fl, fh, la, segs }) };
 }
 function treeVariant(kind, pruned, odd, opt) {
+  if (kind === "aspen") return treeVariant("broad", pruned, odd, Object.assign({ aspen: true }, opt));
   if (opt && opt.fluffy) return fluffyVariant(kind, opt);
   if (kind === "pine") return treeVariant("fir", pruned, odd, opt);   // a young pine is a cone, like a fir
   if (kind === "cactus") return cactusVariant(odd);
@@ -1359,12 +1374,14 @@ function treeVariant(kind, pruned, odd, opt) {
     if (pruned) deadStubs(parts, hb, false);
   } else if (kind === "broad" || kind === "bare") {
     Ht = 7.5 + rnd() * 6; tr = .26 + rnd() * .16; if (opt && opt.thick) tr *= opt.thick;
+    if (opt && opt.aspen) { Ht = 11 + rnd() * 5; tr = .17 + rnd() * .05; }                              // aspen: tall and slender
     if (opt && opt.tall) { Ht *= opt.tall * (.85 + rnd() * .3); tr *= 1 + (opt.tall - 1) * .7; }        // rainforest: tall, thick trunks
     const shape = rnd(); Lmax = lerp(2.6, 5, shape) * (.85 + rnd() * .3);           // tall and narrow ... wide and round
     lean = rnd() < .3 ? (rnd() - .5) * 1.4 : 0; if (opt && opt.noLean) lean = 0;
+    if (opt && opt.aspen) { Lmax = 2.3 + rnd() * 1; lean = (rnd() - .5) * .5; }                            // short branches, a narrow crown
     const lx = y => { const t = Math.max(0, y) / Ht; return t * t * lean; };
-    hb = opt && opt.tall ? Ht * (.55 + rnd() * .15) : pruned ? Ht * (.42 + rnd() * .15) : .8 + rnd() * 1.4; const umb = !!(opt && opt.tall); if (umb) Lmax = 4.2 + rnd() * 2.8;
-    const n = Math.round((pruned ? 12 : 18) + rnd() * 16 + (opt && opt.tall ? 12 : 0)), gaps = gapsOf();
+    hb = opt && opt.aspen ? Ht * (pruned ? .42 : .3) + rnd() * Ht * .1 : opt && opt.tall ? Ht * (.55 + rnd() * .15) : pruned ? Ht * (.42 + rnd() * .15) : .8 + rnd() * 1.4; const umb = !!(opt && opt.tall); if (umb) Lmax = 4.2 + rnd() * 2.8;
+    const n = Math.round((pruned ? 12 : 18) + rnd() * 16 + (opt && opt.tall ? 12 : 0) + (opt && opt.aspen ? 20 : 0)), gaps = gapsOf();
     const lopA = rnd() * 6.28, lop = rnd() < .5 ? .2 + rnd() * .35 : 0;                 // lopsided toward the light
     const sideA = rnd() * 6.28, sideW = rnd() < .4 ? .5 + rnd() * .8 : 0, s0 = rnd() * .5, s1 = s0 + .25 + rnd() * .4;
     const topT = oddType === "broken" ? .68 + rnd() * .1 : 1, flat = oddType === "flat"; ls = parts.length;
@@ -1378,12 +1395,13 @@ function treeVariant(kind, pruned, odd, opt) {
       if (flat && t > .7) L = Math.max(L, Lmax * .6);
       const dr = (umb ? lerp(.05, -.25, t) : flat ? lerp(-.05, -.15, t) : lerp(-.05, -.6, t)) + (rnd() - .5) * .3, roll = (rnd() - .5) * .8;
       const tint = cardTint(), sh = g => shadeCard(g.translate(lx(y), 0, 0), Lmax, hb, Ht, lx, tint, false);
+      if (opt && opt.leafless) { const ca = Math.cos(ang), sa = -Math.sin(ang); parts.push(shadeGeo(tubeGeo([new THREE.Vector3(lx(y), y, 0), new THREE.Vector3(lx(y) + ca * L * .6, y + L * .35, sa * L * .6)], [.035, .01], 3), () => [.92, .92, .9])); continue; }   // a winter aspen: bare twigs
       parts.push(sh(card(L, L * .8, y, ang, dr, roll)));
       if (rnd() < .8) parts.push(sh(card(L * .9, L * .6, y, ang, dr, roll + Math.PI / 2)));
       low.push(sh(k % 2 ? card(L * .94, L * .72, y, ang, dr, roll + Math.PI / 2) : card(L * 1.03, L * .9, y, ang, dr, roll)));
     }
     le = parts.length;
-    if (oddType !== "broken") for (const a of [0, Math.PI]) parts.push(shadeGeo(card(2.4, 2, Ht, a, -1.2, 0).translate(lx(Ht), 0, 0), () => [1.02, 1.05, .97]));
+    if (oddType !== "broken" && !(opt && opt.leafless)) for (const a of [0, Math.PI]) parts.push(shadeGeo(card(2.4, 2, Ht, a, -1.2, 0).translate(lx(Ht), 0, 0), () => [1.02, 1.05, .97]));
     else parts.push(shadeGeo(tubeGeo([new THREE.Vector3(lx(Ht * topT), Ht * topT - .6, 0), new THREE.Vector3(lx(Ht * topT) + .15, Ht * topT + .9, .1)], [tr * .4, tr * .3], 4), () => DEADC));
     if (pruned) deadStubs(parts, hb, true);
     if (opt && opt.moss) for (let k = 0, nv = 8 + Math.floor(rnd() * 8); k < nv; k++) {   // Spanish moss: grey-green curtains hanging straight down from the limbs
@@ -1415,7 +1433,7 @@ function treeVariant(kind, pruned, odd, opt) {
   }
   const G = opt && opt.giant ? opt.giant(Ht) : null, segs = [];
   const bt = opt && opt.buttress, fl = G ? G.flare : bt ? .7 + rnd() * .5 : .3 + rnd() * .35, fh = G ? G.fh : bt ? 1.6 + rnd() * 1.2 : .9 + rnd() * .8, nl = G ? G.lobes : bt ? 5 : 4, la = G ? G.lobA : bt ? .4 + rnd() * .2 : .25 + rnd() * .2;   // rainforest trees: big buttress roots
-  const bamp = G ? G.wob : Ht * (kind === "fir" ? .004 + rnd() * .008 : .01 + rnd() * .02), f1 = .6 + rnd() * .8, f2 = .6 + rnd() * .8, p1 = rnd() * 6.28, p2 = rnd() * 6.28, lv = G ? G.lean : [0, 0];
+  const bamp = G ? G.wob : Ht * (opt && opt.aspen ? .022 + rnd() * .014 : kind === "fir" ? .004 + rnd() * .008 : .01 + rnd() * .02), f1 = .6 + rnd() * .8, f2 = .6 + rnd() * .8, p1 = rnd() * 6.28, p2 = rnd() * 6.28, lv = G ? G.lean : [0, 0];
   const bend = y => { const t = Math.min(1.3, Math.max(0, y / Ht)); return [bamp * t * Math.sin(t * Math.PI * f1 + p1) + lv[0] * t * t, bamp * t * Math.cos(t * Math.PI * f2 + p2) * .7 + lv[1] * t * t]; };   // trunks are never quite straight
   const tint = G ? G.tint : [1, 1, 1], tc = (k) => () => [k * tint[0], k * tint[1], k * tint[2]];
   if (G && G.split && G.split.y < Ht * .98 - 2) {          // the giant splits into a second leader above the porch (when there's room)
@@ -2782,7 +2800,7 @@ function generate() {
     }
   }
   const H0 = baked.H; H = H0;
-  const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand);
+  const varN = makeNoise(rand), densN = makeNoise(rand), spN = makeNoise(rand), aspN = makeNoise(mulberry32(seed * 61 + 3));
 
   // Height stats -> water level, snow line, tree line
   const hs = [];
@@ -2868,6 +2886,7 @@ function generate() {
     broad: { cols: biome === "swamp" ? [["#4e6e30", "#5c7a38", "#42602a", "#688442"], ["#56743a", "#4a662e", "#628040", "#3e5a28"]] : biome === "badlands" ? JUNIPER : biome === "rainforest" ? [["#1f6a22", "#2a7a26", "#185a1c", "#33842c"], ["#25722a", "#1a5e20", "#2e7c2a", "#3a8a30"]] : season === "fall" ? [["#e0782a", "#c9452a", "#d9a12a", "#a83a1f"], ["#e8c23a", "#d9a12a", "#b8642a", "#9aa03a"]] : [leafCols, leafCols], bark: "#6b5442" },
     bare:  { cols: [[], []], bark: "#5e4c3f" },
     palm:  { cols: [LEAVES.tropical, LEAVES.tropical], bark: "#8a6f4a" },
+    aspen: { cols: (c => [c, c])(season === "fall" ? ["#f0c828", "#e8b420", "#f6d850", "#dca818"] : season === "spring" ? ["#a8d860", "#b8e070", "#98c850", "#c4e684"] : ["#6aa63a", "#78b042", "#5e9a34", "#88ba4c"]), bark: "#d8d6c8" },
     pine:  { cols: [["#3e6a34", "#4a7a3a", "#365e2e", "#56823e"], ["#44703a", "#3a6430", "#50783c", "#335a2c"]], bark: "#7a4632" }
   };
   if (DRY(biome)) Object.assign(kinds, {
@@ -2879,8 +2898,8 @@ function generate() {
   for (const k in kinds) {
     kinds[k].mats = kinds[k].cols.map(cols => windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })));   // in a headset: soft, smooth leaf edges
     const v = [], pool = { full: [], fullOdd: [], pruned: [], prunedOdd: [] };
-    const add = (pr, od, key) => { pool[key].push(v.length); v.push(treeVariant(k, pr, od, biome === "rainforest" && k === "broad" ? { tall: 1.55, vines: true, buttress: true } : biome === "swamp" && k === "broad" ? { tall: 1.25, moss: true, buttress: true } : undefined)); };
-    const nv = k === "pine" ? 2 : (FLUFFY[biome] || {})[k] ? Math.max(2, NV - 2) : NV;                        // the pine shares the fir's look when young: fewer shapes, fewer draw calls
+    const add = (pr, od, key) => { pool[key].push(v.length); v.push(treeVariant(k, pr, od, k === "aspen" ? { leafless: season === "winter" } : biome === "rainforest" && k === "broad" ? { tall: 1.55, vines: true, buttress: true } : biome === "swamp" && k === "broad" ? { tall: 1.25, moss: true, buttress: true } : undefined)); };
+    const nv = k === "pine" || k === "aspen" ? 2 : (FLUFFY[biome] || {})[k] ? Math.max(2, NV - 2) : NV;                        // the pine shares the fir's look when young: fewer shapes, fewer draw calls
     for (let i = 0; i < nv; i++) add(false, false, "full");
     add(false, true, "fullOdd");
     if (k !== "palm") { for (let i = 0; i < nv; i++) add(true, false, "pruned"); add(true, true, "prunedOdd"); }
@@ -2892,9 +2911,9 @@ function generate() {
     recs[k] = v.map(() => []);
     bushRecs[k] = kinds[k].bush.map(() => []);
   }
-  const pickVar = (k, pruned, noOdd, open) => {     // about 10% of trees get an odd top; open = 0 (crowded) .. 1 (a loner): how likely a fluffy one is
+  const pickVar = (k, pruned, noOdd, open, high) => {      // high: 1 in the lowlands .. 0 near the snow line     // about 10% of trees get an odd top; open = 0 (crowded) .. 1 (a loner): how likely a fluffy one is
     const p = kinds[k].pool;
-    if (open !== undefined && p.fluffy.length && rand() < p.fluffyP * lerp(.35, 2, open)) return p.fluffy[Math.floor(rand() * p.fluffy.length)];
+    if (open !== undefined && p.fluffy.length && rand() < p.fluffyP * lerp(.35, 2, open) * (high === undefined ? 1 : high)) return p.fluffy[Math.floor(rand() * p.fluffy.length)];
     const odd = !noOdd && rand() < .1, list = pruned ? (odd ? p.prunedOdd : p.pruned) : (odd ? p.fullOdd : p.full);
     return list[Math.floor(rand() * list.length)];
   };
@@ -2925,6 +2944,7 @@ function generate() {
     else if (biome === "boreal") { kind = rand() < cl(.84 + sp * .3) ? "fir" : "broad"; s = .7 + rand() * .6; if (kind === "fir" && rand() < .08) kind = "pine"; }
     else { kind = "fir"; s = .3 + rand() * .3; }
     if (rand() < .05 && biome !== "tundra" && !DRY(biome) && biome !== "rainforest" && biome !== "swamp") kind = kind === "fir" ? "broad" : kind === "palm" ? "broad" : "fir";
+    if ((biome === "temperate" || biome === "boreal") && aspN(x * .011, z * .011) > .5 - rel * .3 && h < snowLine + span * .05) kind = "aspen";   // aspen groves, more of them up the slopes
     if (kind === "broad" && season === "winter") kind = "bare";
     s *= (.78 + rand() * .5) * (rand() < .06 ? 1.35 : 1);            // wider spread of sizes, the odd giant
     s *= 1 - Math.min(.4, Math.max(0, rel - .5) * .8);
@@ -2969,7 +2989,7 @@ function generate() {
         const l = cells.get(key(ci + i, cj + j)); if (l) for (const o of l) if (o !== t && (o.x - t.x) ** 2 + (o.z - t.z) ** 2 < 36) n++;
       }
       let p = smooth(1.5, 4.5, n); if (H0(t.x, t.z) < water + 2.5) p *= .3; if (t.peak) p = 0;
-      t.vi = pickVar(t.kind, rand() < p, false, t.peak ? undefined : biome === "rainforest" ? (t.s > 1.15 ? 1 : 0) : 1 - p); setTreeSize(t);   // rainforest: only the emergent giants spread out on top
+      t.vi = pickVar(t.kind, rand() < p, false, t.peak ? undefined : biome === "rainforest" ? (t.s > 1.15 ? 1 : 0) : 1 - p, smooth(snowLine - span * .12, snowLine - span * .6, H0(t.x, t.z))); setTreeSize(t);   // rainforest: only the emergent giants spread out on top
     }
   }
 
@@ -2983,7 +3003,7 @@ function generate() {
     if (!cand.length) cand = allTrees.filter(t => !t.peak);
     if (cand.length) {
       giant = cand[Math.floor(rand() * cand.length)];
-      if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad"; if (giant.kind === "pine") giant.kind = "fir";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
+      if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad"; if (giant.kind === "pine") giant.kind = "fir"; if (giant.kind === "aspen") giant.kind = "broad";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
       const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
       let maxT = 0; for (const t of allTrees) if (t !== giant) maxT = Math.max(maxT, topOf(kinds[t.kind].vars[t.vi]) * t.s * t.sy);
       const pH = maxT + 2.5, GT = Math.max(22, pH * 1.65, maxT + 16); /* the porch about two thirds of the way up */                     // the giant towers over the rest; the porch sits just above every other treetop
