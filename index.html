@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.64</title>
+<title>JUST TREES 1.65</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.64";              // Just Trees 1.64
+const VERSION = "1.65";              // Just Trees 1.65
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2487,11 +2487,12 @@ function reveal() {
 let mapDirty = true;
 function drawMap(canvas) {
   if (!mapBase) return;
+  if (canvas.id === "miniMap" && vr.on && vrMapCv) drawMap(vrMapCv);
   const ctx = canvas.getContext("2d"), W = canvas.width, Hh = canvas.height;
   ctx.clearRect(0, 0, W, Hh); ctx.imageSmoothingEnabled = true;
   ctx.drawImage(mapBase, 0, 0, W, Hh);
-  if (canvas.id === "miniMap") mapDirty = true;
-  const fogA = vr.on && canvas.id === "miniMap" ? .5 : .82;              // in a headset the unexplored part is see-through
+  if (canvas.id === "miniMap" || canvas.id === "vrMap") mapDirty = true;
+  const fogA = vr.on && (canvas.id === "miniMap" || canvas.id === "vrMap") ? .5 : .82;              // in a headset the unexplored part is see-through
   ctx.fillStyle = `rgba(10,14,12,${fogA})`;
   const cw = W / 64, ch = Hh / 64;
   if (false) {
@@ -2508,7 +2509,20 @@ function drawMap(canvas) {
   ctx.fillStyle = "#F2C14E"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(0, -sz); ctx.lineTo(sz * .65, sz * .7); ctx.lineTo(0, sz * .35); ctx.lineTo(-sz * .65, sz * .7); ctx.closePath(); ctx.fill(); ctx.stroke();
   ctx.restore();
+  if (canvas.id === "vrMap" && vr.mark && vr.mark.visible) {   // your mark (tap B): a gold pin
+    const mx = (vr.mark.position.x + HALF) / S * W, mz = (vr.mark.position.z + HALF) / S * Hh, r = Math.max(5, W / 30);
+    ctx.save(); ctx.fillStyle = "#ffd860"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(mx, mz); ctx.lineTo(mx - r * .7, mz - r * 1.4); ctx.arc(mx, mz - r * 1.6, r * .75, Math.PI * .8, Math.PI * .2, false); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(mx, mz - r * 1.6, r * .28, 0, 6.3); ctx.fill(); ctx.restore();
+  }
   ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.max(10, W / 18)}px system-ui`; ctx.textAlign = "center"; ctx.fillText("N", W / 2, Math.max(12, W / 16));
+  if (gameMode === "hunt" && canvas.id === "vrMap") {   // the score, big enough to read in a headset
+    const f = Math.max(12, W / 13), pad = W * .03, line1 = "Score " + hunt.score.toFixed(1), line2 = hunt.kills + (hunt.kills === 1 ? " kill" : " kills") + " · longest " + Math.round(hunt.longest) + " m";
+    ctx.font = `800 ${f}px system-ui`; const w1 = ctx.measureText(line1).width; ctx.font = `700 ${f * .62}px system-ui`; const w2 = ctx.measureText(line2).width, bw = Math.max(w1, w2) + pad * 2;
+    ctx.fillStyle = "rgba(8,12,10,.72)"; ctx.fillRect(pad * .5, Hh - f * 1.95 - pad, bw, f * 1.95 + pad * .5);
+    ctx.textAlign = "left"; ctx.fillStyle = "#ffd65a"; ctx.font = `800 ${f}px system-ui`; ctx.fillText(line1, pad * 1.5, Hh - f * .95 - pad * .6);
+    ctx.fillStyle = "#e8f0dc"; ctx.font = `700 ${f * .62}px system-ui`; ctx.fillText(line2, pad * 1.5, Hh - pad * .8);
+  }
 }
 function toggleMap(on) {
   mapOpen = on; $("bigMap").classList.toggle("hidden", !on);
@@ -4248,7 +4262,9 @@ const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c02
 const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1, vulture: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
 const legendName = () => { const A = beasts.find(a => LEGEND[a.kind]); return A ? (A.kind === "yeti" ? "a Yeti" : "a Bigfoot") : null; };
 const VBAN = { m: null, t: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
-function vrBanner(text, secs) {                            // a big message floating in front of you (VR), fades after a few seconds
+function vrBanner(text, secs, prio = 2) {                  // a big message floating in front of you (VR), fades after a few seconds
+  if (VBAN.t > 0 && (VBAN.prio || 0) > prio) return;        // a pickup message never covers the Bigfoot one
+  VBAN.prio = prio;
   if (!VBAN.m) {
     const cv = document.createElement("canvas"); cv.width = 768; cv.height = 120;
     VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.48, .075), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
@@ -4639,7 +4655,7 @@ function stockTick(dt) {                                    // keep every part o
   // nobody's been shot: walk over a group from the most crowded part of the map, one that's far away and out of sight
   let best = -1, bq = -1; for (const [s0, c] of cnt) if (c > best) { best = c; bq = s0; }
   if (best < 2) return;
-  const cand = beasts.filter(A => STOCKED(A) && A.kind !== "rabbit" && secOf(A.x, A.z) === bq && !A.trek && !(A.fleeT > 0) && hidden(A.x, A.z));
+  const cand = beasts.filter(A => STOCKED(A) && A.kind !== "rabbit" && secOf(A.x, A.z) === bq && !A.trek && !(A.fleeT > 0) && hidden(A.x, A.z) && Math.hypot(A.x - P.x, A.z - P.z) > 420);
   if (!cand.length) return;
   const lead = cand[Math.floor(Math.random() * cand.length)], grpA = beasts.filter(A => A.grp === lead.grp && STOCKED(A));
   for (let k = 0; k < 80; k++) {
@@ -4650,9 +4666,30 @@ function stockTick(dt) {                                    // keep every part o
     return;
   }
 }
+const _lw1 = new THREE.Vector3(), _lw2 = new THREE.Vector3();
+function legendWatch(dt) {                                  // VR: binoculars at full zoom, aimed at Bigfoot / the Yeti, a clear line of sight
+  for (const A of beasts) if (LEGEND[A.kind]) A.noticeCool = Math.max(0, (A.noticeCool || 0) - dt);
+  if (!vr.on || !vr.binos || vr.zoom !== VR_BINO_FOV.length - 1 || state !== "play") return;
+  const fw = _lw1.set(0, 0, -1).applyQuaternion(vr.headQ);
+  for (const A of beasts) {
+    if (!LEGEND[A.kind] || A.dead || A.gone || A.bolting || A.boltIn > 0 || A.noticeT > 0 || A.noticeCool > 0 || !A.root.visible) continue;
+    const to = _lw2.set(A.x, A.y + 1.6 * (A.scale || 1), A.z).sub(vr.head), d = to.length(); if (d > 3100 || d < 5) continue;
+    to.divideScalar(d); if (to.dot(fw) < Math.cos(2.2 * Math.PI / 180)) continue;                 // he's in the middle of your view
+    const h = castShot(vr.head, to, d); if (h && h.p && h.p.distanceTo(vr.head) < d - 4) continue;    // a hill or tree is in the way
+    A.noticeT = 1.4; A.noticeCool = 20;
+  }
+}
+function legendNotice(A, dt) {                              // he's seen you: stand still, turn, look up at you; then move off a bit faster (not a run)
+  A.noticeT -= dt; A.speed = 0; A.want = 0; A.mode = "idle"; A.timer = 2;
+  const want = Math.atan2(vr.head.x - A.x, vr.head.z - A.z); A.yaw += angDiff(want, A.yaw) * Math.min(1, dt * 6);
+  const dh = vr.head.y - (A.y + 2.1 * (A.scale || 1)), up = Math.atan2(dh, Math.hypot(vr.head.x - A.x, vr.head.z - A.z));
+  A.head.rotation.x += (-Math.max(.3, Math.min(.7, up + .3)) - A.head.rotation.x) * Math.min(1, dt * 7); A.head.rotation.y *= .8;
+  A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
+  if (A.noticeT <= 0) { A.noticeT = 0; fleeFrom(A, vr.head.x, vr.head.z, A.walk * 2, 7, 70); }
+}
 function updateAnimals(dt) {
   if (!animalGroup) return;
-  senseTick(dt); appearTick(dt); stockTick(dt);
+  senseTick(dt); appearTick(dt); stockTick(dt); legendWatch(dt);
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -4661,6 +4698,7 @@ function updateAnimals(dt) {
     if (A.boltIn > 0 && (A.boltIn -= dt) <= 0 && !A.dead) legendBolt(A);
     if (A.bolting && !A.dead && ((A.goneT -= dt) <= 0 || Math.hypot(A.x - P.x, A.z - P.z) > 700)) { A.gone = true; A.root.visible = false; continue; }   // gone
     if (A.dead) { deadPose(A, dt); continue; }
+    if (A.noticeT > 0 && !A.bolting) { legendNotice(A, dt); continue; }
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const pd = Math.hypot(A.x - P.x, A.z - P.z);
     const sR = sense.R * (A.wary || 1);                     // the legends notice you from further off
@@ -4808,7 +4846,7 @@ function killAnimal(A, dist) {
   if (!A || A.dead) return;
   A.dead = true; A.deadT = 0; A.vy = 0; bing();
   const d = dist || 0, pts = Math.round(d * (SCORE[A.kind] || .1) * 10) / 10;
-  hunt.score += pts; hunt.kills++; hunt.longest = Math.max(hunt.longest, d); showHuntScore();
+  hunt.score += pts; hunt.kills++; hunt.longest = Math.max(hunt.longest, d); showHuntScore(); if (vr.on) drawMap($("miniMap"));
   const el = $("scorePop"); el.textContent = "+" + pts.toFixed(1) + " · " + BEAST_NAME[A.kind] + " · " + Math.round(d) + " m"; el.style.opacity = 1;
   clearTimeout(popT); popT = setTimeout(() => { el.style.opacity = 0; }, 2400);
 }
@@ -4920,12 +4958,12 @@ function vrBinos() {
   scene.add(g); binos = g; return g;
 }
 // wrist display and the map you raise with the off-hand trigger
-let wrist = null, wristCv = null, vrMap = null, vrMapTex = null, vignette = null;
+let wrist = null, wristCv = null, vrMap = null, vrMapTex = null, vrMapCv = null, vignette = null;
 function vrHudParts() {
   if (wrist) return;
   wristCv = document.createElement("canvas"); wristCv.width = 256; wristCv.height = 128;
   wrist = new THREE.Mesh(new THREE.PlaneGeometry(.13, .065), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(wristCv), transparent: true, fog: false, toneMapped: false })); scene.add(wrist);
-  vrMapTex = new THREE.CanvasTexture($("miniMap"));
+  vrMapCv = document.createElement("canvas"); vrMapCv.width = vrMapCv.height = 512; vrMapCv.id = "vrMap"; vrMapTex = new THREE.CanvasTexture(vrMapCv); drawMap(vrMapCv);
   vrMap = new THREE.Mesh(new THREE.PlaneGeometry(.26, .26), new THREE.MeshBasicMaterial({ map: vrMapTex, fog: false, toneMapped: false, transparent: true })); vrMap.visible = false; scene.add(vrMap);
   vignette = new THREE.Mesh(new THREE.SphereGeometry(.3, 24, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false,
     uniforms: { uFwd: { value: new THREE.Vector3(0, 0, -1) }, uAmt: { value: 0 } },
@@ -4955,7 +4993,7 @@ function placeMark(from, dir) {                           // a tall glowing beam
   const hit = castShot(from, dir, 1500);
   if (!vr.mark) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd860, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     m.frustumCulled = false; scene.add(m); vr.mark = m; }
-  vr.mark.position.set(hit.p.x, hit.p.y + 35, hit.p.z); vr.mark.visible = true; vr.markT = 45; hitTick();
+  vr.mark.position.set(hit.p.x, hit.p.y + 35, hit.p.z); vr.mark.visible = true; vr.markT = 45; hitTick(); drawMap($("miniMap"));
 }
 // one frame of VR: where your head and hands are, what the sticks and buttons do
 function vrTick(dt) {
@@ -5102,12 +5140,17 @@ function vrAfterMove(dt) {                                // carry the play spac
   vrHudParts();
   const off = vr.off, main = vr.main;
   if (off) {
-    wrist.visible = true; wrist.position.copy(off.pos).add(_v1.set(0, .035, .06).applyQuaternion(off.q)); wrist.quaternion.copy(off.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1));
+    if (gameMode === "hunt") {                              // Hunting: the score lives on the map, messages float in front of you
+      wrist.visible = false;
+      if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), 1); }
+      if (vr.lootT <= 0) vr.banWas = null;
+    } else wrist.visible = true;
+    wrist.position.copy(off.pos).add(_v1.set(0, .035, .06).applyQuaternion(off.q)); wrist.quaternion.copy(off.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1));
     if ((vr.wristT -= dt) <= 0) { vr.wristT = .25; drawWrist(); }
     const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
     if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
   } else { wrist.visible = false; vrMap.visible = false; }
-  if (vr.mark && (vr.markT -= dt) <= 0) vr.mark.visible = false;
+  if (vr.mark && vr.mark.visible && (vr.markT -= dt) <= 0) { vr.mark.visible = false; drawMap($("miniMap")); }
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
   vrAvatar(dt);
   vrHands();

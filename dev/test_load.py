@@ -6,7 +6,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-gl=swiftshader","--enable-webgl","--ignore-gpu-blocklist"])
         for mode in ["hike", "hunt"]:
-            ctx = await b.new_context(viewport={"width":640,"height":360}); pg = await ctx.new_page(); errs = []
+            ctx = await b.new_context(viewport={"width":640,"height":360}); pg = await ctx.new_page(); pg.set_default_timeout(150000); errs = []   # a busy machine (other tests running) can stall the page for a while
             pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("console", lambda m: errs.append(m.text[:200]) if m.type=="error" and "GPU stall" not in m.text else None)
             await pg.goto(TARGET); await pg.wait_for_timeout(800)
             for _ in range(3): await pg.evaluate("document.getElementById('intro').click()"); await pg.wait_for_timeout(1700)
@@ -16,6 +16,6 @@ async def main():
                 await pg.wait_for_timeout(1000)
                 if await pg.evaluate("document.getElementById('loading').classList.contains('hidden')"): break
             await pg.keyboard.press("KeyX"); await pg.wait_for_timeout(2500)
-            print(mode, await pg.inner_text("#ver"), "| errors:", errs or "none"); await ctx.close()
+            print(mode, await pg.evaluate("document.getElementById('ver').textContent"), "| errors:", errs or "none"); await ctx.close()
         await b.close()
 asyncio.run(main())
