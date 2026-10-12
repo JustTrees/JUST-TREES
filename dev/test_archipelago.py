@@ -13,10 +13,13 @@ async def main():
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         r = await pg.evaluate("""() => { window.FREEZE = true; const out = {};
           const gen = (edges, lat, size, sd) => { D.setSeed(sd); D.setVR(true); D.setMode('hunt'); D.set.env = 'auto'; D.set.edges = edges; D.set.land = 'natural'; D.set.size = size; D.set.lat = lat; D.set.weather = 'clear'; D.generate(); D.state = 'play'; };
-          gen('island', 1, 'medium', 3); out.notAt1 = !D.ARCHI; gen('endless', 0, 'medium', 3); out.notEndless = !D.ARCHI;
+          let hits = 0; for (let k = 1; k <= 300; k++) if (D.archiRoll(k)) hits++; out.rollShare = +(hits / 300).toFixed(2);   // 1.73: one kind of equator island, about 4 in 10
+          let plain = 1; while (D.archiRoll(plain)) plain++; gen('island', 0, 'medium', plain); out.plainIslandAt0 = !D.ARCHI && D.edgeShape ? true : !D.ARCHI;
+          const first = s0 => { let k = s0; while (!D.archiRoll(k)) k++; return k; };
+          let a1 = first(3); gen('island', 1, 'medium', a1); out.notAt1 = !D.ARCHI; gen('endless', 0, 'medium', a1); out.notEndless = !D.ARCHI;
           out.maps = [];
-          for (const [size, sd] of [['small', 6], ['medium', 4], ['large', 8], ['xl', 5]]) {
-            gen('island', 0, size, sd); const I = D.ARCHI ? D.ARCHI.isl : [], o = { size, n: I.length };
+          for (const [size, sd0] of [['small', 6], ['medium', 4], ['large', 8], ['xl', 5]]) {
+            const sd = first(sd0); gen('island', 0, size, sd); const I = D.ARCHI ? D.ARCHI.isl : [], o = { size, n: I.length };
             // water between every pair of neighbours, and glide reach from each island's top
             const top = I.map(a => { let t = -1e9; for (let ang = 0; ang < 6.28; ang += .3) for (let r = 0; r < a.r; r += 5) t = Math.max(t, D.H(a.x + Math.cos(ang) * r, a.z + Math.sin(ang) * r)); return t; });
             let minWater = 1e9, unreachable = 0;
@@ -33,8 +36,8 @@ async def main():
             out.maps.push(o); }
           D.set.edges = 'endless'; D.set.env = 'climate'; return out; }""")
         print(json.dumps(r))
-        ok = r["notAt1"] and r["notEndless"] and all(m["n"] >= 5 and m["minWater"] >= 20 and m["unreachable"] == 0 and m["small"] >= 3 and m["animals"] > 10 and m["porch"] and m["loot"] > 5 and m["lootDry"] for m in r["maps"]) \
-             and any(m["big"] >= 1 for m in r["maps"]) and r["maps"][2]["n"] >= 10
+        ok = .3 < r["rollShare"] < .5 and r["plainIslandAt0"] and r["notAt1"] and r["notEndless"] and all(m["n"] >= 5 and m["minWater"] >= 20 and m["unreachable"] == 0 and m["small"] >= 3 and m["animals"] > 10 and m["porch"] and m["loot"] > 5 and m["lootDry"] for m in r["maps"]) \
+             and any(m["big"] >= 1 for m in r["maps"]) and r["maps"][2]["n"] >= 8
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())

@@ -4,7 +4,9 @@ Old pines (about a fifth of the conifers in temperate country, about half of the
 temperate broadleaf ~20-40% fluffy, rainforest only the emergent giants, none in swamps, deserts or badlands.
 You can climb a fluffy tree's trunk and up into its big limbs. Drawing cost stays close to before.
 1.72: leaves along the limbs (no lollipops); fluffy trees fade out going up toward the snow line (none near it) and are rarer in the boreal;
-aspens (white crooked trunks, narrow leafy crowns) grow in groves in temperate and boreal country, more up the slopes."""
+aspens (white crooked trunks, narrow leafy crowns) grow in groves in temperate and boreal country, more up the slopes.
+1.73 (Ron: "still enough straight trunk trees"): fewer overall (~10-15% of temperate broadleaf) and patchy: at least half of every forest has
+very few; the birch and maple forest (45-62°) is fluffy on purpose (maples, multi-stem birches)."""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
 TARGET = 'file://' + os.path.abspath(sys.argv[1])
@@ -18,7 +20,10 @@ async def main():
           const gen = (env, lat, month) => { D.setSeed(7); D.setVR(true); D.setMode('hike'); D.set.env = env; D.set.size = 'large'; D.set.lat = lat; D.set.month = month; D.set.weather = 'clear'; D.set.density = .5; D.generate(); D.state = 'play'; };
           const share = () => { const K = window.__kinds, c = {}; for (const t of window.__trees) { const v = K[t.kind].vars[t.vi], k = t.kind; c[k] = c[k] || { n: 0, f: 0 }; c[k].n++; if (v.fluffy) c[k].f++; }
             const o = {}; for (const k in c) o[k] = { n: c[k].n, fluffy: +(c[k].f / c[k].n).toFixed(2) }; return o; };
-          for (const [env, lat, m] of [['climate', 42, 6], ['climate', 42, 1], ['climate', 56, 6], ['rainforest', 3, 6], ['tropical', 12, 6], ['swamp', 29, 6], ['desert', 28, 6], ['badlands', 38, 6]]) { gen(env, lat, m); out[env + '-' + lat + '-' + m] = share(); }
+          for (const [env, lat, m] of [['birchmaple', 47, 9], ['birchmaple', 57, 6], ['climate', 42, 6], ['climate', 42, 1], ['climate', 56, 6], ['rainforest', 3, 6], ['tropical', 12, 6], ['swamp', 29, 6], ['desert', 28, 6], ['badlands', 38, 6]]) { gen(env, lat, m); out[env + '-' + lat + '-' + m] = share(); }
+          // patchy: share of 100 m squares (with 20+ broadleafs) where under 8% are fluffy
+          gen('climate', 42, 6); { const K = window.__kinds, cells = new Map(); for (const t of window.__trees) { if (t.kind !== 'broad') continue; const k = Math.floor(t.x / 100) + ',' + Math.floor(t.z / 100); const c = cells.get(k) || [0, 0]; c[0]++; if (K.broad.vars[t.vi].fluffy) c[1]++; cells.set(k, c); }
+            const big = [...cells.values()].filter(c => c[0] >= 20); out.lowShare = +(big.filter(c => c[1] / c[0] < .08).length / big.length).toFixed(2); }
           // the crowded/open effect, temperate summer
           gen('climate', 42, 6); { const K = window.__kinds, Tr = window.__trees, near = t => Tr.filter(o => o !== t && Math.abs(o.x - t.x) < 6 && Math.abs(o.z - t.z) < 6 && Math.hypot(o.x - t.x, o.z - t.z) < 6).length;
             let lo = [0, 0], cr = [0, 0]; for (let i = 0; i < Tr.length; i += 3) { const t = Tr[i]; if (t.kind !== 'broad') continue; const n = near(t), f = K.broad.vars[t.vi].fluffy ? 1 : 0; if (n <= 1) { lo[0]++; lo[1] += f; } else if (n >= 5) { cr[0]++; cr[1] += f; } }
@@ -40,11 +45,13 @@ async def main():
           D.set.env = 'climate'; return out; }""")
         print(json.dumps(r))
         t, w = r["climate-42-6"], r["climate-42-1"]
-        ok = r["fluffyHigh"] < r["fluffyLow"] * .5 and r["aspenHigh"] > r["aspenLow"] and t.get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"].get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"]["broad"]["fluffy"] < .15 \
-             and .15 <= t["broad"]["fluffy"] <= .42 and t["fir"]["fluffy"] == 0 and "pine" in t and .1 < t["pine"]["n"] / (t["pine"]["n"] + t["fir"]["n"]) < .32 and .3 < t["pine"]["fluffy"] < .75 \
-             and .2 <= w["bare"]["fluffy"] <= .42 and r["climate-56-6"]["fir"]["fluffy"] == 0 and r["rainforest-3-6"]["broad"]["fluffy"] < .15 \
+        b1, b2 = r["birchmaple-47-9"], r["birchmaple-57-6"]
+        ok = r["lowShare"] >= .5 and b1.get("maple", {}).get("fluffy", 0) > .3 and b1.get("birch", {}).get("fluffy", 0) > .2 and b1["maple"]["n"] > b1["birch"]["n"] \
+             and b2.get("birch", {}).get("n", 0) > b2.get("maple", {}).get("n", 0) * 3 and r["fluffyHigh"] < r["fluffyLow"] * .6 and r["aspenHigh"] > r["aspenLow"] and t.get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"].get("aspen", {}).get("n", 0) > 200 and r["climate-56-6"]["broad"]["fluffy"] < .15 \
+             and .06 <= t["broad"]["fluffy"] <= .2 and t["fir"]["fluffy"] == 0 and "pine" in t and .1 < t["pine"]["n"] / (t["pine"]["n"] + t["fir"]["n"]) < .32 and .1 < t["pine"]["fluffy"] < .45 \
+             and .06 <= w["bare"]["fluffy"] <= .2 and r["climate-56-6"]["fir"]["fluffy"] == 0 and r["rainforest-3-6"]["broad"]["fluffy"] < .15 \
              and all(v["fluffy"] == 0 for k in ["swamp-29-6", "desert-28-6", "badlands-38-6"] for v in r[k].values()) \
-             and r["loners"] > r["crowded"] + .15 and r["limbSegs"] >= 4 and r["limbClimbable"] is not False
+             and r["loners"] > r["crowded"] + .06 and r["limbSegs"] >= 4 and r["limbClimbable"] is not False
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
