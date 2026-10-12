@@ -22,7 +22,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ## 2. How we work
 
-- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.68**.
+- **Each prompt: build, test, push live, send a backup file** (`just-trees-1-xx.html`), reply briefly. Next version is **1.69**.
 - **Exceptions:** if he says "notes" / "just notes", or asks a question, only answer or write notes in this file — no build. Notes can wait and go up with the next build.
 - **Keep PC and phone unchanged** unless he says otherwise. Most work is **VR only**; give visual changes a VR-only branch.
 - **Never upload the debug build:** `index.html` must have no `window.D` / `window.FREEZE` (`dev/check_code.py` checks).
@@ -39,14 +39,14 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
-## 4. What exists now (v1.67)
+## 4. What exists now (v1.68)
 
 ### World (all modes)
 - **Settings:** latitude (sets the climate; each map then picks one of the environments that occur there, see below), terrain roughness, time of day, month (season), tree density, map size (XS 250 m → S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km), edges (Island or Endless), landscape (Natural or Dramatic), weather (clear, rain, fog, snow/blizzard, storm; Hiking never gets fog).
 - **Environments by latitude (1.64, Ron: "when certain latitudes have varied environments those are all options the map may or may not choose"):** `climateOf(lat)` = the old latitude bands (tropical <23°, temperate <50, boreal <62, tundra <72, polar). `envOptions(lat)` lists what really occurs there with weights: under 10° rainforest .65 / palm jungle .35; 10–15° palm jungle .65 / rainforest .35; 15–23° tropical .55 / desert .45; 23–30° desert .5 / climate .5; 30–35° desert .4 / badlands .2 / climate .4; 35–45° climate .65 / badlands .2 / desert .15 (cold desert); else just the climate. `rollEnv()` picks one per map from the map number (`MAPENV`), so a map always comes back the same; `biomeOf(lat)` returns this map's pick. `set.env` = "auto" (default, the roll), "climate" (old behaviour; the debug build defaults to this so old tests stay stable), or a name to force one. The settings line under latitude shows the options ("Desert or forest: each map picks"). **Every new environment must be added to every per-biome table** (`GRASS`, `WATERC`, `SKYTOP`, water fraction ×3, snow/tree lines, `dens`, rock tone/moss, logs, bushes, clouds, haze, weather, flocks, `NATIVE`) and to `envOptions`.
 - **Desert (1.64):** warm sand ground (two tones), red rock on slopes (`rockC`) and reddish rocks (`tone`), extra outcrops, dunes on low flat ground (added to the baked heightfield after erosion: long gentle slopes, steep lee faces, ~60 m apart, 2.5–6 m high), little water (5% fraction), mostly clear weather (6% storm, 6% rain), warm haze. Plants: `cactusVariant` (saguaro: ribbed column, 0–4 arms that turn up; small ones have no arms) and `joshuaVariant` (shaggy trunk that forks, spiky tufts at the tips), scrub bushes (`kinds.scrub`). The giant tree in a desert is an old cottonwood (broadleaf). Animals: coyote, oryx, camel (`hump2` in `buildQuad`: a hump mid-back), roadrunner (`buildRoadrunner`), jackrabbit, vultures (`FLY`), birds, Bigfoot on large maps ("There's a Bigfoot out here"). Test: dev/test_desert.py (+ zoo and hitbox include the desert).
 - **Rainforest (1.66):** biome "rainforest" (`TROPIC(b)` = tropical or rainforest, for the things they share). Broadleaf variants get `{ tall: 1.55, vines, buttress }`: ~1.5× taller, thicker trunks with big buttress roots, a tall bare trunk then a wide flat umbrella crown (`umb`), 3–7 lianas hanging from the limbs (thin tubes, not in the far-tree version). Some palms, the odd emergent giant (×1.55). Closed canopy (density noise flattened), dark leaf-litter floor, thick undergrowth (6500×area bushes, 1.3–2.7 m; costs ~15% more triangles than a temperate map, fewer draw calls), mossy rocks, many mossy logs, mostly rain/storm/fog weather. Animals: black jaguar (panther), tapir, capybara (new `QSPEC`s), monkeys, parrots, caiman (crocodile), peccary (boar), birds, Bigfoot on large maps. Waterfalls come later with rivers. Test: dev/test_rainforest.py (+ zoo, hitbox).
-- **Badlands (1.67, Ron picked it):** after erosion the heights get 3.3× the relief, the very tops are squashed into flat mesa caps (no spikes), then most of the map is terraced into flat benches with sheer risers (step 8–14 m, `smooth(.8, .97)`), mixed with untouched ground by a noise mask. Cliff faces are painted in horizontal rock bands (`BANDS`, 7 colours by height + noise; rock texture turned down there). Warm tan ground, red rock, extra outcrops, scattered squat junipers/pinyon (small broadleaf with `JUNIPER` colours), sage scrub, little water, snow line high (winter can still snow). `DRY(b)` = desert or badlands (scrub, "out here" Bigfoot line). Animals: bighorn sheep (curled horns, high ground like goats), pronghorn (fast), mule deer, mustangs, coyotes, jackrabbits, eagles, vultures, Bigfoot on large maps. Test: dev/test_badlands.py (+ zoo, hitbox).
+- **Badlands = red rock country (1.67, reworked 1.68; Ron: "red sand, big orange sandstone, like driving through Arizona or Nevada… that's what I want to call Badlands"):** after erosion the land is flattened to open red-sand flats (relief ×0.42), then lone features are added (max-combined, so they never stack): 2–4×area mesas (r 90–180 m) and 13–22×area buttes (r 20–54 m, 30–70 m tall) with wobbly outlines, sheer walls (`smooth(r*.05, -r*.03)`), flat slightly tilted caps and a rubble skirt (~30% height), plus smooth slickrock domes (5–18 m) clustered in 2–4 patches. Steep faces are painted in red/orange/gold sandstone `BANDS` (the grey rock texture turned almost off; on a 2 m mesh the layers read as vertical "desert varnish" streaks). Red-orange sand ground, very red rocks (`tone`), no ledge slabs or boulders on cliff walls, few trees (a few cactus and small junipers), round dark juniper bushes (`kinds.juniper`) and sage scrub, 3% water. `DRY(b)` = desert or badlands. Animals: bighorn sheep (curled horns, high ground), pronghorn (fast), mule deer, mustangs, coyotes, jackrabbits, eagles, vultures, Bigfoot on large maps. Test: dev/test_badlands.py (flats and cliffs both common, flat mesa tops) + zoo, hitbox.
 - **Terrain:** heightfield with erosion and rounded summits. `H(x,z)` is the exact surface. Dramatic maps get one landmark from a generator (`makeFeature`: crevasses, canyons, rifts, walls, cliffs, mesas, buttes, terraces, craters, sinkholes, volcanoes in many shapes).
 - **Trees:** trunk + branch cards, Pop: One style; big limbs you can stand on and hold; lighter far-away trees past ~270 m.
 - **Trunks (1.61):** `trunkNice` — flared base with root buttresses that run into the ground (lobes), 8 sides, same taper; every trunk has a gentle natural bend (`bend(y)` applied to the whole variant, firs straighter than broadleaf). Climbing/head-blocking follow the bend and flare (`treeHit` uses `hold.bend`, `hold.fl`). Far trees keep the 4-sided trunk. (Also fixed: animals were updated twice a frame — they moved at double speed.)
@@ -116,6 +116,7 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - Two functions with the same name: the later one silently wins (that bit us with grenades). `check_code.py` catches it.
 - Call `updateMatrixWorld` before raycasts if things moved this frame.
 - Is the Quest a "touch" device (`isTouch`)? Unknown. Don't assume.
+- test_habitat now and then fails at random (few horses spawned, they happen to stand in less open ground than the map's average); rerun it alone before chasing it.
 
 ---
 
@@ -138,7 +139,7 @@ Ron: "each time just lmk how it goes in tests and send pics each time and I'll j
 - 1.63 animals everywhere + lava in volcano craters (only in the crater, no flows) — done
 - 1.64 **Desert** — done (heat shimmer is a warm haze, not a wobble)
 - 1.66 **Rainforest** — done (Ron chose it before the savanna; waterfalls wait for rivers)
-- 1.67 **Badlands** — done
+- 1.67 **Badlands** — done; 1.68 reworked into red rock country (Ron)
 - next **African savanna:** golden grass, flat-topped acacias, big open views; elephants, giraffes, zebras, lions
 - **Swamp:** cypress in still water, mist, alligators, herons
 - **Volcanic island:** black sand, palms, lava fields
