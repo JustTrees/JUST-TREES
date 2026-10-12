@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.74</title>
+<title>JUST TREES 1.75</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.74";              // Just Trees 1.74
+const VERSION = "1.75";              // Just Trees 1.75
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4518,6 +4518,246 @@ function buildApe(r, yeti) {                                // Bigfoot and the Y
   const arms = [-1, 1].map(s => makeLeg(body, mat, s * .54, 1.92, .08, [.55, .14, .11], [.55, .11, .09], pal, "paw", .05, -.25));
   return finish({ root, body, head, legs, arms, w: .38, rad: .38, step: .8, hit: [[0, 1.55, .05, .42], [0, 1.05, 0, .32], [0, .5, 0, .24], [0, 0, 0, .2, 1]], walk: 1.4, run: 6.5, stride: 1.7, swing: .5, graze: .2, range: 60, wary: 1.6 });
 }
+/* ---------------- Prehistoric (1.75, VR hunting): dinosaurs to hunt, and now and then a raptor that hunts you ----------------
+   A switch in the Hunting setup (VR only). Same maps; the animals are dinosaurs. Every dinosaur takes several shots (a health bar
+   shows once it's hurt; each gun does its own damage, a head hit counts 1.5x). At random times one raptor starts a hunt: a low warning
+   swell, it turns up far off out of sight, stalks (circles, creeps, freezes, watching you), then charges, or loses interest and leaves.
+   It bites: you black out red and wake up somewhere else. Climb a tree and it paces underneath, then gives up. */
+const DINO = { on: false, hunter: null, gap: 60, pending: 0, callT: 6, drone: null, hunts: 0 };
+const DINO_HP = { raptor: 180, parasaur: 220, triceratops: 350, stego: 300, bronto: 700 };
+const DINO_BONUS = { raptor: 50 };
+const DINO_SIZE = { raptor: .25, parasaur: .6, stego: .55, triceratops: .7, bronto: 1 };
+const DINO_NATIVE = [["triceratops", 4, [2, 4]], ["parasaur", 4, [3, 6]], ["stego", 3, [1, 2]], ["bronto", 2, [2, 3]]];
+// a dinosaur on two legs: the body balanced over the hips, a long tail held out behind, the neck up to the head
+function buildBiped(r, q) {
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const { pal, hip, L, W, D } = q, [tl, tr] = q.tail, [nl, na, nr] = q.neck, yb = hip + D * .3;
+  const chestY = yb + L * .08, nb = [chestY + D * .4, L * .48], nt = [nb[0] + nl * Math.sin(na), nb[1] + nl * Math.cos(na)], coat = furCol(pal, q.coat);
+  const bb = new Bag().add(sweepGeo([[yb - tl * .1, -L * .5 - tl, tr * .1, tr * .1], [yb - tl * .04, -L * .5 - tl * .6, tr * .45, tr * .5], [yb + D * .05, -L * .5 - tl * .25, tr * .85, tr * .95],
+    [yb + D * .2, -L * .42, W * .75, D * .8], [yb + D * .25, -L * .15, W, D], [yb + D * .1, L * .15, W * 1.02, D * 1.05], [chestY, L * .38, W * .82, D * .92], [nb[0], nb[1], nr * 1.3, nr * 1.4]], 22, 3, coat));
+  bb.add(sweepGeo([[nb[0] - nr * .3, nb[1] - nr * .4, nr * 1.3, nr * 1.4], [(nb[0] + nt[0]) / 2, (nb[1] + nt[1]) / 2, nr * 1.05, nr * 1.1], [nt[0], nt[1], nr * .9, nr * .95]], 14, 3, coat));
+  for (const s of [-1, 1]) {                                 // the little arms, with claws
+    const a = q.arm, sh = [s * W * .7, chestY - D * .2, L * .32], el = [s * W * .85, sh[1] - a * .5, sh[2] + a * .2], wr = [s * W * .8, el[1] - a * .15, el[2] + a * .45];
+    bb.seg(sh, el, a * .12, a * .09, pal[1]).seg(el, wr, a * .09, a * .06, pal[1]);
+    for (const k of [-1, 0, 1]) bb.seg(wr, [wr[0] + k * a * .06, wr[1] - a * .1, wr[2] + a * .14], a * .03, a * .008, 0x2a2420);
+  }
+  const head = new THREE.Group(); head.position.set(0, nt[0], nt[1]); body.add(head);
+  const { hl, hw, hh } = q, ht = q.ht || .15, at = t => [-Math.sin(ht) * t * hl, Math.cos(ht) * t * hl];
+  const hb = new Bag().add(sweepGeo([[-.15, .75, .8], [.1, 1, 1], [.4, .9, .85], [.7, .72, .62], [.95, .55, .45], [1, .2, .2]].map(([t, w, h]) => [...at(t), hw * w, hh * h]), 16, 3, furCol(q.headPal || pal, q.face)));
+  for (const s of [-1, 1]) { const e = at(.3); hb.add(new THREE.SphereGeometry(Math.max(.015, hh * .16), 8, 6), q.eyeC || 0xc8a020, s * hw * .8, e[0] + hh * .3, e[1]);
+    hb.add(new THREE.SphereGeometry(Math.max(.008, hh * .08), 6, 4), 0x080604, s * hw * .9, e[0] + hh * .3, e[1] + hh * .05); }
+  if (q.teeth) for (let k = 0; k < 7; k++) for (const s of [-1, 1]) { const p = at(.42 + k * .075); hb.add(new THREE.ConeGeometry(hh * .06, hh * .22, 4), 0xeee8d8, s * hw * (.62 - k * .045), p[0] - hh * .55, p[1], Math.PI); }
+  const P = { bb, hb, at, hl, hw, hh, pal, L, W, D, yb, nb, nt, hits: [] };
+  if (q.extra) q.extra(P);
+  body.add(bb.mesh(mat)); head.add(hb.mesh(mat));
+  const tot = yb / Math.cos(.35), lw = q.lw;                 // thigh forward, shin back: the legs reach the ground from the hips
+  const legs = [-1, 1].map(s => makeLeg(body, mat, s * W * .75, yb, -L * .12, [tot * .47, lw, lw * .62], [tot * .53, lw * .5, lw * .32], [pal[1], pal[1], 0, pal[3]], "long", -.35, .7));
+  const hit = [[0, yb + D * .2, -L * .15, Math.max(W, D) * 1.15], [0, chestY, L * .3, Math.max(W, D) * 1.05], [0, yb, -L * .5 - tl * .3, tr * 1.3], [0, yb - tl * .03, -L * .5 - tl * .62, tr * .8], [0, hip * .5, -L * .12, lw * 2.2], [0, 0, hl * .5, Math.max(hw, hh) * 1.5, 1]];
+  hit.push(...P.hits);
+  return finish({ root, body, head, legs, w: W, rad: q.rad || W * 1.2, step: q.step || 1, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
+}
+const DINO_BIPED = {
+  raptor: r => buildBiped(r, { pal: [0x8a7448, 0xa08a5a, 0xe0d4b4, 0x6a5a3a], hip: .95, L: 1.3, W: .24, D: .34, tail: [1.9, .23], neck: [.5, .85, .11], hl: .46, hw: .1, hh: .13, ht: .1, teeth: true, arm: .45, lw: .17, eyeC: 0xe0a020,
+    coat: (c, u, cy, cx) => { if (cy > -.2 && Math.sin(u * 70 + cx * 1.5) > .5) c.multiplyScalar(.5); },
+    extra: P => { for (let k = 0; k < 6; k++) { const t = k / 5; P.bb.add(new THREE.ConeGeometry(.03, .14, 4), 0x2a2018, 0, P.nb[0] + (P.nt[0] - P.nb[0]) * t + .08, P.nb[1] + (P.nt[1] - P.nb[1]) * t - .05, -.6); } },   // dark quills down the neck
+    walk: 2, run: 11.5, stride: 2.4, swing: .7, graze: .5, rad: .35, step: .9, range: 30 }),
+  parasaur: r => buildBiped(r, { pal: [0x5a8a44, 0x7aa05a, 0xe0d8a8, 0x5a6a3a], hip: 2.3, L: 3.3, W: .72, D: .92, tail: [4.2, .62], neck: [1.25, .8, .3], hl: 1.0, hw: .22, hh: .28, ht: .35, arm: 1.1, lw: .45, eyeC: 0x3a2a1a,
+    coat: (c, u, cy, cx) => { if (cy > 0 && Math.sin(u * 30 + cx) > .6) c.multiplyScalar(.7); }, face: (c, u) => { if (u > .85) c.multiplyScalar(.8); },
+    extra: P => { const a = P.at(.25), b = [a[0] + P.hh * .6 + .55, a[1] - 1.3]; P.hb.seg([0, a[0] + P.hh * .6, a[1]], [0, b[0], b[1]], .1, .07, 0xb85a2a); P.hb.add(new THREE.SphereGeometry(.075, 8, 6), 0xb85a2a, 0, b[0], b[1]); },   // the long hollow crest it honks through
+    walk: 1.5, run: 7.5, stride: 3, swing: .45, graze: .9, rad: 1.0, step: 1.2, range: 45 })
+};
+Object.assign(QSPEC, {
+  triceratops: r => ({ pal: [0x7a7448, 0x8e8656, 0xc8bc90, 0x6a6440], L: 3.6, W: .85, D: .95, leg: 1.15, frontK: .9, hump: .1, neck: .35, na: .15, nt: .5, hl: 1.45, hw: .45, hh: .5, ht: .55, muz: .55, lw: .26, pillar: true, foot: "paw", noseC: 0x3a3828, legX: .6,
+    tail: [2.4, .45, .4, null], ear: null, coat: (c, u, cy) => { if (cy > .3) c.multiplyScalar(.85); },
+    extra: P => { const { hb, at, hh, hw } = P, b = at(.05), e = at(.88), m = at(.4);
+      hb.add(new THREE.CylinderGeometry(1.15, 1.15, .1, 20, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2 - .55), 0x8a6a3a, 0, b[0] + hh * .55, b[1] - .1);   // the bony frill
+      for (const s of [-1, 1]) horns(hb, s, [[hw * .45, m[0] + hh * .7, m[1]], [hw * .55, m[0] + hh * .7 + .55, m[1] + .35], [hw * .5, m[0] + hh * .7 + .8, m[1] + .9]], .1, .02, 0xe8dcc0);   // two long brow horns
+      hb.seg([0, e[0] + hh * .35, e[1]], [0, e[0] + hh * .35 + .35, e[1] + .12], .09, .015, 0xe8dcc0);                                                                      // and one on the nose
+      P.hits.push([0, P.Y(-P.L * .5) + P.D * .3, -P.L * .5 - 1.0, .45]); },
+    walk: 1.1, run: 6, stride: 2.4, swing: .32, graze: .55, rad: 1.1, step: 1, range: 40 }),
+  stego: r => ({ pal: [0x7a8050, 0x8c9260, 0xd0c494, 0x6a6e44], L: 3.4, W: .7, D: .85, leg: 1.35, frontK: .62, hump: 0, neck: .55, na: -.05, nt: .28, hl: .55, hw: .17, hh: .2, ht: .5, muz: .55, lw: .2, pillar: true, foot: "paw", noseC: 0x3a3a28,
+    tail: [2.4, .3, .35, null], ear: null,
+    extra: P => { const { bb, Y, L, D } = P;
+      for (let k = 0; k < 11; k++) { const t = k / 10, z = -L * .52 + t * L * .85, s = Math.sin(Math.PI * Math.min(1, t * 1.1 + .05)), side = k % 2 ? 1 : -1;          // two rows of plates, biggest over the hips
+        bb.add(new THREE.CylinderGeometry(0, .32 + .3 * s, .35 + .75 * s, 4).scale(.18, 1, 1), 0xa05a32, side * .12, Y(z) + D * .85 + (.18 + .37 * s), z, 0, 0, side * .12); }
+      const t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - 2.4 * Math.sin(.35), t0[2] - 2.4 * Math.cos(.35)];
+      for (const s of [-1, 1]) for (const k of [0, .35]) bb.seg([s * .08, t1[1] + .15, t1[2] + .3 + k], [s * .7, t1[1] + .55, t1[2] + .1 + k], .07, .01, 0xd8ccb0);   // the spiked tail
+      P.hits.push([0, Y(-L * .5) + D * .2, -L * .5 - .9, .4]); },
+    walk: 1, run: 4.5, stride: 2.2, swing: .3, graze: .7, rad: 1, step: 1, range: 35 }),
+  bronto: r => ({ pal: [0x8a8270, 0x9a927e, 0xc0b4a0, 0x7a7262], L: 6.5, W: 1.6, D: 1.9, leg: 3.1, frontK: 1, hump: .15, neck: 8.5, na: .62, nt: .62, hl: .95, hw: .26, hh: .3, ht: .35, muz: .7, lw: .7, pillar: true, foot: "paw", noseC: 0x4a463c, legX: .62,
+    tail: [7, .85, .22, null], ear: null, coat: (c, u, cy) => { if (cy > .4) c.multiplyScalar(.88); },
+    extra: P => { const { bb, Y, L, D } = P, t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - 7 * Math.sin(.22), t0[2] - 7 * Math.cos(.22)], t2 = [0, t1[1] - .4, t1[2] - 4.5];
+      bb.seg(t1, t2, .85 * .55, .06, P.pal[0]);                                                                            // the long whip of a tail
+      for (const t of [.25, .55, .85]) P.hits.push([0, t0[1] + (t1[1] - t0[1]) * t, t0[2] + (t1[2] - t0[2]) * t, .7 * (1 - t * .45)]); },
+    walk: 1, run: 3.6, stride: 3.6, swing: .26, graze: -.15, rad: 1.7, step: 1.4, range: 50 })
+});
+// health bars: a dark bar with a coloured part, floating over the animal once it's hurt
+const BARM = { bg: null };
+function dinoBar(A) {
+  if (!A.hpMax) return;
+  if (!A.bar) {
+    if (!BARM.bg) BARM.bg = new THREE.SpriteMaterial({ color: 0x0c0c0c, transparent: true, opacity: .75, depthWrite: false, fog: false });
+    const box = new THREE.Box3().setFromObject(A.root), top = box.max.y - A.root.position.y, w = Math.max(1.1, Math.min(4, top * .45)), h = w * .11;
+    const g = new THREE.Group(), bg = new THREE.Sprite(BARM.bg), fg = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0x48d048, depthWrite: false, fog: false }));
+    bg.scale.set(w, h, 1); fg.renderOrder = 2; bg.renderOrder = 1; g.add(bg, fg); g.position.set(0, top / (A.scale || 1) + .5 + h, 0);
+    A.root.add(g); A.bar = { g, fg, w: w * .94, h: h * .62 };
+  }
+  const f = Math.max(0, A.hp / A.hpMax), B = A.bar;
+  B.fg.visible = f > .001; B.fg.scale.set(Math.max(.001, B.w * f), B.h, 1); B.fg.center.set(f > .001 ? .5 / f : .5, .5); B.fg.material.color.setHSL(.33 * f, .75, .5);
+  B.g.visible = !A.dead && f < 1;
+}
+function hitAnimal(A, dist, dmg, head) {                    // a bullet (or a grenade) reached an animal: most drop, dinosaurs take several
+  if (!A || A.dead) return;
+  if (!A.hpMax) { killAnimal(A, dist); return; }
+  A.hp -= (dmg > 0 ? dmg : 100) * (head ? 1.5 : 1);
+  if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); return; }
+  dinoBar(A); hitTick(); dinoCall(A, "hurt");
+  if (A.hunter && A.hs !== "charge") dinoCharge(A);            // shot at: it comes for you
+}
+function dinoTick(dt) {
+  if (!DINO.on || state !== "play" || !animalGroup) return;
+  if ((DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
+  dinoSteps(dt);
+  const Hn = DINO.hunter;
+  if (Hn) {
+    if (Hn.dead || Hn.gone) { if (Hn.gone) dinoRemove(Hn); DINO.hunter = null; DINO.gap = 50 + Math.random() * 40; droneLevel(0, true); }
+    else droneLevel(Hn.hs === "charge" ? .11 : Hn.hs === "leave" ? .015 : .05);
+    return;
+  }
+  if (DINO.pending > 0) { if ((DINO.pending -= dt) <= 0) dinoSpawnHunter(); return; }
+  if ((DINO.gap -= dt) > 0) return;
+  if (Math.random() < dt / 140) dinoStartHunt();                // no rhythm to it: any moment, many times a day
+}
+function dinoStartHunt() { if (DINO.hunter || DINO.pending > 0) return; DINO.pending = 1.5 + Math.random() * 2; dinoCue(); }
+function dinoSpawnHunter() {                                 // far off, out of sight, behind a tree
+  camera.getWorldDirection(_lf); const fx = _lf.x, fz = _lf.z, fl = Math.hypot(fx, fz) || 1;
+  let s = null;
+  for (let k = 0; k < 120 && !s; k++) {
+    const a = Math.random() * 6.283, r = 75 + Math.random() * 35, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+    if (Math.abs(x) > EDGE - 12 || Math.abs(z) > EDGE - 12 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 12) || H(x, z) < water + .5 || inLava(x, z, 3)) continue;
+    if (((x - P.x) * fx + (z - P.z) * fz) / (r * fl) > (k < 90 ? .1 : .6)) continue;         // not in front of you
+    if (k < 60 && !trunkNear(x, z, 3)) continue;                                                // tucked in by a trunk
+    s = [x, z];
+  }
+  if (!s) { DINO.gap = 20; droneLevel(0, true); return; }
+  const A = addGround("raptor", s[0], s[1]);
+  Object.assign(A, { hunter: true, grp: -1, hs: "stalk", hsT: 0, stalkFor: 18 + Math.random() * 35, orbit: Math.random() < .5 ? 1 : -1, giveUp: Math.random() < .25, creepT: 0, move: "circle", look: 0, mode: "idle" });
+  A.yaw = Math.atan2(P.x - A.x, P.z - A.z); DINO.hunter = A; DINO.hunts++; droneLevel(.05);
+}
+function dinoRemove(A) { if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); }
+function dinoCharge(A) { A.hs = "charge"; A.hsT = 0; dinoCall(A, "charge"); }
+function dinoLeave(A) {
+  A.hs = "leave"; A.hsT = 0; const a = Math.atan2(A.x - P.x, A.z - P.z) + (Math.random() - .5) * .8, cl = v => Math.max(-EDGE + 20, Math.min(EDGE - 20, v));
+  A.target = [cl(A.x + Math.sin(a) * 300), cl(A.z + Math.cos(a) * 300)]; A.steerT = 0;
+}
+function playerHigh() { return vr.climbing || !!vr.cl || P.y - groundAt(P.x, P.z) > 2.2; }
+function huntTick(A, dt) {                                   // the raptor's mind: stalk, then charge or leave
+  A.hsT += dt; A.timer = 25; A.trek = false;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz), toP = Math.atan2(dx, dz), high = playerHigh();
+  const ring = (R, step) => { const a0 = Math.atan2(A.x - P.x, A.z - P.z) + A.orbit * step; return [P.x + Math.sin(a0) * R, P.z + Math.cos(a0) * R]; };
+  A.look = Math.max(-1.1, Math.min(1.1, angDiff(toP, A.yaw)));
+  if (A.hs === "stalk") {
+    if (A.hsT > A.stalkFor) { if (A.giveUp) dinoLeave(A); else dinoCharge(A); return; }
+    if ((A.creepT -= dt) <= 0) {
+      const r = Math.random(); A.move = r < .22 ? "freeze" : r < .55 ? "creep" : "circle"; A.creepT = A.move === "freeze" ? 1.5 + Math.random() * 3 : 3 + Math.random() * 5;
+      if (Math.random() < .35) A.orbit = -A.orbit; if (Math.random() < .45) dinoCall(A, "stalk"); A.steerT = 0;
+    }
+    const want = Math.max(16, 72 - A.hsT * 1.5);              // the circle slowly tightens
+    if (A.move === "freeze") { A.mode = "idle"; A.want = 0; A.yaw += Math.max(-dt * 1.5, Math.min(dt * 1.5, angDiff(toP, A.yaw))); }   // stops dead and stares
+    else if (A.move === "creep") { A.mode = "walk"; A.target = ring(Math.max(12, d - 10), .05); A.want = A.walk * .45; }
+    else { A.mode = "walk"; A.target = ring(want, .4); A.want = A.walk * 1.15; }
+  } else if (A.hs === "charge") {
+    A.mode = "walk"; A.target = [P.x, P.z]; A.want = A.run; A.fleeT = 1; if (A.hsT < .05) A.steerT = 0;
+    if (d < 1.9 && !high) { dinoBite(A); return; }
+    if (high && d < 10) { A.hs = "wait"; A.hsT = 0; A.waitFor = 8 + Math.random() * 10; return; }
+    if (A.hsT > 30) dinoLeave(A);
+  } else if (A.hs === "wait") {                               // you got up a tree: it paces round underneath, then gives up
+    A.mode = "walk"; A.target = ring(5, .6); A.want = A.walk * 1.3; A.fleeT = 0;
+    if (!high) dinoCharge(A); else if (A.hsT > A.waitFor) dinoLeave(A);
+  } else if (A.hs === "leave") {
+    A.mode = "walk"; A.want = A.run * .8; A.fleeT = 1; A.look *= .3;
+    camera.getWorldDirection(_lf); const inView = (-dx * _lf.x - dz * _lf.z) / (d * (Math.hypot(_lf.x, _lf.z) || 1)) > .5;
+    if ((d > 150 && !inView) || d > 260 || A.hsT > 30) A.gone = true;
+  }
+}
+function dinoBite(A) {                                       // caught: you black out (red), and wake up somewhere else; it's gone
+  dinoCall(A, "bite"); A.gone = true;
+  if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner("A raptor got you", 3.5, 1); }
+  else uwRespawn();
+}
+/* ---- dinosaur sounds: all made on the fly ---- */
+function dinoOut(A, lvlK) {
+  const c = SND.ctx, cx = camera.position.x, cz = camera.position.z, d = Math.hypot(A.x - cx, A.z - cz), big = DINO_SIZE[A.kind] || .5;
+  const lvl = Math.min(1, (18 + 70 * big) / (d + 10)) * (lvlK || 1); if (lvl < .015) return null;
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, pan = d > .5 ? ((A.x - cx) * -_lf.z + (A.z - cz) * _lf.x) / (d * fl) : 0;
+  return panned(lvl, Math.max(-.85, Math.min(.85, pan)));
+}
+function dTone(out, type, f0, f1, t0, dur, vol, filt, vib) {   // one voice: an oscillator through a filter with a soft swell and fade
+  const c = SND.ctx, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(Math.max(10, f1), t0 + dur);
+  if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = vib[0]; lg.gain.value = vib[1]; l.connect(lg).connect(o.frequency); l.start(t0); l.stop(t0 + dur + .1); }
+  g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + Math.min(.12, dur * .2)); g.gain.setTargetAtTime(0, t0 + dur * .7, dur * .12);
+  let node = o; if (filt) { const f = c.createBiquadFilter(); f.type = filt[0]; f.frequency.value = filt[1]; f.Q.value = filt[2] || .8; o.connect(f); node = f; }
+  node.connect(g).connect(out); o.start(t0); o.stop(t0 + dur + .3);
+}
+function dNoise(out, type, f, q, t0, dur, vol) {
+  const c = SND.ctx, s = c.createBufferSource(); s.buffer = SND.noise; const fl = c.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+  const g = c.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(vol, t0 + Math.min(.04, dur * .2)); g.gain.exponentialRampToValueAtTime(.0005, t0 + dur);
+  s.connect(fl).connect(g).connect(out); s.start(t0, Math.random() * 1.5); s.stop(t0 + dur + .05);
+}
+function dinoCall(A, type) {
+  if (!SND.ctx || !SND.on || !A) return;
+  const out = dinoOut(A, type === "hurt" || type === "die" || type === "charge" || type === "bite" ? 1.4 : 1); if (!out) return;
+  const t = SND.ctx.currentTime + .02, k = A.kind, j = 1 + (Math.random() - .5) * .12;      // every call a little different
+  const pain = type === "hurt" || type === "die", dl = type === "die" ? 1.8 : 1;
+  if (k === "raptor") {
+    if (type === "stalk") { for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) dNoise(out, "bandpass", 1700 * j, 4, t + i * .11, .05, .18); dNoise(out, "lowpass", 480, .7, t + .4, .3, .12); }   // clicks, then a huff
+    else { dTone(out, "sawtooth", 950 * j, (pain ? 600 : 480) * j, t, (type === "bite" ? .45 : .7) * dl, .16, ["bandpass", 1300, 1.2], [32, 60]); dNoise(out, "highpass", 2200, .7, t, .5 * dl, .08); }   // a rasping screech
+  } else if (k === "parasaur") {                                // the honk, often twice
+    dTone(out, "sawtooth", (pain ? 150 : 112) * j, (pain ? 120 : 100) * j, t, 1.3 * dl, .2, ["bandpass", 360, 4], [5, 3]);
+    if (!pain && Math.random() < .6) dTone(out, "sawtooth", 124 * j, 110 * j, t + 1.55, 1.1, .17, ["bandpass", 380, 4], [5, 3]);
+  } else if (k === "triceratops") {                             // a snort, or a deep bellow
+    if (!pain && Math.random() < .5) { dNoise(out, "lowpass", 420, .8, t, .45, .3); dTone(out, "sine", 85 * j, 58, t, .5, .22); }
+    else dTone(out, "sawtooth", (pain ? 95 : 72) * j, (pain ? 60 : 52) * j, t, 1.3 * dl, .24, ["lowpass", 320, 1.5], [7, 4]);
+  } else if (k === "stego") {                                   // a rumbling grumble
+    dTone(out, "sawtooth", (pain ? 120 : 92) * j, (pain ? 80 : 78) * j, t, .9 * dl, .2, ["lowpass", 340, 1.2], [13, 6]);
+  } else if (k === "bronto") {                                  // a long deep moan you feel more than hear
+    dTone(out, "sine", (pain ? 62 : 46) * j, (pain ? 34 : 32) * j, t, 3 * dl, .38); dTone(out, "sawtooth", (pain ? 80 : 60) * j, 44 * j, t + .1, 2.6 * dl, .14, ["lowpass", 190, 2], [3, 2]);
+  }
+}
+function dinoAmbient() {                                     // somebody out there calls now and then (the hunter keeps quiet unless stalking)
+  const near = beasts.filter(A => A.hpMax && !A.dead && !A.gone && !A.hunter && Math.hypot(A.x - P.x, A.z - P.z) < 420);
+  if (near.length) dinoCall(near[Math.floor(Math.random() * near.length)], "call");
+}
+function dinoSteps(dt) {                                     // the big ones shake the ground as they walk
+  if (!SND.ctx || !SND.on) return;
+  for (const A of beasts) {
+    if (A.dead || A.gone || !(A.kind === "bronto" || A.kind === "triceratops") || A.speed < .2) continue;
+    const d = Math.hypot(A.x - P.x, A.z - P.z); if (d > 110) continue;
+    A.stepAcc = (A.stepAcc || 0) + A.speed * dt; if (A.stepAcc < A.stride * .5) continue; A.stepAcc = 0;
+    const out = dinoOut(A, A.kind === "bronto" ? 1.3 : .6); if (!out) continue; const t = SND.ctx.currentTime;
+    dTone(out, "sine", 44, 26, t, .35, .45); dNoise(out, "lowpass", 140, .8, t, .3, .25);
+  }
+}
+function dinoCue() {                                         // you've been seen: a sudden low, deep swell (a warning, not a jump scare)
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime + .02, out = c.createGain(); out.gain.value = 1; out.connect(SND.master);
+  const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 420; lp.connect(out);
+  for (const [f, v] of [[49, .15], [73.4, .09], [98, .045], [51.9, .06]]) { const o = c.createOscillator(), g = c.createGain(); o.type = "sawtooth"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .35); g.gain.setTargetAtTime(v * .55, t + .6, 1.2); g.gain.setTargetAtTime(0, t + 4.5, 1.2); o.connect(g).connect(lp); o.start(t); o.stop(t + 9); }
+  const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(72, t); o.frequency.exponentialRampToValueAtTime(34, t + .6);   // one soft low drum hit
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.32, t + .02); g.gain.exponentialRampToValueAtTime(.0005, t + 1.4); o.connect(g).connect(out); o.start(t); o.stop(t + 1.5);
+}
+function droneLevel(v, stop) {                               // a quiet low pulse under the whole hunt, stronger while it charges
+  if (!SND.ctx) return; const c = SND.ctx, t = c.currentTime;
+  if (!DINO.drone && v > 0) {
+    const g = c.createGain(); g.gain.value = 0; g.connect(SND.master); const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 260; lp.connect(g);
+    const oscs = [[41.2, "sawtooth"], [61.7, "triangle"]].map(([f, ty]) => { const o = c.createOscillator(); o.type = ty; o.frequency.value = f; o.connect(lp); o.start(); return o; });
+    const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = .9; lg.gain.value = .35; const am = c.createGain(); am.gain.value = .65; lp.disconnect(); lp.connect(am).connect(g); l.connect(lg).connect(am.gain); l.start(); oscs.push(l);
+    DINO.drone = { g, oscs };
+  }
+  if (!DINO.drone) return;
+  DINO.drone.g.gain.setTargetAtTime(SND.on ? v : 0, t, stop ? 1.2 : .6);
+  if (stop) { const D0 = DINO.drone; DINO.drone = null; setTimeout(() => { for (const o of D0.oscs) try { o.stop(); } catch (_) {} D0.g.disconnect(); }, 5000); }
+}
 const BIRD_COL = { vulture: [0x221c1a, 0x2e2622, 0xa85a4a, 0xd8c8a8], bird: [0x16161a, 0xd8d8d8, 0xb07a6a, 0xd8d8d8], eagle: [0x3a2a1c, 0x4a3624, 0xf2f0ea, 0xe0b030], owl: [0xeceae4, 0xd8d4cc, 0xf2f0ec, 0x2a2622] };
 const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c020, 0x2a62d8, 0x2a2622], [0x2aa040, 0xd83020, 0x3ab050, 0xe8e0d0], [0xe8c020, 0x2aa040, 0xe8a020, 0x2a2622]];
 const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1, vulture: 1 }, LEGEND = { bigfoot: 1, yeti: 1 };
@@ -4545,15 +4785,15 @@ function bannerTick(I, dt) {
   VBAN.m.position.copy(VBAN.p); VBAN.m.quaternion.copy(VBAN.q); VBAN.m.material.opacity = Math.min(1, VBAN.t / .8);
 }
 const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
-const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1 };
+const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
 const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
 const SCORE = { gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
-  coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5 };
+  coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5, raptor: 1, parasaur: .3, triceratops: .25, stego: .25, bronto: .15 };
 const BEAST_NAME = { gator: "Alligator", heron: "Heron", bighorn: "Bighorn sheep", pronghorn: "Pronghorn", tapir: "Tapir", capybara: "Capybara", oryx: "Oryx", camel: "Camel", roadrunner: "Roadrunner", vulture: "Vulture", buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
   elephant: "Elephant", giraffe: "Giraffe", zebra: "Zebra", rhino: "Rhino", lion: "Lion", crocodile: "Crocodile", parrot: "Parrot", goat: "Mountain goat", horse: "Wild horse",
   elk: "Elk", moose: "Moose", boar: "Boar", coyote: "Coyote", fox: "Fox", turkey: "Turkey", eagle: "Eagle", caribou: "Caribou", muskox: "Musk ox", arcticfox: "Arctic fox",
-  owl: "Snowy owl", bigfoot: "BIGFOOT", yeti: "YETI" };
+  owl: "Snowy owl", bigfoot: "BIGFOOT", yeti: "YETI", raptor: "Raptor", parasaur: "Parasaurolophus", triceratops: "Triceratops", stego: "Stegosaurus", bronto: "Brontosaurus" };
 // what lives where: [kind, how many on a 640 m map, group size]
 const NATIVE = {
   swamp:     [["gator", 6], ["heron", 5], ["buck", 4, [2, 4]], ["boar", 4, [3, 6]], ["panther", 2], ["bear", 2], ["turkey", 3, [3, 6]], ["rabbit", 10], ["bird", 3], ["bigfoot", 1]],
@@ -4656,6 +4896,7 @@ const PREF = {
   zebra: [1, .4, 0, .3, 0], horse: [1, .5, 0, .3, .1], giraffe: [.9, .7, .1, .2, 0], elephant: [.8, .6, .3, .8, 0], rhino: [.9, .5, .1, .5, 0], lion: [.9, .6, .1, .3, 0],
   caribou: [1, .4, .1, .3, .2], muskox: [1, .3, 0, .2, .3], buck: [.4, 1, .5, .3, 0], elk: [.5, 1, .5, .3, .2], turkey: [.4, 1, .4, .2, 0], fox: [.6, 1, .4, .2, .1],
   coyote: [.8, .8, .3, .2, .1], boar: [.2, .8, 1, .4, 0], moose: [.2, .6, .9, 1, 0], panther: [.1, .6, 1, .3, .3], baboon: [.7, .8, .4, .3, .3],
+  triceratops: [1, .5, .1, .4, 0], parasaur: [.7, 1, .4, .6, 0], stego: [.4, 1, .5, .3, .1], bronto: [.8, .4, .1, 1, 0],
   crocodile: [0, 0, 0, 1, 0], goat: [0, .1, 0, 0, 1], arcticfox: [1, .6, .2, .3, .4], polar: [.4, .2, 0, 1, 0]
 };
 const HAB = { cell: 24, n: 0, g: null, ranges: {}, homes: [], gid: 0, flee: 0, top: {} };
@@ -4687,7 +4928,7 @@ function appearTick(dt) {
   if (sense.calm < 15) { appear.t = Math.max(appear.t, 8); return; }
   if ((appear.t -= dt) > 0) return;
   appear.t = Math.max(10, 35 - sense.calm / 12) * (.7 + Math.random() * .6);
-  const ground = A => !A.dead && !A.gone && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && !LEGEND[A.kind];
+  const ground = A => !A.dead && !A.gone && !A.hunter && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && !LEGEND[A.kind];
   camera.getWorldDirection(_lf); const seen = (x, z, d) => d < beastDraw() && ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (d * Math.hypot(_lf.x, _lf.z) || 1) > .55;
   const R = Math.min(380, HALF * .6); let near = 0, all = 0; for (const A of beasts) if (ground(A)) { all++; if (Math.hypot(A.x - P.x, A.z - P.z) < R) near++; }
   if (near >= Math.max(14, all * .45)) return;                                  // plenty around already
@@ -4751,7 +4992,7 @@ function neckHits(b) {                                   // hit spheres along th
 }
 function addGround(kind, x, z, home) {
   const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
-  const b = QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "heron" ? buildHeron(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
+  const b = DINO_BIPED[kind] ? DINO_BIPED[kind](r) : QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "heron" ? buildHeron(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
           : kind === "coyote" ? buildWolf(r, false, [0x7a6448, 0x9a8466, 0xd8ccb4, 0x8a7458]) : kind === "fox" ? buildWolf(r, false, [0xa84a1e, 0xc0602a, 0xeee6da, 0x2a1e16], 0xf4f0ea)
           : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
@@ -4759,13 +5000,13 @@ function addGround(kind, x, z, home) {
   const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
-  A.y = beastGround(A, x, z);
+  A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind];
   animalGroup.add(A.root); beasts.push(A); return A;
 }
 // Every part of the map has animals: the map is cut into sections (about 200 m), new groups go to the emptiest sections,
 // and through the round a section that has emptied out (shot out, or everything ran off) is quietly filled again, out of sight.
 const STOCK = { G: 2, land: [], n0: {}, t: 8 };
-const STOCKED = A => !A.dead && !A.gone && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && A.kind !== "crocodile" && A.kind !== "gator" && !LEGEND[A.kind] && !FLY[A.kind];
+const STOCKED = A => !A.dead && !A.gone && !A.hunter && !A.wings && A.kind !== "monkey" && A.kind !== "seal" && A.kind !== "crocodile" && A.kind !== "gator" && !LEGEND[A.kind] && !FLY[A.kind];
 const secOf = (x, z) => { const w = S / STOCK.G, i = Math.max(0, Math.min(STOCK.G - 1, Math.floor((x + HALF) / w))), j = Math.max(0, Math.min(STOCK.G - 1, Math.floor((z + HALF) / w))); return i * STOCK.G + j; };
 const secBox = q => { const w = S / STOCK.G, i = Math.floor(q / STOCK.G), j = q % STOCK.G, x0 = -HALF + i * w, z0 = -HALF + j * w; return [Math.max(-EDGE + 10, x0 + 4), Math.min(EDGE - 10, x0 + w - 4), Math.max(-EDGE + 10, z0 + 4), Math.min(EDGE - 10, z0 + w - 4)]; };
 function stockInit() {
@@ -4815,7 +5056,8 @@ function spawnAnimals() {
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12; stockInit();
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
-  const plan = (NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
+  DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
+  const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
     for (const p of plan) { if (p.left <= 0 || beasts.length >= BEAST_CAP) continue; p.left--; more = true; spawnKind(p.kind, p.grp, peak); }
@@ -4851,7 +5093,7 @@ function senseTick(dt) {
 }
 const _lf = new THREE.Vector3();
 function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0; HAB.flee++;
-  for (const A of beasts) { if (A.dead || LEGEND[A.kind]) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
+  for (const A of beasts) { if (A.dead || LEGEND[A.kind] || A.hunter) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
     if (FLY[A.kind]) { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
     if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
@@ -4958,7 +5200,7 @@ function legendNotice(A, dt) {                              // he's seen you: st
 }
 function updateAnimals(dt) {
   if (!animalGroup) return;
-  senseTick(dt); appearTick(dt); stockTick(dt); legendWatch(dt);
+  senseTick(dt); appearTick(dt); stockTick(dt); legendWatch(dt); dinoTick(dt);
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -4971,13 +5213,14 @@ function updateAnimals(dt) {
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const pd = Math.hypot(A.x - P.x, A.z - P.z);
     const sR = sense.R * (A.wary || 1);                     // the legends notice you from further off
-    if (sR > 0 && pd < sR) {                               // you're moving and close enough: ease away, or bolt if you're near
+    if (sR > 0 && pd < sR && !A.hunter) {                               // you're moving and close enough: ease away, or bolt if you're near
       const k = 1 - pd / sR, sp = k > .55 ? A.run : A.walk * 1.5;
       if (A.trek && pd > 25) {}                                                      // already leaving for somewhere else
       else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, P.x, P.z, sp, 70, 160)) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
       else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, P.x, P.z, sp, 3 + 4 * k, 18 + 45 * k);
     }
-    if (A.mode !== "walk" && A.timer <= 0) {
+    if (A.hunter) huntTick(A, dt);
+    else if (A.mode !== "walk" && A.timer <= 0) {
       const t = pickAnimalTarget(A);
       if (t && Math.random() < .75) { A.mode = "walk"; A.target = t; A.want = Math.random() < .12 ? A.run * .7 : A.walk; A.timer = 25; A.steerT = 0; }
       else { A.mode = Math.random() < .6 ? "graze" : "idle"; A.timer = (A.hop ? 1 : 3) + Math.random() * (A.hop ? 3 : 8); }
@@ -5053,7 +5296,7 @@ function updateAnimals(dt) {
       A.body.position.y = Math.abs(fl) * (A.bolting ? .1 : .04) * amt; A.body.rotation.x = A.bolting ? .28 * amt : 0;
     } else A.body.position.y = Math.abs(Math.sin(A.phase)) * .05 * Math.min(1, A.speed * 2);   // seals hump along
     A.head.rotation.x = A.grazeK * A.graze + Math.sin(T * .7 + A.phase) * .04;                  // head down to graze, up to look around
-    A.head.rotation.y = (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);
+    A.head.rotation.y = A.hunter ? A.look : (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);   // the hunter keeps its eyes on you
   }
 }
 function deadPose(A, dt) {                                 // falls over sideways, and once it hits the ground the legs and head go limp
@@ -5091,7 +5334,7 @@ function updateBird(A, dt, T) {
 }
 const _ao = new THREE.Vector3();
 function animalRay(o, dir, minT = .5) {                              // the nearest animal hit box along the shot
-  let best = 1e9, who = null;
+  let best = 1e9, who = null, whoH = false;
   for (const A of beasts) {
     if (A.dead || !A.root.visible || A.bolting) continue;
     A.root.updateMatrixWorld();
@@ -5100,10 +5343,10 @@ function animalRay(o, dir, minT = .5) {                              // the near
       const rr = r * (A.scale || 1) * (FLY[A.kind] ? 2.2 : A.kind === "monkey" ? 1.5 : 1),   // birds and monkeys get generous hit boxes
  b = _ao.dot(dir), c = _ao.lengthSq() - rr * rr, disc = b * b - c;
       if (disc < 0) continue; const t = -b - Math.sqrt(disc);   // (radius scaled below)
-      if (t > minT && t < best) { best = t; who = A; }
+      if (t > minT && t < best) { best = t; who = A; whoH = !!onHead; }
     }
   }
-  return [best, who];
+  return [best, who, whoH];
 }
 const hunt = { score: 0, kills: 0, longest: 0 };
 function showHuntScore() {
@@ -5114,7 +5357,7 @@ let popT = 0;
 function killAnimal(A, dist) {
   if (!A || A.dead) return;
   A.dead = true; A.deadT = 0; A.vy = 0; bing();
-  const d = dist || 0, pts = Math.round(d * (SCORE[A.kind] || .1) * 10) / 10;
+  const d = dist || 0, pts = Math.round((d * (SCORE[A.kind] || .1) + (DINO_BONUS[A.kind] || 0)) * 10) / 10;   // a raptor is worth a big bonus
   hunt.score += pts; hunt.kills++; hunt.longest = Math.max(hunt.longest, d); showHuntScore(); if (vr.on) drawMap($("miniMap"));
   const el = $("scorePop"); el.textContent = "+" + pts.toFixed(1) + " · " + BEAST_NAME[A.kind] + " · " + Math.round(d) + " m"; el.style.opacity = 1;
   clearTimeout(popT); popT = setTimeout(() => { el.style.opacity = 0; }, 2400);
@@ -5994,6 +6237,7 @@ function vruiParts() {
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
     if (gameMode === "pvp") uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
+    if (gameMode === "hunt") { uiLabel(g, lx, 1048, "Prehistoric"); note(g, 680, 1048, "Dinosaurs to hunt · now and then a raptor hunts you"); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1128, "Capture point"); note(g, 680, 1128, "A hidden spot on the map: +1 point every " + CAPTURE.every + " s you hold it alone. A flag shows where it is."); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[MP.idx]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
@@ -6017,6 +6261,8 @@ function vruiParts() {
   uiSlider(S2, rx + 300, 884, 270, 5, 20, () => set.roundMin || 10, v => { set.roundMin = v; }, 1).hide = () => gameMode !== "pvp";   // PvP round length, 5 to 20 minutes
   uiBtn(S2, 360, 1086, 130, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" });   // PvP capture point
   uiBtn(S2, 500, 1086, 130, 62, "On", () => { set.capture = "on"; }, { active: () => set.capture === "on", hide: () => gameMode !== "pvp" });
+  uiBtn(S2, 370, 1006, 130, 62, "Off", () => { set.dino = false; }, { active: () => !set.dino, hide: () => gameMode !== "hunt" });   // Prehistoric (Hunting, VR)
+  uiBtn(S2, 510, 1006, 130, 62, "On", () => { set.dino = true; }, { active: () => !!set.dino, hide: () => gameMode !== "hunt" });
   uiBtn(S2, 220, 1006, 130, 62, "Off", () => { set.zone = "off"; }, { active: () => set.zone !== "on", hide: () => gameMode !== "pvp" });   // PvP closing zone
   uiBtn(S2, 360, 1006, 130, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
   uiSlider(S2, 830, 1008, 330, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
@@ -7443,7 +7689,7 @@ function nadeBoom(p, remote) {
   if (d < 25) { const s = 1 - d / 25; buzz("L", .4 + .6 * s, 120); buzz("R", .4 + .6 * s, 120); }
   if (remote) return;                                       // only the thrower's game counts what it hits
   scatterBeasts(p); alertBots();
-  for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) killAnimal(A, camera.position.distanceTo(p));
+  for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) hitAnimal(A, camera.position.distanceTo(p), 200);
   for (const S of squad) if (!S.dead) { const sd = S.group.position.distanceTo(p); if (sd < NADE.R) for (let n = sd < 3 ? 3 : sd < 5 ? 2 : 1; n-- > 0;) damageBot(S, false); }
   if (gameMode === "pvp" && MP.on) for (const L of MP.links.values()) {
     const R = L.R; if (!L.open || L.bad || !R || !R.alive) continue;
@@ -8392,7 +8638,7 @@ function bulletStep(t, dt) {                                // move one frame al
   place(t.head, 18, w); place(t.trail, 70, w * .45);
   if (end) {
     if (!t.remote) {                                        // only the shooter's own game counts the hit
-      if (h.kind === "animal") killAnimal(h.animal, t.from.distanceTo(end));
+      if (h.kind === "animal") hitAnimal(h.animal, t.from.distanceTo(end), t.dmg, h.head);
       else if (h.kind === "bot") damageBot(h.bot, h.head);
     }
     if (h.kind && h.kind !== "animal" && h.kind !== "bot") addPuff(end, h.kind);
@@ -8402,13 +8648,13 @@ function bulletStep(t, dt) {                                // move one frame al
 }
 function castShot(o, dir, maxD, cs) {                      // cs: a flying bullet's state between frames (water so far, step size)
   const p = o.clone(), max = maxD || 120 + (72 / camera.fov) * 140;      // the scope reaches further
-  const [aT, aWho] = beasts.length ? animalRay(o, dir, cs ? 0 : .5) : [1e9, null];
+  const [aT, aWho, aHead] = beasts.length ? animalRay(o, dir, cs ? 0 : .5) : [1e9, null, false];
   const [bT, bWho, bHead] = squad.length && gameMode === "pvp" ? botRay(o, dir, cs ? 0 : .5) : [1e9, null, false];
   let wet = cs ? cs.wet : 0;                                // how far this bullet has gone through water
   for (let dist = 0; dist < max;) {
     const st = cs ? Math.min(cs.st, max - dist + .001) : dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
     if (dist >= bT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
-    if (dist >= aT) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho };
+    if (dist >= aT) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho, head: aHead };
     if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) break;
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
@@ -8418,7 +8664,7 @@ function castShot(o, dir, maxD, cs) {                      // cs: a flying bulle
     if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return { p, kind: "wood" };
   }
   if (bT < max && bT < aT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
-  if (aT < max) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho };   // past the map edge (birds out over the borderlands)
+  if (aT < max) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho, head: aHead };   // past the map edge (birds out over the borderlands)
   return { p, kind: null };
 }
 function fire() {
@@ -8482,7 +8728,7 @@ function updateGun(dt) {
       place(t.head, tp, hp, w); place(t.trail, t.from, hp, w * .45);
       if (k >= 1 && t.hit.bot) { damageBot(t.hit.bot, t.hit.head); t.hit.bot = null; t.hit.kind = null; }
       if (k >= 1 && t.hit.botHit) { t.hit.botHit = false; if (state === "play") hurt(BOT.hitDmg); }
-      if (k >= 1 && t.hit.animal) { killAnimal(t.hit.animal, t.hit.dist); t.hit.animal = null; t.hit.kind = null; }   // no blood: it just drops, and a bing
+      if (k >= 1 && t.hit.animal) { hitAnimal(t.hit.animal, t.hit.dist, 0, t.hit.head); t.hit.animal = null; t.hit.kind = null; }   // no blood: it just drops, and a bing
       if (k >= 1 && t.hit.kind) addPuff(t.end, t.hit.kind);
     } else {
       t.fade += dt;
