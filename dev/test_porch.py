@@ -29,10 +29,13 @@ async def main():
               return o; }""", [lat, size, sd])
             # clear view: no branch geometry of the giant near porch height (beyond the trunk)
             r2 = await pg.evaluate("""() => { const Pc = D.PORCH; if (!Pc) return null; const T = D.THREE; let n = 0, other = 0, m4 = new T.Matrix4(), v = new T.Vector3();
-              D.scene.traverse(m => { if (!m.isInstancedMesh || !m.geometry.attributes.position) return;
-                for (let i = 0; i < m.count; i++) { m.getMatrixAt(i, m4); const px = m4.elements[12], pz = m4.elements[14]; const dd = Math.hypot(px - (Pc.tree ? Pc.tree.x : Pc.x), pz - (Pc.tree ? Pc.tree.z : Pc.z));
+              const sets = []; const nearMeshes = new Set();   /* 1.86: trees live in near batches (all squares' instances in their blocks) and cards; measure the real trees */
+              if (D.NEAR) for (const NS of [D.NEAR.trees]) for (const E of NS.items) { nearMeshes.add(E.mesh); for (const bl of E.blocks.values()) sets.push([E.mesh, bl.m, bl.n]); }
+              D.scene.traverse(m => { if (m.isInstancedMesh && !m.userData.card && !nearMeshes.has(m)) sets.push([m, m.instanceMatrix.array, m.count]); });
+              for (const [m, arr, cnt] of sets) { if (!m.geometry.attributes.position) continue;
+                for (let i = 0; i < cnt; i++) { m4.fromArray(arr, i * 16); const px = m4.elements[12], pz = m4.elements[14]; const dd = Math.hypot(px - (Pc.tree ? Pc.tree.x : Pc.x), pz - (Pc.tree ? Pc.tree.z : Pc.z));
                   if (dd < .5) { const P = m.geometry.attributes.position; for (let k = 0; k < P.count; k += 3) { v.fromBufferAttribute(P, k).applyMatrix4(m4); const r = Math.hypot(v.x - Pc.x, v.z - Pc.z); if (v.y > Pc.top - .3 && v.y < Pc.top + 3 && r > Pc.rIn - .2 && r < 30) n++; } }
-                  else if (dd < 250) { const sy = Math.hypot(m4.elements[4], m4.elements[5], m4.elements[6]); other = Math.max(other, m4.elements[13] + sy * (m.geometry.boundingBox || (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).max.y - m4.elements[13]); } } });
+                  else if (dd < 250) { const sy = Math.hypot(m4.elements[4], m4.elements[5], m4.elements[6]); other = Math.max(other, m4.elements[13] + sy * (m.geometry.boundingBox || (m.geometry.computeBoundingBox(), m.geometry.boundingBox)).max.y - m4.elements[13]); } } }
               return { branchVertsInView: n, tallestOtherTop: +other.toFixed(1) }; }""")
             r.update(r2 or {}); out.append(r)
             if SHOTS and lat == 45:

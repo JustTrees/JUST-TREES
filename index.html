@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.85</title>
+<title>JUST TREES 1.86</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.85";              // Just Trees 1.85
+const VERSION = "1.86";              // Just Trees 1.86
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -354,7 +354,7 @@ let TILE = 160; const SIZES = { xs: 250, small: 400, medium: 560, large: 800, xl
 let S = 640, HALF = 320, EDGE = 270, SEG = 230, NT = 4, AREA = 1;
 function applySize() {                      // map size from the setup screen; detail per meter stays the same
   S = SIZES[set.size] || 560; HALF = S / 2; EDGE = HALF - (set.edges === "island" ? 50 : 6);   // endless: almost to the very edge
-  SEG = Math.round(S / (S > 2000 ? 4 : isTouch ? 3.76 : 2.78)); /* 3 km: a vertex every 4 m (XXL: 2.8 m) */ TILE = S > 2000 ? 300 : 160; /* 3 km: bigger tree tiles */ NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
+  SEG = Math.round(S / (S > 2000 ? 4 : isTouch ? 3.76 : 2.78)); /* 3 km: a vertex every 4 m (XXL: 2.8 m) */ TILE = S > 2000 ? 200 : 160; /* XXXL: a bit bigger squares */ NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
 }
 const EYE = 1.65;
 /* ---- map shape: an organic outline inside the square (a coastline on islands, a soft boundary on endless maps) ---- */
@@ -487,12 +487,12 @@ const densMul = () => .5 + set.density;
 const ARMED = () => gameMode === "hunt" || (gameMode === "pvp" && VR_ON);   // the full set of guns (VR PvP plays like Hunting)
 // headset savings on the biggest maps: fewer far-off copies, trees switch to their lighter version a bit sooner, a few less trees, lighter rain and snow
 const BIG3 = () => set.size === "xxxl";                    // the 3 km open-world map: no animals, trees thinned to XXL's count less 10%
-const PERF = () => BIG3() ? (VR_ON ? { lod: 205, zoomLod: 2.5, border: .4, trees: .9 * .82 * (1600 * 1600) / (3000 * 3000), precip: .6 } : { lod: 270, zoomLod: 99, border: 1, trees: .9 * (1600 * 1600) / (3000 * 3000), precip: 1 })
+const PERF = () => BIG3() ? (VR_ON ? { lod: 115, zoomLod: 4.5, border: .4, trees: .9 * .82 * (1600 * 1600) / (3000 * 3000), precip: .6 } : { lod: 270, zoomLod: 99, border: 1, trees: .9 * (1600 * 1600) / (3000 * 3000), precip: 1 })
   : !VR_ON ? { lod: 270, zoomLod: 99, border: 1, trees: 1, precip: 1 }
-  : set.size === "xxl" ? { lod: 205, zoomLod: 2.5, border: .4, trees: .82, precip: .6 }
-  : set.size === "xl" ? { lod: 240, zoomLod: 3.5, border: .7, trees: .92, precip: .8 }
-  : { lod: 270, zoomLod: 4, border: 1, trees: 1, precip: 1 };       // 0.5x to 1.5x of the normal forest, middle of the slider is normal
-[["xs", "XS"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "3 km"]].forEach(([k, label]) => {
+  : set.size === "xxl" ? { lod: 115, zoomLod: 4.5, border: .4, trees: .82, precip: .6 }
+  : set.size === "xl" ? { lod: 120, zoomLod: 7, border: .7, trees: .92, precip: .8 }
+  : { lod: 120, zoomLod: 9, border: 1, trees: 1, precip: 1 };   /* 1.86 headset: full-detail trees only in the squares within ~165 m (was ~205-270 m), tree cards beyond; a scope still reaches about as far */       // 0.5x to 1.5x of the normal forest, middle of the slider is normal
+[["xs", "XS"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, label]) => {
   if (k === "xxxl" && isTouch) return;                       // phones: not the 3 km map
   const b = document.createElement("button"); b.textContent = label; b.dataset.size = k;
   b.addEventListener("click", () => { set.size = k; renderSetup(); });
@@ -1493,6 +1493,110 @@ function treeVariant(kind, pruned, odd, opt) {
 
 const phong = (color, extra = {}) => new THREE.MeshPhongMaterial({ color, flatShading: true, shininess: 0, specular: 0x000000, ...extra });
 const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), EU = new THREE.Euler(), V = new THREE.Vector3(), SC = new THREE.Vector3();
+/* ---------------- 1.86: drawing less, the same look (Ron: "it still glitched … can we compromise some things") ----------------
+   1. Near sets: every tree (and limb) close to you is drawn in one big batch per shape for the whole map, refilled only when you
+      move into a new square (or the scope reaches further) — not one batch per shape per square. Small things (bushes, pebbles,
+      fallen logs) the same way, but only within SMALL_D.
+   2. Tree cards: past the full-detail range every tree is a flat picture of itself that turns to face you (painted once per map
+      from the real tree, in this map's light): one draw per square of forest instead of dozens, a few triangles per tree. */
+const SMALL_D = 150, MID_D = 600;                                       // bushes, pebbles and fallen logs: only drawn this close (m)
+let NEAR = null, CARD = null;
+const _nWhite = new THREE.Color(1, 1, 1);
+function nearSet() { return { items: [], flags: null }; }
+function nearAdd(NS, geo, mat, list, tileOfFn) {           // list: the instances; tileOfFn(t) -> which square it's in
+  if (!list.length) return;
+  const per = new Map();
+  for (const t of list) { const ti = tileOfFn(t); let a = per.get(ti); if (!a) per.set(ti, a = []); a.push(t); }
+  const blocks = new Map();
+  for (const [ti, arr] of per) {
+    const m = new Float32Array(arr.length * 16), c = new Float32Array(arr.length * 3);
+    arr.forEach((t, i) => {
+      Q.setFromEuler(EU.set(t.tx || 0, t.ry || 0, t.tz || 0, t.ord || "XYZ"));
+      M4.compose(V.set(t.x, t.y, t.z), Q, SC.set(t.s * (t.sx || 1), t.s * (t.sy || 1), t.s * (t.sz || t.sx || 1))).toArray(m, i * 16);
+      (t.c || _nWhite).toArray(c, i * 3);
+    });
+    blocks.set(ti, { m, c, n: arr.length });
+  }
+  const mesh = new THREE.InstancedMesh(geo, mat, list.length); mesh.count = 0; mesh.frustumCulled = false; mesh.setColorAt(0, _nWhite);
+  world.add(mesh); NS.items.push({ mesh, blocks }); NS.flags = null;
+}
+function nearRebuild(NS, flags) {
+  for (const E of NS.items) {
+    const M = E.mesh.instanceMatrix, C = E.mesh.instanceColor; let o = 0;
+    for (const [ti, b] of E.blocks) if (flags[ti]) { M.array.set(b.m, o * 16); C.array.set(b.c, o * 3); o += b.n; }
+    E.mesh.count = o; E.mesh.visible = o > 0;
+    if (o) { M.updateRange.offset = 0; M.updateRange.count = o * 16; M.needsUpdate = true; C.updateRange.offset = 0; C.updateRange.count = o * 3; C.needsUpdate = true; }
+  }
+  NS.flags = flags.slice();
+}
+function nearTick(NS, flags) {                              // refill only when the set of squares changed
+  const F = NS.flags; if (F && F.length === flags.length) { let same = true; for (let i = 0; i < F.length; i++) if (F[i] !== flags[i]) { same = false; break; } if (same) return false; }
+  nearRebuild(NS, flags); return true;
+}
+// ---- tree cards
+function cardMaterial(tex) {
+  const m = new THREE.MeshBasicMaterial({ map: tex, alphaTest: VR_ON ? .3 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, fog: true });
+  m.onBeforeCompile = sh => {
+    sh.vertexShader = "attribute vec4 aCell;\n" + sh.vertexShader
+      .replace("#include <uv_vertex>", "#include <uv_vertex>\n  vUv = aCell.xy + vUv * aCell.zw;")
+      .replace("#include <project_vertex>", `
+        vec4 cW = modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float sX = length(instanceMatrix[0].xyz), sY = length(instanceMatrix[1].xyz);
+        vec3 toC = cameraPosition - cW.xyz; toC.y = 0.0; toC = normalize(toC + vec3(1e-4, 0.0, 0.0));
+        vec3 rgt = vec3(toC.z, 0.0, -toC.x);
+        vec4 mvPosition = viewMatrix * vec4(cW.xyz + rgt * (position.x * sX) + vec3(0.0, position.y * sY, 0.0), 1.0);
+        gl_Position = projectionMatrix * mvPosition;`);
+  };
+  m.customProgramCacheKey = () => "treecard186";
+  return m;
+}
+function bakeCards(kinds, used) {                           // paint each tree shape once, side-on, in this map's light, into one picture sheet
+  const COLS = 16, CW = 128, CHT = 256, N = used.length, rows = Math.max(1, Math.ceil(N / COLS));
+  const W = COLS * CW, Hh = Math.pow(2, Math.ceil(Math.log2(rows * CHT)));
+  const rt = new THREE.WebGLRenderTarget(W, Hh, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter });
+  const bs = new THREE.Scene(), hl = new THREE.HemisphereLight(hemi.color, hemi.groundColor, hemi.intensity), sl = new THREE.DirectionalLight(sunL.color, sunL.intensity);
+  const sd = _v1.copy(sunL.position).normalize(), el = Math.asin(Math.max(-1, Math.min(1, sd.y)));
+  sl.position.set(Math.sin(.9) * Math.cos(el), Math.max(.15, Math.sin(el)), Math.cos(.9) * Math.cos(el)).multiplyScalar(100); bs.add(hl, sl, sl.target);   // the sun from the front and one side
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 600); cam.position.set(0, 0, 300);
+  const xrOn = renderer.xr.enabled, prevRT = renderer.getRenderTarget(), prevC = renderer.getClearColor(new THREE.Color()), prevA = renderer.getClearAlpha(), prevAuto = renderer.autoClear;
+  renderer.xr.enabled = false; renderer.setRenderTarget(rt); renderer.setClearColor(0x34401f, 0); renderer.clear(); renderer.autoClear = false;
+  const cells = {};
+  used.forEach(([k, vi], i) => {
+    const v = kinds[k].vars[vi], geo = v.geo; if (!geo.boundingBox) geo.computeBoundingBox(); const bb = geo.boundingBox;
+    const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z, .5), hgt = Math.max(.5, bb.max.y - bb.min.y);
+    const fh = Math.max(hgt, w * 2) * 1.04, fw = fh / 2, y0 = bb.min.y - fh * .01, cx0 = (bb.max.x + bb.min.x) / 2;
+    const m = new THREE.Mesh(geo, kinds[k].mats[vi % 2]); m.position.x = -cx0; bs.add(m);
+    cam.left = -fw / 2; cam.right = fw / 2; cam.bottom = y0; cam.top = y0 + fh; cam.updateProjectionMatrix();
+    const cx = (i % COLS) * CW, cy = Math.floor(i / COLS) * CHT;
+    rt.viewport.set(cx, cy, CW, CHT); rt.scissor.set(cx, cy, CW, CHT); rt.scissorTest = true; renderer.setRenderTarget(rt);
+    renderer.render(bs, cam); bs.remove(m);
+    cells[k + "|" + vi] = { u0: cx / W, v0: cy / Hh, du: CW / W, dv: CHT / Hh, fw, fh, y0 };
+  });
+  rt.scissorTest = false; rt.viewport.set(0, 0, W, Hh); rt.scissor.set(0, 0, W, Hh);
+  renderer.setRenderTarget(prevRT); renderer.setClearColor(prevC, prevA); renderer.autoClear = prevAuto; renderer.xr.enabled = xrOn;
+  return { rt, cells };
+}
+function cardMesh(list, parent) {                           // list: [tree record, cell] -> one mesh of cards
+  if (!list.length) return null;
+  const g = CARD.base.clone(), cellA = new Float32Array(list.length * 4), m = new THREE.InstancedMesh(g, CARD.mat, list.length);
+  list.forEach(([t, c], i) => {
+    const sx = t.s * (t.sx || 1), sy = t.s * (t.sy || 1);
+    m.setMatrixAt(i, M4.compose(V.set(t.x, t.y + c.y0 * sy, t.z), Q.identity(), SC.set(c.fw * sx, c.fh * sy, 1)));
+    m.setColorAt(i, t.c || _nWhite); cellA[i * 4] = c.u0; cellA[i * 4 + 1] = c.v0; cellA[i * 4 + 2] = c.du; cellA[i * 4 + 3] = c.dv;
+  });
+  g.setAttribute("aCell", new THREE.InstancedBufferAttribute(cellA, 4));
+  m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; m.frustumCulled = false; m.userData.card = true;
+  parent.add(m); return m;
+}
+function buildCards(kinds) {                                // after the light is set: paint the sheet, then one card mesh per square
+  const pend = CARD ? CARD.pend : [];
+  const used = [], seen = new Set();
+  for (const P0 of pend) for (const e of P0.list) { const key = e.k + "|" + e.vi; if (!seen.has(key)) { seen.add(key); used.push([e.k, e.vi]); } }
+  if (!used.length) { CARD = null; return; }
+  const B = bakeCards(kinds, used);
+  CARD = { rt: B.rt, cells: B.cells, base: new THREE.PlaneGeometry(1, 1).translate(0, .5, 0), mat: cardMaterial(B.rt.texture), pend: [] };
+  for (const P0 of pend) cardMesh(P0.list.map(e => [e.t, CARD.cells[e.k + "|" + e.vi]]).filter(e => e[1]), P0.parent);
+}
 function addInstances(geo, mat, list, useColor, parent = world) {
   if (!list.length) return;
   const m = new THREE.InstancedMesh(geo, mat, list.length);
@@ -2719,6 +2823,7 @@ function generate() {
   starMat.uniforms.uPx.value = renderer.getPixelRatio();
   if (world) { scene.remove(world); world.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
   world = new THREE.Group(); scene.add(world);
+  if (CARD && CARD.rt) CARD.rt.dispose(); CARD = { pend: [] }; NEAR = { trees: nearSet(), small: nearSet(), mid: nearSet() };   // 1.86: near batches and tree cards
   rndF = mulberry32(seed * 31 + 17);
   if (groundDetail) { groundDetail.dispose(); groundDetail = null; }
   if (rockTex) { rockTex.dispose(); rockTex = null; }
@@ -3158,16 +3263,15 @@ function generate() {
       }
     }
   }
-  for (const k in limbVars) limbVars[k].forEach((lv, vi) => limbRecs[k][vi].forEach((list, ti) => addInstances(lv.geo, limbMats[k], list, true, tiles[ti].hi)));
+  for (const k in limbVars) limbVars[k].forEach((lv, vi) => { const all = []; limbRecs[k][vi].forEach((list, ti) => { for (const r of list) { r._ti = ti; all.push(r); } }); nearAdd(NEAR.trees, lv.geo, limbMats[k], all, r => r._ti); });
 
   {                                     // bake the soft tree shadows for this map's sun (or moon)
     const sp0 = sunPos(lat, set.month, hourNow); shadowSrc = { trees: allTrees, kinds, lat };
     bakeShadows(allTrees, kinds, sp0.el > -4 ? sp0.dir : new THREE.Vector3(-sp0.dir.x, Math.max(.45, -sp0.dir.y * .5 + .4), -sp0.dir.z).normalize());
   }
-  for (const k in kinds) kinds[k].vars.forEach((variant, vi) => {
-    const mat = kinds[k].mats[vi % 2];
-    for (let ti = 0; ti < tiles.length; ti++) { const l = recs[k][vi].filter(t => t.tile === ti); addInstances(variant.geo, mat, l, true, tiles[ti].hi); addInstances(variant.geoLow || variant.geo, mat, l, true, tiles[ti].lo); }
-  });
+  for (const k in kinds) kinds[k].vars.forEach((variant, vi) => nearAdd(NEAR.trees, variant.geo, kinds[k].mats[vi % 2], recs[k][vi], t => t.tile));   // full detail: near batches
+  for (let ti = 0; ti < tiles.length; ti++) CARD.pend.push({ list: [], parent: tiles[ti].lo });                                          // further out: cards (painted once the light is set)
+  for (const k in kinds) kinds[k].vars.forEach((variant, vi) => { for (const t of recs[k][vi]) CARD.pend[t.tile].list.push({ t, k, vi }); });
 
   // Terrain mesh, with rock blended in on steep and high ground
   const g = biome === "redwood" ? ["#4c5e2e", "#5c4a30"] : Array.isArray(GRASS[TB(biome)]) ? GRASS[TB(biome)] : GRASS[TB(biome)][season];
@@ -3223,7 +3327,7 @@ function generate() {
     bgeo.setAttribute("color", new THREE.BufferAttribute(bcol, 3)); bgeo.setAttribute("rocky", new THREE.BufferAttribute(brk, 1)); bgeo.computeVertexNormals();
     world.add(new THREE.Mesh(bgeo, groundMaterial(litter, TROPIC(biome) ? "#5a4a2a" : "#b5642a", weather.wet)));
     // forest on the borderlands: copies of this map's own trees, grouped in big chunks that get culled like the map tiles
-    const brand = mulberry32(seed * 17 + 3), bn = makeNoise(brand), CH = 320, reach = HALF + Math.min(ext, (VR_ON ? 1500 : isTouch ? 550 : 950) + 120);
+    const brand = mulberry32(seed * 17 + 3), bn = makeNoise(brand), CH = 320, reach = HALF + Math.min(ext, (VR_ON ? 1200 : isTouch ? 550 : 950) + 120);
     const dens = allTrees.length / (S * S) * .55, cap = Math.round((VR_ON ? 7000 : isTouch ? 2600 : 7500) * PERF().border);
     const ringArea = (2 * reach) ** 2 - (S - 40) ** 2, want = Math.min(cap, Math.round(dens * ringArea));
     const chunks = new Map();
@@ -3244,7 +3348,7 @@ function generate() {
     for (const ch of chunks.values()) {
       const group = new THREE.Group(); world.add(group);
       const by = {}; for (const t of ch.list) (by[t.kind + "|" + t.vi] = by[t.kind + "|" + t.vi] || []).push(t);
-      for (const key in by) { const [kd, vi] = key.split("|"); const kk = kinds[kd]; if (kk && kk.vars[+vi]) addInstances(kk.vars[+vi].geoLow || kk.vars[+vi].geo, kk.mats[+vi % 2], by[key], true, group); }
+      CARD.pend.push({ list: ch.list.filter(t => kinds[t.kind] && kinds[t.kind].vars[t.vi]).map(t => ({ t, k: t.kind, vi: t.vi })), parent: group });   // the borderlands: cards, one batch per chunk
       tiles.push({ group, cx: ch.cx, cz: ch.cz, cy: water + span * .3, r: CH * .72 });
     }
   }
@@ -3263,7 +3367,7 @@ function generate() {
   const addObstacleSoft = (x, z, r) => addObstacle(x, z, r, true);
   rockN = Math.ceil(S) + 1; rockGrid = new Float32Array(rockN * rockN).fill(-1e9); rockLow = new Float32Array(rockN * rockN).fill(1e9);
   // Rocks
-  const RG = { ...rockGeos(), ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
+  const RGr = rockGeos(), RG = { ...RGr, ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
   const tone = { swamp: [.78, .84, .74], badlands: [1.3, .62, .44], rainforest: [.8, .86, .76], desert: [1.14, .8, .6], tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[TB(biome)];
   const rc = () => { const v = .8 + rand() * .35; return new THREE.Color(v * tone[0], v * tone[1], v * tone[2]); };
   const rockAt = (k, x, z, s, sink, extra = {}) => inLava(x, z, s * 1.6 + 2) || (biome === "badlands" && slopeNy(x, z) < .8) ? 0 : rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
@@ -3333,7 +3437,7 @@ function generate() {
     winterSnow ? 1 : 0,
     TROPIC(biome) ? "#3f7a2a" : season === "fall" ? "#6a7a30" : "#4a6a2c", biome === "tundra" ? "#c8a040" : "#b8b878",
     snowLine, Math.max(1, span * .05), weather.wet);
-  for (const k in RG) addInstances(RG[k], rMat, rr[k], true);
+  for (const k in RG) if (k === "pebble") nearAdd(NEAR.small, RG[k], rMat, rr[k], t => tileOf(t.x, t.z)); else if (k in RGr) nearAdd(NEAR.mid, RG[k], rMat, rr[k], t => tileOf(t.x, t.z)); else addInstances(RG[k], rMat, rr[k], true);   // pebbles only near you, boulders within MID_D, cliffs and outcrops always
   for (const k in RG) if (k !== "pebble") stampSolid(RG[k], rr[k]);   // rocks are solid: their real shape blocks you
 
   // Fallen logs in the forest
@@ -3350,7 +3454,7 @@ function generate() {
     if (r > .33) for (let q = -L / 2; q <= L / 2; q += 1.2) addObstacleSoft(x + cx * q, z + cz * q, r + .1);
   }
   const LG = logGeo();
-  addInstances(LG, grade(new THREE.MeshLambertMaterial({ map: kinds.fir.mats[0].map })), logs, true);
+  nearAdd(NEAR.small, LG, grade(new THREE.MeshLambertMaterial({ map: kinds.fir.mats[0].map })), logs, t => tileOf(t.x, t.z));   // fallen logs only near you
   stampSolid(LG, logs);
 
   // Bushes: just a few, mostly near trees and rocks
@@ -3380,7 +3484,7 @@ function generate() {
   }
   for (const k in kinds) kinds[k].bush.forEach((geo, vi) => {
     const mat = kinds[k].mats[vi % 2];
-    for (let ti = 0; ti < tiles.length; ti++) addInstances(geo, mat, bushRecs[k][vi].filter(t => t.tile === ti), true, tiles[ti].group);
+    nearAdd(NEAR.small, geo, mat, bushRecs[k][vi], t => t.tile);   // bushes only near you
   });
 
   // Fog field: patches of fog and clear ground, thicker in valleys and along lake shores
@@ -3466,6 +3570,7 @@ function generate() {
   skyP = makeSkyStyle(rand, biome);
   skySeedX = rand() * 50; skySeedY = rand() * 50;
   setLighting(lat, biome);
+  buildCards(kinds);                                         // 1.86: paint the tree cards in this light
   // ground fog for this map: how thick, how deep, how uneven, depending on the weather
   { const W = weather, R = mulberry32(seed * 29 + 3);
     const P0 = gameMode === "hike" ? [0, 10, 0, 0, 0] : W.type === "fog" ? [water + 6 + R() * 6, 9, .05, 14, .55] : W.mist ? [water + 1.5, 5, .03, 6, .7]
@@ -3617,7 +3722,7 @@ function setLighting(lat, biome) {
   if (el > -4) { WATER_U.uSunDir.value.copy(sp.dir); WATER_U.uSunCol.value.copy(sunCol); WATER_U.uSunVis.value = smooth(-3, 2, el) * (1 - oc * .9); }
   else { WATER_U.uSunDir.value.copy(moonDir); WATER_U.uSunCol.value.set("#c8d4f0"); WATER_U.uSunVis.value = U.moonVis.value * .7; }
   if (fogBanks) fogBanks.material.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
-  fogBase = scene.fog.far = (VR_ON ? 1500 : isTouch ? 550 : 950) * weather.fogMul;   // you can see further before the haze takes over
+  fogBase = scene.fog.far = (VR_ON ? 1200 : isTouch ? 550 : 950) * weather.fogMul;   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
 }
 
 /* ---------------- The zone: green spore mist that creeps inward in stages ---------------- */
@@ -6512,7 +6617,7 @@ function vruiParts() {
   uiSlider(S2, lx, 516, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 790 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
-  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "3 km"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 130, 196, 122, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
+  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 130, 196, 122, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
   uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
   uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
@@ -7988,17 +8093,17 @@ function bowTipZ() { return bowLimbZ(1); }
 function arrowModel() {
   const g = new THREE.Group(), ph = (col, o) => new THREE.MeshPhongMaterial(Object.assign({ color: col, shininess: 60, specular: 0x444444 }, o || {}));
   const carbon = ph("#202326", { shininess: 90, specular: 0x666666 }), steel = ph("#c9cdd2", { shininess: 120, specular: 0xbbbbbb }), orange = ph("#ff6a1a", { shininess: 20 }), white = ph("#f2f2ec", { shininess: 20 });
-  const sh = new THREE.Mesh(new THREE.CylinderGeometry(.0034, .0034, .72, 8).rotateX(Math.PI / 2), carbon); sh.position.z = -.37; g.add(sh);
-  const ins = new THREE.Mesh(new THREE.CylinderGeometry(.0034, .0042, .02, 8).rotateX(Math.PI / 2), steel); ins.position.z = -.74; g.add(ins);
-  const head = new THREE.Mesh(new THREE.ConeGeometry(.0065, .045, 3).rotateX(-Math.PI / 2), steel); head.position.z = -.772; g.add(head);   // a three-blade broadhead
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(.0055, .0055, .72, 8).rotateX(Math.PI / 2), carbon); sh.position.z = -.37; g.add(sh);
+  const ins = new THREE.Mesh(new THREE.CylinderGeometry(.0055, .0062, .02, 8).rotateX(Math.PI / 2), steel); ins.position.z = -.74; g.add(ins);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(.0085, .05, 3).rotateX(-Math.PI / 2), steel); head.position.z = -.772; g.add(head);   // a three-blade broadhead
   for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(.0006, .012, .03), steel); const a = k * Math.PI * 2 / 3; b.position.set(Math.sin(a) * .006, Math.cos(a) * .006, -.765); b.rotation.z = -a; g.add(b); }
   const vaneShape = new THREE.Shape(); vaneShape.moveTo(0, 0); vaneShape.lineTo(.075, 0); vaneShape.quadraticCurveTo(.05, .013, .012, .015); vaneShape.lineTo(0, 0);
   const vaneGeo = new THREE.ShapeGeometry(vaneShape);
   for (let k = 0; k < 3; k++) {                               // three vanes, one white (the cock vane)
     const v = new THREE.Mesh(vaneGeo, k ? orange : white); v.material = v.material.clone(); v.material.side = THREE.DoubleSide;
-    const holder = new THREE.Group(); holder.rotation.z = k * Math.PI * 2 / 3; v.rotation.y = Math.PI / 2; v.position.set(0, .0034, -.025); holder.add(v); g.add(holder);
+    const holder = new THREE.Group(); holder.rotation.z = k * Math.PI * 2 / 3; v.rotation.y = Math.PI / 2; v.position.set(0, .0055, -.025); holder.add(v); g.add(holder);
   }
-  const nock = new THREE.Mesh(new THREE.CylinderGeometry(.004, .0036, .014, 8).rotateX(Math.PI / 2), orange); nock.position.z = -.004; g.add(nock);
+  const nock = new THREE.Mesh(new THREE.CylinderGeometry(.0062, .0058, .014, 8).rotateX(Math.PI / 2), orange); nock.position.z = -.004; g.add(nock);
   return g;                                                  // the nock at 0, the point at -0.79 (forward is -z)
 }
 function bowParts() {
@@ -8103,7 +8208,11 @@ function bowTick(dt, I, main, off, mainSide, offSide) {
 function bowShoot(rest, nockPt, f, mainSide, offSide) {
   const dir = new THREE.Vector3().subVectors(rest, nockPt).normalize(), spd = BOW.vMin + (BOW.vMax - BOW.vMin) * Math.pow(f, .8);
   const m = arrowModel(); scene.add(m); m.traverse(c => { c.frustumCulled = false; });
-  ARROWS.push({ m, p: rest.clone().addScaledVector(dir, .05), v: dir.multiplyScalar(spd), from: new THREE.Vector3(P.x, P.y, P.z), t: 0, cs: { wet: 0, st: .25 }, f });
+  const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));   // a light-blue streak, like the bullets' yellow one
+  head.material.color.set("#bfeaff"); trail.material.color.set("#5cc8ff"); trail.material.opacity = .5; head.material.opacity = .85;
+  head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
+  const p0 = rest.clone().addScaledVector(dir, .05);
+  ARROWS.push({ m, head, trail, p: p0, start: p0.clone(), gone: 0, v: dir.multiplyScalar(spd), from: new THREE.Vector3(P.x, P.y, P.z), t: 0, cs: { wet: 0, st: .25 }, f });
   gunFoley(SFX_BOW.twang); buzz(mainSide, .8, 45); buzz(offSide, .6, 60);
 }
 function arrowsTick(dt) {
@@ -8122,7 +8231,11 @@ function arrowsTick(dt) {
     }
     const dir = _bw3.copy(R.v).normalize();
     R.m.position.copy(a).addScaledVector(dir, -.79); R.m.lookAt(_bw4.copy(R.m.position).sub(dir));   // the point leads (the model points down -z)
-    if (done) { scene.remove(R.m); ARROWS.splice(i, 1); }
+    R.gone = R.start.distanceTo(a);
+    { const tail = a.clone().addScaledVector(dir, -.8), w = .012 + tail.distanceTo(camera.position) * .0009;   // the streak starts behind the fletching
+      const put = (o, back, wd) => { const L = Math.max(.05, Math.min(back, R.gone - .8)); if (L <= .06) { o.visible = false; return; } const q = tail.clone().addScaledVector(dir, -L); o.position.lerpVectors(q, tail, .5); o.lookAt(tail); o.scale.set(wd, wd, L); o.visible = true; };
+      put(R.head, 2.5, w); put(R.trail, 12, w * .55); }
+    if (done) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); ARROWS.splice(i, 1); }
   }
 }
 function arrowHit(A, R, p, head, spd) {
@@ -8135,7 +8248,7 @@ function arrowHit(A, R, p, head, spd) {
   }
   hitAnimal(A, dist, Math.max(5, (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * k), head, null);
 }
-function arrowsClear() { for (const R of ARROWS) scene.remove(R.m); ARROWS.length = 0; bowHide(); }
+function arrowsClear() { for (const R of ARROWS) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); } ARROWS.length = 0; bowHide(); }
 function vrClearNades() {
   for (const N of NADES) scene.remove(N.m); NADES.length = 0;
   for (const B of BOOMS) scene.remove(B.m); BOOMS.length = 0;
@@ -9406,20 +9519,23 @@ addEventListener("resize", () => {
 
 const FR = new THREE.Frustum(), PM = new THREE.Matrix4(), SPH = new THREE.Sphere();
 const cullCam = new THREE.PerspectiveCamera(118, 1.25, .1, 3000);   // a headset sees wider than the page camera
+const cullFT = [], cullFS = [], cullFM = [];
 function cullTiles() {
   camera.updateMatrixWorld();
   let cc = camera;
   if (vr.on && !(vr.scoped || vr.binos)) { cullCam.position.copy(camera.position); cullCam.quaternion.copy(camera.quaternion); cullCam.updateMatrixWorld(); cc = cullCam; }
   PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
   const pf = PERF(), lodD = pf.lod * Math.max(1, vr.on ? Math.min(vr.zoomK, pf.zoomLod) : 72 / camera.fov);   // full-detail trees nearby (and further out through a scope, but not all the way to the horizon)
-  for (const t of tiles) {
-    const d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
+  const fT = cullFT, fS = cullFS, fM = cullFM; fT.length = fS.length = fM.length = tiles.length;
+  for (let i = 0; i < tiles.length; i++) {
+    const t = tiles[i], d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
     const tr = t.r || TILE * .72;
+    if (t.hi) { const near = d < lodD + TILE * .3; t.lo.visible = !near; fT[i] = near; fS[i] = d < SMALL_D + TILE * .55; fM[i] = d < MID_D + TILE * .55; } else fT[i] = fS[i] = fM[i] = false;
     if (d - tr > scene.fog.far) { t.group.visible = false; continue; }
     SPH.center.set(t.cx, t.cy, t.cz); SPH.radius = tr + 60;
     t.group.visible = FR.intersectsSphere(SPH);
-    if (t.hi) { const near = d < lodD; t.hi.visible = near; t.lo.visible = !near; }
   }
+  if (NEAR) { nearTick(NEAR.trees, fT); nearTick(NEAR.small, fS); nearTick(NEAR.mid, fM); }   // 1.86: refill the near batches only when the squares around you change
 }
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 let last = performance.now(), infoT = 0, mapT = 0;

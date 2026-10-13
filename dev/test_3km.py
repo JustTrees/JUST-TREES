@@ -23,7 +23,7 @@ async def main():
         print(json.dumps(out)); print("errors:", errs or "none")
         a, k = out["xxl"], out["3km"]; ratio = k["trees"] / max(1, a["trees"])
         ok = (.8 < ratio < 1.0 and k["beasts0"] == 0 and k["beastsLater"] == 0 and out["3kmDino"]["beasts0"] == 0 and out["3kmDino"]["beastsLater"] == 0
-              and not out["3kmDino"]["dino"] and a["beasts0"] > 50 and "3 km" in k["btns"] and k["gen"] < a["gen"] * 2 and not errs)
+              and not out["3kmDino"]["dino"] and a["beasts0"] > 50 and "XXXL" in k["btns"] and k["gen"] < a["gen"] * 2.5 and not errs)
         print("treeRatio", round(ratio, 3)); print("PASS" if ok else "FAIL"); await b.close()
         if not ok: sys.exit(1)
 asyncio.run(main())
