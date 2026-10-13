@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.80</title>
+<title>JUST TREES 1.81</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.80";              // Just Trees 1.80
+const VERSION = "1.81";              // Just Trees 1.81
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5269,8 +5269,10 @@ function scatterBeasts(o) { const again = sense.shotT > 8.5 && sense.shot && Mat
 function legendShot(o, dir, reach, speed) {                // a shot at Bigfoot: the bullet passing (or landing) within 15 m of him is your one shot
   if (gameMode !== "hunt" || !legendSeen()) return;
   for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
-    const h = castShot(o, dir, reach), maxD = h && h.p ? h.p.distanceTo(o) + 2 : reach;          // where the bullet actually stops
-    const cx = A.x - o.x, cy = A.y + 1.2 - o.y, cz = A.z - o.z, t = Math.max(0, Math.min(maxD, cx * dir.x + cy * dir.y + cz * dir.z));
+    const cx = A.x - o.x, cy = A.y + (A.kind === "trex" ? 3 : 1.2) - o.y, cz = A.z - o.z, t0 = Math.max(0, Math.min(reach, cx * dir.x + cy * dir.y + cz * dir.z));
+    if (Math.hypot(cx - dir.x * t0, cy - dir.y * t0, cz - dir.z * t0) >= 15) continue;           // the line doesn't pass near: nothing to trace (this was costing every shot)
+    const h = castShot(o, dir, Math.min(reach, t0 + 20)), maxD = h && h.p ? h.p.distanceTo(o) + 2 : reach;          // where the bullet actually stops
+    const t = Math.max(0, Math.min(maxD, t0));
     const d = Math.hypot(cx - dir.x * t, cy - dir.y * t, cz - dir.z * t);
     if (d < 15) { if (A.kind === "trex") rexStart(A); else A.boltIn = t / speed + .15; }   // (the T. rex doesn't run: it comes for you)                  // he bolts the moment it goes by (a hit lands first and counts)
   }
@@ -5448,8 +5450,8 @@ function updateAnimals(dt) {
     A.root.visible = vis; A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
     if (!vis) continue;
     A.phase += dt * A.speed / A.stride * Math.PI * 2;
-    const near = cd < 220 || zoomed; for (const l of A.legs) l.visible = near;                  // far away: legs aren't worth drawing
-    if (cd > 140 && !zoomed) continue;                     // and their animation isn't worth working out
+    const zoomedAny = zoomed || (vr.on && (vr.scoped || vr.binos)), near = cd < 220 || zoomedAny; for (const l of A.legs) l.visible = near;                  // far away: legs aren't worth drawing
+    if (cd > 140 && !zoomedAny) continue;                     // and their animation isn't worth working out
     const amt = Math.min(1, A.speed / A.walk), sw = Math.sin(A.phase) * A.swing * amt, fl = Math.cos(A.phase);
     if (A.legs.length === 4) {
       if (A.hop) {                                         // rabbits hop: hind legs push, front legs reach
@@ -5503,10 +5505,17 @@ function updateBird(A, dt, T) {
   A.wings[0].rotation.z = -flap; A.wings[1].rotation.z = flap;
 }
 const _ao = new THREE.Vector3();
-function animalRay(o, dir, minT = .5) {                              // the nearest animal hit box along the shot
+function beastRadius(A) {                                  // a sphere round the whole animal (its hit boxes, wherever the head moves), for quick misses
+  let r = 0; const hp = A.head ? A.head.position.length() : 0;
+  for (const [x, y, z, rr, onHead] of A.hit) r = Math.max(r, Math.hypot(x, y, z) + rr + (onHead ? hp : 0));
+  return r * (A.scale || 1) * (FLY[A.kind] ? 2.2 : A.kind === "monkey" ? 1.5 : 1) + 1;
+}
+function animalRay(o, dir, minT = .5, maxT = 1e9) {                  // the nearest animal hit box along the shot
   let best = 1e9, who = null, whoH = false;
   for (const A of beasts) {
     if (A.dead || !A.root.visible || A.bolting) continue;
+    const c = A.root.position, R = A.bR || (A.bR = beastRadius(A)), ox = c.x - o.x, oy = c.y - o.y, oz = c.z - o.z, tc = ox * dir.x + oy * dir.y + oz * dir.z;
+    if (tc < -R || tc > maxT + R) continue; const qx = ox - dir.x * tc, qy = oy - dir.y * tc, qz = oz - dir.z * tc; if (qx * qx + qy * qy + qz * qz > R * R) continue;   // nowhere near this one
     A.root.updateMatrixWorld();
     for (const [x, y, z, r, onHead] of A.hit) {
       _aq.set(x, y, z).applyMatrix4(onHead ? A.head.matrixWorld : A.root.matrixWorld); _ao.copy(o).sub(_aq);       // head boxes follow the head as it grazes
@@ -8818,7 +8827,7 @@ function bulletStep(t, dt) {                                // move one frame al
 }
 function castShot(o, dir, maxD, cs) {                      // cs: a flying bullet's state between frames (water so far, step size)
   const p = o.clone(), max = maxD || 120 + (72 / camera.fov) * 140;      // the scope reaches further
-  const [aT, aWho, aHead] = beasts.length ? animalRay(o, dir, cs ? 0 : .5) : [1e9, null, false];
+  const [aT, aWho, aHead] = beasts.length ? animalRay(o, dir, cs ? 0 : .5, max) : [1e9, null, false];
   const [bT, bWho, bHead] = squad.length && gameMode === "pvp" ? botRay(o, dir, cs ? 0 : .5) : [1e9, null, false];
   let wet = cs ? cs.wet : 0;                                // how far this bullet has gone through water
   for (let dist = 0; dist < max;) {
