@@ -1,0 +1,8 @@
+{
+  // Cloudflare Worker "just-trees-online": builds from this repo (main) on every push.
+  // Serves the game files from the repo root, and cf/worker.js answers /turn (relay passes).
+  "name": "just-trees-online",
+  "main": "cf/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": ".", "binding": "ASSETS" }
+}

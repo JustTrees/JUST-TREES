@@ -41,6 +41,10 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 
 ---
 
+**Ron's vision (Oct 13): it's a map-making battle game — a brand-new map every game, balanced, endless variety (people get bored of fixed maps).** He doesn't care about goals, progression or public opinion; he wants it to run exactly how he wants. **Stay on the web** (free, and Claude can build it). So prioritise: map variety and quality, every map fair for battles, smooth frame rate, reliable online play — not unlocks/challenges/leaderboards.
+
+**Direction for animals (Ron, Oct 13): go with free artist-made models, not code-built ones.** Ron saw Quaternius's packs and said they "look so much better" — "we're going to go that route in the future". Plan when he's ready: he downloads (sandbox can't reach itch.io) the CC0 [Animated LowPoly Dinosaurs](https://quaternius.itch.io/animated-lowpoly-dinosaurs) (T. rex, velociraptor, triceratops, stegosaurus, apatosaurus; FBX/OBJ/Blend; idle, walk, run, attack, jump, death animations) and Quaternius's animated animals pack(s), and attaches the zips. Then: convert FBX → glTF/GLB (e.g. `npm i fbx2gltf` or Blender's `bpy` via pip), compress, embed as base64 in index.html with an inlined GLTFLoader + AnimationMixer; map their animations to our states (idle/graze, walk, run, attack/roar, death) and keep our hit spheres (fit them to the new shapes) and AI. Watch file size (a few MB) and Quest draw cost. **Decided (Oct 13): keep the models as separate .glb files next to index.html (not base64 inside it)** so the headset caches them and updates stay small; no general code split for now (it doesn't change frame rate). Until then, don't put more effort into the code-built animal shapes.
+
 ## 4. What exists now (v1.82)
 
 ### World (all modes)
@@ -114,7 +118,8 @@ Read this first. It's the current state of the game, how Ron likes to work, and 
 - **Closing zone** (optional): hold and speed settings, stages, never faster than sprint, small final circle; respawns go inside the next circle.
 - **Capture point** (optional): hidden smart spot, floating flag, +1 point every 20 s held alone.
 - **Voice:** connects on join, positional.
-- **Known problem:** some friends can't connect (strict home networks; the free relay didn't carry it). Fix later: our own relay — Cloudflare TURN behind a small Worker (make a fresh key; keep it out of the repo), or Metered. Ron will do this "another time".
+- **Known problem:** some friends can't connect (strict home networks; the free relay didn't carry it). Fix in progress: our own Cloudflare TURN relay (below).
+- **Cloudflare (Oct 13):** Worker `just-trees-online` (https://just-trees-online.ron-bb2.workers.dev) builds from this repo's main on every push (`npx wrangler deploy`). It serves the game (a second home besides GitHub Pages) and `cf/worker.js` answers `/turn` with a 6-hour Cloudflare TURN pass (`iceServers`), only for justtrees.github.io, the workers.dev address and localhost. Config: `wrangler.jsonc`; `.assetsignore` keeps dev/, cf/, HANDOFF.md off the site. TURN app "JUST TREES" made in Realtime → TURN. Secrets `TURN_KEY_ID` and `TURN_KEY_TOKEN` are set by Ron in the dashboard (Worker → Settings → Variables and Secrets) — never in the repo or chat. Until set, `/turn` returns 503. Next: the game fetches `/turn` before PeerJS connects and uses those iceServers (keep Open Relay as a fallback if the fetch fails). The Cloudflare connector here can read Workers and make storage, but can't deploy code or set secrets; code goes live by pushing to GitHub.
 
 ---
 
