@@ -15,7 +15,7 @@ export default {
     if (origin && okOrigin) { head["Access-Control-Allow-Origin"] = origin; head["Access-Control-Allow-Methods"] = "GET, OPTIONS"; }
     if (!okOrigin) return new Response(JSON.stringify({ error: "not allowed" }), { status: 403, headers: head });
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
-    if (!env.TURN_KEY_ID || !env.TURN_KEY_TOKEN) return new Response(JSON.stringify({ error: "relay not set up yet", sees: Object.keys(env).filter(k => k !== "ASSETS") }), { status: 503, headers: head });   // names only, never values
+    if (!env.TURN_KEY_ID || !env.TURN_KEY_TOKEN) return new Response(JSON.stringify({ error: "relay not set up yet" }), { status: 503, headers: head });
 
     const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
       method: "POST",

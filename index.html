@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.82</title>
+<title>JUST TREES 1.83</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.82";              // Just Trees 1.82
+const VERSION = "1.83";              // Just Trees 1.83
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8323,14 +8323,22 @@ function mpLeave() {
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
   MP.peer = null; MP.links.clear(); MP.on = false; MP.code = ""; MP.joining = false; MP.entry = ""; MP.idx = 0; MP.revealT = 0; MP.reveal = MP.pendingReveal = null; MP.lastSet = "";
 }
-async function mpRelay() {                                  // relay logins for players whose networks block a direct line: the free Open Relay
+const MP_TURN_URL = "https://just-trees-online.ron-bb2.workers.dev/turn";   // our own Cloudflare relay (1.83): the Worker keeps the key, hands out 6-hour passes
+async function mpRelay() {                                  // relay logins for players whose networks block a direct line: Cloudflare first, the free Open Relay if that fails
   if (MP.relay !== undefined && (!MP.relayAt || Date.now() - MP.relayAt < 3 * 3600e3)) return MP.relay;
+  try {
+    const ac = typeof AbortController !== "undefined" ? new AbortController() : null, to = ac && setTimeout(() => ac.abort(), 4000);
+    const r = await fetch(MP_TURN_URL, { cache: "no-store", signal: ac ? ac.signal : undefined }); if (to) clearTimeout(to);
+    const j = r.ok ? await r.json() : null;
+    const turn = (j && Array.isArray(j.iceServers) ? j.iceServers : []).filter(x => x && x.username && x.credential && x.urls);
+    if (turn.length) { MP.relay = turn; MP.relayAt = Date.now(); MP.relayFrom = "cloudflare"; return MP.relay; }
+  } catch (e) {}
   try {
     const user = Math.floor(Date.now() / 1000 + 6 * 3600) + ":justtrees", enc = new TextEncoder();
     const key = await crypto.subtle.importKey("raw", enc.encode("openrelayprojectsecret"), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
     const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, enc.encode(user))); let bin = ""; for (const b of sig) bin += String.fromCharCode(b);
     const h = "staticauth.openrelay.metered.ca";
-    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }]; MP.relayAt = Date.now();
+    MP.relay = [{ urls: ["turn:" + h + ":80", "turn:" + h + ":443", "turn:" + h + ":443?transport=tcp", "turns:" + h + ":443?transport=tcp"], username: user, credential: btoa(bin) }]; MP.relayAt = Date.now(); MP.relayFrom = "openrelay";
   } catch (e) { MP.relay = []; }
   return MP.relay;
 }

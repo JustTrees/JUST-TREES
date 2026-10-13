@@ -20,7 +20,7 @@ async def main():
         errs = []
         async def page(nm):
             pg = await (await b.new_context(viewport={"width": 300, "height": 200})).new_page(); pg.on("pageerror", lambda e: errs.append(nm + " " + str(e)))
-            pg.on("console", lambda m: errs.append(nm + " CON " + m.text) if m.type == "error" else None)
+            pg.on("console", lambda m: errs.append(nm + " CON " + m.text) if m.type == "error" and "Failed to load resource" not in m.text else None)   # 1.83: no network here, so the Cloudflare relay fetch fails (expected; it falls back)
             await pg.goto(T); await pg.wait_for_timeout(600); await pg.evaluate(INIT); return pg
         A, B, C = await page("A"), await page("B"), await page("C"); out = {}
         await A.evaluate("() => { D.mpHost(); return 1; }"); await wait(A, "() => D.MP.status.includes('Waiting')", 15); code = await A.evaluate("() => D.MP.code")
