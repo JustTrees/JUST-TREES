@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.81</title>
+<title>JUST TREES 1.82</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.81";              // Just Trees 1.81
+const VERSION = "1.82";              // Just Trees 1.82
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4108,7 +4108,35 @@ function aLeg(par, x, y, z, len, r0, r1, mat, hoof) {        // a pivot at the h
   return g;
 }
 /* ---- smooth animal bodies: shapes swept along a curved spine, coloured top to belly ---- */
-function sweepGeo(secs, segs, per, colFn) {           // secs: [y, z, halfWidth, halfHeight, roundness], centres in the side-on (yz) plane
+function sweepUV(secs, segs, per, colFn, uvT) {             // the same swept shape, with a seam column so a skin texture wraps cleanly
+  const n = secs.length, F = (i, t, k) => {
+    const a = secs[Math.max(0, i - 1)][k], b = secs[i][k], c = secs[Math.min(n - 1, i + 1)][k], d = secs[Math.min(n - 1, i + 2)][k], t2 = t * t, t3 = t2 * t;
+    return .5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+  };
+  const R = [];
+  for (let i = 0; i < n - 1; i++) for (let k = 0; k < per; k++) { const t = k / per; R.push([F(i, t, 0), F(i, t, 1), Math.max(.004, F(i, t, 2)), Math.max(.004, F(i, t, 3)), secs[i][4] || 2.3, (i + t) / (n - 1)]); }
+  const L = secs[n - 1]; R.push([L[0], L[1], Math.max(.004, L[2]), Math.max(.004, L[3]), L[4] || 2.3, 1]);
+  const pos = [], col = [], uv = [], idx = [], c = new THREE.Color(), S1 = segs + 1; let arc = 0;
+  for (let i = 0; i < R.length; i++) {
+    if (i) arc += Math.hypot(R[i][0] - R[i - 1][0], R[i][1] - R[i - 1][1]);
+    const A = R[Math.max(0, i - 1)], B = R[Math.min(R.length - 1, i + 1)]; let ty = B[0] - A[0], tz = B[1] - A[1]; const tl = Math.hypot(ty, tz) || 1; ty /= tl; tz /= tl;
+    const uy = tz, uz = -ty, [y, z, w, h, e, u] = R[i], perim = Math.PI * (w + h);
+    for (let s = 0; s <= segs; s++) {
+      const a = s / segs * Math.PI * 2, sn = Math.sin(a), cs = Math.cos(a);
+      const cx = Math.sign(sn) * Math.pow(Math.abs(sn), 2 / e), cy = Math.sign(cs) * Math.pow(Math.abs(cs), 2 / e);
+      pos.push(cx * w, y + uy * h * cy, z + uz * h * cy); colFn(c, u, cy, cx); col.push(c.r, c.g, c.b); uv.push(arc / uvT, s / segs * perim / uvT);
+    }
+  }
+  for (let i = 0; i < R.length - 1; i++) for (let s = 0; s < segs; s++) { const a = i * S1 + s, b = a + 1, cc = a + S1, d = b + S1; idx.push(a, cc, b, b, cc, d); }
+  for (const [ring, flip] of [[0, true], [R.length - 1, false]]) {
+    const ci = pos.length / 3; pos.push(0, R[ring][0], R[ring][1]); colFn(c, R[ring][5], 0, 0); col.push(c.r, c.g, c.b); uv.push(0, 0);
+    for (let s = 0; s < segs; s++) { const a = ring * S1 + s, b = a + 1; flip ? idx.push(ci, a, b) : idx.push(ci, b, a); }
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals(); g.userData.uvWorld = true; return g;
+}
+function sweepGeo(secs, segs, per, colFn, uvT) {
+  if (uvT) return sweepUV(secs, segs, per, colFn, uvT);           // secs: [y, z, halfWidth, halfHeight, roundness], centres in the side-on (yz) plane
   const n = secs.length, F = (i, t, k) => {
     const a = secs[Math.max(0, i - 1)][k], b = secs[i][k], c = secs[Math.min(n - 1, i + 1)][k], d = secs[Math.min(n - 1, i + 2)][k], t2 = t * t, t3 = t2 * t;
     return .5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
@@ -4141,12 +4169,15 @@ function furCol(pal, extra) {                         // back colour on top, fla
 }
 const flatCol = col => { const k = new THREE.Color(col); return c => c.copy(k); };
 // a bag of static parts merged into one mesh (one draw call)
-function Bag() { this.parts = []; }
+let bagUV = 0;                                               // set while a skinned animal is being built
+function Bag() { this.parts = []; this.uvT = bagUV; }
 Bag.prototype.add = function (geo, col, x, y, z, rx, ry, rz, sx, sy, sz) {
   const g = geo.index ? geo : (() => { const n = geo.attributes.position.count, ix = []; for (let i = 0; i < n; i++) ix.push(i); geo.setIndex(ix); return geo; })();
   if (!g.attributes.color) { const k = new THREE.Color(col), n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) a.set([k.r, k.g, k.b], i * 3); g.setAttribute("color", new THREE.BufferAttribute(a, 3)); }
   const m = new THREE.Matrix4().compose(new THREE.Vector3(x || 0, y || 0, z || 0), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx || 0, ry || 0, rz || 0)), new THREE.Vector3(sx || 1, sy || 1, sz || 1));
-  g.applyMatrix4(m); this.parts.push(g); return this;
+  g.applyMatrix4(m);
+  if (this.uvT && g.attributes.uv && !g.userData.uvWorld) { g.computeBoundingBox(); const b = g.boundingBox, cu = Math.PI * ((b.max.x - b.min.x) + (b.max.z - b.min.z)) / 2 / this.uvT, cv = Math.max(.02, b.max.y - b.min.y) / this.uvT, u = g.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, u.getX(i) * cu, u.getY(i) * cv); }
+  this.parts.push(g); return this;
 };
 Bag.prototype.seg = function (p0, p1, r0, r1, col) {   // a tapered rod from one point to another (antlers, tails)
   const a = new THREE.Vector3(...p0), b = new THREE.Vector3(...p1), d = b.clone().sub(a), L = d.length();
@@ -4157,31 +4188,66 @@ Bag.prototype.seg = function (p0, p1, r0, r1, col) {   // a tapered rod from one
 Bag.prototype.mesh = function (mat) {
   let nv = 0, ni = 0; for (const g of this.parts) { nv += g.attributes.position.count; ni += g.index.count; }
   const P = new Float32Array(nv * 3), N = new Float32Array(nv * 3), C = new Float32Array(nv * 3), I = new Uint32Array(ni); let ov = 0, oi = 0;
+  const hasUV = this.parts.some(g => g.attributes.uv), U = hasUV ? new Float32Array(nv * 2) : null;   // (a skinned animal keeps its texture coordinates)
   for (const g of this.parts) {
     if (!g.attributes.normal) g.computeVertexNormals();
-    P.set(g.attributes.position.array, ov * 3); N.set(g.attributes.normal.array, ov * 3); C.set(g.attributes.color.array, ov * 3);
+    P.set(g.attributes.position.array, ov * 3); N.set(g.attributes.normal.array, ov * 3); C.set(g.attributes.color.array, ov * 3); if (U && g.attributes.uv) U.set(g.attributes.uv.array, ov * 2);
     const ix = g.index.array; for (let i = 0; i < ix.length; i++) I[oi + i] = ix[i] + ov; ov += g.attributes.position.count; oi += ix.length; g.dispose();
   }
   const out = new THREE.BufferGeometry(); out.setAttribute("position", new THREE.BufferAttribute(P, 3)); out.setAttribute("normal", new THREE.BufferAttribute(N, 3));
-  out.setAttribute("color", new THREE.BufferAttribute(C, 3)); out.setIndex(new THREE.BufferAttribute(I, 1)); return new THREE.Mesh(out, mat);
+  out.setAttribute("color", new THREE.BufferAttribute(C, 3)); if (U) out.setAttribute("uv", new THREE.BufferAttribute(U, 2)); out.setIndex(new THREE.BufferAttribute(I, 1)); return new THREE.Mesh(out, mat);
 };
+// painted skins (1.82): a tileable scaly skin, multiplied over the animal's own colours
+const DSKIN = {};
+function dinoSkin(big) {
+  const key = big ? "big" : "small"; if (DSKIN[key]) return DSKIN[key];
+  const N = 256, G = big ? 9 : 16, cell = N / G, cv = document.createElement("canvas"); cv.width = cv.height = N; const g = cv.getContext("2d"), img = g.createImageData(N, N), d = img.data;
+  const R = mulberry32(big ? 77 : 33), pts = []; for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) pts.push([(i + .15 + R() * .7) * cell, (j + .15 + R() * .7) * cell, .82 + R() * .18]);
+  const mot = (x, y) => .5 + .25 * Math.sin(x / N * 12.566 + Math.sin(y / N * 18.85) * 1.3) + .25 * Math.sin(y / N * 12.566 + 1.7 + Math.sin(x / N * 6.283) * 1.1);   // soft blotches, tiling
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const ci = Math.floor(x / cell), cj = Math.floor(y / cell); let d1 = 1e9, d2 = 1e9, br = 1;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const cx = ci + di, cy = cj + dj, ii = (cx % G + G) % G, jj = (cy % G + G) % G, p = pts[jj * G + ii], px = p[0] + (cx - ii) * cell, py = p[1] + (cy - jj) * cell, dd = Math.hypot(x - px, y - py);
+      if (dd < d1) { d2 = d1; d1 = dd; br = p[2]; } else if (dd < d2) d2 = dd;
+    }
+    const seam = smooth(0, cell * .16, d2 - d1), dome = Math.max(0, 1 - (d1 / (cell * .75)) ** 2);
+    const v = (.6 + .32 * seam) * (.9 + .12 * dome) * (.86 + .14 * mot(x, y)) * br, o = (y * N + x) * 4;
+    d[o] = d[o + 1] = d[o + 2] = Math.min(255, v * 255); d[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return DSKIN[key] = t;
+}
+const DMAT = {};
+const dinoMat = big => DMAT[big ? 1 : 0] || (DMAT[big ? 1 : 0] = grade(new THREE.MeshLambertMaterial({ vertexColors: true, map: dinoSkin(big), color: new THREE.Color(1.45, 1.45, 1.45) })));   // (the skin darkens a little; this evens it out)
 const beastMat = () => grade(new THREE.MeshLambertMaterial({ vertexColors: true }));
 // a two-part leg: hip pivot, then knee (or hock) pivot, then a hoof or paw
-function makeLeg(par, mat, x, y, z, up, lo, pal, foot, restHip, restKnee) {
+function makeLeg(par, mat, x, y, z, up, lo, pal, foot, restHip, restKnee, opt) {
+  const lsg = opt && opt.segs || 12, luv = opt && opt.uvT;
   const top = new THREE.Color(pal[1]), low = new THREE.Color(pal[3] || pal[1]);
   const hip = new THREE.Group(); hip.position.set(x, y, z); hip.rotation.x = restHip || 0; par.add(hip);
   const [l1, a0, a1] = up, [l2, b0, b1] = lo;
   const cU = (c, u) => c.copy(top).lerp(low, u * .5), cL = (c, u) => c.copy(top).lerp(low, .5 + u * .5);
   // the thigh rounds up into the body (a dome, not a flat end), swells, then eases down to the knee
   hip.add(new Bag().add(sweepGeo([[.12 + a0 * .9, 0, a0 * .5, a0 * .55], [.12 + a0 * .3, 0, a0 * 1.15, a0 * 1.3], [.06, 0, a0 * 1.32, a0 * 1.52], [-l1 * .3, 0, a0 * 1.08, a0 * 1.18],
-    [-l1 * .65, 0, (a0 + a1) * .52, (a0 + a1) * .56], [-l1 * .9, 0, a1 * .98, a1 * 1.04], [-l1, 0, a1 * .92, a1]], 12, 3, cU))
-    .add(new THREE.SphereGeometry(1, 14, 10).scale(a0 * 1.3, a0 * 1.9, a0 * 1.7), top, 0, -.01, 0).mesh(mat));     // a broad haunch / shoulder, so the leg melts into the body
+    [-l1 * .65, 0, (a0 + a1) * .52, (a0 + a1) * .56], [-l1 * .9, 0, a1 * .98, a1 * 1.04], [-l1, 0, a1 * .92, a1]], lsg, 3, cU, luv))
+    .add(new THREE.SphereGeometry(1, 14, 10).scale(a0 * 1.3 * (opt && opt.haunch || 1), a0 * 1.9 * (opt && opt.haunch || 1), a0 * 1.7 * (opt && opt.haunch || 1)), top, 0, -.01, 0).mesh(mat));     // a broad haunch / shoulder, so the leg melts into the body
   const knee = new THREE.Group(); knee.position.y = -l1; knee.rotation.x = restKnee || 0; hip.add(knee);
   const kc = new THREE.Color(pal[1]).lerp(new THREE.Color(pal[3] || pal[1]), .5), kr = Math.max(a1, b0) * 1.02;
   const b = new Bag().add(new THREE.SphereGeometry(1, 12, 8).scale(kr, kr * 1.1, kr * 1.05), kc, 0, 0, 0)             // a rounded knee, so bends don't show a gap
-    .add(sweepGeo([[kr * .5, 0, b0 * .7, b0 * .75], [0, 0, b0 * .98, b0 * 1.02], [-l2 * .3, 0, b0 * .82, b0 * .9], [-l2 * .6, 0, (b0 * .8 + b1) * .5, (b0 * .9 + b1) * .5], [-l2 * .85, 0, b1, b1], [-l2, 0, b1, b1]], 12, 3, cL));
+    .add(sweepGeo([[kr * .5, 0, b0 * .7, b0 * .75], [0, 0, b0 * .98, b0 * 1.02], [-l2 * .3, 0, b0 * .82, b0 * .9], [-l2 * .6, 0, (b0 * .8 + b1) * .5, (b0 * .9 + b1) * .5], [-l2 * .85, 0, b1, b1], [-l2, 0, b1, b1]], lsg, 3, cL, luv));
   if (foot === "hoof") b.add(new THREE.CylinderGeometry(b1 * 1.05, b1 * 1.35, .07, 10), 0x1e1712, 0, -l2 - .02, .01);
   else if (foot === "paw") b.add(new THREE.SphereGeometry(1, 10, 6).scale(b1 * 1.3, b1 * .75, b1 * 1.7), pal[3] || pal[1], 0, -l2 - b1 * .3, b1 * .5);
+  else if (foot === "bird") {                                // a long foot bone angled forward, three toes flat on the ground with claws, a small back toe
+    const fc = pal[3] || pal[1], m = opt.meta, my = -l2 - m * Math.cos(.65), mz = m * Math.sin(.65), tl = opt.toe, fy = .34, fz = .94, cy = -.94, cz = .34;
+    b.seg([0, -l2, 0], [0, my, mz], b1, b1 * .78, fc).add(new THREE.SphereGeometry(1, 12, 8).scale(b1 * 1.05, b1 * .9, b1 * 1.1), fc, 0, my, mz);
+    for (const a of [-.34, 0, .34]) { const ex = Math.sin(a) * tl, e = [ex, my + fy * Math.cos(a) * tl, mz + fz * Math.cos(a) * tl], k = a ? .85 : 1;
+      b.seg([0, my, mz], e, b1 * .55, b1 * .4 * k, fc).seg(e, [e[0] + Math.sin(a) * tl * .2, e[1] + (fy * .2 + cy * .14) * tl, e[2] + (fz * .2 + cz * .14) * tl], b1 * .34, .004, 0x1a1612); }
+    b.seg([0, my, mz], [0, my + fy * -.3 * tl, mz - fz * .3 * tl], b1 * .4, b1 * .15, fc);
+    if (opt.sickle) b.seg([0, my + b1 * .4, mz + tl * .22], [0, my + b1 * 1.9, mz + tl * .5], b1 * .38, .005, 0x1a1612);   // the raptor's big sickle claw, held up off the ground
+  }
+  else if (foot === "pad") {                                  // a round padded foot with blunt nails (sauropods, horned and plated dinosaurs)
+    b.add(new THREE.CylinderGeometry(b1 * 1.08, b1 * 1.32, b1 * .7, 18), pal[3] || pal[1], 0, -l2 - b1 * .05, 0);
+    for (const a of [-.65, -.22, .22, .65]) b.add(new THREE.SphereGeometry(1, 10, 6).scale(b1 * .26, b1 * .22, b1 * .2), 0xcfc4a8, Math.sin(a) * b1 * 1.2, -l2 - b1 * .25, Math.cos(a) * b1 * 1.2);
+  }
   else if (foot === "long") b.add(new THREE.SphereGeometry(1, 8, 6).scale(b1 * 1.2, b1 * .7, b1 * 4), pal[3] || pal[1], 0, -l2, b1 * 2.5);
   knee.add(b.mesh(mat));
   hip.userData = { rest: restHip || 0, knee, kneeRest: restKnee || 0 };
@@ -4324,23 +4390,27 @@ function buildBird(r, cols) {
 // q: pal [back, side, belly, lower leg], L body length, W/D half width/depth, leg (hind) height, frontK, hump,
 //    neck length / rise angle / thickness, head length / half width / half height / downward tilt, ear [r, len, splay], tail [len, r, droop, tuft]
 function buildQuad(r, q) {
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = q.mat || beastMat(), sg = q.segs || 24, sp = q.per || 3, uvT = q.uvT; bagUV = uvT || 0;
   const { pal, L, W, D } = q, legB = q.leg, legF = q.leg * (q.frontK || 1), ycB = legB + D * .55, ycF = legF + D * .55;
   const Y = z => ycB + (ycF - ycB) * (z / L + .5), hump = q.hump || 0;
-  const secs = [[-.5, .12, .12], [-.45, .7, .8], [-.3, 1, 1], [0, 1.02, 1.02], [.28, .98, 1.06], [.42, .8, .92], [.5, .45, .55]]
-    .map(([k, w, h]) => [Y(k * L) + (k > .1 ? hump * D * smooth(.1, .3, k) : 0) + (q.hump2 ? q.hump2 * D * Math.exp(-Math.pow((k + .03) / .17, 2)) : 0), k * L, W * w, D * h * (q.hump2 ? 1 + .25 * Math.exp(-Math.pow((k + .03) / .17, 2)) : 1)]);
-  const bb = new Bag().add(sweepGeo(secs, 24, 3, furCol(pal, q.coat)));
+  const secs = (q.prof || [[-.5, .12, .12], [-.45, .7, .8], [-.3, 1, 1], [0, 1.02, 1.02], [.28, .98, 1.06], [.42, .8, .92], [.5, .45, .55]])
+    .map(([k, w, h, dy]) => [Y(k * L) + (dy || 0) * D + (k > .1 ? hump * D * smooth(.1, .3, k) : 0) + (q.hump2 ? q.hump2 * D * Math.exp(-Math.pow((k + .03) / .17, 2)) : 0), k * L, W * w, D * h * (q.hump2 ? 1 + .25 * Math.exp(-Math.pow((k + .03) / .17, 2)) : 1)]);
+  const bb = new Bag().add(sweepGeo(secs, sg, sp, furCol(pal, q.coat), uvT));
   if (q.tail) { const [tl, tr, td, tuft] = q.tail, t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - tl * Math.sin(td), t0[2] - tl * Math.cos(td)];
-    bb.seg(t0, t1, tr, tr * .55, q.tailC || pal[0]); if (tuft) bb.add(new THREE.SphereGeometry(1, 8, 6).scale(tr * 1.6, tr * 3, tr * 1.6), tuft, t1[0], t1[1] - tr, t1[2]); }
+    if (q.tailSweep) { const ts = []; for (let i = 0; i <= 7; i++) { const t = i / 7; ts.push([t0[1] + (t1[1] - t0[1]) * t - tl * .06 * Math.sin(Math.PI * t), t0[2] + (t1[2] - t0[2]) * t, tr * (.95 - .72 * t), tr * (1.05 - .8 * t)]); }   // a thick root, sagging a little, tapering
+      bb.add(sweepGeo(ts, Math.round(sg * .6), sp, furCol(q.tailPal || pal, q.coat), uvT)); }
+    else bb.seg(t0, t1, tr, tr * .55, q.tailC || pal[0]); if (tuft) bb.add(new THREE.SphereGeometry(1, 8, 6).scale(tr * 1.6, tr * 3, tr * 1.6), tuft, t1[0], t1[1] - tr, t1[2]); }
   const ntk = q.nt, nb = [Y(L * .36) + D * .25 + hump * D, L * .36], nt = [nb[0] + q.neck * Math.sin(q.na), nb[1] + q.neck * Math.cos(q.na)];
   const nm = [(nb[0] + nt[0]) / 2, (nb[1] + nt[1]) / 2];
-  bb.add(sweepGeo([[nb[0] - D * .3, nb[1] - .05, ntk * 1.35, ntk * 1.6], [nb[0], nb[1], ntk * 1.3, ntk * 1.45], [nm[0], nm[1], ntk * 1.05, ntk * 1.1], [nt[0], nt[1], ntk * .9, ntk * .95]], 16, 3, furCol(q.neckPal || pal, q.coat)));
+  if (q.neckCurve) { const ns = [[nb[0] - D * .3, nb[1] - .05, ntk * 1.5, ntk * 1.75]]; for (let i = 0; i <= 8; i++) { const t = i / 8, lift = q.neck * q.neckCurve * Math.sin(Math.PI * t); ns.push([nb[0] + (nt[0] - nb[0]) * t + lift * Math.cos(q.na), nb[1] + (nt[1] - nb[1]) * t - lift * Math.sin(q.na) * .4, ntk * (1.35 - .45 * t), ntk * (1.5 - .55 * t)]); }   // a swan-like curve
+    bb.add(sweepGeo(ns, Math.round(sg * .67), sp, furCol(q.neckPal || pal, q.coat), uvT)); } else
+  bb.add(sweepGeo([[nb[0] - D * .3, nb[1] - .05, ntk * 1.35, ntk * 1.6], [nb[0], nb[1], ntk * 1.3, ntk * 1.45], [nm[0], nm[1], ntk * 1.05, ntk * 1.1], [nt[0], nt[1], ntk * .9, ntk * .95]], Math.round(sg * .67), sp, furCol(q.neckPal || pal, q.coat), uvT));
   if (q.skirt) bb.add(sweepGeo([[Y(-L * .45) - D * .35, -L * .45, W * .9, D * .5], [Y(-L * .2) - D * .45, -L * .2, W * 1.12, D * .6], [Y(L * .2) - D * .45, L * .2, W * 1.12, D * .62], [Y(L * .42) - D * .35, L * .42, W * .9, D * .55]], 18, 2, furCol(q.skirt)));
   const head = new THREE.Group(); head.position.set(0, nt[0], nt[1]); body.add(head);
   const { hl, hw, hh } = q, dy = -Math.sin(q.ht), dz = Math.cos(q.ht), at = t => [dy * t * hl, dz * t * hl], muz = q.muz || .5;
   const noseC = new THREE.Color(q.noseC || 0x16110e);
   const hb = new Bag().add(sweepGeo([[-.15, .8, .85], [.1, 1, 1], [.4, .92, .9], [.7, .7, .72], [.95, muz, muz * 1.05], [1, .15, .15]].map(([t, w, h]) => [...at(t), hw * w, hh * h]),
-    18, 3, furCol(q.headPal || q.neckPal || pal, (c, u, cy, cx) => { if (q.face) q.face(c, u, cy, cx); if (u > .93) c.copy(noseC); })));
+    Math.round(sg * .75), sp, furCol(q.headPal || q.neckPal || pal, (c, u, cy, cx) => { if (q.face) q.face(c, u, cy, cx); if (u > .93) c.copy(noseC); }), uvT));
   for (const s of [-1, 1]) {
     const e = at(.3); hb.add(new THREE.SphereGeometry(Math.max(.012, hh * .13), 8, 6), 0x0a0806, s * hw * .86, e[0] + hh * .3, e[1]);
     if (q.ear) { const [er, el, sp] = q.ear; hb.add(new THREE.ConeGeometry(er, el, 8).scale(1, 1, .45), q.earC || pal[0], s * hw * .7, hh * .85, -hh * .1, -.4, 0, -s * sp); }
@@ -4351,11 +4421,12 @@ function buildQuad(r, q) {
   const hipF = Y(L * .36) - D * .25, hipB = Y(-L * .36) - D * .2, lw = q.lw, pillar = q.pillar;
   const legs = [[1, hipF, L * .36, 0, 0], [-1, hipF, L * .36, 0, 0], [1, hipB, -L * .36, q.bend ? -.2 : 0, q.bend ? .4 : 0], [-1, hipB, -L * .36, q.bend ? -.2 : 0, q.bend ? .4 : 0]]
     .map(([s, hy, z, rh, rk], i) => { const tot = hy - .05, l1 = tot * .48, l2 = tot * .52, k = i < 2 ? 1 : 1.2;
-      return makeLeg(body, mat, s * W * (q.legX || .6), hy, z, [l1, lw * k, lw * .72 * k], pillar ? [l2, lw * .85, lw * .8] : [l2, lw * .6, lw * .4], pal, q.foot || "hoof", rh, rk); });
+      return makeLeg(body, mat, s * W * (q.legX || .6), hy, z, [l1, lw * k, lw * .72 * k], pillar ? [l2, lw * .85, lw * .8] : [l2, lw * .6, lw * .4], pal, q.foot || "hoof", rh, rk, { segs: q.legSegs, uvT, haunch: q.haunch }); });
   const R = Math.max(W, D) * 1.15, hit = [[0, Y(L * .25), L * .25, R], [0, Y(-L * .25), -L * .25, R], [0, ...at(.45), Math.max(hw, hh) * 1.4, 1]];
   hit.push(...P.hits);
   if (q.neck > .5) { const n = Math.ceil(q.neck / (ntk * 2.6)); for (let i = 1; i < n; i++) { const t = i / n; hit.push([0, nb[0] + (nt[0] - nb[0]) * t, nb[1] + (nt[1] - nb[1]) * t, ntk * 1.6]); } }
   if (q.leg > .9) for (const z of [L * .36, -L * .36]) hit.push([0, q.leg * .5, z, W * .85]);   // tall legs can be hit too
+  bagUV = 0;
   return finish({ root, body, head, legs, w: W, rad: q.rad || W * 1.1, step: q.step || .8, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
 }
 const horns = (hb, s, pts, r0, r1, col) => { for (let i = 0; i < pts.length - 1; i++) { const t0 = i / (pts.length - 1), t1 = (i + 1) / (pts.length - 1); hb.seg(pts[i].map((v, k) => k ? v : v * s), pts[i + 1].map((v, k) => k ? v : v * s), r0 + (r1 - r0) * t0, r0 + (r1 - r0) * t1, col); } };
@@ -4538,12 +4609,12 @@ const DINO_SIZE = { trex: 1.3, raptor: .4, parasaur: .6, stego: .55, triceratops
 const DINO_NATIVE = [["triceratops", 8, [2, 4]], ["parasaur", 8, [3, 6]], ["stego", 6, [1, 2]], ["bronto", 4, [2, 3]], ["trex", 1]];   // (the T. rex: one, Large maps and up)
 // a dinosaur on two legs: the body balanced over the hips, a long tail held out behind, the neck up to the head
 function buildBiped(r, q) {
-  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = beastMat();
+  const root = new THREE.Group(), body = new THREE.Group(); root.add(body); const mat = q.mat || beastMat(), sg = q.segs || 22, sp = q.per || 3, uvT = q.uvT; bagUV = uvT || 0;
   const { pal, hip, L, W, D } = q, [tl, tr] = q.tail, [nl, na, nr] = q.neck, yb = hip + D * .3;
   const chestY = yb + L * .08, nb = [chestY + D * .4, L * .48], nt = [nb[0] + nl * Math.sin(na), nb[1] + nl * Math.cos(na)], coat = furCol(pal, q.coat);
   const bb = new Bag().add(sweepGeo([[yb - tl * .1, -L * .5 - tl, tr * .1, tr * .1], [yb - tl * .04, -L * .5 - tl * .6, tr * .45, tr * .5], [yb + D * .05, -L * .5 - tl * .25, tr * .85, tr * .95],
-    [yb + D * .2, -L * .42, W * .75, D * .8], [yb + D * .25, -L * .15, W, D], [yb + D * .1, L * .15, W * 1.02, D * 1.05], [chestY, L * .38, W * .82, D * .92], [nb[0], nb[1], nr * 1.3, nr * 1.4]], 22, 3, coat));
-  bb.add(sweepGeo([[nb[0] - nr * .3, nb[1] - nr * .4, nr * 1.3, nr * 1.4], [(nb[0] + nt[0]) / 2, (nb[1] + nt[1]) / 2, nr * 1.05, nr * 1.1], [nt[0], nt[1], nr * .9, nr * .95]], 14, 3, coat));
+    [yb + D * .2, -L * .42, W * .75, D * .8], [yb + D * .25, -L * .15, W, D], [yb + D * .1, L * .15, W * 1.02, D * 1.05], [chestY, L * .38, W * .82, D * .92], [nb[0], nb[1], nr * 1.3, nr * 1.4]], sg, sp, coat, uvT));
+  bb.add(sweepGeo([[nb[0] - nr * .3, nb[1] - nr * .4, nr * 1.3, nr * 1.4], [(nb[0] + nt[0]) / 2, (nb[1] + nt[1]) / 2, nr * 1.05, nr * 1.1], [nt[0], nt[1], nr * .9, nr * .95]], Math.round(sg * .65), sp, coat, uvT));
   for (const s of [-1, 1]) {                                 // the little arms, with claws
     const a = q.arm, sh = [s * W * .7, chestY - D * .2, L * .32], el = [s * W * .85, sh[1] - a * .5, sh[2] + a * .2], wr = [s * W * .8, el[1] - a * .15, el[2] + a * .45];
     bb.seg(sh, el, a * .12, a * .09, pal[1]).seg(el, wr, a * .09, a * .06, pal[1]);
@@ -4551,41 +4622,48 @@ function buildBiped(r, q) {
   }
   const head = new THREE.Group(); head.position.set(0, nt[0], nt[1]); body.add(head);
   const { hl, hw, hh } = q, ht = q.ht || .15, at = t => [-Math.sin(ht) * t * hl, Math.cos(ht) * t * hl];
-  const hb = new Bag().add(sweepGeo([[-.15, .75, .8], [.1, 1, 1], [.4, .9, .85], [.7, .72, .62], [.95, .55, .45], [1, .2, .2]].map(([t, w, h]) => [...at(t), hw * w, hh * h]), 16, 3, furCol(q.headPal || pal, q.face)));
+  const hb = new Bag().add(sweepGeo([[-.15, .75, .8], [.1, 1, 1], [.4, .9, .85], [.7, .72, .62], [.95, .55, .45], [1, .2, .2]].map(([t, w, h]) => [...at(t), hw * w, hh * h]), Math.round(sg * .75), sp, furCol(q.headPal || pal, q.face), uvT));
   for (const s of [-1, 1]) { const e = at(.3); hb.add(new THREE.SphereGeometry(Math.max(.015, hh * .16), 8, 6), q.eyeC || 0xc8a020, s * hw * .8, e[0] + hh * .3, e[1]);
     hb.add(new THREE.SphereGeometry(Math.max(.008, hh * .08), 6, 4), 0x080604, s * hw * .9, e[0] + hh * .3, e[1] + hh * .05); }
+  if (q.brows) for (const s of [-1, 1]) {
+    const e = at(.3), nn = at(.9), ck = at(.1);
+    hb.add(new THREE.SphereGeometry(1, 14, 10).scale(hw * .34, hh * .2, hl * .17), pal[0], s * hw * .6, e[0] + hh * .62, e[1]);            // a bony brow over the eye
+    hb.add(new THREE.SphereGeometry(1, 10, 8).scale(hw * .13, hh * .09, hl * .05), 0x161210, s * hw * .3, nn[0] + hh * .26, nn[1]);       // nostril
+    hb.add(new THREE.SphereGeometry(1, 14, 10).scale(hw * .42, hh * .52, hl * .2), pal[1], s * hw * .58, ck[0] - hh * .12, ck[1]);         // the big jaw muscle behind the eye
+  }
   if (q.teeth) for (let k = 0; k < 7; k++) for (const s of [-1, 1]) { const p = at(.42 + k * .075); hb.add(new THREE.ConeGeometry(hh * .06, hh * .22, 4), 0xeee8d8, s * hw * (.62 - k * .045), p[0] - hh * .55, p[1], Math.PI); }
   let jaw = null;
   if (q.jaw) {                                               // a lower jaw that opens (the raptor screeches, bites)
     const j0 = at(.12); jaw = new THREE.Group(); jaw.position.set(0, j0[0] - hh * .35, j0[1]); head.add(jaw);
-    const jb = new Bag().add(sweepGeo([[0, -.02, .7, .5], [.3, 0, .62, .42], [.6, 0, .5, .32], [.86, 0, .32, .22], [.9, .02, .1, .1]].map(([t, dy, w, h]) => [-Math.sin(ht) * t * hl - hh * .1 + dy, Math.cos(ht) * t * hl, hw * w, hh * h]), 12, 2, furCol([pal[2], pal[2], pal[2]])));
+    const jb = new Bag().add(sweepGeo([[0, -.02, .7, .5], [.3, 0, .62, .42], [.6, 0, .5, .32], [.86, 0, .32, .22], [.9, .02, .1, .1]].map(([t, dy, w, h]) => [-Math.sin(ht) * t * hl - hh * .1 + dy, Math.cos(ht) * t * hl, hw * w, hh * h]), Math.round(sg * .55), sp, furCol([pal[2], pal[2], pal[2]]), uvT));
     for (let k = 0; k < 6; k++) for (const s of [-1, 1]) { const z = Math.cos(ht) * (.25 + k * .1) * hl; jb.add(new THREE.ConeGeometry(hh * .055, hh * .2, 4), 0xeee8d8, s * hw * (.5 - k * .045), -Math.sin(ht) * (.25 + k * .1) * hl + hh * .12, z); }
     jaw.add(jb.mesh(mat)); jaw.rotation.x = .04;
   }
   const P = { bb, hb, at, hl, hw, hh, pal, L, W, D, yb, nb, nt, hits: [] };
   if (q.extra) q.extra(P);
   body.add(bb.mesh(mat)); head.add(hb.mesh(mat));
-  const tot = yb / Math.cos(.35), lw = q.lw;                 // thigh forward, shin back: the legs reach the ground from the hips
-  const legs = [-1, 1].map(s => makeLeg(body, mat, s * W * .75, yb, -L * .12, [tot * .47, lw, lw * .62], [tot * .53, lw * .5, lw * .32], [pal[1], pal[1], 0, pal[3]], "long", -.35, .7));
+  const lw = q.lw, k = yb / (Math.cos(.35) * .84 + .3 * Math.cos(.3));   // thigh forward, shin back, a long foot bone forward again: the toes reach the ground from the hips
+  const legs = [-1, 1].map(s => makeLeg(body, mat, s * W * .75, yb, -L * .12, [k * .42, lw * 1.3, lw * .62], [k * .42, lw * .55, lw * .3], [pal[1], pal[1], 0, pal[3]], "bird", -.35, .7, { segs: q.legSegs || 12, uvT, meta: k * .3, toe: k * .24, sickle: q.sickle, haunch: .55 }));
   const hit = [[0, yb + D * .2, -L * .15, Math.max(W, D) * 1.15], [0, chestY, L * .3, Math.max(W, D) * 1.05], [0, yb, -L * .5 - tl * .3, tr * 1.3], [0, yb - tl * .03, -L * .5 - tl * .62, tr * .8], [0, hip * .5, -L * .12, lw * 2.2], [0, 0, hl * .5, Math.max(hw, hh) * 1.5, 1]];
   hit.push(...P.hits);
+  bagUV = 0;
   return finish({ root, body, head, jaw, legs, w: W, rad: q.rad || W * 1.2, step: q.step || 1, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
 }
 const DINO_BIPED = {
-  trex: r => buildBiped(r, { pal: [0x4e4532, 0x665a40, 0xb0a07c, 0x3e3628], hip: 4, L: 5, W: 1.1, D: 1.5, tail: [6.5, 1.1], neck: [1.4, .45, .66], hl: 2.1, hw: .62, hh: .78, ht: .04, teeth: true, jaw: true, arm: .9, lw: .95, eyeC: 0xd8a020,
+  trex: r => buildBiped(r, { mat: dinoMat(true), uvT: .9, segs: 40, per: 5, legSegs: 20, brows: true, pal: [0x4e4532, 0x665a40, 0xb0a07c, 0x3e3628], hip: 4, L: 5, W: 1.1, D: 1.5, tail: [6.5, 1.1], neck: [1.4, .45, .66], hl: 2.1, hw: .62, hh: .78, ht: .04, teeth: true, jaw: true, arm: .9, lw: .95, eyeC: 0xd8a020,
     coat: (c, u, cy, cx) => { if (cy > -.2 && Math.sin(u * 40 + cx * 1.2) > .55) c.multiplyScalar(.6); }, face: (c, u, cy) => { if (cy > .3) c.multiplyScalar(.85); },
     walk: 2.4, run: 11, stride: 6.5, swing: .5, graze: .2, rad: 2, step: 2.5, range: 60 }),
-  raptor: r => buildBiped(r, { pal: [0x3e3226, 0x54442e, 0xa89a7c, 0x2e261c], hip: 1.5, L: 2.0, W: .36, D: .5, tail: [3.0, .34], neck: [.8, .5, .16], hl: .72, hw: .15, hh: .18, ht: .05, teeth: true, jaw: true, arm: .7, lw: .26, eyeC: 0xe8b020,
+  raptor: r => buildBiped(r, { mat: dinoMat(false), uvT: .32, segs: 36, per: 5, legSegs: 18, brows: true, sickle: true, pal: [0x3e3226, 0x54442e, 0xa89a7c, 0x2e261c], hip: 1.5, L: 2.0, W: .36, D: .5, tail: [3.0, .34], neck: [.8, .5, .16], hl: .72, hw: .15, hh: .18, ht: .05, teeth: true, jaw: true, arm: .7, lw: .26, eyeC: 0xe8b020,
     coat: (c, u, cy, cx) => { if (cy > -.3 && Math.sin(u * 64 + cx * 1.5) > .35) c.multiplyScalar(.45); },
     extra: P => { for (let k = 0; k < 8; k++) { const t = k / 7; P.bb.add(new THREE.ConeGeometry(.045, .22, 4), 0x1e1812, 0, P.nb[0] + (P.nt[0] - P.nb[0]) * t + .13, P.nb[1] + (P.nt[1] - P.nb[1]) * t - .06, -.7); } },   // dark quills down the neck
     walk: 3, run: 18, stride: 4.4, swing: .75, graze: .4, rad: .5, step: 1.2, range: 30 }),
-  parasaur: r => buildBiped(r, { pal: [0x5a8a44, 0x7aa05a, 0xe0d8a8, 0x5a6a3a], hip: 2.3, L: 3.3, W: .72, D: .92, tail: [4.2, .62], neck: [1.25, .8, .3], hl: 1.0, hw: .22, hh: .28, ht: .35, arm: 1.1, lw: .45, eyeC: 0x3a2a1a,
+  parasaur: r => buildBiped(r, { mat: dinoMat(false), uvT: .55, segs: 36, per: 5, legSegs: 18, brows: true, pal: [0x5a8a44, 0x7aa05a, 0xe0d8a8, 0x5a6a3a], hip: 2.3, L: 3.3, W: .72, D: .92, tail: [4.2, .62], neck: [1.25, .8, .3], hl: 1.0, hw: .22, hh: .28, ht: .35, arm: 1.1, lw: .45, eyeC: 0x3a2a1a,
     coat: (c, u, cy, cx) => { if (cy > 0 && Math.sin(u * 30 + cx) > .6) c.multiplyScalar(.7); }, face: (c, u) => { if (u > .85) c.multiplyScalar(.8); },
     extra: P => { const a = P.at(.25), b = [a[0] + P.hh * .6 + .55, a[1] - 1.3]; P.hb.seg([0, a[0] + P.hh * .6, a[1]], [0, b[0], b[1]], .1, .07, 0xb85a2a); P.hb.add(new THREE.SphereGeometry(.075, 8, 6), 0xb85a2a, 0, b[0], b[1]); },   // the long hollow crest it honks through
     walk: 1.5, run: 7.5, stride: 3, swing: .45, graze: .9, rad: 1.0, step: 1.2, range: 45 })
 };
 Object.assign(QSPEC, {
-  triceratops: r => ({ pal: [0x7a7448, 0x8e8656, 0xc8bc90, 0x6a6440], L: 3.6, W: .85, D: .95, leg: 1.15, frontK: .9, hump: .1, neck: .35, na: .15, nt: .5, hl: 1.45, hw: .45, hh: .5, ht: .55, muz: .55, lw: .26, pillar: true, foot: "paw", noseC: 0x3a3828, legX: .6,
+  triceratops: r => ({ mat: dinoMat(true), uvT: .6, segs: 40, per: 5, legSegs: 20, haunch: .6, legX: .5, tailSweep: true, prof: [[-.5, .32, .36, .12], [-.42, .78, .88, .02], [-.25, .98, 1.04, -.04], [0, 1.06, 1.14, -.1], [.22, 1.02, 1.1, -.06], [.38, .86, .94, .04], [.5, .5, .56, .14]], pal: [0x7a7448, 0x8e8656, 0xc8bc90, 0x6a6440], L: 3.6, W: .85, D: .95, leg: 1.15, frontK: .9, hump: .1, neck: .35, na: .15, nt: .5, hl: 1.45, hw: .45, hh: .5, ht: .55, muz: .55, lw: .26, pillar: true, foot: "pad", noseC: 0x3a3828, legX: .6,
     tail: [2.4, .45, .4, null], ear: null, coat: (c, u, cy) => { if (cy > .3) c.multiplyScalar(.85); },
     extra: P => { const { hb, at, hh, hw } = P, b = at(.05), e = at(.88), m = at(.4);
       hb.add(new THREE.CylinderGeometry(1.15, 1.15, .1, 20, 1, false, Math.PI / 2, Math.PI).rotateX(Math.PI / 2 - .55), 0x8a6a3a, 0, b[0] + hh * .55, b[1] - .1);   // the bony frill
@@ -4593,7 +4671,7 @@ Object.assign(QSPEC, {
       hb.seg([0, e[0] + hh * .35, e[1]], [0, e[0] + hh * .35 + .35, e[1] + .12], .09, .015, 0xe8dcc0);                                                                      // and one on the nose
       P.hits.push([0, P.Y(-P.L * .5) + P.D * .3, -P.L * .5 - 1.0, .45]); },
     walk: 1.1, run: 6, stride: 2.4, swing: .32, graze: .55, rad: 1.1, step: 1, range: 40 }),
-  stego: r => ({ pal: [0x7a8050, 0x8c9260, 0xd0c494, 0x6a6e44], L: 3.4, W: .7, D: .85, leg: 1.35, frontK: .62, hump: 0, neck: .55, na: -.05, nt: .28, hl: .55, hw: .17, hh: .2, ht: .5, muz: .55, lw: .2, pillar: true, foot: "paw", noseC: 0x3a3a28,
+  stego: r => ({ mat: dinoMat(true), uvT: .55, segs: 40, per: 5, legSegs: 20, haunch: .6, legX: .5, tailSweep: true, prof: [[-.5, .3, .34, .2], [-.4, .76, .94, .26], [-.2, .96, 1.14, .22], [0, 1.02, 1.12, .06], [.25, .92, .98, -.08], [.42, .7, .76, -.18], [.5, .4, .45, -.24]], pal: [0x7a8050, 0x8c9260, 0xd0c494, 0x6a6e44], L: 3.4, W: .7, D: .85, leg: 1.35, frontK: .62, hump: 0, neck: .55, na: -.05, nt: .28, hl: .55, hw: .17, hh: .2, ht: .5, muz: .55, lw: .2, pillar: true, foot: "pad", noseC: 0x3a3a28,
     tail: [2.4, .3, .35, null], ear: null,
     extra: P => { const { bb, Y, L, D } = P;
       for (let k = 0; k < 11; k++) { const t = k / 10, z = -L * .52 + t * L * .85, s = Math.sin(Math.PI * Math.min(1, t * 1.1 + .05)), side = k % 2 ? 1 : -1;          // two rows of plates, biggest over the hips
@@ -4602,7 +4680,7 @@ Object.assign(QSPEC, {
       for (const s of [-1, 1]) for (const k of [0, .35]) bb.seg([s * .08, t1[1] + .15, t1[2] + .3 + k], [s * .7, t1[1] + .55, t1[2] + .1 + k], .07, .01, 0xd8ccb0);   // the spiked tail
       P.hits.push([0, Y(-L * .5) + D * .2, -L * .5 - .9, .4]); },
     walk: 1, run: 4.5, stride: 2.2, swing: .3, graze: .7, rad: 1, step: 1, range: 35 }),
-  bronto: r => ({ pal: [0x8a8270, 0x9a927e, 0xc0b4a0, 0x7a7262], L: 6.5, W: 1.6, D: 1.9, leg: 3.1, frontK: 1, hump: .15, neck: 8.5, na: .62, nt: .62, hl: .95, hw: .26, hh: .3, ht: .35, muz: .7, lw: .7, pillar: true, foot: "paw", noseC: 0x4a463c, legX: .62,
+  bronto: r => ({ mat: dinoMat(true), uvT: 1, segs: 40, per: 5, legSegs: 20, haunch: .6, tailSweep: true, neckCurve: .12, prof: [[-.5, .34, .4, .16], [-.38, .84, .96, .06], [-.15, 1, 1.1, -.06], [.1, 1.03, 1.14, -.1], [.3, .96, 1.06, -.02], [.45, .74, .8, .14], [.52, .44, .5, .3]], pal: [0x8a8270, 0x9a927e, 0xc0b4a0, 0x7a7262], L: 6.5, W: 1.6, D: 1.9, leg: 3.1, frontK: 1, hump: .15, neck: 8.5, na: .62, nt: .62, hl: .95, hw: .26, hh: .3, ht: .35, muz: .7, lw: .7, pillar: true, foot: "pad", noseC: 0x4a463c, legX: .62,
     tail: [7, .85, .22, null], ear: null, coat: (c, u, cy) => { if (cy > .4) c.multiplyScalar(.88); },
     extra: P => { const { bb, Y, L, D } = P, t0 = [0, Y(-L / 2) + D * .45, -L * .48], t1 = [0, t0[1] - 7 * Math.sin(.22), t0[2] - 7 * Math.cos(.22)], t2 = [0, t1[1] - .4, t1[2] - 4.5];
       bb.seg(t1, t2, .85 * .55, .06, P.pal[0]);                                                                            // the long whip of a tail
