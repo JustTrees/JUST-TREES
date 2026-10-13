@@ -83,6 +83,15 @@ async def main():
           const starts = []; let tt = 0; D.DINO.gap = 60; D.DINO.hunter = null; D.DINO.pending = 0; let n0 = D.DINO.hunts;
           for (let i = 0; i < 3600 * 10; i++) { tt += .1; D.dinoTick(.1); if (D.DINO.hunts > n0) { n0 = D.DINO.hunts; starts.push(tt); if (D.DINO.hunter) D.DINO.hunter.gone = true; } }
           const gaps = starts.slice(1).map((s, i) => s - starts[i]); out.timing = { n: starts.length, minGap: Math.round(Math.min(...gaps)), maxGap: Math.round(Math.max(...gaps)) };
+          // 1.79: nobody gets stuck: dense redwood woods, every dinosaur pulled in close, the longest time any one stands wedged while trying to walk
+          { D.setSeed(9); D.setVR(true); D.setMode('hunt'); D.set.dino = true; D.set.env = 'redwood'; D.set.size = 'medium'; D.set.lat = 40; D.set.density = .8; D.generate(); D.state = 'play';
+            const Q = D.P; Q.y = D.groundAt(Q.x, Q.z); D.camera.position.set(Q.x, Q.y + 1.7, Q.z); D.DINO.gap = 1e9; const dinos = D.beasts.filter(A => A.hpMax);
+            for (const A of dinos) { A.x = Q.x + (Math.random() - .5) * 300; A.z = Q.z + (Math.random() - .5) * 300; if (!D.okSpot(A.x, A.z)) { A.x = Q.x; A.z = Q.z; } A.home = [A.x, A.z]; A.y = D.beastGround(A, A.x, A.z); }
+            const last = new Map(), streak = new Map(); let worst = 0;
+            for (let i = 0; i < 30 * 60; i++) { D.updateAnimals(1 / 30); if (i % 30 === 0) for (const A of dinos) { const L = last.get(A); if (L && A.mode === 'walk' && A.want > .3 && !A.dead) { const n = Math.hypot(A.x - L[0], A.z - L[1]) < .3 ? (streak.get(A) || 0) + 1 : 0; streak.set(A, n); worst = Math.max(worst, n); } last.set(A, [A.x, A.z]); } }
+            D.DINO.gap = 0; D.dinoStartHunt(); for (let i = 0; i < 200 && !D.DINO.hunter; i++) D.dinoTick(1 / 30); const R = D.DINO.hunter; R.stalkFor = 999; let rs = 0, rmax = 0, lp = null;
+            for (let i = 0; i < 30 * 45; i++) { D.updateAnimals(1 / 30); if (i % 15 === 0) { if (lp && R.mode === 'walk' && R.want > 2) { rs = Math.hypot(R.x - lp[0], R.z - lp[1]) < 1 ? rs + 1 : 0; rmax = Math.max(rmax, rs); } lp = [R.x, R.z]; } }
+            out.stuck = { dinoWorstSecs: worst, raptorWorstHalfSecs: rmax, thru: dinos.every(A => A.thru) }; }
           // sounds: 3D at the animal, with forest echo
           D.initSound(); D.DINO.voices.length = 0;
           for (const k of DN) { const B = D.beasts.find(a => a.kind === k && !a.dead); for (const ty of ['call', 'stalk', 'charge', 'hurt', 'die']) D.dinoCall(B, ty); }
@@ -108,6 +117,7 @@ async def main():
              and "wait" in r["tree"]["states"] and not r["tree"]["bit"] and r["tree"]["gone"] \
              and r["kill"]["n"] == 5 and r["kill"]["dead"] and r["kill"]["pts"] >= 75 and not r["afterKill"]["hunter"] \
              and 8 <= r["timing"]["n"] <= 35 and r["timing"]["minGap"] >= 45 and r["timing"]["maxGap"] > r["timing"]["minGap"] * 2.5 \
+             and r["stuck"]["dinoWorstSecs"] <= 6 and r["stuck"]["raptorWorstHalfSecs"] <= 3 and r["stuck"]["thru"] \
              and r["sound"]["ctx"] and r["sound"]["voices"] >= 5 and r["sound"]["verb"] and r["sound"]["panner"] == "HRTF"
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)

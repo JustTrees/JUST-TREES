@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.78</title>
+<title>JUST TREES 1.79</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.78";              // Just Trees 1.78
+const VERSION = "1.79";              // Just Trees 1.79
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4628,6 +4628,11 @@ function dinoTick(dt) {
     DINO.warm = true; sndVerb(); sndPool(); for (const k of [3.5, 4, 5, 6, 7, 8, 9, 11]) driveCurve(k); }
   if ((DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
   dinoSteps(dt); dinoVoices();
+  for (const A of beasts) {                                   // a dinosaur that hasn't got anywhere for a while pushes straight on through
+    if (!A.hpMax || A.hunter || A.dead || A.gone) continue;
+    if ((A.pgT = (A.pgT || 0) + dt) < 2.5) continue; const moved = A.pgP ? Math.hypot(A.x - A.pgP[0], A.z - A.pgP[1]) : 99; A.pgT = 0; A.pgP = [A.x, A.z];
+    if (A.mode === "walk" && A.want > .3 && moved < 1.5 && A.target && !(A.ghostT > 0)) { const gx = A.target[0] - A.x, gz = A.target[1] - A.z, gd = Math.hypot(gx, gz) || 1, k = Math.min(1, 10 / gd); A.ghost = [A.x + gx * k, A.z + gz * k]; A.ghostT = 3; }
+  }
   for (const A of beasts) if (A.flinch > 0 && A.body) {       // hit: a jolt through the body and a stagger
     A.flinch = Math.max(0, A.flinch - dt * 3.5); const k = A.flinch; A.body.rotation.z = Math.sin(k * 18) * .1 * k; if (!A.hunter) A.speed *= 1 - dt * 2 * k;
     if (k <= 0) A.body.rotation.z = 0;
@@ -4669,6 +4674,10 @@ function playerHigh() { return vr.climbing || !!vr.cl || P.y - groundAt(P.x, P.z
 function huntTick(A, dt) {                                   // the raptor's mind: circle far and fast, close in as it weakens, and in the end come for you
   A.hsT += dt; A.timer = 25; A.trek = false; A.sinceHit += dt; A.rage = Math.max(0, A.rage - dt / 6); A.fleeT = 1; A.steerT = Math.min(A.steerT, .1);
   const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, toP = Math.atan2(dx, dz), high = playerHigh(), f = A.hp / A.hpMax;
+  if ((A.pgT = (A.pgT || 0) + dt) > 1) {                     // agile: if it isn't getting where it's going (a trunk, a rock), it slips straight through
+    const moved = A.pgP ? Math.hypot(A.x - A.pgP[0], A.z - A.pgP[1]) : 99;
+    if (A.mode === "walk" && A.want > 2 && moved < A.want * A.pgT * .35 && A.target && !(A.ghostT > 0)) { A.ghost = [A.x + (A.target[0] - A.x) * Math.min(1, 12 / (Math.hypot(A.target[0] - A.x, A.target[1] - A.z) || 1)), A.z + (A.target[1] - A.z) * Math.min(1, 12 / (Math.hypot(A.target[0] - A.x, A.target[1] - A.z) || 1))]; A.ghostT = 1; }
+    A.pgT = 0; A.pgP = [A.x, A.z]; }
   const ring = (R, step) => { const a0 = Math.atan2(A.x - P.x, A.z - P.z) + A.orbit * step; return [P.x + Math.sin(a0) * R, P.z + Math.cos(a0) * R]; };
   if (A.hs === "stalk" && A.sinceHit > 3 && A.hp < A.top) {                                  // left alone it heals, but each time to a bar less than before
     if (!A.healing) { A.healing = true; A.healTo = Math.max(A.hp, A.top - A.hpMax * .1); A.top = A.healTo; }
@@ -4709,7 +4718,6 @@ function huntTick(A, dt) {                                   // the raptor's min
   } else if (A.hs === "charge" || A.hs === "approach") {     // it comes in on a curve, not straight
     const sp = A.hs === "charge" ? A.run : A.run * .55, side = A.chargeSide || A.orbit, k = Math.min(1, (d - 15) / 60), px = -dz / d * side, pz = dx / d * side;
     A.mode = "walk"; A.want = sp; A.target = [P.x + px * k * Math.min(30, d * .5), P.z + pz * k * Math.min(30, d * .5)];
-    if ((A.progT = (A.progT || 0) + dt) > 2.5) { if (A.progD !== undefined && d > A.progD - 3) { A.ghost = [P.x, P.z]; A.ghostT = 2; } A.progT = 0; A.progD = d; }   // caught on trees or rocks: it pushes straight through
     doom();
     if (high && d < 20) { A.hs = "wait"; A.hsT = 0; A.waitFor = 8 + Math.random() * 10; return; }
     if (A.hs === "approach" && f <= .3) dinoCharge(A);
@@ -5066,7 +5074,7 @@ function trunkNear(x, z, pad) {                            // trees and other so
   return false;
 }
 function walkable(A, x, z) {                              // logs and small rocks: step over them; trees and big boulders: go round
-  return targetOk(A, x, z) && !trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < Math.max(2.5, A.step * 2);   // only big boulders and cliff rocks turn them
+  return targetOk(A, x, z) && (A.thru || (!trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < Math.max(2.5, A.step * 2)));   // only big boulders and cliff rocks turn them
 }
 function neckHits(b) {                                   // hit spheres along the neck, chest to head (the head's own spheres follow it as it grazes)
   let mr = 0; for (const h of b.hit) if (!h[4]) mr = Math.max(mr, h[3]);
@@ -5100,7 +5108,7 @@ function addGround(kind, x, z, home) {
   const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
-  A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind];
+  A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur") A.thru = true;
   animalGroup.add(A.root); beasts.push(A); return A;
 }
 // Every part of the map has animals: the map is cut into sections (about 200 m), new groups go to the emptiest sections,
@@ -5346,7 +5354,7 @@ function updateAnimals(dt) {
     if (A.ghostT > 0) {                                      // squeezing out: straight for open ground, past whatever it was caught on
       A.ghostT -= dt; const gx = A.ghost[0] - A.x, gz = A.ghost[1] - A.z, gd = Math.hypot(gx, gz);
       if (gd < .25) A.ghostT = 0;
-      else { const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 6, Math.min(dt * 6, angDiff(h, A.yaw))); const st = Math.min(gd, Math.max(1.2, A.walk) * dt); A.x += gx / gd * st; A.z += gz / gd * st; A.speed = Math.max(A.walk * .6, A.speed * .9); }
+      else { const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 6, Math.min(dt * 6, angDiff(h, A.yaw))); const st = Math.min(gd, Math.max(1.2, A.hunter ? A.want : A.walk) * dt); A.x += gx / gd * st; A.z += gz / gd * st; A.speed = Math.max(A.walk * .6, A.speed * .9); }
       if (A.ghostT <= 0) A.steerT = 0;
     } else
     if (A.mode === "walk") {
@@ -6015,7 +6023,7 @@ function climbTick(dt, I) {                               // returns true while 
   C.prevP = null; C.vel.set(0, 0, 0);
   if (C.air) {                                             // flying through the air after a fling: high gravity, no fall damage, glide by spreading your arms
     P.gliding = !!input.glide;
-    if (P.gliding) { P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4); const want = GLIDE_SPEED, fx = (vr.glideDir ? vr.glideDir.x : -Math.sin(P.yaw)) * want, fz = (vr.glideDir ? vr.glideDir.z : -Math.cos(P.yaw)) * want; C.air.vx += (fx - C.air.vx) * Math.min(1, dt * 1.5); C.air.vz += (fz - C.air.vz) * Math.min(1, dt * 1.5); }
+    if (P.gliding) { P.vy += (-GLIDE_SINK - P.vy) * Math.min(1, dt * 4); const want = vr.on ? GLIDE_VR : GLIDE_SPEED, fx = (vr.glideDir ? vr.glideDir.x : -Math.sin(P.yaw)) * want, fz = (vr.glideDir ? vr.glideDir.z : -Math.cos(P.yaw)) * want; C.air.vx += (fx - C.air.vx) * Math.min(1, dt * 1.5); C.air.vz += (fz - C.air.vz) * Math.min(1, dt * 1.5); }
     else P.vy -= CLIMB_G * dt;
     P.x = Math.max(-EDGE, Math.min(EDGE, P.x + C.air.vx * dt)); P.z = Math.max(-EDGE, Math.min(EDGE, P.z + C.air.vz * dt)); clampToMap(P);
     P.y += P.vy * dt;
@@ -6642,7 +6650,7 @@ function spawn(rand) {
 }
 
 const input = { jx: 0, jy: 0, jump: false, run: false, glide: false, glideMouse: false };
-const GLIDE_SPEED = 11, GLIDE_SINK = 2.2;   // m/s forward at full stick, m/s gentle drop
+const GLIDE_SPEED = 11, GLIDE_SINK = 2.2, GLIDE_VR = 22;   // VR glides twice as fast (1.79, Ron)   // m/s forward at full stick, m/s gentle drop
 const CLIMB = 1.5, CLIFF = 5.67;   // anything below eye level (1.5 m) can be walked up onto; walkable up to 80 degrees (tan 80)
 const keys = {};
 function update(dt) {
@@ -6665,12 +6673,12 @@ function update(dt) {
   if (P.gliding && P.onGround) { P.onGround = false; P.vy = Math.max(P.vy, 1.5); P.y += .05; }   // push off the slope into the air
   if (swimming || P.gliding) P.crouch = false;
   if (vr.on && P.gliding && vr.glideDir) mag = 1;                            // in a headset you always fly forward, the way your arms point
-  let speed = P.gliding ? GLIDE_SPEED * mag : (vr.on ? (running ? 12.5 : 8.5) : running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
+  let speed = P.gliding ? (vr.on ? GLIDE_VR : GLIDE_SPEED) * mag : (vr.on ? (running ? 12.5 : 8.5) : running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
   let moved = 0;
   if (mag > .02) {
     const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw);
     let dx = (-sy * my + cy * mx) * speed * dt, dz = (-cy * my - sy * mx) * speed * dt;
-    if (vr.on && P.gliding && vr.glideDir) { dx = vr.glideDir.x * GLIDE_SPEED * dt; dz = vr.glideDir.z * GLIDE_SPEED * dt; }
+    if (vr.on && P.gliding && vr.glideDir) { dx = vr.glideDir.x * GLIDE_VR * dt; dz = vr.glideDir.z * GLIDE_VR * dt; }
     const tryMove = (nx, nz) => {
       const mx2 = nx - P.x, mz2 = nz - P.z, ml = Math.hypot(mx2, mz2) + 1e-6, lx = mx2 / ml, lz = mz2 / ml;
       // rocks and logs are solid; low ones you can step onto, and you can jump onto taller ones
