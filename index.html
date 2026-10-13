@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.83</title>
+<title>JUST TREES 1.84</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.83";              // Just Trees 1.83
+const VERSION = "1.84";              // Just Trees 1.84
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -350,11 +350,11 @@ const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in win
 if (isTouch) document.body.classList.add("touch");
 let VR_ON = false;                    // set while a headset session runs: long views, more distant forest
 
-const TILE = 160, SIZES = { xs: 250, small: 400, medium: 560, large: 800, xl: 1200, xxl: 1600 };
+let TILE = 160; const SIZES = { xs: 250, small: 400, medium: 560, large: 800, xl: 1200, xxl: 1600, xxxl: 3000 };
 let S = 640, HALF = 320, EDGE = 270, SEG = 230, NT = 4, AREA = 1;
 function applySize() {                      // map size from the setup screen; detail per meter stays the same
   S = SIZES[set.size] || 560; HALF = S / 2; EDGE = HALF - (set.edges === "island" ? 50 : 6);   // endless: almost to the very edge
-  SEG = Math.round(S / (isTouch ? 3.76 : 2.78)); NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
+  SEG = Math.round(S / (S > 2000 ? 4 : isTouch ? 3.76 : 2.78)); /* 3 km: a vertex every 4 m (XXL: 2.8 m) */ TILE = S > 2000 ? 300 : 160; /* 3 km: bigger tree tiles */ NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
 }
 const EYE = 1.65;
 /* ---- map shape: an organic outline inside the square (a coastline on islands, a soft boundary on endless maps) ---- */
@@ -486,11 +486,14 @@ densEl.addEventListener("input", () => { set.density = densEl.value / 100; rende
 const densMul = () => .5 + set.density;
 const ARMED = () => gameMode === "hunt" || (gameMode === "pvp" && VR_ON);   // the full set of guns (VR PvP plays like Hunting)
 // headset savings on the biggest maps: fewer far-off copies, trees switch to their lighter version a bit sooner, a few less trees, lighter rain and snow
-const PERF = () => !VR_ON ? { lod: 270, zoomLod: 99, border: 1, trees: 1, precip: 1 }
+const BIG3 = () => set.size === "xxxl";                    // the 3 km open-world map: no animals, trees thinned to XXL's count less 10%
+const PERF = () => BIG3() ? (VR_ON ? { lod: 205, zoomLod: 2.5, border: .4, trees: .9 * .82 * (1600 * 1600) / (3000 * 3000), precip: .6 } : { lod: 270, zoomLod: 99, border: 1, trees: .9 * (1600 * 1600) / (3000 * 3000), precip: 1 })
+  : !VR_ON ? { lod: 270, zoomLod: 99, border: 1, trees: 1, precip: 1 }
   : set.size === "xxl" ? { lod: 205, zoomLod: 2.5, border: .4, trees: .82, precip: .6 }
   : set.size === "xl" ? { lod: 240, zoomLod: 3.5, border: .7, trees: .92, precip: .8 }
   : { lod: 270, zoomLod: 4, border: 1, trees: 1, precip: 1 };       // 0.5x to 1.5x of the normal forest, middle of the slider is normal
-[["xs", "XS"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, label]) => {
+[["xs", "XS"], ["small", "Small"], ["medium", "Medium"], ["large", "Large"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "3 km"]].forEach(([k, label]) => {
+  if (k === "xxxl" && isTouch) return;                       // phones: not the 3 km map
   const b = document.createElement("button"); b.textContent = label; b.dataset.size = k;
   b.addEventListener("click", () => { set.size = k; renderSetup(); });
   $("sizes").appendChild(b);
@@ -2158,9 +2161,9 @@ function makeFeature(r, base, wGuess) {
     } };
 }
 function bakeAndErode(Hf, rand, waterGuess) {
-  const G = 2, N = S / G + 1, SC = 25, map = new Float32Array(N * N);
+  const G = S > 2000 ? 3 : 2, N = Math.round(S / G) + 1, SC = 25, map = new Float32Array(N * N);   /* 3 km: a 3 m grid (the ground mesh is 4 m there), so the loading time doesn't balloon */
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) map[j * N + i] = Hf(-HALF + i * G, -HALF + j * G) / SC;
-  erode(map, N, Math.round((isTouch ? 45000 : 80000) * 1.15 * AREA), rand);
+  erode(map, N, Math.round((isTouch ? 45000 : 80000) * 1.15 * AREA * (2 / G) * (2 / G)), rand);
   for (let i = 0; i < map.length; i++) map[i] *= SC;
   const sample = arr => (x, z) => {
     let fx = (x + HALF) / G, fz = (z + HALF) / G;
@@ -5169,6 +5172,7 @@ function animalLike(kind, x, z) {                          // 0..1: how much thi
 // standing still: now and then a group that's far away and out of sight turns up somewhere around you (not in a ring, never in view); moving around, nothing new turns up
 const appear = { t: 12 };
 function appearTick(dt) {
+  if (BIG3()) return;
   if (sense.calm < 15) { appear.t = Math.max(appear.t, 8); return; }
   if ((appear.t -= dt) > 0) return;
   appear.t = Math.max(10, 35 - sense.calm / 12) * (.7 + Math.random() * .6);
@@ -5299,6 +5303,7 @@ function spawnAnimals() {
   const k = Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12; stockInit();
+  if (BIG3()) { DINO.on = false; DINO.hunter = null; DINO.pending = 0; droneLevel(0, true); return; }   // 3 km open world: no animals for now (Ron)
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
   DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
   const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
@@ -5392,7 +5397,7 @@ function unstick(A) {
   return false;
 }
 function stockTick(dt) {                                    // keep every part of the map stocked: refill an empty section far from you, out of sight
-  if (!STOCK.land.length || state !== "play" || (STOCK.t -= dt) > 0) return;
+  if (BIG3() || !STOCK.land.length || state !== "play" || (STOCK.t -= dt) > 0) return;
   STOCK.t = 4 + Math.random() * 3;
   camera.getWorldDirection(_lf); const fw = Math.hypot(_lf.x, _lf.z) || 1;
   const hidden = (x, z) => { const d = Math.hypot(x - P.x, z - P.z); return d > 200 && (d > Math.max(900, beastDraw()) || ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (d * fw) < .3); };
@@ -6506,7 +6511,7 @@ function vruiParts() {
   uiSlider(S2, lx, 516, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 790 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
-  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 196, 140, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
+  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "3 km"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 130, 196, 122, 62, l, () => { set.size = k; }, { active: () => set.size === k }));
   uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island" });
   uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless" });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
