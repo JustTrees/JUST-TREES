@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.84</title>
+<title>JUST TREES 1.85</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.84";              // Just Trees 1.84
+const VERSION = "1.85";              // Just Trees 1.85
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -327,7 +327,7 @@ const WEAP = {                     // mag = rounds per magazine, start = spare r
   ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
   smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
   pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
-const AMMO_CAP = 300;                                       // most spare rounds you can carry for one gun
+const AMMO_CAP = 300, INF_AMMO = true;                      // 1.85: unlimited spare ammo on every gun (no ammo cans or ammo drops)                                       // most spare rounds you can carry for one gun
 const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no drop (they fly dead straight, just take time to arrive); sight distance if drop ever comes back
 const VR_NADE_G = 9.81;                                    // VR grenades still fall in an arc
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
@@ -5854,6 +5854,7 @@ function vrTick(dt) {
   if (huntV && vr.nadeMode && main && state === "play" && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
     nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
   } else nadeHide();
+  if (huntV && gameMode === "hunt" && vr.bowMode && main && off && state === "play" && !P.gliding && !(vr.cl && vr.cl.hold)) bowTick(dt, I, main, off, mainSide, offSide); else bowHide();   // 1.85: the bow
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(VR_BINO_FOV.length - 1, vr.zoom)); }
@@ -7611,10 +7612,11 @@ function boltSounds() {                        // lift, pull back, push forward,
   });
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
-const WHEEL = ["hunt", "ar", "smg", "pistol", "gren"];  // five slices, clockwise from the top
-const WSTEP = Math.PI * 2 / 5;
+const WHEEL_GUNS = ["hunt", "ar", "smg", "pistol"];
+const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"] : ["hunt", "ar", "smg", "pistol", "gren"];   // clockwise from the top; Hunting has a bow (1.85)
+const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};
-function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
+function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
   if (VR_ON && (gameMode === "pvp" || gameMode === "hunt")) pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }   // VR PvP and Hunting: start with a 1-star pistol, find the rest
 vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
 resetArms();
@@ -7741,10 +7743,11 @@ function vrWheel() {
 }
 function drawWheel(sel) {
   const m = vrWheel(), cv = m.userData.cv, g = cv.getContext("2d"); g.clearRect(0, 0, 512, 512);
-  WHEEL.forEach((k, i) => {
-    const a0 = -Math.PI / 2 + (i - .5) * WSTEP, a1 = a0 + WSTEP, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === vr.weapon && !vr.nadeMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : WEAP[k];
+  const WS = wstep();
+  wheelKeys().forEach((k, i) => {
+    const a0 = -Math.PI / 2 + (i - .5) * WS, a1 = a0 + WS, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === "bow" ? !!vr.bowMode : k === vr.weapon && !vr.nadeMode && !vr.bowMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : k === "bow" ? { name: "Bow", col: "#e0a050" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
-    const lock = k !== "gren" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && lootMode();
+    const lock = k !== "gren" && k !== "bow" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && k !== "bow" && lootMode();
     g.fillStyle = on && !lock ? "rgba(255,214,90,.92)" : lock ? "rgba(14,20,15,.45)" : "rgba(14,20,15,.82)"; g.fill();
     g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
     const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165 - (pv ? 12 : 0), A = arms[k];
@@ -7752,7 +7755,7 @@ function drawWheel(sel) {
     if (pv && !lock) { const t = tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
       for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
     g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
-    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : lock ? "not found" : A.mag + " | " + A.res, cx, cy + (pv ? 66 : 40));
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -7770,9 +7773,9 @@ function wheelTick(dt, main, I) {
       W.lp = m.position.clone().sub(new THREE.Vector3(vr.ox, vr.oy, vr.oz)).applyQuaternion(yqi); W.lq = yqi.multiply(m.quaternion);
     }
   } else if (W.t > 0) {
-    const picked = W.open && W.sel >= 0; if (picked) pickGun(WHEEL[W.sel]);
+    const picked = W.open && W.sel >= 0; if (picked) pickGun(wheelKeys()[W.sel]);
     if (W.open) { W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
-    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else if (vr.nadeMode) { vr.nadeMode = false; vr.gunOut = true; } else vr.gunOut = !vr.gunOut; }   // tap with a grenade in hand: back to the gun   // a quick tap with nothing picked: gun in or out
+    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else if (vr.nadeMode || vr.bowMode) { vr.nadeMode = false; vr.bowMode = false; vr.gunOut = true; } else vr.gunOut = !vr.gunOut; }   // tap with a grenade in hand: back to the gun   // a quick tap with nothing picked: gun in or out
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun
@@ -7781,15 +7784,16 @@ function wheelTick(dt, main, I) {
     if (Math.abs(den) > 1e-3) {
       const t = _wp.copy(m.position).sub(main.rayPos).dot(_wn) / den;
       if (t > 0) { const lp = m.worldToLocal(_wp.copy(main.rayPos).addScaledVector(_wd, t)); const r = Math.hypot(lp.x, lp.y);
-        sel = r < .025 ? -1 : ((Math.round(Math.atan2(lp.x, lp.y) / WSTEP) % 5) + 5) % 5; }
+        const nK = wheelKeys().length; sel = r < .025 ? -1 : ((Math.round(Math.atan2(lp.x, lp.y) / wstep()) % nK) + nK) % nK; }
     }
     if (sel !== W.sel) { W.sel = sel; drawWheel(sel); if (sel >= 0) buzz(set.hand === "right" ? "R" : "L", .15, 12); }
   }
 }
 function pickGun(k) {
-  if (k === "gren") { vr.nadeMode = true; vr.gunOut = false; gunFoley(SFX.swap); return; }
+  if (k === "gren") { vr.nadeMode = true; vr.bowMode = false; vr.gunOut = false; gunFoley(SFX.swap); return; }
+  if (k === "bow") { vr.bowMode = true; vr.nadeMode = false; vr.gunOut = false; gunFoley(SFX.swap); return; }   // 1.85: the bow (VR Hunting)
   if (lootMode() && !(vr.own[k] > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }   // not found yet
-  vr.nadeMode = false;
+  vr.nadeMode = false; vr.bowMode = false;
   if (k !== vr.weapon) { vr.weapon = k; vr.gunInit = false; vr.rl.grab = null; vr.cool = Math.max(vr.cool, .25); gunFoley(SFX.swap); }
   vr.gunOut = true;
 }
@@ -7812,7 +7816,8 @@ function drawCounter(m, A) {
   g.strokeStyle = "rgba(255,255,255,.25)"; g.lineWidth = 2; g.beginPath(); g.moveTo(64, 14); g.lineTo(64, 66); g.stroke();
   g.textAlign = "center"; g.font = "bold 40px sans-serif";
   g.fillStyle = A.phase || A.mag === 0 ? "#ffcf3a" : "#f2f6ec"; g.fillText(String(A.mag), 33, 55);
-  g.fillStyle = A.res === 0 ? "#ff6a5a" : "#b8c4ad"; g.font = (A.res > 99 ? "bold 30px" : "bold 38px") + " sans-serif"; g.fillText(String(A.res), 96, 54);
+  if (INF_AMMO) { g.fillStyle = "#b8c4ad"; g.font = "bold 46px sans-serif"; g.fillText("\u221e", 96, 56); }
+  else { g.fillStyle = A.res === 0 ? "#ff6a5a" : "#b8c4ad"; g.font = (A.res > 99 ? "bold 30px" : "bold 38px") + " sans-serif"; g.fillText(String(A.res), 96, 54); }
   m.material.map.needsUpdate = true;
 }
 function glowParts(o, amt) {
@@ -7834,13 +7839,13 @@ function reloadTick(dt, G, off) {
     const hl = G.worldToLocal(_rl.copy(off.pos));                       // the off hand, in the gun's own space
     if (offPress && !R.grab) {
       const mc = _rm.copy(U.magBase).addScaledVector(U.magDir, S.drop * A.k + S.magC);
-      if (A.phase === 1 && A.res > 0 && hl.distanceTo(mc) < SNAP_R) { R.grab = "mag"; R.off = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - S.drop * A.k; A.popping = false; buzz(offSide, .3, 25); }
+      if (A.phase === 1 && (INF_AMMO || A.res > 0) && hl.distanceTo(mc) < SNAP_R) { R.grab = "mag"; R.off = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - S.drop * A.k; A.popping = false; buzz(offSide, .3, 25); }
       else if (A.phase === 2 && hl.distanceTo(_rm.set(...S.handle)) < SNAP_R) { R.grab = "charge"; R.start = hl.z; R.pull = 0; R.armed = false; buzz(offSide, .3, 25); }
     }
     if (R.grab === "mag") {                                              // the magazine only moves along its slot, so it lines up by itself
       const along = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - R.off;
       A.k = Math.max(0, Math.min(1, along / S.drop));
-      if (A.k < .07) { const n = Math.min(magOf(kind), A.res); A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
+      if (A.k < .07) { const n = INF_AMMO ? magOf(kind) : Math.min(magOf(kind), A.res); if (!INF_AMMO) A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
     }
     if (R.grab === "charge") {
       R.pull = Math.max(0, Math.min(S.pull, hl.z - R.start));
@@ -7851,7 +7856,7 @@ function reloadTick(dt, G, off) {
     const big = A.phase === 1 ? 1 + .35 * Math.min(1, A.k * 3) : 1; U.mag.scale.setScalar(big); }          // out of the gun it shows a bit oversized, easy to see and grab
   if (U.charge) { U.charge.position.copy(U.chargeBase); U.charge.position.z += R.grab === "charge" ? R.pull : 0; if (kind === "hunt") U.charge.rotation.z += ((R.grab === "charge" ? 1.2 : 0) - U.charge.rotation.z) * Math.min(1, dt * 16); }   // the bolt lifts as you grab it
   const pulse = 1.1 + .45 * Math.sin(performance.now() * .008);          // a bright, slow yellow pulse
-  glowParts(U.mag, A.phase === 1 && A.res > 0 ? pulse : 0);
+  glowParts(U.mag, A.phase === 1 && (INF_AMMO || A.res > 0) ? pulse : 0);
   glowParts(U.charge, A.phase === 2 ? pulse : 0);
   if (U.counter) drawCounter(U.counter, A);
 }
@@ -7968,11 +7973,174 @@ function boomSound(d) {
   const o = c.createOscillator(), og = c.createGain(); o.frequency.setValueAtTime(80, t); o.frequency.exponentialRampToValueAtTime(28, t + .5);
   og.gain.setValueAtTime(vol * .9, t); og.gain.exponentialRampToValueAtTime(.001, t + .6); o.connect(og).connect(SND.master); o.start(t); o.stop(t + .65);
 }
+/* ---------------- 1.85: the recurve bow (VR Hunting) ----------------
+   The bow sits in your off hand. Reach back over your gun-hand shoulder to the quiver and squeeze the trigger: an arrow in your fingers.
+   Bring it to the string and it nocks itself; keep the trigger held, pull back, let go to shoot. The further you draw, the faster it
+   flies; it drops in a real arc. Quiet: the shot doesn't empty the woods like a gunshot. Unlimited arrows; they don't stay stuck in things. */
+const BOW = { len: 1.6, rest: [0, .07, -.008], drawLen: .7, vMax: 62, vMin: 10, g: 9.81, life: 7, quiverR: .27, nockR: .14 };
+const BOW_DMG = { dino: 70, raptor: 80 };                  // a full-draw arrow against a dinosaur / the raptor or T. rex (weaker draws do less)
+let bowObj = null; const ARROWS = [];
+const _bw1 = new THREE.Vector3(), _bw2 = new THREE.Vector3(), _bw3 = new THREE.Vector3(), _bw4 = new THREE.Vector3(), _bwM = new THREE.Matrix4(), _bwQ = new THREE.Quaternion();
+const SFX_BOW = { pull: [[0, 1700, .14, .05], [.06, 2600, .08, .04]], nock: [[0, 3200, .02, .12], [.015, 1900, .03, .08]], drop: [[0, 900, .06, .06]],
+  creak: [[0, 420, .22, .035], [.08, 640, .16, .03]], twang: [[0, 160, .3, .38], [0, 2300, .05, .2], [.008, 520, .14, .22], [.02, 1100, .07, .12]], thud: [[0, 260, .09, .16], [0, 1400, .03, .06]] };
+function bowLimbZ(t) { return .012 + .25 * Math.pow(t, 1.55) - .05 * Math.pow(Math.max(0, (t - .7) / .3), 2); }   // limbs sweep back toward you, the tips curl forward again (a recurve)
+function bowTipZ() { return bowLimbZ(1); }
+function arrowModel() {
+  const g = new THREE.Group(), ph = (col, o) => new THREE.MeshPhongMaterial(Object.assign({ color: col, shininess: 60, specular: 0x444444 }, o || {}));
+  const carbon = ph("#202326", { shininess: 90, specular: 0x666666 }), steel = ph("#c9cdd2", { shininess: 120, specular: 0xbbbbbb }), orange = ph("#ff6a1a", { shininess: 20 }), white = ph("#f2f2ec", { shininess: 20 });
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(.0034, .0034, .72, 8).rotateX(Math.PI / 2), carbon); sh.position.z = -.37; g.add(sh);
+  const ins = new THREE.Mesh(new THREE.CylinderGeometry(.0034, .0042, .02, 8).rotateX(Math.PI / 2), steel); ins.position.z = -.74; g.add(ins);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(.0065, .045, 3).rotateX(-Math.PI / 2), steel); head.position.z = -.772; g.add(head);   // a three-blade broadhead
+  for (let k = 0; k < 3; k++) { const b = new THREE.Mesh(new THREE.BoxGeometry(.0006, .012, .03), steel); const a = k * Math.PI * 2 / 3; b.position.set(Math.sin(a) * .006, Math.cos(a) * .006, -.765); b.rotation.z = -a; g.add(b); }
+  const vaneShape = new THREE.Shape(); vaneShape.moveTo(0, 0); vaneShape.lineTo(.075, 0); vaneShape.quadraticCurveTo(.05, .013, .012, .015); vaneShape.lineTo(0, 0);
+  const vaneGeo = new THREE.ShapeGeometry(vaneShape);
+  for (let k = 0; k < 3; k++) {                               // three vanes, one white (the cock vane)
+    const v = new THREE.Mesh(vaneGeo, k ? orange : white); v.material = v.material.clone(); v.material.side = THREE.DoubleSide;
+    const holder = new THREE.Group(); holder.rotation.z = k * Math.PI * 2 / 3; v.rotation.y = Math.PI / 2; v.position.set(0, .0034, -.025); holder.add(v); g.add(holder);
+  }
+  const nock = new THREE.Mesh(new THREE.CylinderGeometry(.004, .0036, .014, 8).rotateX(Math.PI / 2), orange); nock.position.z = -.004; g.add(nock);
+  return g;                                                  // the nock at 0, the point at -0.79 (forward is -z)
+}
+function bowParts() {
+  if (bowObj) return bowObj;
+  const half = BOW.len / 2, RIS = .28, secs = [];
+  for (let i = 0; i <= 40; i++) {                            // riser and both limbs in one swept piece: y up, you (the string) behind at +z
+    const y = -half + i / 40 * BOW.len, a = Math.abs(y);
+    if (a < RIS) { const grip = Math.max(0, 1 - Math.abs(y + .03) / .085), win = y > .05 && y < .2 ? .45 : 1;
+      secs.push([y, .01 + grip * .02, (.017 + grip * .005) * (y > .05 && y < .2 ? .8 : 1), .026 + grip * .012, 2.6]); void win; }
+    else { const t = (a - RIS) / (half - RIS); secs.push([y, bowLimbZ(t), .02 - .011 * t, .0068 - .0026 * t, 3.4]); }
+  }
+  const wood = new THREE.Color("#6e4526"), woodL = new THREE.Color("#9a6a3c"), wrap = new THREE.Color("#2b1d14"), limb = new THREE.Color("#1e1c1a"), limbE = new THREE.Color("#5a3a20");
+  const col = (c, u, cy, cx) => { const y = -half + u * BOW.len, a = Math.abs(y);
+    if (a < RIS) { if (Math.abs(y + .03) < .065) c.copy(wrap).multiplyScalar(.85 + .15 * Math.abs(cx)); else c.copy(wood).lerp(woodL, (Math.sin(cx * 9 + y * 40) * .5 + .5) * .6); }
+    else c.copy(limb).lerp(limbE, Math.abs(cy) > .8 ? .55 : .08); };
+  const bowM = new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 55, specular: 0x3a3a3a });
+  const bow = new THREE.Group(), body = new THREE.Mesh(sweepGeo(secs, 12, 3, col), bowM); bow.add(body);
+  const tipM = new THREE.MeshPhongMaterial({ color: "#d8cfc0", shininess: 60 });
+  for (const s of [-1, 1]) { const tip = new THREE.Mesh(new THREE.CylinderGeometry(.0055, .0065, .022, 8), tipM); tip.position.set(0, s * (half - .012), bowTipZ()); bow.add(tip); }
+  const strM = new THREE.MeshPhongMaterial({ color: "#e9e4d6", shininess: 30 });
+  const strA = new THREE.Mesh(new THREE.CylinderGeometry(.0018, .0018, 1, 6), strM), strB = strA.clone();
+  const nockSet = new THREE.Mesh(new THREE.CylinderGeometry(.003, .003, .012, 6), new THREE.MeshPhongMaterial({ color: "#c43a2a" }));
+  scene.add(bow, strA, strB, nockSet);
+  const handArrow = arrowModel(); scene.add(handArrow);
+  // the quiver: a leather tube over your gun-hand shoulder, fletchings showing
+  const quiver = new THREE.Group(), lea = new THREE.MeshPhongMaterial({ color: "#5c3a22", shininess: 12 }), trim = new THREE.MeshPhongMaterial({ color: "#2a1c12", shininess: 20 });
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(.048, .04, .52, 14, 1, true), lea); tube.material.side = THREE.DoubleSide; quiver.add(tube);
+  const bottom = new THREE.Mesh(new THREE.CylinderGeometry(.04, .036, .03, 14), trim); bottom.position.y = -.27; quiver.add(bottom);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.048, .005, 6, 18).rotateX(Math.PI / 2), trim); rim.position.y = .26; quiver.add(rim);
+  const strap = new THREE.Mesh(new THREE.BoxGeometry(.03, .5, .006), trim); strap.position.set(0, 0, .046); quiver.add(strap);
+  const fl = new THREE.Group(), orange = new THREE.MeshPhongMaterial({ color: "#ff6a1a", side: THREE.DoubleSide }), shaftM = new THREE.MeshPhongMaterial({ color: "#202326" });
+  for (let i = 0; i < 6; i++) {                              // the tops of six arrows
+    const a = i / 6 * 6.283, r = .022, x = Math.cos(a) * r, z = Math.sin(a) * r, h = .3 + (i % 3) * .015;
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(.0034, .0034, .14, 6), shaftM); s.position.set(x, h - .07, z); fl.add(s);
+    const v = new THREE.Mesh(new THREE.PlaneGeometry(.014, .07), orange); v.position.set(x, h - .03, z); v.rotation.y = a; fl.add(v);
+    const v2 = v.clone(); v2.rotation.y = a + Math.PI / 2; fl.add(v2);
+  }
+  quiver.add(fl); scene.add(quiver);
+  for (const o of [bow, strA, strB, nockSet, handArrow, quiver]) { o.visible = false; o.frustumCulled = false; o.traverse(c => { c.frustumCulled = false; }); }
+  bowObj = { bow, strA, strB, nockSet, handArrow, quiver };
+  return bowObj;
+}
+function bowString(m, a, b) { const d = _bw4.subVectors(b, a), L = d.length(); m.position.copy(a).addScaledVector(d, .5); m.scale.set(1, Math.max(.001, L), 1); m.quaternion.setFromUnitVectors(_bw3.set(0, 1, 0), d.divideScalar(L || 1)); m.visible = true; }
+function bowHide() {
+  if (!bowObj) return; for (const k in bowObj) bowObj[k].visible = false;
+  if (vr.bowSt) { vr.bowSt.arrow = false; vr.bowSt.nocked = false; vr.bowSt.f = 0; }
+}
+function quiverMouth(head, side) {                           // just behind and above your gun-hand shoulder; it turns with your body, not every glance
+  const y = vr.qYaw, rx = Math.cos(y), rz = -Math.sin(y), bx = Math.sin(y), bz = Math.cos(y);
+  return _bw1.set(head.x + rx * side * .12 + bx * .16, head.y - .17, head.z + rz * side * .12 + bz * .16);
+}
+function inQuiver(hand, head, side) {
+  const m = quiverMouth(head, side); if (hand.distanceTo(m) < BOW.quiverR) return true;
+  const y = vr.qYaw, back = (hand.x - head.x) * Math.sin(y) + (hand.z - head.z) * Math.cos(y);   // or anywhere just behind your head, above the shoulders
+  return back > .04 && hand.y > head.y - .32 && hand.distanceTo(head) < .5;
+}
+function bowTick(dt, I, main, off, mainSide, offSide) {
+  const B = bowParts(), st = vr.bowSt || (vr.bowSt = { arrow: false, nocked: false, f: 0, fx: 0, creakT: 0, buzzT: 0 }), side = mainSide === "R" ? 1 : -1;
+  vr.qYaw = vr.qYaw === undefined ? P.yaw : vr.qYaw + angDiff(P.yaw, vr.qYaw) * Math.min(1, dt * 2.5);
+  // the quiver on your back
+  const mouth = quiverMouth(I.head, side).clone(), Q = B.quiver; Q.visible = true;
+  Q.quaternion.setFromEuler(new THREE.Euler(-.22, vr.qYaw, side * -.35, "YXZ"));
+  Q.position.copy(mouth).sub(_bw2.set(0, .26, 0).applyQuaternion(Q.quaternion));
+  // the bow in your off hand: pointing where the hand points; drawn, it lines up with the arrow
+  const grip = off.pos, bow = B.bow; bow.visible = true;
+  const fwd = _bw2, up = _bw3.set(0, 1, 0).applyQuaternion(off.rayQ);
+  if (st.nocked) fwd.subVectors(grip, main.pos).normalize(); else fwd.set(0, 0, -1).applyQuaternion(off.rayQ);
+  const zA = _bw4.copy(fwd).negate(); up.addScaledVector(zA, -up.dot(zA)).normalize(); const xA = new THREE.Vector3().crossVectors(up, zA);
+  _bwQ.setFromRotationMatrix(_bwM.makeBasis(xA, up, zA));
+  bow.quaternion.slerp(_bwQ, bow.userData.init ? 1 - Math.exp(-dt * (st.nocked ? 30 : 18)) : 1); bow.userData.init = true;
+  bow.position.copy(grip).sub(_bw1.set(0, -.03, .03).applyQuaternion(bow.quaternion)); bow.updateMatrixWorld(true);
+  const restX = side * -.018;                                // the arrow rides on the bow-hand side of the riser
+  const rest = bow.localToWorld(new THREE.Vector3(restX, BOW.rest[1], BOW.rest[2])), half = BOW.len / 2, tz = bowTipZ();
+  const tipT = bow.localToWorld(new THREE.Vector3(0, half - .01, tz)), tipB = bow.localToWorld(new THREE.Vector3(0, -half + .01, tz)), restStr = bow.localToWorld(new THREE.Vector3(0, BOW.rest[1], tz));
+  // trigger: grab an arrow at the quiver, nock it at the string, hold to draw, let go to shoot
+  const trig = main.trig, pressed = edge("bowtrig", trig);
+  if (pressed && !st.arrow && inQuiver(main.pos, I.head, side)) { st.arrow = true; st.nocked = false; gunFoley(SFX_BOW.pull); buzz(mainSide, .35, 25); }
+  if (st.arrow && !st.nocked && trig > .5 && main.pos.distanceTo(restStr) < BOW.nockR) { st.nocked = true; gunFoley(SFX_BOW.nock); buzz(mainSide, .45, 20); buzz(offSide, .25, 15); }
+  let nockPt = restStr;
+  if (st.nocked) {
+    const aim = _bw4.subVectors(rest, main.pos), d = aim.length(); aim.divideScalar(d || 1);
+    const dl = Math.min(BOW.drawLen, d); nockPt = rest.clone().addScaledVector(aim, -dl);
+    const brace = tz - BOW.rest[2], f = Math.max(0, Math.min(1, (dl - brace) / (BOW.drawLen - brace)));
+    if (f > st.f + .06 && (st.creakT -= dt) <= 0) { st.creakT = .35; gunFoley(SFX_BOW.creak); }
+    st.f = f;
+    if ((st.buzzT -= dt) <= 0 && f > .05) { st.buzzT = .09; buzz(mainSide, .05 + .35 * f, 12); buzz(offSide, .03 + .2 * f, 10); }   // the string's pull in your hands
+    if (d < .05 || (main.pos.clone().sub(rest).dot(fwd) > .02)) { st.nocked = false; st.f = 0; }   // pushed the arrow forward off the string
+  }
+  if (st.arrow && trig < .4) {                               // let go
+    if (st.nocked && st.f > .04) bowShoot(rest, nockPt, st.f, mainSide, offSide);
+    else gunFoley(SFX_BOW.drop);
+    st.arrow = st.nocked = false; st.f = 0;
+  }
+  bowString(B.strA, tipT, nockPt); bowString(B.strB, nockPt, tipB);
+  B.nockSet.position.copy(restStr); B.nockSet.quaternion.copy(bow.quaternion); B.nockSet.visible = true;
+  const A = B.handArrow; A.visible = st.arrow;
+  if (st.arrow) {
+    if (st.nocked) { A.position.copy(nockPt); A.lookAt(_bw1.copy(nockPt).sub(_bw2.subVectors(rest, nockPt))); }   // nock on the string, point through the rest
+    else { A.position.copy(main.pos).add(_bw1.set(0, -.01, .05).applyQuaternion(main.rayQ)); A.quaternion.copy(main.rayQ); }
+  }
+}
+function bowShoot(rest, nockPt, f, mainSide, offSide) {
+  const dir = new THREE.Vector3().subVectors(rest, nockPt).normalize(), spd = BOW.vMin + (BOW.vMax - BOW.vMin) * Math.pow(f, .8);
+  const m = arrowModel(); scene.add(m); m.traverse(c => { c.frustumCulled = false; });
+  ARROWS.push({ m, p: rest.clone().addScaledVector(dir, .05), v: dir.multiplyScalar(spd), from: new THREE.Vector3(P.x, P.y, P.z), t: 0, cs: { wet: 0, st: .25 }, f });
+  gunFoley(SFX_BOW.twang); buzz(mainSide, .8, 45); buzz(offSide, .6, 60);
+}
+function arrowsTick(dt) {
+  for (let i = ARROWS.length - 1; i >= 0; i--) {
+    const R = ARROWS[i], st = Math.min(.05, dt); R.t += st;
+    const a = R.p, b = _bw1.copy(a).addScaledVector(R.v, st); b.y -= .5 * BOW.g * st * st; R.v.y -= BOW.g * st;
+    const seg = a.distanceTo(b); let done = R.t > BOW.life || Math.abs(b.x) > HALF || Math.abs(b.z) > HALF || b.y < -500;
+    if (seg > 1e-6 && !done) {
+      const d = _bw2.subVectors(b, a).divideScalar(seg), h = castShot(a, d, seg, R.cs);
+      if (h.kind) {
+        done = true; const spd = R.v.length();
+        if (h.kind === "animal") arrowHit(h.animal, R, h.p, h.head, spd);
+        else if (h.p.distanceTo(camera.position) < 30) gunFoley(SFX_BOW.thud);
+        a.copy(h.p);
+      } else a.copy(b);
+    }
+    const dir = _bw3.copy(R.v).normalize();
+    R.m.position.copy(a).addScaledVector(dir, -.79); R.m.lookAt(_bw4.copy(R.m.position).sub(dir));   // the point leads (the model points down -z)
+    if (done) { scene.remove(R.m); ARROWS.splice(i, 1); }
+  }
+}
+function arrowHit(A, R, p, head, spd) {
+  if (!A || A.dead) return;
+  const dist = R.from.distanceTo(p), k = spd / BOW.vMax;
+  for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
+  if (!A.hpMax) {
+    if (spd < 26 && !head) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // a weak arrow: it just runs
+    hitAnimal(A, dist, 0, head, null); return;
+  }
+  hitAnimal(A, dist, Math.max(5, (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * k), head, null);
+}
+function arrowsClear() { for (const R of ARROWS) scene.remove(R.m); ARROWS.length = 0; bowHide(); }
 function vrClearNades() {
   for (const N of NADES) scene.remove(N.m); NADES.length = 0;
   for (const B of BOOMS) scene.remove(B.m); BOOMS.length = 0;
   if (nadeLootMesh) { for (const o of [nadeLootMesh.body, nadeLootMesh.band]) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } }
-  nadeLootMesh = null; nadeLoot = []; nadeHide();
+  nadeLootMesh = null; nadeLoot = []; nadeHide(); arrowsClear();
 }
 function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
   const R = mulberry32(seed * 91 + 7), n = Math.round(LOOT.nade[0] + HALF / LOOT.nade[1]), spots = [];
@@ -8093,7 +8261,7 @@ const DROPS = new Map(); let dropSeq = 0, PORCH = null;
 function pvpLoadout() {                                     // every spawn: a 1-star pistol and nothing else
   vr.own = { pistol: 1 };
   for (const k in WEAP) { const A = arms[k]; A.phase = 0; A.k = 0; A.popping = false; A.mag = k === "pistol" ? magOf("pistol") : 0; A.res = k === "pistol" ? WEAP.pistol.start : 0; }
-  vr.nades = 0; vr.nadeMode = false; vr.weapon = "pistol"; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; MP.sh = 0;
+  vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "pistol"; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; MP.sh = 0;
 }
 // ---- the things lying about
 let _crossGeo = null;
@@ -8185,9 +8353,10 @@ function dropUse(d) {                                       // what grabbing it 
   if (d.type === "hp") { if (MP.hp >= 100) return false; MP.hp = Math.min(100, MP.hp + PICK.hp); msg = "+" + PICK.hp + " health"; }
   else if (d.type === "sh") { if (MP.sh >= 100) return false; MP.sh = Math.min(100, MP.sh + PICK.sh); msg = "+" + PICK.sh + " shield"; }
   else if (d.type === "nade") { if (vr.nades >= NADE.MAX) return false; const n = Math.min(d.n, NADE.MAX - vr.nades); vr.nades += n; msg = "+" + n + (n === 1 ? " grenade" : " grenades"); }
-  else if (d.type === "ammo") { const A = arms[d.kind]; if (A.res >= AMMO_CAP) return false; const n = Math.min(d.n, AMMO_CAP - A.res); A.res += n; msg = "+" + n + " " + WEAP[d.kind].name + " ammo"; }
+  else if (d.type === "ammo") { const A = arms[d.kind]; if (INF_AMMO || A.res >= AMMO_CAP) return false; const n = Math.min(d.n, AMMO_CAP - A.res); A.res += n; msg = "+" + n + " " + WEAP[d.kind].name + " ammo"; }
   else if (d.type === "gun") {
     const k = d.kind, A = arms[k], had = vr.own[k] || 0;
+    if (INF_AMMO && d.tier <= had) return false;              // the same gun or a weaker one: nothing to gain (ammo never runs out), leave it
     A.res = Math.min(AMMO_CAP, A.res + WEAP[k].can);
     if (k === "hunt" && d.tier >= 5 && had < 5 && gameMode === "hunt" && legendName()) vrBanner("There's " + legendName() + (DRY(biomeOf(set.lat * set.hemi)) ? " out here" : " in these woods"), 6);
     if (d.tier > had) { vr.own[k] = d.tier; if (!had) { A.mag = magOf(k); A.phase = 0; } if (!(vr.own[vr.weapon] > 0)) { vr.weapon = k; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = false; } msg = GUN_NAME[k] + (had ? " upgraded " : " ") + "★".repeat(d.tier); }
@@ -8210,7 +8379,7 @@ function pvpSpill() {                                       // you died: everyth
   for (const k in WEAP) {
     const t = vr.own[k] || 0, A = arms[k], n = A.res + A.mag;
     if (t && !(k === "pistol" && t === 1)) put({ type: "gun", kind: k, tier: t });
-    if (n > 0) put({ type: "ammo", kind: k, n });
+    if (n > 0 && !INF_AMMO) put({ type: "ammo", kind: k, n });
   }
   if (vr.nades > 0) put({ type: "nade", n: vr.nades });
   for (const o of items) dropAdd(Object.assign({}, o));
@@ -8258,7 +8427,7 @@ function clearAmmo() {
 }
 function spawnAmmo() {
   clearAmmo(); const R = mulberry32(seed * 91 + 5);           // seeded: both players get the same cans
-  const n = Math.round(LOOT.ammo[0] + HALF / LOOT.ammo[1]), spots = [];
+  const n = INF_AMMO ? 0 : Math.round(LOOT.ammo[0] + HALF / LOOT.ammo[1]), spots = [];
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -8273,7 +8442,7 @@ function spawnAmmo() {
   const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.326, .05, .156), new THREE.MeshBasicMaterial({ color: 0xffffff }), spots.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
   spots.forEach(([x, z], i) => {
-    const kind = WHEEL[i % 4], y = H(x, z) + .09;   // (the 5th slice, grenades, has its own boxes) q.setFromAxisAngle(_UPv, R() * 6.283);
+    const kind = WHEEL_GUNS[i % 4], y = H(x, z) + .09;   // (the 5th slice, grenades, has its own boxes) q.setFromAxisAngle(_UPv, R() * 6.283);
     m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .03, z), q, one); band.setMatrixAt(i, m4);
     band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
   });
@@ -8969,6 +9138,7 @@ function addPuff(p, kind) {
   m.frustumCulled = false; scene.add(m); puffs.push({ m, v, life: .7 });
 }
 function updateGun(dt) {
+  if (ARROWS.length) arrowsTick(dt);
   GUN.cool = Math.max(0, GUN.cool - dt); GUN.kick = Math.max(0, GUN.kick - dt * 7);
   GUN.ads = Math.min(1, Math.max(0, (72 - camera.fov) / 40));
   const sway = 0;

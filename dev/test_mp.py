@@ -91,11 +91,9 @@ async def main():
         await asyncio.gather(run_frames(A, 120, 30), run_frames(B, 120, 30))
         out["guestBackAfter5s"] = await B.evaluate("() => [D.MP.dead <= 0, D.MP.hp]")
         print("guestBackAfter5s", out.get("guestBackAfter5s"), flush=True)
-        # ammo cans: the guest takes one, it's gone for the host too
-        ci = await B.evaluate("() => { const i = D.ammoCans.findIndex(c => !c.got); const c = D.ammoCans[i]; placeAt(c.x + .3, c.z); frames(4); return i; }")
-        await asyncio.gather(run_frames(A, 24), run_frames(B, 24))
-        out["canGoneForBoth"] = [await B.evaluate(f"() => D.ammoCans[{ci}].got"), await A.evaluate(f"() => D.ammoCans[{ci}].got")]
-        print("canGoneForBoth", out.get("canGoneForBoth"), flush=True)
+        # 1.85: unlimited ammo, so no ammo cans on either side
+        out["noCans"] = [await B.evaluate("() => D.ammoCans.length === 0"), await A.evaluate("() => D.ammoCans.length === 0")]
+        print("noCans", out.get("noCans"), flush=True)
         out["voice"] = [await A.evaluate("() => !!D.MP.mic && !!D.MP.call"), await B.evaluate("() => !!D.MP.mic && !!D.MP.call")]
         print("voice", out.get("voice"), flush=True)
         # the guest leaves: the host is told

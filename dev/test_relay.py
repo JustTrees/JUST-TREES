@@ -31,4 +31,5 @@ async def main():
               and all(out[k]["from"] == "openrelay" and out[k]["n"] == 1 and ":" in out[k]["user"] and out[k]["iceHasRelay"] for k in ("workerNotSetUp", "networkError", "emptyAnswer", "tooSlow"))
               and 3.5 < out["tooSlow"]["secs"] < 6 and not errs)
         print("PASS" if ok else "FAIL"); await b.close()
+        if not ok: sys.exit(1)
 asyncio.run(main())
