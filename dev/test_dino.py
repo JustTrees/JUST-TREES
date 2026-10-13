@@ -25,7 +25,7 @@ async def main():
           gen(false, true, 5); out.pc = { on: D.DINO.on, kinds: Object.keys(kinds()) };
           gen(true, false, 5); out.off = { on: D.DINO.on, dinos: D.beasts.filter(A => A.hpMax).length };
           gen(true, true, 5); out.on = { on: D.DINO.on, kinds: kinds(), allHp: D.beasts.every(A => A.hpMax > 0), n: D.beasts.length };
-          const P = D.P, ground = () => { P.y = D.groundAt(P.x, P.z); D.vr.climbing = false; D.vr.cl = null; D.camera.position.set(P.x, P.y + 1.7, P.z); D.camera.rotation.set(0, 0, 0, 'YXZ'); D.camera.updateMatrixWorld(); };
+          const P = D.P, home = [P.x, P.z], ground = () => { P.y = D.groundAt(P.x, P.z); D.vr.climbing = false; D.vr.cl = null; D.camera.position.set(P.x, P.y + 1.7, P.z); D.camera.rotation.set(0, 0, 0, 'YXZ'); D.camera.updateMatrixWorld(); };
           const step = (secs, f) => { for (let i = 0; i < secs * 30; i++) { D.updateAnimals(1 / 30); if (f && f(i / 30)) return true; } return false; };
           // damage: sniper hits on a triceratops (head 1.5x), the 10-bar bar
           const tri = D.beasts.find(A => A.kind === 'triceratops'), s0 = D.hunt.score;
@@ -46,8 +46,8 @@ async def main():
           D.scatterBeasts(P); D.hitAnimal(t2, 25, 0, false, 'hunt'); const fl0 = t2.flinch; const d0t = Math.hypot(t2.x - P.x, t2.z - P.z); step(6); out.triRun = { angry: !!t2.angry, flinch: fl0, further: Math.hypot(t2.x - P.x, t2.z - P.z) > d0t + 5, got: D.UW.drown > 0 };
           const pz = D.beasts.find(A => A.kind === 'parasaur' && !A.dead); D.DINO.voices.length = 0; let tms = performance.now(); for (let i = 0; i < 30; i++) { D.hitAnimal(pz, 60, 0, false, 'ar'); D.updateAnimals(1 / 30); } tms = performance.now() - tms;
           out.akBurst = { voices: D.DINO.voices.length, ms: Math.round(tms), dead: pz.dead };
-          // the raptor
-          ground(); D.UW.drown = 0; D.UW.red = 0;
+          // the raptor (back at the start spot, well inside the map)
+          P.x = home[0]; P.z = home[1]; ground(); D.UW.drown = 0; D.UW.red = 0;
           const startHunt = () => { D.DINO.gap = 0; D.DINO.pending = 0; D.dinoStartHunt(); let t = 0; while (!D.DINO.hunter && t < 6) { D.dinoTick(1 / 30); t += 1 / 30; } return D.DINO.hunter; };
           const ang = a => Math.atan2(Math.sin(a), Math.cos(a));
           let A = startHunt(); const dist = () => Math.hypot(A.x - P.x, A.z - P.z), fw = new T.Vector3(); D.camera.getWorldDirection(fw);
@@ -70,14 +70,14 @@ async def main():
           out.charge = { trace: bit === null ? trc : null, bite: bit, curve: +(lat / Math.max(1, n2)).toFixed(2), n: n2 };   // (n: frames it was still over 20 m away)
           D.UW.drown = 0; D.UW.red = 0; D.dinoTick(1 / 30); out.afterBite = { hunter: !!D.DINO.hunter, inBeasts: D.beasts.includes(A) };
           // never shot: after the long tease it comes for you anyway
-          ground(); A = startHunt(); A.giveUp = false; A.hsT = A.stalkFor + 1; let st2 = null; let bit2 = null;
+          P.x = home[0]; P.z = home[1]; ground(); A = startHunt(); A.giveUp = false; A.hsT = A.stalkFor + 1; let st2 = null; let bit2 = null;
           step(45, t => { if (!st2) st2 = A.hs; if (D.UW.drown > 0) { bit2 = t; return true; } }); out.unshot = { state: st2, bite: bit2 };
           D.UW.drown = 0; D.UW.red = 0; D.dinoTick(1 / 30);
           // up a tree: it waits underneath, then gives up
-          ground(); A = startHunt(); A.giveUp = false; A.hsT = A.stalkFor + 1; D.vr.climbing = true; const tst = new Set(); let tbit = false;
+          P.x = home[0]; P.z = home[1]; ground(); A = startHunt(); A.giveUp = false; A.hsT = A.stalkFor + 1; D.vr.climbing = true; const tst = new Set(); let tbit = false;
           step(70, () => { tst.add(A.hs); if (D.UW.drown > 0) tbit = true; return A.gone; }); out.tree = { states: [...tst], bit: tbit, gone: !!A.gone }; D.vr.climbing = false; D.dinoTick(1 / 30);
           // killing it: ~5 sniper hits, big bonus
-          ground(); A = startHunt(); const s1 = D.hunt.score; let n = 0; while (!A.dead && n < 30) { D.hitAnimal(A, 80, 0, false, 'hunt'); n++; }
+          P.x = home[0]; P.z = home[1]; ground(); A = startHunt(); const s1 = D.hunt.score; let n = 0; while (!A.dead && n < 30) { D.hitAnimal(A, 80, 0, false, 'hunt'); n++; }
           out.kill = { n, dead: A.dead, pts: +(D.hunt.score - s1).toFixed(1) }; D.dinoTick(1 / 30); out.afterKill = { hunter: !!D.DINO.hunter };
           // random timing: an hour standing around
           const starts = []; let tt = 0; D.DINO.gap = 60; D.DINO.hunter = null; D.DINO.pending = 0; let n0 = D.DINO.hunts;
@@ -102,7 +102,7 @@ async def main():
         on = r["on"]
         ok = r["huntOnBtns"] == 1 and r["switched"] and r["hikeOnBtns"] == 0 \
              and not r["pc"]["on"] and "triceratops" not in r["pc"]["kinds"] and not r["off"]["on"] and r["off"]["dinos"] == 0 \
-             and on["on"] and set(on["kinds"]) == {"triceratops", "parasaur", "stego", "bronto"} and on["allHp"] and on["n"] > 60 \
+             and on["on"] and set(on["kinds"]) == {"triceratops", "parasaur", "stego", "bronto", "trex"} and on["kinds"]["trex"] == 1 and on["allHp"] and on["n"] > 60 \
              and r["tri1"]["hp"] == 300 and not r["tri1"]["dead"] and not r["tri1"]["bar"] and not r["tri1"]["angry"] and r["tri2"]["hp"] == 120 and r["tri3"]["dead"] and not r["tri3"]["bar"] and r["tri3"]["pts"] > 10 \
              and 8 <= r["raptorShots"]["sniper"] <= 10 and r["raptorShots"]["ar"] >= 50 \
              and r["rayBody"]["who"] == "stego" and not r["rayBody"]["head"] and r["rayHead"]["who"] == "stego" and r["rayHead"]["head"] \
