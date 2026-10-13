@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.77</title>
+<title>JUST TREES 1.78</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.77";              // Just Trees 1.77
+const VERSION = "1.78";              // Just Trees 1.78
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2468,10 +2468,10 @@ function setSound(on) {
   $("soundBtn").textContent = "Sound: " + (on ? "On" : "Off");
 }
 let soundSpots = { birds: [], crickets: [] };
-function panned(level, p) {
+function panned(level, p, dry) {
   const ctx = SND.ctx, g = ctx.createGain(); g.gain.value = level;
   if (ctx.createStereoPanner) { const pn = ctx.createStereoPanner(); pn.pan.value = p * .8; g.connect(pn); pn.connect(SND.master); } else g.connect(SND.master);
-  const w = ctx.createGain(); w.gain.value = .3; g.connect(w); w.connect(sndVerb());   // a little of it echoes back from the woods
+  if (!dry) { const w = ctx.createGain(); w.gain.value = .3; g.connect(w); w.connect(sndVerb()); }   // a little of it echoes back from the woods
   return g;
 }
 function chirp(spot, level, p) {           // each bird spot keeps its own voice
@@ -2486,7 +2486,7 @@ function chirp(spot, level, p) {           // each bird spot keeps its own voice
   }
 }
 function cricketBurst(spot, level, p) {
-  const ctx = SND.ctx, t = ctx.currentTime, f = spot.f, vol = (.014 + Math.random() * .008) * level, out = panned(1, p);
+  const ctx = SND.ctx, t = ctx.currentTime, f = spot.f, vol = (.014 + Math.random() * .008) * level, out = panned(1, p, true);
   for (let k = 0; k < 3; k++) {
     const o = ctx.createOscillator(); o.frequency.value = f; const eg = ctx.createGain(), st = t + k * .045;
     eg.gain.setValueAtTime(0, st); eg.gain.linearRampToValueAtTime(vol, st + .008); eg.gain.linearRampToValueAtTime(0, st + .03);
@@ -2617,6 +2617,8 @@ function reveal() {
     }
 }
 let mapDirty = true;
+const FPSM = { t: 0, n: 0, worst: 0, fps: 0, low: 0 };
+function fpsTick(raw) { if (!(raw > 0) || raw > 2) return; FPSM.t += raw; FPSM.n++; FPSM.worst = Math.max(FPSM.worst, raw); if (FPSM.t >= 2) { FPSM.fps = Math.round(FPSM.n / FPSM.t); FPSM.low = Math.round(FPSM.worst * 1000); FPSM.t = 0; FPSM.n = 0; FPSM.worst = 0; } }
 function drawMap(canvas) {
   if (!mapBase) return;
   if (canvas.id === "miniMap" && vr.on && vrMapCv) drawMap(vrMapCv);
@@ -2648,6 +2650,7 @@ function drawMap(canvas) {
     ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(mx, mz - r * 1.6, r * .28, 0, 6.3); ctx.fill(); ctx.restore();
   }
   ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.max(10, W / 18)}px system-ui`; ctx.textAlign = "center"; ctx.fillText("N", W / 2, Math.max(12, W / 16));
+  if (canvas.id === "vrMap" && FPSM.fps) { ctx.textAlign = "left"; ctx.font = `600 ${Math.max(10, W / 30)}px system-ui`; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4, W * .36, W / 22); ctx.fillStyle = FPSM.low > 30 ? "#ff8a6a" : "#cfe8c0"; ctx.fillText(FPSM.fps + " fps · worst " + FPSM.low + " ms", 10, 4 + W / 30); }   // how smooth it's running
   if (gameMode === "hunt" && canvas.id === "vrMap") {   // the score, big enough to read in a headset
     const f = Math.max(12, W / 13), pad = W * .03, line1 = "Score " + hunt.score.toFixed(1), line2 = hunt.kills + (hunt.kills === 1 ? " kill" : " kills") + " · longest " + Math.round(hunt.longest) + " m";
     ctx.font = `800 ${f}px system-ui`; const w1 = ctx.measureText(line1).width; ctx.font = `700 ${f * .62}px system-ui`; const w2 = ctx.measureText(line2).width, bw = Math.max(w1, w2) + pad * 2;
@@ -4604,23 +4607,7 @@ Object.assign(QSPEC, {
     walk: 1, run: 3.6, stride: 3.6, swing: .26, graze: -.15, rad: 1.7, step: 1.4, range: 50 })
 });
 // health bars: a dark bar with a coloured part, floating over the animal once it's hurt
-// health bars: ten segments over the animal, once it's hurt
-function dinoBar(A) {
-  if (!A.hpMax) return;
-  if (!A.bar) {
-    const box = new THREE.Box3().setFromObject(A.root), top = box.max.y - A.root.position.y, w = Math.max(1.3, Math.min(4.5, top * .5));
-    const cv = document.createElement("canvas"); cv.width = 164; cv.height = 22; const tex = new THREE.CanvasTexture(cv);
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false })); sp.scale.set(w, w * 22 / 164, 1); sp.renderOrder = 2;
-    sp.position.set(0, top / (A.scale || 1) + .5 + w * .1, 0); A.root.add(sp); A.bar = { g: sp, cv, tex, key: -1 };
-  }
-  const f = Math.max(0, Math.min(1, A.hp / A.hpMax)), B = A.bar, key = Math.round(f * 200);
-  B.g.visible = !A.dead && f < .999; if (key === B.key) return; B.key = key;
-  const g = B.cv.getContext("2d"); g.clearRect(0, 0, 164, 22); g.fillStyle = "rgba(10,10,10,.78)"; g.fillRect(0, 0, 164, 22);
-  for (let i = 0; i < 10; i++) { const x = 4 + i * 15.8, part = Math.max(0, Math.min(1, f * 10 - i));
-    g.fillStyle = "rgba(255,255,255,.12)"; g.fillRect(x, 4, 13.8, 14);
-    if (part > 0) { g.fillStyle = `hsl(${Math.round(120 * f)},80%,50%)`; g.fillRect(x, 4, 13.8 * part, 14); } }
-  B.tex.needsUpdate = true;
-}
+function dinoBar(A) {}                                       // (1.78: no health bar — Ron: scarier without, and it cost frames)
 function hitAnimal(A, dist, dmg, head, gun) {               // a bullet (or a grenade) reached an animal: most drop, dinosaurs take several
   if (!A || A.dead) return;
   if (!A.hpMax) { killAnimal(A, dist); return; }
@@ -4637,6 +4624,8 @@ function hitAnimal(A, dist, dmg, head, gun) {               // a bullet (or a gr
 }
 function dinoTick(dt) {
   if (!DINO.on || state !== "play" || !animalGroup) return;
+  if (!DINO.warm && SND.ctx) {                                // get the slow one-time sound set-up out of the way now, not in the middle of a fight
+    DINO.warm = true; sndVerb(); sndPool(); for (const k of [3.5, 4, 5, 6, 7, 8, 9, 11]) driveCurve(k); }
   if ((DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
   dinoSteps(dt); dinoVoices();
   for (const A of beasts) if (A.flinch > 0 && A.body) {       // hit: a jolt through the body and a stagger
@@ -4705,7 +4694,7 @@ function huntTick(A, dt) {                                   // the raptor's min
       const r = Math.random(); A.move = r < .12 ? "freeze" : r < .22 ? "sniff" : r < .45 ? "weave" : r < .65 && A.hsT > 8 ? "feint" : "circle";
       A.creepT = A.move === "freeze" || A.move === "sniff" ? 1 + Math.random() * 1.5 : A.move === "feint" ? 6 : 3 + Math.random() * 4;
       if (A.move === "feint") { const sd = Math.random() < .5 ? 1 : -1, ux = (P.x - A.x) / (Math.hypot(P.x - A.x, P.z - A.z) || 1), uz = (P.z - A.z) / (Math.hypot(P.x - A.x, P.z - A.z) || 1);   // the path is fixed when it starts: in beside you, then out past you
-        A.feintE = [P.x - uz * sd * 19, P.z + ux * sd * 19]; A.feintX = [P.x - uz * sd * 24 + ux * 55, P.z + ux * sd * 24 + uz * 55]; A.feintPast = false; A.jawT = .7; dinoCall(A, "rush"); }
+        A.feintE = [P.x - uz * sd * 23, P.z + ux * sd * 23]; A.feintX = [P.x - uz * sd * 28 + ux * 55, P.z + ux * sd * 28 + uz * 55]; A.feintPast = false; A.jawT = .7; dinoCall(A, "rush"); }
       else { if (Math.random() < .3) A.orbit = -A.orbit; if (Math.random() < .5) dinoCall(A, A.move === "sniff" ? "sniff" : "stalk"); }
     }
     if (A.move === "freeze" || A.move === "sniff") { A.mode = "idle"; A.want = 0; A.yaw += Math.max(-dt * 2, Math.min(dt * 2, angDiff(toP, A.yaw))); if (A.move === "sniff") A.head.rotation.x = .35; }
@@ -4720,6 +4709,7 @@ function huntTick(A, dt) {                                   // the raptor's min
   } else if (A.hs === "charge" || A.hs === "approach") {     // it comes in on a curve, not straight
     const sp = A.hs === "charge" ? A.run : A.run * .55, side = A.chargeSide || A.orbit, k = Math.min(1, (d - 15) / 60), px = -dz / d * side, pz = dx / d * side;
     A.mode = "walk"; A.want = sp; A.target = [P.x + px * k * Math.min(30, d * .5), P.z + pz * k * Math.min(30, d * .5)];
+    if ((A.progT = (A.progT || 0) + dt) > 2.5) { if (A.progD !== undefined && d > A.progD - 3) { A.ghost = [P.x, P.z]; A.ghostT = 2; } A.progT = 0; A.progD = d; }   // caught on trees or rocks: it pushes straight through
     doom();
     if (high && d < 20) { A.hs = "wait"; A.hsT = 0; A.waitFor = 8 + Math.random() * 10; return; }
     if (A.hs === "approach" && f <= .3) dinoCharge(A);
@@ -4742,8 +4732,8 @@ function dinoGot(A, text, call) {                            // caught: you blac
 const _sl = new THREE.Vector3(), _sf = new THREE.Vector3(), _su = new THREE.Vector3();
 function sndVerb() {                                         // one shared soft forest echo
   if (SND.verb || !SND.ctx) return SND.verb;
-  const c = SND.ctx, len = Math.floor(c.sampleRate * 2.6), b = c.createBuffer(2, len, c.sampleRate);
-  for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); let lp = 0;
+  const c = SND.ctx, len = Math.floor(c.sampleRate * 1.6), b = c.createBuffer(1, len, c.sampleRate);   // short and mono: much lighter to run
+  for (let ch = 0; ch < 1; ch++) { const d = b.getChannelData(ch); let lp = 0;
     for (let i = 0; i < len; i++) { const t = i / c.sampleRate, e = Math.pow(1 - i / len, 2.4) * Math.min(1, t / .025); lp += (Math.random() * 2 - 1 - lp) * .3; d[i] = lp * e * (Math.random() < .0015 && t < .4 ? 4 : 1); } }   // dull diffuse tail, a few early reflections off trunks
   const cv = c.createConvolver(); cv.buffer = b; const g = c.createGain(); g.gain.value = .8; cv.connect(g).connect(SND.master); SND.verb = cv; return cv;
 }
@@ -4753,21 +4743,30 @@ function sndListener() {                                     // your ears: where
   if (L.positionX) { L.positionX.value = p.x; L.positionY.value = p.y; L.positionZ.value = p.z; L.forwardX.value = f.x; L.forwardY.value = f.y; L.forwardZ.value = f.z; L.upX.value = u.x; L.upY.value = u.y; L.upZ.value = u.z; }
   else { L.setPosition(p.x, p.y, p.z); L.setOrientation(f.x, f.y, f.z, u.x, u.y, u.z); }
 }
+function sndPool() {                                         // a few 3D voices made once and reused (making a new 3D voice for every call cost frames)
+  if (DINO.pool || !SND.ctx) return DINO.pool; const c = SND.ctx; DINO.pool = [];
+  for (let i = 0; i < 8; i++) { const cheap = i >= 6, pn = c.createPanner(); pn.panningModel = cheap ? "equalpower" : "HRTF"; pn.distanceModel = "inverse"; pn.rolloffFactor = 1; pn.maxDistance = 3000;
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; const inp = c.createGain(); inp.connect(lp).connect(pn).connect(SND.master);
+    let wet = null; if (!cheap) { wet = c.createGain(); wet.gain.value = 0; inp.connect(wet).connect(sndVerb()); }
+    DINO.pool.push({ pn, lp, wet, inp, A: null, until: 0, y: 0, cheap }); }
+  return DINO.pool;
+}
 function dinoOut(A, k, cheap) {
   const c = SND.ctx, d = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), big = DINO_SIZE[A.kind] || .5; if (d > 900) return null;
-  if (DINO.voices.length >= (cheap ? 6 : 10)) return null;     // only so many at once (keeps the frame rate up)
-  sndListener(); k = k || 1;
-  const ref = 8 + 30 * big, pn = c.createPanner(); pn.panningModel = cheap ? "equalpower" : "HRTF"; pn.distanceModel = "inverse"; pn.refDistance = ref; pn.rolloffFactor = 1; pn.maxDistance = 3000;
-  const y = A.y + 1 + 3 * big; if (pn.positionX) { pn.positionX.value = A.x; pn.positionY.value = y; pn.positionZ.value = A.z; } else pn.setPosition(A.x, y, A.z);
-  const inp = c.createGain(), lp = c.createBiquadFilter(); inp.gain.value = k; lp.type = "lowpass"; lp.frequency.value = Math.max(650, 16000 / (1 + d / 35));   // further: duller
-  inp.connect(lp).connect(pn).connect(SND.master);
-  if (!cheap) { const wet = c.createGain(); wet.gain.value = k * .5 * Math.min(1, .1 + d / 250) * ref / (ref + d * .25); inp.connect(wet).connect(sndVerb()); }   // further: more of it is echo
-  DINO.voices.push({ pn, A, y: 1 + 3 * big, until: c.currentTime + (cheap ? 1 : 4) });
-  return { node: inp, delay: Math.min(1.4, d / 343) };
+  const pool = sndPool(); if (!pool) return null; sndListener(); k = k || 1; const now = c.currentTime;
+  let v = null; for (const s of pool) if (s.cheap === !!cheap && (!v || s.until < v.until)) v = s;   // a free voice, or the one that's been going longest
+  const ref = 8 + 30 * big, y = A.y + 1 + 3 * big; v.pn.refDistance = ref; v.A = A; v.y = 1 + 3 * big; v.until = now + (cheap ? 1 : 4);
+  if (v.pn.positionX) { v.pn.positionX.value = A.x; v.pn.positionY.value = y; v.pn.positionZ.value = A.z; } else v.pn.setPosition(A.x, y, A.z);
+  v.lp.frequency.value = Math.max(650, 16000 / (1 + d / 35));                                // further: duller
+  if (v.wet) v.wet.gain.value = .5 * Math.min(1, .1 + d / 250) * ref / (ref + d * .25);      // further: more of it is echo
+  const g = c.createGain(); g.gain.value = k; g.connect(v.inp);
+  DINO.voices = pool.filter(s => s.until > now);
+  return { node: g, delay: Math.min(1.4, d / 343) };
 }
 function dinoVoices() {                                      // a call keeps coming from the animal as it moves
-  if (!SND.ctx || !DINO.voices.length) return; const now = SND.ctx.currentTime; sndListener();
-  DINO.voices = DINO.voices.filter(v => { if (now > v.until) return false; const p = v.pn; if (p.positionX) { p.positionX.value = v.A.x; p.positionY.value = v.A.y + v.y; p.positionZ.value = v.A.z; } return true; });
+  if (!SND.ctx || !DINO.pool) return; const now = SND.ctx.currentTime; let any = false;
+  for (const v of DINO.pool) { if (v.until < now || !v.A) continue; any = true; const p = v.pn; if (p.positionX) { p.positionX.value = v.A.x; p.positionY.value = v.A.y + v.y; p.positionZ.value = v.A.z; } }
+  if (any) sndListener(); DINO.voices = DINO.pool.filter(s => s.until > now);
 }
 const DRIVE = {};
 function driveCurve(k) { if (DRIVE[k]) return DRIVE[k]; const n = 512, a = new Float32Array(n); for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; a[i] = Math.tanh(k * x) / Math.tanh(k); } return DRIVE[k] = a; }
@@ -5193,11 +5192,14 @@ function senseTick(dt) {
   sense.shotT = Math.max(0, sense.shotT - dt);
 }
 const _lf = new THREE.Vector3();
-function scatterBeasts(o) { sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0; HAB.flee++;
+const FLEEQ = [];
+function fleeQTick() { for (let k = 0; k < 5 && FLEEQ.length; k++) { const [A, x, z] = FLEEQ.shift(); if (!A.dead && !A.gone) fleeFar(A, x, z, A.run * 1.15, 140, 340); } }   // a few escape routes a frame, not all at once
+function scatterBeasts(o) { const again = sense.shotT > 8.5 && sense.shot && Math.hypot(sense.shot[0] - o.x, sense.shot[1] - o.z) < 40;   // (an automatic burst: the first shot already sent everything running)
+  sense.shot = [o.x, o.z]; sense.shotT = 10; sense.calm = 0; HAB.flee++; if (again) return;
   for (const A of beasts) { if (A.dead || LEGEND[A.kind] || A.hunter) continue; const d = Math.hypot(A.x - o.x, A.z - o.z); if (d > 420) continue;
     if (FLY[A.kind]) { A.altUp = 25; A.scared = 10; continue; }
     if (A.kind === "monkey") { A.flee = 10; continue; }
-    if (!fleeFar(A, o.x, o.z, A.run * 1.15, 140, 340)) fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); } }   // a shot: the whole area empties out
+    fleeFrom(A, o.x, o.z, A.run * 1.2, 10, 90); FLEEQ.push([A, o.x, o.z]); } }   // a shot: the whole area empties out
 function legendShot(o, dir, reach, speed) {                // a shot at Bigfoot: the bullet passing (or landing) within 15 m of him is your one shot
   if (gameMode !== "hunt" || !legendSeen()) return;
   for (const A of beasts) if (LEGEND[A.kind] && !A.dead && !A.gone && !A.bolting && !(A.boltIn > 0)) {
@@ -5301,7 +5303,7 @@ function legendNotice(A, dt) {                              // he's seen you: st
 }
 function updateAnimals(dt) {
   if (!animalGroup) return;
-  senseTick(dt); appearTick(dt); stockTick(dt); legendWatch(dt); dinoTick(dt);
+  senseTick(dt); appearTick(dt); stockTick(dt); legendWatch(dt); dinoTick(dt); fleeQTick();
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -5761,7 +5763,7 @@ function vrAfterMove(dt) {                                // carry the play spac
     wrist.position.copy(off.pos).add(_v1.set(0, .035, .06).applyQuaternion(off.q)); wrist.quaternion.copy(off.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1));
     if ((vr.wristT -= dt) <= 0) { vr.wristT = .25; drawWrist(); }
     const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
-    if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
+    if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); if ((vr.fpsT = (vr.fpsT || 0) - dt) <= 0 || !mapWas) { vr.fpsT = 1; drawMap(vrMapCv); mapDirty = true; } if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
   } else { wrist.visible = false; vrMap.visible = false; }
   if (vr.mark && vr.mark.visible && (vr.markT -= dt) <= 0) { vr.mark.visible = false; drawMap($("miniMap")); }
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
@@ -9085,6 +9087,7 @@ function cullTiles() {
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 let last = performance.now(), infoT = 0, mapT = 0;
 function loop(now) {
+  fpsTick((now - last) / 1000);
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (state === "play" || state === "fly") { updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
