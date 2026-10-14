@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.08</title>
+<title>JUST TREES 2.09</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.08";              // Just Trees 2.08
+const VERSION = "2.09";              // Just Trees 2.09
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6371,9 +6371,9 @@ function vrTick(dt) {
       fireHeld = false;
       const W = WEAP[vr.gunKind], A = arms[vr.gunKind], pressed = edge("trig", main.trig);
       if (edge("drop", main.stickBtn) && A.phase !== 1) {                 // click the gun-hand stick: drop the magazine early (its rounds go back to your spare ammo)
-        A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoley(SFX.magOut); buzz(mainSide, .3, 25);
+        A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoleyK("magout", SFX.magOut); buzz(mainSide, .3, 25);
       }
-      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoley(SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
+      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoleyK("dry", SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
     } else {
       fireHeld = main.trig > .6 && state === "play";
       if (edge("trig", main.trig) && !GUN.auto) fire();
@@ -6545,7 +6545,7 @@ function vrFire() {
       vr.climb = Math.min(RECOIL.max * Math.PI / 180, (vr.climb || 0) + RECOIL.up[lvl] * (vr.ads ? RECOIL.ads : 1) * Math.PI / 180); vr.lastShot = performance.now();
     }
     if (gameMode === "hunt") scatterBeasts(P);
-    if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoley(SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
+    if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoleyK("magout", SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
     else if (vr.gunKind === "hunt") A.phase = 2;                                    // sniper: work the bolt by hand after every shot
   } else {
     if (GUN.cool > 0) return;
@@ -8385,7 +8385,7 @@ function reloadTick(dt, G, off) {
   const offG = !!off && off.grip > .5, offPress = off ? edge("rlg", off.grip) : false;
   if (A.phase === 1 && A.popping && R.grab !== "mag") { A.k = Math.min(1, A.k + dt * 6); if (A.k >= 1) A.popping = false; }
   if (R.grab && !offG) {                                    // let go
-    if (R.grab === "charge" && R.armed) { A.phase = 0; gunFoley(SFX.fwd); buzz(offSide, .5, 30); }
+    if (R.grab === "charge" && R.armed) { A.phase = 0; gunFoleyK("fwd", SFX.fwd); buzz(offSide, .5, 30); }
     R.grab = null; R.pull = 0; R.armed = false;
   }
   if (off) {
@@ -8398,11 +8398,11 @@ function reloadTick(dt, G, off) {
     if (R.grab === "mag") {                                              // the magazine only moves along its slot, so it lines up by itself
       const along = _rm.copy(hl).sub(U.magBase).dot(U.magDir) - R.off;
       A.k = Math.max(0, Math.min(1, along / S.drop));
-      if (A.k < .07) { const n = INF_AMMO ? magOf(kind) : Math.min(magOf(kind), A.res); if (!INF_AMMO) A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoley(SFX.magIn); buzz(offSide, .6, 40); }
+      if (A.k < .07) { const n = INF_AMMO ? magOf(kind) : Math.min(magOf(kind), A.res); if (!INF_AMMO) A.res -= n; A.mag = n; A.phase = 2; A.k = 0; R.grab = null; gunFoleyK("magin", SFX.magIn); buzz(offSide, .6, 40); }
     }
     if (R.grab === "charge") {
       R.pull = Math.max(0, Math.min(S.pull, hl.z - R.start));
-      if (!R.armed && R.pull > S.pull * .85) { R.armed = true; gunFoley(SFX.back); buzz(offSide, .4, 25); }
+      if (!R.armed && R.pull > S.pull * .85) { R.armed = true; gunFoleyK("back", SFX.back); buzz(offSide, .4, 25); }
     }
   }
   if (U.mag) { U.mag.position.copy(U.magBase).addScaledVector(U.magDir, A.phase === 1 ? S.drop * A.k : 0);
@@ -9019,7 +9019,7 @@ function mpBoard() {                                         // everyone's score
 }
 function clearLoot() { vrClearNades(); dropsClear(); }
 function spawnLoot() {                                       // the things lying about the map (seeded: everyone gets the same): grenades, and in VR PvP / Hunting the guns, bows and crosses
-  clearLoot(); spawnNadeLoot(); if (lootMode()) spawnPvpLoot();
+  clearLoot(); spawnNadeLoot(); if (lootMode()) spawnPvpLoot(); gunSndLoad();
 }
 /* ---------------- Multiplayer (VR PvP, up to 8 players): join by a 4-digit code; everyone builds the same map from its number and
         everyone connects straight to everyone else (peer to peer). Before a round the others see the host's settings and the same map preview,
@@ -9572,7 +9572,7 @@ function mpPoseSoldier(S, s, dt) {                         // a player's body fr
 function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
   makeBullet(from, new THREE.Vector3(...o.v), { reach: 3200, remote: true });
-  if (camera.position.distanceTo(from) < 700) gunshot(o.k);
+  const dd = camera.position.distanceTo(from); if (dd < 700) gunshot(o.k, 0, dd);
 }
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
   if (!R || !R.cur || !R.alive) return null;
@@ -9971,8 +9971,32 @@ function updateGun(dt) {
   }
 }
 const AUTO_LAT = .035;                                      // automatic fire: each shot's sound is placed this long after its true moment (the same for every shot, so the rhythm is exact)
-function gunshot(kind, lead) {
+/* 2.09 (Ron: "sounds like a cap gun"): real recorded guns (Snake's Authentic Gun Sounds 1 + 2, free, recorded outdoors with their echo):
+   sniper .308, assault rifle 7.62x39 (AK), SMG and pistol 9mm; reloads, bolt, charging handles and slide from the same packs (sounds/guns/,
+   cut by the scratch script; a copy opened from disk keeps the made-up ones). Pitch and volume per gun in GSND. */
+const GSND = { shot: { hunt: "sniper_shot", ar: "ar_shot", smg: "nine_shot", pistol: "nine_shot" }, vol: { hunt: 1, ar: .85, smg: .62, pistol: .72 }, rate: { hunt: 1, ar: 1, smg: 1.06, pistol: .97 },
+  set: { hunt: "sniper", ar: "ar", smg: "smg", pistol: "pistol" }, bus: null };
+function gunSndLoad() {
+  if (GSND.asked || !SND.ctx) return; GSND.asked = true;
+  dsndLoad(["sniper_shot", "ar_shot", "nine_shot", "dry", ...["sniper", "ar", "smg", "pistol"].flatMap(g => ["back", "fwd", "magout", "magin"].map(x => g + "_" + x))].map(n => "guns/" + n));
+}
+function gunSample(n, vol, rate, lead) {                     // play a recorded gun sound; false if it isn't loaded
+  const b = DSND.buf["guns/" + n]; if (!b || !SND.ctx || !SND.on) return false;
+  const c = SND.ctx;
+  if (!GSND.bus) { GSND.bus = c.createDynamicsCompressor(); GSND.bus.threshold.value = -10; GSND.bus.knee.value = 6; GSND.bus.ratio.value = 8; GSND.bus.attack.value = .002; GSND.bus.release.value = .2; GSND.bus.connect(SND.master); }   // full auto never clips
+  const sb = c.createBufferSource(), g = c.createGain(); sb.buffer = b; sb.playbackRate.value = rate || 1; g.gain.value = vol; sb.connect(g).connect(GSND.bus); sb.start(c.currentTime + (lead || 0));
+  return true;
+}
+function gunFoleyK(x, synth) {                               // a reload / bolt / slide sound for the gun in your hand (recorded, or the made-up one)
+  gunSndLoad(); const n = x === "dry" ? "dry" : (GSND.set[vr.gunKind] || "ar") + "_" + x;
+  if (!gunSample(n, .9, 1)) gunFoley(synth);
+}
+function gunshot(kind, lead, dist) {
   if (!SND.ctx || !SND.on) return;
+  if (kind && GSND.shot[kind]) {                             // 2.09: the recording (someone else's shot: quieter and later with distance)
+    gunSndLoad(); const d = dist || 0, vol = GSND.vol[kind] * (d > 15 ? Math.pow(15 / d, .8) : 1);
+    if (gunSample(GSND.shot[kind], vol, GSND.rate[kind] * (1 + (Math.random() - .5) * .06), (lead || 0) + d / 343)) return;
+  }
   const c = SND.ctx, t = c.currentTime + (lead || 0), pr = { ar: [.75, 3000, .5, .55], smg: [.5, 4200, .3, .32], pistol: [.6, 3800, .4, .4] }[kind];
   if (pr) {                                                  // VR Hunting's assault rifle, SMG and pistol
     const [v, f, e, b] = pr, cr = (delay, vol, fq) => { const s = c.createBufferSource(); s.buffer = SND.noise; const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = fq;
