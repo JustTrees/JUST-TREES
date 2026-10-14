@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.10</title>
+<title>JUST TREES 2.11</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.10";              // Just Trees 2.10
+const VERSION = "2.11";              // Just Trees 2.11
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -9975,7 +9975,7 @@ const AUTO_LAT = .035;                                      // automatic fire: e
    sniper .308, assault rifle 7.62x39 (AK), SMG and pistol 9mm; reloads, bolt, charging handles and slide from the same packs (sounds/guns/,
    cut by the scratch script; a copy opened from disk keeps the made-up ones). Pitch and volume per gun in GSND. */
 const GSND = { shot: { hunt: "sniper_shot", ar: "ar_shot", smg: "nine_shot", pistol: "nine_shot" }, vol: { hunt: 1, ar: .85, smg: .62, pistol: .72 }, rate: { hunt: .87, ar: 1, smg: 1.06, pistol: .97 },
-  thick: { hunt: 1 }, out: .72,                               // 2.10 (Ron): the sniper deeper and thicker (lower pitch, a low-end boost and a sub thump); every gun through a compressor, a bit quieter overall
+  thick: { hunt: 1 }, out: 1,                                 // 2.10 (Ron): the sniper deeper and thicker (lower pitch, a low-end boost and a sub thump). 2.11 (Ron): no compressor on the guns ("too soft")
   set: { hunt: "sniper", ar: "ar", smg: "smg", pistol: "pistol" }, bus: null };
 function gunSndLoad() {
   if (GSND.asked || !SND.ctx) return; GSND.asked = true;
@@ -9984,10 +9984,7 @@ function gunSndLoad() {
 function gunSample(n, vol, rate, lead, thick) {                     // play a recorded gun sound; false if it isn't loaded
   const b = DSND.buf["guns/" + n]; if (!b || !SND.ctx || !SND.on) return false;
   const c = SND.ctx;
-  if (!GSND.bus) {                                            // all gun sounds share one compressor: shots sit in the mix with the world, full auto never clips
-    const k = GSND.bus = c.createDynamicsCompressor(); k.threshold.value = -18; k.knee.value = 10; k.ratio.value = 6; k.attack.value = .002; k.release.value = .25;
-    const o = c.createGain(); o.gain.value = GSND.out; k.connect(o).connect(SND.master);
-  }
+  if (!GSND.bus) { GSND.bus = c.createGain(); GSND.bus.gain.value = GSND.out; GSND.bus.connect(SND.master); }   // all gun sounds (no compressor: Ron, 2.11)
   const sb = c.createBufferSource(), g = c.createGain(), t0 = c.currentTime + (lead || 0); sb.buffer = b; sb.playbackRate.value = rate || 1; g.gain.value = vol;
   if (thick) {                                               // a big gun: more low end, plus a short sub thump under the crack
     const ls = c.createBiquadFilter(); ls.type = "lowshelf"; ls.frequency.value = 200; ls.gain.value = 7; sb.connect(ls).connect(g);
