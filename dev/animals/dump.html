@@ -1,0 +1,37 @@
+<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from './node_modules/three/examples/jsm/loaders/FBXLoader.js';
+// Dump a Quaternius FBX for the Python animal builder: the rest pose (mesh baked into it), colours, skin, and each clip sampled
+// as every bone's world rotation and position, 30 times a second.
+window.dump = async (name) => {
+  const obj = await new FBXLoader().loadAsync('in/' + name + '.fbx'); obj.updateMatrixWorld(true);
+  let mesh = null; obj.traverse(o => { if (o.isSkinnedMesh && !mesh) mesh = o; });
+  const nodes = [], idx = new Map();
+  obj.traverse(o => { if (o === obj || o.isMesh) return; idx.set(o, nodes.length);
+    const wq = new THREE.Quaternion(), wp = new THREE.Vector3(), ws = new THREE.Vector3(); o.matrixWorld.decompose(wp, wq, ws);
+    nodes.push({ n: o.name, p: o.parent === obj ? -1 : idx.get(o.parent), b: o.isBone ? 1 : 0, t: [...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray()], wp: wp.toArray(), wq: wq.toArray(), ws: ws.toArray() }); });
+  const g = mesh.geometry, mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material], n = g.attributes.position.count;
+  const matOf = new Array(n).fill(0); if (g.groups.length) for (const gr of g.groups) for (let i = gr.start; i < gr.start + gr.count; i++) matOf[i] = gr.materialIndex;
+  const P = g.attributes.position, C = g.attributes.color, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight, bones = mesh.skeleton.bones;
+  const pos = [], col = [], si = [], sw = [], mat = [];
+  for (let i = 0; i < n; i++) {
+    const v = mesh.boneTransform(i, new THREE.Vector3().fromBufferAttribute(P, i)).applyMatrix4(mesh.matrixWorld); pos.push(+v.x.toFixed(3), +v.y.toFixed(3), +v.z.toFixed(3));
+    const m = mats[matOf[i]], c = m.color.clone(); if (C && m.vertexColors) c.multiply(new THREE.Color(C.getX(i), C.getY(i), C.getZ(i)));
+    col.push(+c.r.toFixed(4), +c.g.toFixed(4), +c.b.toFixed(4)); mat.push(m.name);
+    for (let k = 0; k < 4; k++) { si.push(idx.get(bones[SI.array[i * 4 + k]])); sw.push(+SW.array[i * 4 + k].toFixed(4)); }
+  }
+  const clips = {};
+  const mixer = new THREE.AnimationMixer(obj);
+  for (const c of obj.animations) {
+    const nm = c.name.split("|").pop().split("_").pop(), a = mixer.clipAction(c); mixer.stopAllAction(); a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; a.reset(); a.play();
+    const fr = Math.max(2, Math.round(c.duration * 30) + 1), frames = [];
+    for (let f = 0; f < fr; f++) { a.reset(); a.play(); mixer.setTime(Math.min(c.duration * f / (fr - 1), c.duration - 1e-4)); obj.updateMatrixWorld(true);
+      const row = []; for (const nd of nodes) { const o = obj.getObjectByName(nd.n); const q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(); o.matrixWorld.decompose(p, q, s); row.push([...p.toArray().map(v => +v.toFixed(3)), ...q.toArray().map(v => +v.toFixed(5))]); }
+      frames.push(row); }
+    clips[nm] = { d: c.duration, frames };
+  }
+  return JSON.stringify({ name, nodes, pos, col, mat, si, sw, clips });
+};
+window.ready = true;
+</script></body></html>

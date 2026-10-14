@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.02</title>
+<title>JUST TREES 2.03</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.02";              // Just Trees 2.02
+const VERSION = "2.03";              // Just Trees 2.03
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4536,7 +4536,7 @@ function buildBird(r, cols) {
     for (let f = 0; f < 4; f++) aPart(w, roundBox(.26, .02, .07, .01), black, s * (1.38 + f * .02), 0, .14 - f * .1, 0, s * (.15 - f * .12));   // finger feathers
     return w;
   });
-  return { root, body, wings, w: .15, hit: [[0, 0, 0, .45], [.8, 0, 0, .38], [-.8, 0, 0, .38], [1.35, 0, 0, .3], [-1.35, 0, 0, .3]] };
+  return { root, body, wings, cols, w: .15, hit: [[0, 0, 0, .45], [.8, 0, 0, .38], [-.8, 0, 0, .38], [1.35, 0, 0, .3], [-1.35, 0, 0, .3]] };
 }
 /* ---- more animals (1.55): one shared four-legged builder tuned per kind, plus a turkey and the two legends ---- */
 // q: pal [back, side, belly, lower leg], L body length, W/D half width/depth, leg (hind) height, frontK, hump,
@@ -5308,7 +5308,7 @@ function spawnMonkeys(grp) {
     for (let j = 0; j < m; j++) {
       const at = near[Math.floor(Math.random() * near.length)], b = buildMonkey(Math.random);
       const A = Object.assign(b, { kind: "monkey", scale: 1, at, from: null, to: null, swingT: 0, swingDur: 1, sitT: 1 + Math.random() * 6, x: at.x, y: at.top, z: at.z, yaw: Math.random() * 6.28,
-        dead: false, deadT: 0, vy: 0, landed: false, flee: 0, callT: 5 + Math.random() * 25 });
+        dead: false, deadT: 0, vy: 0, landed: false, flee: 0, callT: 5 + Math.random() * 25, qf: "monkey" }); qdinoLoad("monkey");
       animalGroup.add(A.root); beasts.push(A);
     }
     return;
@@ -5467,7 +5467,7 @@ function addGround(kind, x, z, home, size0) {
   const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
-  qdinoLoad(kind); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
+  qaPick(A, cold, TROPIC(biomeOf(lat))); qdinoLoad(A.qf); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
   animalGroup.add(A.root); beasts.push(A); return A;
 }
 // Every part of the map has animals: the map is cut into sections (about 200 m), new groups go to the emptiest sections,
@@ -5498,7 +5498,7 @@ function spawnKind(kind, grp, peak, onlySec) {
     for (let j = 0; j < m && beasts.length < BEAST_CAP; j++) {
       const bd = buildBird(Math.random, parrot ? PARROT_COL[Math.floor(Math.random() * PARROT_COL.length)] : BIRD_COL[kind]); bd.root.scale.setScalar(sc);
       const A = Object.assign(bd, { kind, scale: sc, cx, cz, rad, ang: ang + (j ? (Math.random() - .5) * .3 : 0), rOff: j ? (Math.random() - .5) * 6 : 0, altOff: parrot ? -12 + (Math.random() - .5) * 4 : 0, flappy: parrot,
-        w, alt: 0, altUp: 0, flapT: Math.random() * 8, x: 0, y: 0, z: 0, vy: 0, dead: false, deadT: 0, landed: false });
+        w, alt: 0, altUp: 0, flapT: Math.random() * 8, x: 0, y: 0, z: 0, vy: 0, dead: false, deadT: 0, landed: false, qf: "bird" }); qdinoLoad("bird");
       A.alt = birdAlt(A); animalGroup.add(A.root); beasts.push(A);
     }
     return;
@@ -5686,6 +5686,7 @@ function updateAnimals(dt) {
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.ptero) { pteroTick(A, dt); continue; }                 // 2.02: the pteranodons fly their own way
+    if (QR_KINDS[A.kind] && !A.qr) qrAttach(A);
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
     if (FLY[A.kind]) { updateBird(A, dt, T); A.root.visible = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < far * 1.4; continue; }
     if (A.gone) { A.root.visible = false; continue; }
@@ -5955,7 +5956,20 @@ const qgunKey = (kind, tier) => kind + "_" + Math.max(1, Math.min(5, tier || 1))
    The old hand-built dinosaur stays underneath, hidden: its hit spheres still do the hitting (the head ones ride on the model's head),
    and a copy opened from disk, which can't load the files, just keeps the old ones. */
 const QDINO = { models: {}, loading: {}, failed: 0, fit: {} };
-const QD_KINDS = { trex: 1, raptor: 1, parasaur: 1, triceratops: 1, stego: 1, bronto: 1, ptero: 1 };
+const QD_DINO = { trex: 1, raptor: 1, parasaur: 1, triceratops: 1, stego: 1, bronto: 1, ptero: 1 };
+/* 2.03: the hunting animals too, in the same pack's style (Quaternius Farm Animals, CC0, reshaped by dev/animals/build_animals.py): models/animals/<file>.bin,
+   the horse's walk / run / fall copied onto each, and a grazing move. Birds, the ground birds, the seal, monkeys, Bigfoot and the Yeti are built from
+   scratch (dev/animals/build_rigged.py) and skinned onto the old animal's own moving parts, so the game's flapping / swinging / striding still drives them. */
+const QA_KINDS = { horse: 1, zebra: 1, buck: 1, elk: 1, moose: 1, caribou: 1, pronghorn: 1, oryx: 1, giraffe: 1, goat: 1, bighorn: 1, muskox: 1, camel: 1, boar: 1, tapir: 1, capybara: 1,
+  bear: 1, polar: 1, rhino: 1, elephant: 1, gator: 1, crocodile: 1, wolf: 1, coyote: 1, fox: 1, arcticfox: 1, panther: 1, lion: 1, baboon: 1, rabbit: 1 };
+const QR_KINDS = { bird: 1, parrot: 1, eagle: 1, owl: 1, vulture: 1, turkey: 1, roadrunner: 1, heron: 1, seal: 1, monkey: 1, bigfoot: 1, yeti: 1 };
+const QD_KINDS = Object.assign({}, QD_DINO, QA_KINDS);
+function qaPick(A, cold, tropic) {                         // the model file and coat for this one
+  const k = A.kind, r = Math.random(); A.qv = -1;
+  A.qf = k === "crocodile" ? "gator" : k === "lion" ? (r < .5 ? "lion_m" : "lion") : FLY[k] ? "bird" : k;
+  if (k === "crocodile") A.qv = 1; else if (k === "horse") A.qv = Math.floor(r * 6) - 1; else if (k === "bear") A.qv = r < .5 ? 1 : -1;
+  else if (k === "panther") A.qv = tropic ? 1 : -1; else if (k === "wolf" || k === "rabbit") A.qv = cold ? 1 : -1; else if (k === "arcticfox") A.qv = cold ? -1 : 1;
+}
 /* ---------------- 2.02: Pteranodons (Ron): huge (9 m wings), circling high over the dinosaur maps. Pass under one and it screeches and dives at
    you; if it reaches you, you black out like a raptor bite. Shoot one and it comes for you. Quaternius' Dragon reshaped (dev/dinos/exp_ptero.*):
    long beak, swept crest, stub tail, flat colours, a little less boxy. Its own flight, not the ground animals' walking. */
@@ -6045,9 +6059,10 @@ function pteroTick(A, dt) {
   Q.acc += dt; if (Q.acc < (cd < 120 ? 0 : cd < 300 ? 1 / 30 : 1 / 12)) return; Q.mixer.update(Q.acc); Q.acc = 0;
 }
 function qdinoLoad(kind) {
-  if (!QD_KINDS[kind] || QDINO.models[kind] || QDINO.loading[kind] || typeof fetch === "undefined" || location.protocol === "file:") return;
+  if (!kind || QDINO.models[kind] || QDINO.loading[kind] || typeof fetch === "undefined" || location.protocol === "file:") return;
+  if (!QD_DINO[kind] && !QA_KINDS[kind] && !QR_KINDS[kind] && kind !== "gator" && kind !== "lion_m") return;
   QDINO.loading[kind] = true;
-  fetch("models/dinos/" + kind + ".bin").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QDINO.models[kind] = qdinoParse(buf); }).catch(() => { QDINO.failed++; });
+  fetch((QD_DINO[kind] ? "models/dinos/" : "models/animals/") + kind + ".bin").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QDINO.models[kind] = qdinoParse(buf); }).catch(() => { QDINO.failed++; });
 }
 function qdinoParse(buf) {
   const dv = new DataView(buf), jl = dv.getUint32(4, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl))), B = 8 + jl, M = js.mesh, n = M.n, [mn, mx] = M.bb;
@@ -6065,10 +6080,38 @@ function qdinoParse(buf) {
   }));
   return { js, geo, clips, inv: M.inv.map(a => new THREE.Matrix4().fromArray(a)), bind: new THREE.Matrix4().fromArray(M.bind), mat: grade(new THREE.MeshLambertMaterial({ vertexColors: true })) };
 }
-function qdinoMake(M) {                                      // one dinosaur: its own bones on the shared shape
+const qaLin = c => Math.min(255, Math.round(255 * Math.min(1, (c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4)) * 2.3)));
+function qdGeo(M, v, cols) {                                 // the shape with another coat: v = one of the file's colour swaps; cols = [main, patch, head, beak] for the birds
+  const key = cols ? cols.join(",") : v; if (key === undefined || key < 0 || (!cols && !(M.js.mesh.vars && M.js.mesh.vars[v]))) return M.geo;
+  M.vg = M.vg || {}; if (M.vg[key]) return M.vg[key];
+  const C0 = M.geo.attributes.color.array, C = new Uint8Array(C0.length), pairs = [];
+  if (cols) [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]].forEach((a, i) => { const h = cols[i]; pairs.push([a, [qaLin((h >> 16 & 255) / 255), qaLin((h >> 8 & 255) / 255), qaLin((h & 255) / 255)]]); });
+  else pairs.push(...M.js.mesh.vars[v]);
+  for (let i = 0; i < C0.length; i += 3) { let r = C0[i], g = C0[i + 1], b = C0[i + 2];
+    for (const [a, t] of pairs) if (Math.abs(a[0] - r) < 2 && Math.abs(a[1] - g) < 2 && Math.abs(a[2] - b) < 2) { r = t[0]; g = t[1]; b = t[2]; break; }
+    C[i] = r; C[i + 1] = g; C[i + 2] = b; }
+  const g = new THREE.BufferGeometry(); for (const k in M.geo.attributes) g.setAttribute(k, M.geo.attributes[k]);
+  g.setAttribute("color", new THREE.BufferAttribute(C, 3, true)); g.boundingSphere = M.geo.boundingSphere; g.boundingBox = M.geo.boundingBox;
+  return M.vg[key] = g;
+}
+function qrAttach(A) {                                       // 2.03: a from-scratch model skinned onto the old animal's moving parts (the old animation drives it)
+  const M = QDINO.models[A.qf || A.kind]; if (!M) { qdinoLoad(A.qf || A.kind); return; }
+  A.qr = true; const slot = { body: A.body, head: A.head || A.body }, saved = [];
+  const keep = o => saved.push([o, o.position.clone(), o.quaternion.clone()]);
+  (A.legs || []).forEach((l, i) => { slot["leg" + i] = l; keep(l); l.rotation.set(l.userData.rest || 0, 0, 0); const k = l.userData.knee; if (k) { slot["leg" + i + "k"] = k; keep(k); k.rotation.set(l.userData.kneeRest || 0, 0, 0); } });
+  (A.arms || []).forEach((l, i) => { slot["arm" + i] = l; keep(l); l.rotation.set(l.userData.rest || 0, 0, 0); const k = l.userData.knee; if (k) { slot["arm" + i + "k"] = k; keep(k); k.rotation.set(l.userData.kneeRest || 0, 0, 0); } });
+  (A.wings || []).forEach((w, i) => { slot["wing" + i] = w; keep(w); w.rotation.set(0, 0, 0); });
+  keep(A.body); A.body.position.set(0, 0, 0); A.body.rotation.set(0, 0, 0); if (A.head && A.head !== A.body) { keep(A.head); A.head.rotation.set(0, 0, 0); }
+  A.root.traverse(o => { if (o.isMesh) o.visible = false; });
+  const mesh = new THREE.SkinnedMesh(qdGeo(M, -1, A.cols), M.mat); A.root.add(mesh); A.root.updateMatrixWorld(true);
+  mesh.bind(new THREE.Skeleton(M.js.mesh.bones.map(i => slot[M.js.nodes[i].n] || A.body)));
+  for (const [o, p, q] of saved) { o.position.copy(p); o.quaternion.copy(q); }
+  A.qrMesh = mesh;
+}
+function qdinoMake(M, v) {                                   // one dinosaur: its own bones on the shared shape
   const js = M.js, top = new THREE.Group(), objs = js.nodes.map(nd => { const o = nd.b ? new THREE.Bone() : new THREE.Object3D(); o.name = nd.n; o.position.fromArray(nd.t, 0); o.quaternion.fromArray(nd.t, 3); o.scale.fromArray(nd.t, 7); return o; });
   js.nodes.forEach((nd, i) => (nd.p < 0 ? top : objs[nd.p]).add(objs[i]));
-  const mesh = new THREE.SkinnedMesh(M.geo, M.mat), t = js.mesh.t; mesh.position.fromArray(t, 0); mesh.quaternion.fromArray(t, 3); mesh.scale.fromArray(t, 7);
+  const mesh = new THREE.SkinnedMesh(v !== undefined ? qdGeo(M, v) : M.geo, M.mat), t = js.mesh.t; mesh.position.fromArray(t, 0); mesh.quaternion.fromArray(t, 3); mesh.scale.fromArray(t, 7);
   (js.mesh.p < 0 ? top : objs[js.mesh.p]).add(mesh); top.updateMatrixWorld(true);
   mesh.bind(new THREE.Skeleton(js.mesh.bones.map(i => objs[i]), M.inv), M.bind);
   const head = top.getObjectByName("Head"), neck = top.getObjectByName("Neck"), up = o => new THREE.Vector3(0, 1, 0).applyQuaternion(o.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
@@ -6078,20 +6121,20 @@ function qdinoMake(M) {                                      // one dinosaur: it
 }
 const _qdM = new THREE.Matrix4(), _qdM2 = new THREE.Matrix4(), _qdQ = new THREE.Quaternion(), _qdV = new THREE.Vector3(), _qdS = new THREE.Vector3();
 function qdAttach(A) {
-  const M = QDINO.models[A.kind]; if (!M) { qdinoLoad(A.kind); return false; }
-  const Q = qdinoMake(M), wrap = new THREE.Group(), r0 = A.root, sv = [r0.position.clone(), r0.quaternion.clone()];
+  const fk = A.qf || A.kind, M = QDINO.models[fk]; if (!M) { qdinoLoad(fk); return false; }
+  const Q = qdinoMake(M, A.qv), wrap = new THREE.Group(), r0 = A.root, sv = [r0.position.clone(), r0.quaternion.clone()];
   if (!M.sph) M.sph = qdSpheres(M, Q);
   r0.position.set(0, 0, 0); r0.quaternion.identity(); A.head.rotation.set(0, 0, 0); r0.updateMatrixWorld(true);
-  let F = QDINO.fit[A.kind];
+  let F = QDINO.fit[fk];
   if (!F) {                                                  // fit the model to the old one's length (feet on the ground), once per kind
     const sc = r0.scale.x, bp = new THREE.Box3().setFromObject(A.body), bq = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld);
     const s = (bp.max.z - bp.min.z) / (bq.max.z - bq.min.z) / sc;
-    F = QDINO.fit[A.kind] = { s, dz: ((bp.max.z + bp.min.z) / 2 / sc - (bq.max.z + bq.min.z) / 2 * s), hm: null, len: (bp.max.z - bp.min.z) / sc, hgt: [(bp.max.y - bp.min.y) / sc, (bq.max.y - bq.min.y) * s] };
+    F = QDINO.fit[fk] = { s, dz: ((bp.max.z + bp.min.z) / 2 / sc - (bq.max.z + bq.min.z) / 2 * s), hm: null, len: (bp.max.z - bp.min.z) / sc, hgt: [(bp.max.y - bp.min.y) / sc, (bq.max.y - bq.min.y) * s] };
   }
   wrap.scale.setScalar(F.s); wrap.position.z = F.dz; wrap.add(Q.top); r0.add(wrap); r0.updateMatrixWorld(true);
   A.qhit = M.sph.map(([b, x, y, z, r, hd]) => [Q.mesh.skeleton.bones[b], x, y, z, r * F.s, hd]);   // hit spheres that move with the bones
   r0.position.copy(sv[0]); r0.quaternion.copy(sv[1]); r0.updateMatrixWorld(true);
-  A.body.visible = false; Q.wrap = wrap; A.qd = Q; A.bR = (F.len * .7 + 1) * (A.scale || 1);
+  A.body.visible = false; Q.wrap = wrap; A.qd = Q; Q.F = F; A.bR = (F.len * .7 + 1) * (A.scale || 1);
   return true;
 }
 function qdSpheres(M, Q) {                                 // hit spheres fitted to the model, each riding on its bone (once per kind)
@@ -6117,18 +6160,18 @@ function qdTick(A, dt, cd) {                                 // pick the move, m
   if (!A.qd && !qdAttach(A)) return;
   const Q = A.qd;
   if (A.dead && Q.cur === "Death" && (Q.deadT += dt) > Q.curA.getClip().duration + .3) return;   // lying still
-  const atk = !A.dead && (A.doomT > 0 || A.rearT > 0), v = A.speed || 0;
-  const want = A.dead ? "Death" : atk ? "Attack" : v < A.walk * .3 ? "Idle" : v < (A.walk + A.run) * .45 ? "Walk" : "Run";
+  const cl = QDINO.models[A.qf || A.kind].clips, atk = !A.dead && (A.doomT > 0 || A.rearT > 0) && cl.Attack, v = A.speed || 0;
+  const want = A.dead ? "Death" : atk ? "Attack" : v < A.walk * .3 ? (cl.Eat && A.mode === "graze" ? "Eat" : "Idle") : v < (A.walk + A.run) * .45 ? "Walk" : "Run";
   if (want !== Q.cur) {
     const a = Q.act(want); a.reset(); a.setLoop(want === "Death" ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = want === "Death"; a.timeScale = 1;
     if (Q.curA) a.crossFadeFrom(Q.curA, want === "Death" ? .15 : .3, false); a.play(); Q.cur = want; Q.curA = a;
   }
   if (want === "Walk" || want === "Run") Q.curA.timeScale = Math.max(.4, Math.min(2.2, v / (A.stride * (want === "Run" ? 1.6 : 1)) * Q.curA.getClip().duration));
-  const F = QDINO.fit[A.kind], hl = F.len * .35 * (A.scale || 1), hw = Math.max(.4, F.len * .06 * (A.scale || 1)), fx = Math.sin(A.yaw), fz = Math.cos(A.yaw);   // 1.92: lean with the ground
+  const F = Q.F, hl = F.len * .35 * (A.scale || 1), hw = Math.max(.4, F.len * .06 * (A.scale || 1)), fx = Math.sin(A.yaw), fz = Math.cos(A.yaw);   // 1.92: lean with the ground
   const pT = Math.atan2(groundAt(A.x - fx * hl, A.z - fz * hl) - groundAt(A.x + fx * hl, A.z + fz * hl), hl * 2), rT = Math.atan2(groundAt(A.x + fz * hw, A.z - fx * hw) - groundAt(A.x - fz * hw, A.z + fx * hw), hw * 2);
   const kT = Math.min(1, dt * 5); Q.pitch += (Math.max(-.6, Math.min(.6, pT)) - Q.pitch) * kT; Q.roll += (Math.max(-.3, Math.min(.3, rT * .6)) - Q.roll) * kT;
   Q.wrap.rotation.set(Q.pitch, 0, Q.roll + A.body.rotation.z, "YXZ");   // (and the flinch when hit)
-  Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn ? 0 : cd < 140 ? 1 / 30 : 1 / 12;   // far ones move a little less often
+  Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn ? 0 : cd < 140 ? 1 / 30 : cd < 320 || zoomed || (vr.on && (vr.scoped || vr.binos)) ? 1 / 12 : 1 / 4;   // far ones move a little less often
   if (Q.acc < every) return;
   if (Q.looked) { Q.neck.quaternion.copy(Q.nq); Q.head.quaternion.copy(Q.hq); Q.looked = false; }   // (1.92: the turn was piling up on moves that don't move the neck: the head spun)
   Q.mixer.update(Q.acc); Q.acc = 0;

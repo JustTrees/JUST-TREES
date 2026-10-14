@@ -17,7 +17,7 @@ async def main():
         await pg.goto("http://127.0.0.1:8781/dbg.html", timeout=120000); await pg.wait_for_timeout(800)
         await pg.evaluate("""() => { window.FREEZE = true; D.setSeed(5); D.setVR(true); D.setMode('hunt'); D.set.dino = true; D.set.env = 'climate'; D.set.land = 'natural'; D.set.size = 'large'; D.set.lat = 42; D.set.month = 6; D.set.weather = 'clear'; D.set.density = .5; D.generate(); D.state = 'play';
           for (const k of ['trex', 'raptor', 'parasaur', 'triceratops', 'stego', 'bronto']) D.qdinoLoad(k); }""")
-        await pg.wait_for_function("Object.keys(D.QDINO.models).length === 6 || D.QDINO.failed > 0", timeout=60000)
+        await pg.wait_for_function("['trex', 'raptor', 'parasaur', 'triceratops', 'stego', 'bronto'].every(k => D.QDINO.models[k]) || D.QDINO.failed > 0", timeout=120000)
         r = await pg.evaluate("""() => { const out = { failed: D.QDINO.failed }, T = D.THREE, P = D.P;
           const x0 = P.x, z0 = P.z, mk = {}; let i = 0;
           for (const k of ['trex', 'raptor', 'parasaur', 'triceratops', 'stego', 'bronto']) { const A = D.addGround(k, x0 - 50 + i * 20, z0 + 30); A.yaw = Math.PI / 2; A.mode = 'idle'; A.timer = 99; A.speed = 0; A.want = 0; mk[k] = A; i++; }
