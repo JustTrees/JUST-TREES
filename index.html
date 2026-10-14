@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.04</title>
+<title>JUST TREES 2.05</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.04";              // Just Trees 2.04
+const VERSION = "2.05";              // Just Trees 2.05
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -331,13 +331,13 @@ const AMMO_CAP = 300, INF_AMMO = true;                      // 1.85: unlimited s
 const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no drop (they fly dead straight, just take time to arrive); sight distance if drop ever comes back
 const VR_NADE_G = 9.81;                                    // VR grenades still fall in an arc
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
-const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 2 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per box
+const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 1 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per pickup (2.05: one floating grenade each)
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
 const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
-const LOOT = { ammo: [30, 4], nade: [12, 11], cross: [10, 15], gunGrid: [22, .02] };   // ammo/grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
+const LOOT = { ammo: [30, 4], nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // ammo/grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
@@ -8403,12 +8403,19 @@ function reloadTick(dt, G, off) {
 /* ---- grenades (VR Hunting / PvP): a fifth slot on the wheel, up to 10, picked up from grenade boxes; aim shows the arc, trigger throws ---- */
 const NADES = [], BOOMS = [];
 let nadeLoot = [], nadeLootMesh = null, nadeArc = null;
-function nadeModel() {
-  const g = new THREE.Group(), olive = grade(new THREE.MeshLambertMaterial({ color: 0x4b5a32 })), metal = new THREE.MeshLambertMaterial({ color: 0x9a9a92 });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(.036, 14, 10), olive); body.scale.set(1, 1.2, 1); g.add(body);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.013, .016, .022, 10), metal); cap.position.y = .048; g.add(cap);
-  const spoon = new THREE.Mesh(new THREE.BoxGeometry(.012, .07, .006), metal); spoon.position.set(0, .02, .038); spoon.rotation.x = -.15; g.add(spoon);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(.012, .0025, 6, 14), metal); ring.position.set(.018, .055, 0); ring.rotation.y = Math.PI / 2; g.add(ring);
+let NADE_PARTS = null;
+function nadeModel() {                                       // 2.05 (Ron): a red frag grenade, a little bigger: a faceted pineapple body with dark grooves, the fuse, the spoon, the pin
+  if (!NADE_PARTS) {
+    const red = grade(new THREE.MeshLambertMaterial({ color: 0xb3261e, flatShading: true })), groove = grade(new THREE.MeshLambertMaterial({ color: 0x4a0d0a })), metal = new THREE.MeshLambertMaterial({ color: 0xa8a8a0 }), dark = new THREE.MeshLambertMaterial({ color: 0x3a3a36 });
+    const R = .044, parts = [[new THREE.SphereGeometry(R, 10, 8).scale(1, 1.18, 1), red, 0, 0, 0, 0, 0, 0]];
+    for (const y of [-.024, 0, .024]) { const rr = Math.sqrt(Math.max(0, R * R - (y / 1.18) ** 2)) * 1.01; parts.push([new THREE.TorusGeometry(rr, .0028, 4, 18).rotateX(Math.PI / 2), groove, 0, y, 0, 0, 0, 0]); }
+    for (let k = 0; k < 3; k++) parts.push([new THREE.TorusGeometry(R * 1.01, .0026, 4, 20).scale(1, 1.18, 1), groove, 0, 0, 0, 0, k * Math.PI / 3, 0]);
+    parts.push([new THREE.CylinderGeometry(.015, .018, .022, 10), metal, 0, .058, 0, 0, 0, 0], [new THREE.CylinderGeometry(.01, .012, .01, 8), dark, 0, .072, 0, 0, 0, 0]);
+    parts.push([new THREE.BoxGeometry(.014, .078, .006), metal, 0, .028, .047, -.18, 0, 0], [new THREE.TorusGeometry(.013, .0026, 6, 14), metal, .022, .064, 0, 0, Math.PI / 2, 0]);
+    NADE_PARTS = parts;
+  }
+  const g = new THREE.Group();
+  for (const [geo, mat, x, y, z, rx, ry, rz] of NADE_PARTS) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); g.add(m); }
   return g;
 }
 function nadeArcObj() {                                     // the dotted arc and the ring where it lands
@@ -8712,7 +8719,7 @@ function arrowsClear() { for (const R of ARROWS) { scene.remove(R.m, R.head, R.t
 function vrClearNades() {
   for (const N of NADES) scene.remove(N.m); NADES.length = 0;
   for (const B of BOOMS) scene.remove(B.m); BOOMS.length = 0;
-  if (nadeLootMesh) { for (const o of [nadeLootMesh.body, nadeLootMesh.band]) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } }
+  if (nadeLootMesh) scene.remove(nadeLootMesh.grp);
   nadeLootMesh = null; nadeLoot = []; nadeHide(); arrowsClear();
 }
 function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
@@ -8727,27 +8734,25 @@ function spawnNadeLoot() {                                  // grenade boxes: se
     }
     if (s) spots.push(s);
   }
-  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(.26, .14, .2), grade(new THREE.MeshLambertMaterial({ color: 0x55603c })), spots.length);
-  const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.266, .045, .206), new THREE.MeshBasicMaterial({ color: 0x9be05a }), spots.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+  const grp = new THREE.Group();                             // 2.05 (Ron): each one a red frag grenade floating and turning like the guns (no glow); one grenade each
   spots.forEach(([x, z], i) => {
-    const y = H(x, z) + .07; q.setFromAxisAngle(_UPv, R() * 6.283);
-    m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .035, z), q, one); band.setMatrixAt(i, m4);
-    nadeLoot.push({ x, y, z, got: false });
+    const y = H(x, z) + .55, o = new THREE.Group(), m = nadeModel(); m.scale.setScalar(2.6); o.add(m); o.position.set(x, y, z); o.rotation.y = R() * 6.283; grp.add(o);
+    nadeLoot.push({ x, y, z, got: false, o, ph: R() * 6.283 });
   });
-  body.frustumCulled = band.frustumCulled = false; scene.add(body, band); nadeLootMesh = { body, band };
+  scene.add(grp); nadeLootMesh = { grp };
 }
 function nadeLootTake(i) {
-  const c = nadeLoot[i]; if (!c) return; c.got = true;
-  const z0 = new THREE.Matrix4().makeScale(0, 0, 0); nadeLootMesh.body.setMatrixAt(i, z0); nadeLootMesh.band.setMatrixAt(i, z0); nadeLootMesh.body.instanceMatrix.needsUpdate = nadeLootMesh.band.instanceMatrix.needsUpdate = true;
+  const c = nadeLoot[i]; if (!c) return; c.got = true; if (c.o) c.o.visible = false;
 }
 function nadeLootTick(I) {
   if (!nadeLootMesh) return;
-  const hs = [I.hands.left, I.hands.right].filter(Boolean);
+  const hs = [I.hands.left, I.hands.right].filter(Boolean), t = performance.now() / 1000;
   for (let i = 0; i < nadeLoot.length; i++) {
     const c = nadeLoot[i]; if (c.got) continue;
-    const dx = c.x - P.x, dz = c.z - P.z; if (dx * dx + dz * dz > 9) continue;
-    const near = (dx * dx + dz * dz < 1.44 && Math.abs(c.y - P.y) < 2) || hs.some(h => (h.pos.x - c.x) ** 2 + (h.pos.y - c.y) ** 2 + (h.pos.z - c.z) ** 2 < .12);
+    const dx = c.x - P.x, dz = c.z - P.z, d2 = dx * dx + dz * dz; c.o.visible = d2 < 140 * 140;
+    if (c.o.visible && d2 < 90 * 90) { c.o.position.y = c.y + Math.sin(t * 2 + c.ph) * .07; c.o.rotation.y = t * 1.3 + c.ph; }
+    if (d2 > 9) continue;
+    const near = (d2 < 1.44 && Math.abs(c.y - .55 - P.y) < 2) || hs.some(h => (h.pos.x - c.x) ** 2 + (h.pos.y - c.y) ** 2 + (h.pos.z - c.z) ** 2 < .16);
     if (!near || vr.nades >= NADE.MAX) continue;            // already carrying 10: leave it
     const got = Math.min(NADE.GIVE, NADE.MAX - vr.nades); vr.nades += got; nadeLootTake(i); if (MP.on) mpSend({ t: "nade", i });
     gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + (got === 1 ? " grenade" : " grenades"); vr.lootT = 2.5; vr.wristT = 0;
@@ -8881,6 +8886,7 @@ function dropObj(d) {
     const holder = new THREE.Group(); holder.rotation.y = Math.PI / 2; holder.scale.setScalar(d.kind === "bow" ? .85 : 1.5); spin.add(holder); g.userData.holder = holder;
     const tpl = gunTemplate(d.kind, d.tier), gl = gunGlow(d.kind, tpl, d.tier); holder.add(gl); g.userData.glow = gl; g.userData.glowQ = !!tpl.userData.qk;   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
+  else if (d.type === "nade") { const m = nadeModel(); m.scale.setScalar(2.6); spin.add(m); }
   else {                                                    // spilled ammo or grenades: a little box with a coloured band
     _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
     spin.add(new THREE.Mesh(_boxGeo[0], new THREE.MeshLambertMaterial({ color: 0x3e4733 })), new THREE.Mesh(_boxGeo[1], new THREE.MeshBasicMaterial({ color: d.type === "nade" ? 0x9be05a : WEAP[d.kind].col })));
@@ -8928,8 +8934,8 @@ function dropsTick(I, dt) {
       else if (far > 75 && U.model) { U.holder.remove(U.model); U.model = null; }
     }
     if (!o.visible) continue;
-    const hover = d.type === "gun" ? (d.kind === "bow" ? .95 : .55) : d.type === "hp" || d.type === "sh" ? 1.1 : .12, ph = (d.x * 7 + d.z * 3) % 6.28;
-    U.spin.position.y = hover + (d.type === "ammo" || d.type === "nade" ? 0 : Math.sin(t * 2 + ph) * .07); U.spin.rotation.y = t * 1.3 + ph;
+    const hover = d.type === "gun" ? (d.kind === "bow" ? .95 : .55) : d.type === "nade" ? .55 : d.type === "hp" || d.type === "sh" ? 1.1 : .12, ph = (d.x * 7 + d.z * 3) % 6.28;
+    U.spin.position.y = hover + (d.type === "ammo" ? 0 : Math.sin(t * 2 + ph) * .07); U.spin.rotation.y = t * 1.3 + ph;
     if (state !== "play" || MP.dead > 0) continue;
     const dx = d.x - P.x, dz = d.z - P.z;
     const near = (dx * dx + dz * dz < 1.6 && Math.abs(d.y - P.y) < 2) || hs.some(h => h.pos.distanceTo(_v1.set(d.x, d.y + hover, d.z)) < .4);
