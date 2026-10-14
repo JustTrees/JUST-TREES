@@ -1,0 +1,44 @@
+<!doctype html><html><body><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from './node_modules/three/examples/jsm/loaders/FBXLoader.js';
+const b64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 32768) s += String.fromCharCode.apply(null, u8.subarray(i, i + 32768)); return btoa(s); };
+window.exp = async (name, cols) => {
+  const obj = await new FBXLoader().loadAsync('in/' + name + '.fbx'); obj.updateMatrixWorld(true);
+  const nodes = [], idx = new Map(); let mesh = null;
+  obj.traverse(o => { if (o === obj) return; if (o.isSkinnedMesh) { mesh = o; return; } idx.set(o, nodes.length);
+    nodes.push({ n: o.name, p: o.parent === obj ? -1 : idx.get(o.parent), b: o.isBone ? 1 : 0, t: [...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray()].map(v => +v.toPrecision(7)) }); });
+  const parts = []; let off = 0; const put = (ta) => { const u = new Uint8Array(ta.buffer, ta.byteOffset, ta.byteLength); const o = off; parts.push(u); off += u.length; const pad = (4 - off % 4) % 4; if (pad) { parts.push(new Uint8Array(pad)); off += pad; } return o; };
+  // geometry: bake the material colours into the vertices
+  let g = mesh.geometry; const n = g.attributes.position.count;
+  const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+  const col = new Uint8Array(n * 4), miss = new Set();
+  for (const gr of (g.groups.length ? g.groups : [{ start: 0, count: n, materialIndex: 0 }])) { const mn = mats[gr.materialIndex].name, c = new THREE.Color(cols[mn] !== undefined ? cols[mn] : (miss.add(mn), 0xff00ff));
+    for (let i = gr.start; i < gr.start + gr.count; i++) { col[i * 4] = Math.round(c.r * 255); col[i * 4 + 1] = Math.round(c.g * 255); col[i * 4 + 2] = Math.round(c.b * 255); col[i * 4 + 3] = 255; } }
+  if (g.index) throw "indexed";
+  const P = g.attributes.position.array, N = g.attributes.normal.array, SI = g.attributes.skinIndex.array, SW = g.attributes.skinWeight.array;
+  g.computeBoundingBox(); const mn = g.boundingBox.min.toArray(), mx = g.boundingBox.max.toArray();
+  const pq = new Int16Array(n * 3), nq = new Int8Array(n * 4), si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
+  for (let i = 0; i < n; i++) { for (let a = 0; a < 3; a++) { pq[i * 3 + a] = Math.round(((P[i * 3 + a] - mn[a]) / ((mx[a] - mn[a]) || 1)) * 65535 - 32768); nq[i * 4 + a] = Math.round(Math.max(-1, Math.min(1, N[i * 3 + a])) * 127); }
+    let ws = 0; for (let a = 0; a < 4; a++) ws += SW[i * 4 + a]; const q = []; let s = 0;
+    for (let a = 0; a < 4; a++) { si[i * 4 + a] = SI[i * 4 + a]; q.push(Math.round(SW[i * 4 + a] / (ws || 1) * 255)); s += q[a]; }
+    let big = 0; for (let a = 1; a < 4; a++) if (q[a] > q[big]) big = a; q[big] += 255 - s; for (let a = 0; a < 4; a++) sw[i * 4 + a] = q[a]; }
+  const M = { n, bb: [mn, mx], p: idx.get(mesh.parent) ?? -1, t: [...mesh.position.toArray(), ...mesh.quaternion.toArray(), ...mesh.scale.toArray()], bind: mesh.bindMatrix.toArray(),
+    inv: mesh.skeleton.boneInverses.map(m => m.toArray().map(v => +v.toPrecision(8))), bones: mesh.skeleton.bones.map(b => idx.get(b)),
+    pos: put(pq), nrm: put(nq), col: put(col), si: put(si), sw: put(sw) };
+  // clips: drop tracks that never move away from the rest pose
+  const clips = obj.animations.map(c => { const tr = [];
+    for (const t of c.tracks) { const [nn, prop] = t.name.split("."), nd = nodes.findIndex(x => x.n === nn); if (nd < 0) continue;
+      const rest = prop === "position" ? nodes[nd].t.slice(0, 3) : prop === "quaternion" ? nodes[nd].t.slice(3, 7) : nodes[nd].t.slice(7, 10), k = rest.length, V = t.values;
+      let still = true; for (let i = 0; i < V.length && still; i++) if (Math.abs(V[i] - rest[i % k]) > (prop === "position" ? 1e-3 * Math.max(1, Math.abs(rest[i % k])) : 1e-4)) still = false;
+      if (still) continue;
+      const e = { nd, pr: prop[0], nk: t.times.length, t: put(new Float32Array(t.times)) };
+      if (prop === "quaternion") { const q = new Int16Array(V.length); for (let i = 0; i < V.length; i++) q[i] = Math.round(Math.max(-1, Math.min(1, V[i])) * 32767); e.v = put(q); }
+      else e.v = put(new Float32Array(V));
+      tr.push(e); }
+    return { n: c.name.split("|").pop().split("_").pop(), d: +c.duration.toFixed(4), tr }; });
+  const bin = new Uint8Array(off); let o = 0; for (const p of parts) { bin.set(p, o); o += p.length; }
+  return { json: JSON.stringify({ v: 1, nodes, mesh: M, clips }), bin: b64(bin), miss: [...miss] };
+};
+window.ready = true;
+</script></body></html>
