@@ -79,7 +79,10 @@ def build(kind, name):
     if kind == "pistol":
         fore = (gx + .05, gy - .32, 0)                                   # the other hand cups under the grip
     else:
-        fx = gx + L * (.48 if kind == "hunt" else .52 if kind == "ar" else .5)
+        fx = gx + L * .48
+        if mag:                                                          # 1.90 (Ron): the front hand holds just in front of the magazine
+            mv = [V[i] for t in mag['tris'] for i in tris[t][:3]]; ymx = max(v[1] for v in mv); h = ymx - min(v[1] for v in mv)
+            fx = max(v[0] for v in mv if v[1] > ymx - .2 * h) + (.14 if kind == "ar" else .1)
         top_scope = eye[1] - lensR - .05 if eye else None
         vs = slab(fx, ymax=top_scope)
         fore = (fx, (min(v[1] for v in vs) + max(v[1] for v in vs)) / 2 if vs else muzzle[1], 0)

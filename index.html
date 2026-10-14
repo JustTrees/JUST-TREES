@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.89</title>
+<title>JUST TREES 1.90</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.89";              // Just Trees 1.89
+const VERSION = "1.90";              // Just Trees 1.90
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6378,11 +6378,23 @@ function buzz(side, strength, ms) {                       // a little controller
 
 /* ---- your hands: gloves built in the controller's grip space (palm, four fingers and a thumb that close with grip and trigger) ---- */
 let vrHandsObj = null;
+/* 1.90 (Ron: the hands "look like they are held with all fingers straight … pointed down"): on a gun, the gloves take the gun's own
+   grip — the gun hand wrapped round the pistol grip (raked back like the grip, index finger at the trigger), the front hand palm-up
+   under the handguard just in front of the magazine, and on a pistol the other hand wrapped over the gun hand. */
+const GRIP_RAKE = { hunt: .32, ar: .38, smg: .3, pistol: .3, pvp: .3 };
+const _gb = new THREE.Matrix4(), _gx = new THREE.Vector3(), _gy = new THREE.Vector3(), _gz = new THREE.Vector3();
+function gloveQ(kind, role, out) {                          // the glove's turn in the gun's own space. role: "grip" (gun hand), "fore", "cup" (pistol support hand)
+  const r = GRIP_RAKE[kind] || .3;
+  if (role === "fore") { _gz.set(0, 0, 1); _gy.set(set.hand === "right" ? -1 : 1, 0, 0); }          // finger row along the barrel; fingers reach up round the far side
+  else { _gz.set(0, -Math.cos(r), Math.sin(r)); _gy.set(0, Math.sin(r), Math.cos(r)); if (role === "cup") _gz.y -= .25; }   // finger row down the grip; fingers reach forward round it
+  _gz.normalize(); _gx.crossVectors(_gy, _gz).normalize(); _gy.crossVectors(_gz, _gx);
+  return out.setFromRotationMatrix(_gb.makeBasis(_gx, _gy, _gz));
+}
 function handPose(hand, h) {                               // where a hand is drawn: on the controller, or snapped to the rifle's front grip
   const isMain = hand === set.hand;
-  if (isMain && vr.gun && vr.gun.visible) {                  // the gun hand is locked to the grip: glove, gun and arm move as one piece
-    const q = vr.gunHandQ.clone().multiply(_q1.copy(h.rayQ).invert().multiply(h.q));
-    return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].grip)), q };
+  if (isMain && vr.gun && vr.gun.visible) {                  // the gun hand wraps the gun's pistol grip: glove, gun and arm move as one piece
+    const S = GUNSPOT[vr.gunKind], q = vr.gun.quaternion.clone().multiply(gloveQ(vr.gunKind, "grip", _q1));
+    return { pos: vr.gun.localToWorld(new THREE.Vector3(...S.grip).add(_gx.set((set.hand === "right" ? 1 : -1) * .012, .012, .012))), q };
   }
   if (!isMain && vr.rl && vr.rl.grab && vr.gun && vr.gun.visible) {        // reloading: the glove sits on the magazine or the handle it's holding
     const U = vr.gun.userData, S = GUNSPOT[vr.gunKind];
@@ -6391,7 +6403,11 @@ function handPose(hand, h) {                               // where a hand is dr
     const lp = vr.rl.grab === "mag" ? U.mag.position.clone().addScaledVector(U.magDir, S.magC) : new THREE.Vector3(...S.handle).add(new THREE.Vector3(0, 0, vr.rl.pull));
     return { pos: vr.gun.localToWorld(lp), q: h.q };
   }
-  if (!isMain && vr.two && vr.gun && vr.gun.visible) return { pos: vr.gun.localToWorld(new THREE.Vector3(...GUNSPOT[vr.gunKind].fore)), q: h.q };
+  if (!isMain && vr.two && vr.gun && vr.gun.visible) {      // the front hand: palm-up under the handguard (pistol: wrapped over the gun hand)
+    const pist = vr.gunKind === "pistol", S = GUNSPOT[vr.gunKind], q = vr.gun.quaternion.clone().multiply(gloveQ(vr.gunKind, pist ? "cup" : "fore", _q1));
+    const p = pist ? new THREE.Vector3(...S.grip).add(_gx.set((set.hand === "right" ? -1 : 1) * .022, -.006, .006)) : new THREE.Vector3(...S.fore).add(_gx.set(0, -.028, 0));
+    return { pos: vr.gun.localToWorld(p), q };
+  }
   return { pos: h.pos, q: h.q };
 }
 function vrHandsParts() {
