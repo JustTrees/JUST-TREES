@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.96</title>
+<title>JUST TREES 1.97</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.96";              // Just Trees 1.96
+const VERSION = "1.97";              // Just Trees 1.97
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8664,7 +8664,7 @@ function dropObj(d) {
   const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin); g.userData.spin = spin;
   if (d.type === "gun") {
     const holder = new THREE.Group(); holder.rotation.y = Math.PI / 2; holder.scale.setScalar(1.5); spin.add(holder); g.userData.holder = holder;
-    holder.add(gunGlow(d.kind, gunTemplate(d.kind, d.tier), d.tier));   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
+    const tpl = gunTemplate(d.kind, d.tier), gl = gunGlow(d.kind, tpl, d.tier); holder.add(gl); g.userData.glow = gl; g.userData.glowQ = !!tpl.userData.qk;   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
   else {                                                    // spilled ammo or grenades: a little box with a coloured band
     _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
@@ -8698,7 +8698,13 @@ function dropsTick(I, dt) {
   for (const d of [...DROPS.values()]) {
     if (d.got) { if ((d.back -= dt) <= 0) { d.got = false; d.obj.visible = true; } continue; }
     const far = Math.hypot(d.x - cx, d.z - cz), o = d.obj, U = o.userData;
+    if (d.type === "gun" && INF_AMMO && vr.own && (vr.own[d.kind] || 0) >= d.tier) {   // 1.97 (Ron): a gun you already have (or better): nothing to gain, so it isn't drawn
+      if (o.visible) { o.visible = false; if (U.model) { U.holder.remove(U.model); U.model = null; } } continue; }
     o.visible = far < (d.type === "gun" ? 320 : 140);
+    if (U.holder && !U.glowQ && (U.glowT = (U.glowT || 0) - dt) <= 0) {   // 1.97: the round started before the pack gun had loaded: once it has, the glow takes its shape
+      U.glowT = 1; const tpl = gunTemplate(d.kind, d.tier);
+      if (tpl.userData.qk) { U.holder.remove(U.glow); U.glow.material.dispose(); U.glow = gunGlow(d.kind, tpl, d.tier); U.holder.add(U.glow); U.glowQ = true; if (U.model) { U.holder.remove(U.model); U.model = null; } }
+    }
     if (U.holder) {
       U.spin.visible = far < 160;
       if (far < 55 && !U.model) { U.model = gunTemplate(d.kind, d.tier).clone(true); U.model.visible = true; U.holder.add(U.model); }
