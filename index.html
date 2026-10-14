@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.07</title>
+<title>JUST TREES 2.08</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.07";              // Just Trees 2.07
+const VERSION = "2.08";              // Just Trees 2.08
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -334,6 +334,7 @@ const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no dro
 const VR_NADE_G = 9.81;                                    // VR grenades still fall in an arc
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
 const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 1 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per pickup (2.05: one floating grenade each)
+const RECOIL = { up: [0, .25, .4, .55, .75, 1, 2.5], ads: .85, max: 25, back: 9 };   // 2.08 (Ron): auto guns climb per shot (degrees) by level: 1 = 5 stars … 5 = 1 star, 6 = held in one hand; looking down the gun 15% less; most climb; settle-back speed
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
@@ -6350,7 +6351,8 @@ function vrTick(dt) {
     vr.gqL.slerp(hQ, 1 - Math.exp(-dt * rq)); vr.gpL.lerp(hL, 1 - Math.exp(-dt * rp));
     vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
-    G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12));
+    if (!(main.trig > .6) || performance.now() - (vr.lastShot || 0) > 160) vr.climb = (vr.climb || 0) * Math.exp(-dt * RECOIL.back);   // stop firing: it settles back to your hand
+    G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12 + (vr.climb || 0)));
     vr.gunHandQ.copy(G.quaternion);                                          // the hand keeps the controller's own angle
     if (huntV && vr.gunKind !== "hunt") G.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), IRON_DIP));   // rifles and pistol without a scope: nose a touch down
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
@@ -6361,6 +6363,7 @@ function vrTick(dt) {
     const fore = G.localToWorld(_v2.set(...S.fore));
     vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && (S.snap ? off.pos.distanceTo(fore) < S.snap : nearGunLine(off.pos, G.localToWorld(_v1.set(...S.grip)), fore) < .17)));   // squeeze anywhere along the gun, even right next to the trigger hand        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
     const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
+    vr.ads = vr.two && gf.dot(hf) > .85 && eye.distanceTo(I.head) < .32;   // 2.08: up at your eye, looking down the gun
     vr.scoped = !!S.fov && vr.two && (huntV ? gf.dot(hf) > .55 && eye.distanceTo(I.head) < (vr.scoped ? .36 : .3)          // Hunting: two hands on the sniper anywhere near your face = scope
                                             : gf.dot(hf) > .8 && eye.distanceTo(I.head) < (vr.scoped ? .2 : .14));          // eye to the eyepiece: the whole view goes into the scope
     vr.zoom = Math.max(0, Math.min(scopeFovs().length - 1, vr.zoom));
@@ -6376,7 +6379,7 @@ function vrTick(dt) {
       if (edge("trig", main.trig) && !GUN.auto) fire();
       if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
     }
-  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (vr.cross) vr.cross.visible = false; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
+  } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.ads = false; vr.climb = 0; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (vr.cross) vr.cross.visible = false; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
   if (huntV && vr.nadeMode && main && state === "play" && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
     nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
   } else nadeHide();
@@ -6536,7 +6539,11 @@ function vrFire() {
     const A = arms[vr.gunKind]; if (vr.cool > 0 || A.phase || A.mag <= 0) return;
     const cl = W.cool / TIER.rate[Math.max(1, tierOf(vr.gunKind))];             // better stars fire faster
     late = W.auto ? Math.max(0, Math.min(cl * .99, -vr.cool)) : 0;              // how long ago this shot was due
-    vr.cool = cl - late; A.mag--; vr.kick = 0;                                   // no recoil for now
+    vr.cool = cl - late; A.mag--; vr.kick = 0;
+    if (W.auto) {                                                                 // 2.08: recoil: the muzzle climbs (no scatter, same fire rate)
+      const lvl = vr.two ? 6 - Math.max(1, Math.min(5, tierOf(vr.gunKind))) : 6;
+      vr.climb = Math.min(RECOIL.max * Math.PI / 180, (vr.climb || 0) + RECOIL.up[lvl] * (vr.ads ? RECOIL.ads : 1) * Math.PI / 180); vr.lastShot = performance.now();
+    }
     if (gameMode === "hunt") scatterBeasts(P);
     if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoley(SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
     else if (vr.gunKind === "hunt") A.phase = 2;                                    // sniper: work the bolt by hand after every shot
@@ -6544,7 +6551,7 @@ function vrFire() {
     if (GUN.cool > 0) return;
     GUN.cool = GUN.auto ? .1 : .28; vr.kick = 0; alertBots();
   }
-  // a real bullet: it flies at the gun's speed and drops, so far shots take time (lead a runner) and fall (aim a touch high). No spread, no recoil.
+  // a real bullet: it flies at the gun's speed and drops, so far shots take time (lead a runner) and fall (aim a touch high). No spread (2.08: auto guns climb, see RECOIL).
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
   const online = gameMode === "pvp" && MP.on && !!W;
