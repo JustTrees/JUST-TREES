@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.14</title>
+<title>JUST TREES 2.15</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.14";              // Just Trees 2.14
+const VERSION = "2.15";              // Just Trees 2.15
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6639,16 +6639,16 @@ function limbHit(p, tolW) {                                 // inside one of the
 function climbableAt(p) {                                  // is this point inside something you can hold? (matches what you see)
   const g = H(p.x, p.z);
   if (p.y < g + .04) return { kind: "ground", y: g };
-  const rk = rockAround(p.x, p.z, .15, p.y, 0); if (rk > g + .05 && p.y < rk + .05 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders, cliffs and fallen logs
-  if (H(p.x + .12, p.z) > p.y || H(p.x - .12, p.z) > p.y || H(p.x, p.z + .12) > p.y || H(p.x, p.z - .12) > p.y) return { kind: "ground", y: g };   // a steep face of the mountain
-  if (limbHit(p, .04)) return { kind: "limb" };
+  const rk = rockAround(p.x, p.z, .035, p.y, 0); if (rk > g + .05 && p.y < rk + .015 && p.y > g - .5) return { kind: "rock", y: rk };   // boulders, cliffs and fallen logs (2.15: right at the surface)
+  if (H(p.x + .04, p.z) > p.y || H(p.x - .04, p.z) > p.y || H(p.x, p.z + .04) > p.y || H(p.x, p.z - .04) > p.y) return { kind: "ground", y: g };   // a steep face of the mountain
+  if (limbHit(p, .01)) return { kind: "limb" };
   const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
     const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
     for (const o of list) {
       const d = Math.hypot(p.x - o.x, p.z - o.z);
-      if (o.t && o.t.hold) { if (d > o.r + .6) continue; const k = treeHit(p, o.t, .05, false); if (k) return { kind: k, o }; }
-      else if (o.tr !== undefined) { if (d < o.tr + .06 && p.y > H(o.x, o.z) - .3 && p.y < H(o.x, o.z) + o.h) return { kind: "trunk", o }; }
+      if (o.t && o.t.hold) { if (d > o.r + .6) continue; const k = treeHit(p, o.t, .012, false); if (k) return { kind: k, o }; }
+      else if (o.tr !== undefined) { if (d < o.tr + .015 && p.y > H(o.x, o.z) - .3 && p.y < H(o.x, o.z) + o.h) return { kind: "trunk", o }; }
       else if (o.soft && d < o.r && p.y < H(o.x, o.z) + 1.3) return { kind: "bush", o };
     }
   }
@@ -6675,11 +6675,14 @@ function climbTick(dt, I) {                               // returns true while 
   const C = vr.cl;
   for (const side of ["L", "R"]) {
     const h = sides[side]; if (!h) { C.was[side + "in"] = false; continue; }
-    const busy = gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab));
+    const offS = mainS === "R" ? "L" : "R", bowOn = ARMED() && vr.bowMode, nadeOn = ARMED() && vr.nadeMode && vr.nades > 0;
+    const busy = (gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab)))       // the gun hand, and the front hand while it's on the gun or reloading
+      || (bowOn && (side === offS || (side === mainS && vr.bowSt && vr.bowSt.arrow)))   // 2.15: the bow hand, and the hand holding an arrow
+      || (nadeOn && side === mainS);                                                    // 2.15: the hand holding a grenade
     if (busy && C.hold === side) C.hold = null;
     const hit = gunHands || busy || vr.binos ? null : climbableAt(h.pos), grip = h.grip > .5;
-    const wasInside = C.was[side + "in"], wasGrip = C.was[side + "g"];
-    C.was[side + "in"] = !!hit; C.was[side + "g"] = grip;
+    const wasInside = C.was[side + "in"], wasGrip = C.was[side + "g"] || C.was[side + "busy"];   // (2.15: a hand that just let go of the gun needs a fresh squeeze to catch)
+    C.was[side + "in"] = !!hit; C.was[side + "g"] = grip; C.was[side + "busy"] = busy && grip;
     if (hit && grip && C.hold !== side && (!wasGrip || !wasInside)) {      // squeeze inside it, or arrive already squeezing: you catch
       C.hold = side; C.anchor.copy(h.pos); C.air = null; P.vy = 0; buzz(side, .5, 40);
     }
