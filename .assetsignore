@@ -6,3 +6,4 @@ node_modules
 wrangler.jsonc
 .assetsignore
 HANDOFF.md
+models/source
