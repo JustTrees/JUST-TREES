@@ -30,7 +30,7 @@ async def main():
         out = {}
         out["a"] = await pg.evaluate("""() => { D.vruiOpen('intro'); frames(5); const r = { stage: D.VRUI.stage, state: D.state };
           D.intro.t0 -= 9000; frames(2); r.after9s = D.VRUI.stage; click(); r.afterClick = D.VRUI.stage;
-          r.aimHike = aimAt('mode', 'Hiking'); frames(2); r.hover = D.VRUI.panels.mode.hov.map(w => w.label).join(','); click(); r.afterHike = D.VRUI.stage; r.gameModeIsHike = D.set && document.body.classList.contains('mode-hike'); r.mode = D.set ? 'ok' : '';
+          r.aimHike = aimAt('mode', 'Solo hiking'); frames(2); r.hover = D.VRUI.panels.mode.hov.map(w => w.label).join(','); click(); r.afterHike = D.VRUI.stage; r.gameModeIsHike = D.set && document.body.classList.contains('mode-hike'); r.mode = D.set ? 'ok' : '';
           aimAt('setup', 'XXL'); click(); r.size = D.set.size; aimAt('setup', 'L'); click(); r.size2 = D.set.size;
           return r; }""")
         # screenshot of setup panel

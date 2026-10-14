@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.12</title>
+<title>JUST TREES 2.13</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.12";              // Just Trees 2.12
+const VERSION = "2.13";              // Just Trees 2.13
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -422,7 +422,7 @@ function biomeOf(lat) { return MAPENV && MAPENV.lat === lat ? MAPENV.b : climate
 const ENV_NAME = { redwood: "redwood forest", birchmaple: "birch and maple forest", swamp: "swamp", badlands: "badlands", rainforest: "rainforest", tropical: "palm jungle", desert: "desert", temperate: "forest", boreal: "spruce forest", tundra: "tundra", polar: "polar ice" };
 function envNote(lat) {                                     // the settings line under latitude
   const o = envOptions(lat); if (o.length === 1) return BIOME_TEXT[o[0][0]];
-  const t = o.map(([k]) => ENV_NAME[k]).join(" or "); return t[0].toUpperCase() + t.slice(1) + ": each map picks";
+  const t = o.map(([k]) => ENV_NAME[k]).join(" or "); return t[0].toUpperCase() + t.slice(1);   // (2.13, Ron: no "each map picks")
 }
 const BIOME_TEXT = {
   tropical: "Tropical: palms and jungle",
@@ -7007,8 +7007,8 @@ function vruiParts() {
   uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
-  [["hike", "Hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
-   ["hunt", "Hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
+  [["hike", "Solo hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
+   ["hunt", "Solo hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
    ["online", "Online · with friends", "Up to 8 of you in one lobby: hike, hunt or PvP together. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
     uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { if (m === "online") { vruiOpen("mp"); return; } setMode(m); renderSetup(); vruiOpen("setup"); }, { sub, fs: 54 }));
   uiBtn(M, 90, 870, 1220, 90, "Set my height (standing or sitting)", () => vrHeightCheck("mode"), { fs: 36, personal: true });
@@ -7021,7 +7021,7 @@ function vruiParts() {
     else if (MP.code && MP.host) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Your game code", 700, 150); g.font = "bold 120px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MP.code.split("").join(" "), 700, 280); y = 345; }
     else if (MP.code) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Game " + MP.code, 700, 150); y = 210; }
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim;
-    uiWrap(g, MP.joining ? "" : MP.status || "One of you hosts and gets a code, the others join with it. Everyone meets in the lobby, the host picks Hiking, Hunting or PvP.", 700, y, 1200, 42);
+    uiWrap(g, MP.joining ? "" : MP.status || "One of you hosts and gets a code, the others join with it. Everyone meets in the lobby, the host picks the map settings.", 700, y, 1200, 42);
     if (MP.mic === false && MP.code) { g.font = "28px sans-serif"; g.fillStyle = "rgba(255,255,255,.55)"; g.fillText("Voice chat is off (no microphone allowed)", 700, y + 95); }
   };
   uiBtn(MPP, 90, 420, 590, 150, "Host a game", () => { VRUI.tagNext = "host"; vruiOpen("tag"); }, { sub: "You get a code to share", fs: 50, hide: () => MP.joining || !!MP.code });

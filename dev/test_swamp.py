@@ -33,7 +33,7 @@ async def main():
         print(json.dumps(out))
         R, M = out["roll"], out["map"]
         ok = "swamp" not in R["10"] and "swamp" in R["27"] and 20 < R["27"]["swamp"] < 70 and "swamp" in R["33"] and "swamp" not in R["40"] \
-             and R["note27"] == "Desert or swamp or forest: each map picks" and M["env"] == "swamp" and not M["missing"] and not M["foreign"] \
+             and R["note27"] == "Desert or swamp or forest" and M["env"] == "swamp" and not M["missing"] and not M["foreign"] \
              and .3 < M["wet"] < .65 and M["deepShare"] < .25 and M["treesInWater"] > 50 and M["murky"] and M["moving"] > 5
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)

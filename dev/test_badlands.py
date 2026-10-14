@@ -33,7 +33,7 @@ async def main():
         print(json.dumps(out))
         R, M = out["roll"], out["map"]
         ok = "badlands" not in R["25"] and set(R["32"]) == {"desert", "badlands", "swamp", "temperate"} and 15 < R["32"]["badlands"] < 70 and "badlands" in R["40"] and "badlands" not in R["50"] \
-             and R["note40"] == "Forest or redwood forest or badlands or desert: each map picks" and M["env"] == "badlands" and not M["missing"] and not M["foreign"] and M["flat"] > .3 and M["cliff"] > .05 and M["topFlatDirs"] >= 6 and M["moving"] > 5
+             and R["note40"] == "Forest or redwood forest or badlands or desert" and M["env"] == "badlands" and not M["missing"] and not M["foreign"] and M["flat"] > .3 and M["cliff"] > .05 and M["topFlatDirs"] >= 6 and M["moving"] > 5
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
