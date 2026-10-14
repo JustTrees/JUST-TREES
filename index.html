@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.92</title>
+<title>JUST TREES 1.93</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.92";              // Just Trees 1.92
+const VERSION = "1.93";              // Just Trees 1.93
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4851,7 +4851,7 @@ function dinoTick(dt) {
   if (!DINO.warm && SND.ctx) {                                // get the slow one-time sound set-up out of the way now, not in the middle of a fight
     DINO.warm = true; sndVerb(); sndPool(); for (const k of [3.5, 4, 5, 6, 7, 8, 9, 11]) driveCurve(k); }
   if ((DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
-  dinoSteps(dt); dinoVoices();
+  dinoSteps(dt); dinoVoices(); rexAnnounce();
   for (const A of beasts) {                                   // a dinosaur that hasn't got anywhere for a while pushes straight on through
     if (!A.hpMax || A.hunter || A.dead || A.gone) continue;
     if ((A.pgT = (A.pgT || 0) + dt) < 2.5) continue; const moved = A.pgP ? Math.hypot(A.x - A.pgP[0], A.z - A.pgP[1]) : 99; A.pgT = 0; A.pgP = [A.x, A.z];
@@ -5034,13 +5034,13 @@ function sndPool() {                                         // a few 3D voices 
     DINO.pool.push({ pn, lp, wet, inp, A: null, until: 0, y: 0, cheap }); }
   return DINO.pool;
 }
-function dinoOut(A, k, cheap) {
-  const c = SND.ctx, d = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), big = DINO_SIZE[A.kind] || .5; if (d > 900) return null;
+function dinoOut(A, k, cheap, far) {
+  const c = SND.ctx, d = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), big = DINO_SIZE[A.kind] || .5; if (d > 900 && !far) return null;
   const pool = sndPool(); if (!pool) return null; sndListener(); k = k || 1; const now = c.currentTime;
   let v = null; for (const s of pool) if (s.cheap === !!cheap && (!v || s.until < v.until)) v = s;   // a free voice, or the one that's been going longest
-  const ref = 8 + 30 * big, y = A.y + 1 + 3 * big; v.pn.refDistance = ref; v.A = A; v.y = 1 + 3 * big; v.until = now + (cheap ? 1 : 4);
+  const ref = far ? Math.max(8 + 30 * big, d * .3) : 8 + 30 * big, y = A.y + 1 + 3 * big; v.pn.refDistance = ref; v.A = A; v.y = 1 + 3 * big; v.until = now + (cheap ? 1 : 4);
   if (v.pn.positionX) { v.pn.positionX.value = A.x; v.pn.positionY.value = y; v.pn.positionZ.value = A.z; } else v.pn.setPosition(A.x, y, A.z);
-  v.lp.frequency.value = Math.max(650, 16000 / (1 + d / 35));                                // further: duller
+  v.lp.frequency.value = Math.max(far ? 1600 : 650, 16000 / (1 + d / 35));                  // further: duller
   if (v.wet) v.wet.gain.value = .5 * Math.min(1, .1 + d / 250) * ref / (ref + d * .25);      // further: more of it is echo
   const g = c.createGain(); g.gain.value = k; g.connect(v.inp);
   DINO.voices = pool.filter(s => s.until > now);
@@ -5103,12 +5103,27 @@ function dinoCall(A, type) {
     else { huff(380, .25, .25); dRoar(out, t + .15, { f0: 112 * j * pu, f1: 74 * j, dur: 1.2 * dl, vol: .34, drive: 9, form: [340, 820], rat: 24, ratD: .8, rasp: [1200, .55], jit: .2, brk: .22, crk: [1900, 30, .5] }); dSub(out, 70, 45, t + .15, 1.1 * dl, .18); }
   } else if (k === "stego") {                               // a rumbling, gravelly grumble
     dRoar(out, t, { f0: 96 * j * pu, f1: 80 * j, dur: 1 * dl, vol: .3, drive: 11, form: [280, 650], rat: 22, ratD: .9, rasp: [1000, .6], jit: .22, brk: .25, crk: [1700, 26, .55] });
-  } else if (k === "trex") {                                // the roar: huge, deep, tearing; a scream when it comes for you
-    if (type === "charge" || type === "bite") { huff(500, .3, .3); dRoar(out, t + .2, { f0: 190 * j, f1: 95 * j, dur: 1.5, vol: .42, drive: 10, form: [520, 1300], rat: 26, ratD: .8, rasp: [1800, .65], jit: .22, brk: .2, crk: [2200, 34, .55], att: .05 }); dSub(out, 70, 38, t + .2, 1.4, .3); }
-    else { huff(300, .5, .32); dRoar(out, t + .35, { f0: 100 * j * pu, f1: 58 * j, dur: 2.4 * dl, vol: .45, drive: 9, form: [260, 720], rat: 18, ratD: .8, rasp: [1000, .6], jit: .18, brk: .18, crk: [1500, 26, .6], att: .15 }); dSub(out, 52, 30, t + .35, 2.4 * dl, .4); }
+  } else if (k === "trex") {                                // 1.93: its own scream (Ron: "its own crazy scream"): a deep tearing roar, a shrieking scream on top that climbs and cracks, a brassy trumpet, a body you feel
+    rexScream(out, t, type === "charge" || type === "bite" ? .6 : type === "hurt" ? .45 : 1, j * (pain ? 1.15 : 1));
   } else if (k === "bronto") {                              // a deep, rough bellow you feel in your chest
     huff(260, .5, .28); dRoar(out, t + .3, { f0: 58 * j * pu, f1: 41 * j, dur: 2.4 * dl, vol: .4, drive: 8, form: [190, 430], rat: 17, ratD: .75, rasp: [700, .55], jit: .16, brk: .18, crk: [1400, 22, .45], att: .2 }); dSub(out, 46, 30, t + .3, 2.6 * dl, .32);
   }
+}
+function rexScream(out0, t, L, j) {                          // L: length (1 = the full scream)
+  const out = SND.ctx.createGain(); out.gain.value = .55; out.connect(out0);                    // (all the layers together: kept under clipping)
+  dNoise(out, "bandpass", 420, .6, t, .45, .34);                                                // the big breath in
+  const t1 = t + .35;
+  dRoar(out, t1, { f0: 125 * j, f1: 55 * j, dur: 3 * L, vol: .42, drive: 10, form: [300, 820], rat: 18, ratD: .85, rasp: [1100, .7], jit: .2, brk: .2, crk: [1500, 24, .6], att: .12, bend: .7 });   // the deep roar under it all
+  dRoar(out, t1 + .15 * L, { f0: 560 * j, f1: 1050 * j, dur: 1 * L, vol: .3, drive: 12, form: [1500, 2900], rat: 42, ratD: .7, rasp: [3000, .8], jit: .3, brk: .32, crk: [3200, 52, .6], att: .08, bend: .6 });   // the scream climbs ...
+  dRoar(out, t1 + 1.1 * L, { f0: 1050 * j, f1: 430 * j, dur: 1.7 * L, vol: .28, drive: 12, form: [1400, 2700], rat: 38, ratD: .75, rasp: [2800, .8], jit: .3, brk: .35, crk: [3000, 48, .6], att: .03, bend: 1.4 });   // ... and cracks and falls away
+  dRoar(out, t1 + .45 * L, { f0: 390 * j, f1: 290 * j, dur: 1.9 * L, vol: .2, drive: 6, form: [950, 2100], rat: 7, ratD: .45, rasp: [1800, .3], jit: .06, brk: .05, att: .1 });   // a brassy trumpet inside it
+  dSub(out, 58, 26, t1, 3.1 * L, .45);
+}
+function rexAnnounce() {                                     // 1.93: the moment you hold the red sniper, the T. rex screams from wherever it is on the map
+  if (!SND.ctx || !SND.on || DINO.rexHeard || !legendSeen()) return;
+  const A = beasts.find(a => a.kind === "trex" && !a.dead && !a.gone); if (!A) return;
+  DINO.rexHeard = true; const O = dinoOut(A, 1.6, false, true); if (!O) return;
+  rexScream(O.node, SND.ctx.currentTime + .4 + O.delay, 1.15, .95);
 }
 function dinoAmbient() {                                     // somebody out there calls now and then (the hunter keeps quiet unless stalking)
   const near = beasts.filter(A => A.hpMax && !A.dead && !A.gone && !A.hunter && A.kind !== "trex" && Math.hypot(A.x - P.x, A.z - P.z) < 600);
@@ -5118,10 +5133,11 @@ function dinoSteps(dt) {                                     // the big ones sha
   if (!SND.ctx || !SND.on) return;
   for (const A of beasts) {
     if (A.dead || A.gone || !(A.kind === "bronto" || A.kind === "triceratops" || (A.kind === "trex" && legendSeen())) || A.speed < .2) continue;
-    const d = Math.hypot(A.x - P.x, A.z - P.z); if (d > (A.kind === "trex" ? 260 : 90)) continue;
+    const d = Math.hypot(A.x - P.x, A.z - P.z); if (d > (A.kind === "trex" ? 330 : 90)) continue;   // (1.93: the T. rex out to a third of a km)
     A.stepAcc = (A.stepAcc || 0) + A.speed * dt; if (A.stepAcc < A.stride * .5) continue; A.stepAcc = 0;
-    const O = dinoOut(A, A.kind === "trex" ? 2.2 : A.kind === "bronto" ? 1.4 : .7, true); if (!O) continue; const t = SND.ctx.currentTime + O.delay;
-    dSub(O.node, 44, 26, t, .35, .5); dNoise(O.node, "lowpass", 140, .8, t, .3, .28);
+    const rx = A.kind === "trex", O = dinoOut(A, rx ? 2.2 * Math.max(1, Math.min(2.2, d / 120)) : A.kind === "bronto" ? 1.4 : .7, true); if (!O) continue; const t = SND.ctx.currentTime + O.delay;
+    if (rx) O.node.gain.value *= A.size || 1;                 // (heavier ones land harder)
+    dSub(O.node, rx ? 38 : 44, rx ? 22 : 26, t, rx ? .5 : .35, .5); dNoise(O.node, "lowpass", 140, .8, t, rx ? .45 : .3, .28);
   }
 }
 function dinoCue() {                                         // you've been seen: a sudden low, deep swell (a warning, not a jump scare)
@@ -5445,7 +5461,7 @@ function spawnAnimals() {
   habInit(peak); appear.t = 12; stockInit();
   const nearSecs = BIG3() ? STOCK.land.filter(q => { const b = secBox(q); return inBubble((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, BUBBLE - 100); }) : null;   // XXXL: only the sections round you
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
-  DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
+  DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
   const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
