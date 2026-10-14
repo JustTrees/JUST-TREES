@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.15</title>
+<title>JUST TREES 2.16</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.15";              // Just Trees 2.15
+const VERSION = "2.16";              // Just Trees 2.16
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4375,6 +4375,87 @@ function dinoSkin(big) {
   }
   g.putImageData(img, 0, 0); const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return DSKIN[key] = t;
 }
+/* 2.16: textured skins on the pack dinosaurs and the pack guns. Small patterns painted once into canvases, laid over each model by its own shape
+   (three-way projection in the model's own space, so the pattern rides along with walking legs and needs no UV map). No new triangles, no extra draws.
+   SKIN.dino / SKIN.gun switch them off; a dinosaur's pattern fades out between SKIN.fade[0] and [1] metres away (just its plain colours further off). */
+const SKIN = { dino: true, gun: true, fade: [45, 70], dinoAmt: .62, leatherAmt: .7, gunAmt: [.34, .55, .4] };
+function skinNoise(N, gx, gy, seed) {                       // smooth tiling noise, gx by gy blobs across one tile
+  const R = mulberry32(seed), v = new Float32Array(gx * gy); for (let i = 0; i < v.length; i++) v[i] = R();
+  const s = t => t * t * (3 - 2 * t);
+  return (x, y) => { const fx = x / N * gx, fy = y / N * gy, i = Math.floor(fx), j = Math.floor(fy), u = s(fx - i), w = s(fy - j), a = (i % gx + gx) % gx, b = (j % gy + gy) % gy, a1 = (a + 1) % gx, b1 = (b + 1) % gy;
+    return (v[b * gx + a] * (1 - u) + v[b * gx + a1] * u) * (1 - w) + (v[b1 * gx + a] * (1 - u) + v[b1 * gx + a1] * u) * w; };
+}
+function skinTex(cv, mean) { const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; t.userData.mean = mean; return t; }
+function texMean(img) { let m = 0; for (let i = 0; i < img.data.length; i += 4) m += img.data[i]; return m / (img.data.length / 4) / 255; }
+function leatherSkin() {                                     // fine wrinkled hide, for the pterosaur's wings and body
+  if (DSKIN.leather) return DSKIN.leather;
+  const N = 256, cv = document.createElement("canvas"); cv.width = cv.height = N; const g = cv.getContext("2d"), img = g.createImageData(N, N), d = img.data;
+  const a = skinNoise(N, 8, 8, 11), b = skinNoise(N, 20, 20, 12), c = skinNoise(N, 48, 48, 13), e = skinNoise(N, 6, 6, 14);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const r1 = 1 - Math.abs(2 * b(x, y) - 1), r2 = 1 - Math.abs(2 * c(x, y) - 1);            // creases where the noise crosses the middle
+    const v = .62 + .2 * Math.pow(r1, .5) + .1 * Math.pow(r2, .7) + .12 * (a(x, y) - .5) + .1 * (e(x, y) - .5), o = (y * N + x) * 4;
+    d[o] = d[o + 1] = d[o + 2] = Math.max(0, Math.min(255, v * 255)); d[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); return DSKIN.leather = skinTex(cv, texMean(img));
+}
+const DINO_SKIN = { trex: ["big", 7], raptor: ["small", 3.2], parasaur: ["big", 6], triceratops: ["big", 6], stego: ["big", 6.5], bronto: ["big", 8], ptero: ["leather", 3] };   // pattern, tiles along the longest side
+const DINO_RECOL = { trex: [[[77, 98, 54], [61, 83, 42]], [[138, 145, 80], [114, 126, 63]]] };   // Ron: the T. rex a little darker green
+const SKIN_FADE = { value: new THREE.Vector2() };
+function dinoSkinOn(mat, kind, bb) {
+  const sp = DINO_SKIN[kind]; if (!sp) return mat;
+  const tex = sp[0] === "leather" ? leatherSkin() : dinoSkin(sp[0] === "big"), dim = bb.getSize(new THREE.Vector3()), L = Math.max(dim.x, dim.y, dim.z);
+  if (tex.userData.mean === undefined) { const im = tex.image.getContext("2d").getImageData(0, 0, tex.image.width, tex.image.height); tex.userData.mean = texMean(im); }
+  SKIN_FADE.value.set(SKIN.fade[0], SKIN.fade[1]);
+  const U = { uSkT: { value: tex }, uSkS: { value: sp[1] / L }, uSkAmt: { value: (sp[0] === "leather" ? SKIN.leatherAmt : SKIN.dinoAmt) / tex.userData.mean }, uSkMean: { value: tex.userData.mean }, uSkFade: SKIN_FADE };
+  mat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = "uniform float uSkS; varying vec3 vSkP; varying vec3 vSkN;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSkP = position * uSkS; vSkN = normal;");
+    sh.fragmentShader = "uniform sampler2D uSkT; uniform float uSkAmt; uniform float uSkMean; uniform vec2 uSkFade; varying vec3 vSkP; varying vec3 vSkN;\n" + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+      { float near = 1.0 - smoothstep(uSkFade.x, uSkFade.y, length(vViewPosition));
+        if (near > 0.0) { vec3 bw = pow(abs(normalize(vSkN)), vec3(4.0)); bw /= bw.x + bw.y + bw.z;
+          float sk = texture2D(uSkT, vSkP.yz).r * bw.x + texture2D(uSkT, vSkP.xz).r * bw.y + texture2D(uSkT, vSkP.xy).r * bw.z;
+          diffuseColor.rgb *= 1.0 + (sk - uSkMean) * uSkAmt * near; } }`);
+  };
+  return mat;
+}
+/* the guns: brushed metal (grain along the barrel), wood grain, and a fine grip stipple on the black / grey / green plastic. One small texture holds
+   all three (red, green, blue); each corner of the model is marked with which one it is, from the colour the pack painted it. */
+const GUN_PART = { "72,76,82": 0, "118,122,128": 0, "176,180,186": 0, "176,124,80": 1, "112,74,46": 1, "50,52,56": 2, "40,40,43": 2, "148,150,144": 2, "112,132,86": 2 };
+let _gunSkT = null;
+function gunSkinTex() {
+  if (_gunSkT) return _gunSkT;
+  const N = 256, cv = document.createElement("canvas"); cv.width = cv.height = N; const g = cv.getContext("2d"), img = g.createImageData(N, N), d = img.data;
+  const m1 = skinNoise(N, 3, 160, 21), m2 = skinNoise(N, 8, 56, 22), m3 = skinNoise(N, 2, 4, 23);                 // brushed: long thin streaks
+  const w1 = skinNoise(N, 2, 3, 24), w2 = skinNoise(N, 6, 90, 25), w3 = skinNoise(N, 4, 6, 26);                    // wood: wavy rings and fibres
+  const p1 = skinNoise(N, 128, 128, 27), p2 = skinNoise(N, 64, 64, 28), R = mulberry32(29);                       // stipple: tiny bumps
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const o = (y * N + x) * 4, cl = v => Math.max(0, Math.min(255, v * 255));
+    d[o] = cl(.5 + .55 * (m1(x, y) - .5) + .35 * (m2(x, y) - .5) + .2 * (m3(x, y) - .5));
+    const f = y / N * 7 + 1.6 * w1(x, y) + .5 * w3(x, y), ring = Math.pow(.5 + .5 * Math.sin(f * 6.2832), 2.2);
+    d[o + 1] = cl(.38 + .45 * ring + .35 * (w2(x, y) - .5));
+    d[o + 2] = cl(.5 + .55 * (p1(x, y) - .5) + .3 * (p2(x, y) - .5) + .18 * (R() - .5)); d[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); return _gunSkT = skinTex(cv, .5);
+}
+const GUN_SKU = { uGunSk: { value: null }, uGunAmt: { value: new THREE.Vector3() } };
+function gunSkinOn(mat) {
+  if (!SKIN.gun) return mat;
+  GUN_SKU.uGunSk.value = gunSkinTex(); GUN_SKU.uGunAmt.value.fromArray(SKIN.gunAmt);
+  mat.onBeforeCompile = sh => { addHF(sh); Object.assign(sh.uniforms, GUN_SKU);
+    sh.vertexShader = "attribute vec3 skinK; varying vec3 vSkK; varying vec3 vSkP; varying vec3 vSkN;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n vSkK = skinK; vSkP = position; vSkN = normal;");
+    sh.fragmentShader = "uniform sampler2D uGunSk; uniform vec3 uGunAmt; varying vec3 vSkK; varying vec3 vSkP; varying vec3 vSkN;\n" + sh.fragmentShader.replace("#include <color_fragment>", `#include <color_fragment>
+      float gSt = 0.5, gMt = 0.5;
+      { vec4 ln = texture2D(uGunSk, vec2(vSkP.z * 2.2, (vSkP.y + vSkP.x * .8) * 11.0));     // along the barrel: metal streaks (r) and wood grain (g)
+        vec3 bw = abs(normalize(vSkN)); bw /= bw.x + bw.y + bw.z;
+        gSt = texture2D(uGunSk, vSkP.zy * 16.0).b * bw.x + texture2D(uGunSk, vSkP.xz * 16.0).b * bw.y + texture2D(uGunSk, vSkP.xy * 16.0).b * bw.z;
+        gMt = ln.r;
+        diffuseColor.rgb *= 1.0 + vSkK.x * (ln.r - 0.5) * uGunAmt.x + vSkK.y * (ln.g - 0.5) * uGunAmt.y + vSkK.z * (gSt - 0.5) * uGunAmt.z; }`)
+      .replace("#include <specularmap_fragment>", "#include <specularmap_fragment>\n specularStrength *= 1.0 + vSkK.x * (gMt - 0.5) * 1.6 - vSkK.z * 0.35 - vSkK.y * 0.2;");   // brushed metal glints in streaks; plastic and wood a bit duller
+  };
+  mat.customProgramCacheKey = () => "gunskin";
+  mat.clone = function () { return gunSkinOn(THREE.Material.prototype.clone.call(this)); };   // (a copy loses the hook otherwise: the hand-held guns copy theirs)
+  return mat;
+}
 const DMAT = {};
 const dinoMat = big => DMAT[big ? 1 : 0] || (DMAT[big ? 1 : 0] = grade(new THREE.MeshLambertMaterial({ vertexColors: true, map: dinoSkin(big), color: new THREE.Color(1.45, 1.45, 1.45) })));   // (the skin darkens a little; this evens it out)
 const beastMat = () => grade(new THREE.MeshLambertMaterial({ vertexColors: true }));
@@ -6070,12 +6151,13 @@ function qdinoLoad(kind) {
   if (!kind || QDINO.models[kind] || QDINO.loading[kind] || typeof fetch === "undefined" || location.protocol === "file:") return;
   if (!QD_DINO[kind] && !QA_KINDS[kind] && !QR_KINDS[kind] && kind !== "gator" && kind !== "lion_m") return;
   QDINO.loading[kind] = true;
-  fetch((QD_DINO[kind] ? "models/dinos/" : "models/animals/") + kind + ".bin").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QDINO.models[kind] = qdinoParse(buf); }).catch(() => { QDINO.failed++; });
+  fetch((QD_DINO[kind] ? "models/dinos/" : "models/animals/") + kind + ".bin").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QDINO.models[kind] = qdinoParse(buf, kind); }).catch(() => { QDINO.failed++; });
 }
-function qdinoParse(buf) {
+function qdinoParse(buf, kind) {
   const dv = new DataView(buf), jl = dv.getUint32(4, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl))), B = 8 + jl, M = js.mesh, n = M.n, [mn, mx] = M.bb;
   const pq = new Int16Array(buf, B + M.pos, n * 3), P = new Float32Array(n * 3), n4 = new Int8Array(buf, B + M.nrm, n * 4), N = new Int8Array(n * 3), c4 = new Uint8Array(buf, B + M.col, n * 4), C = new Uint8Array(n * 3);
   for (let i = 0; i < n * 3; i++) { const a = i % 3, v = (i - a) / 3; P[i] = mn[a] + (pq[i] + 32768) / 65535 * (mx[a] - mn[a]); N[i] = n4[v * 4 + a]; C[i] = c4[v * 4 + a]; }
+  if (DINO_RECOL[kind]) for (let i = 0; i < n * 3; i += 3) for (const [f, t] of DINO_RECOL[kind]) if (C[i] === f[0] && C[i + 1] === f[1] && C[i + 2] === f[2]) { C[i] = t[0]; C[i + 1] = t[1]; C[i + 2] = t[2]; break; }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(P, 3)); geo.setAttribute("normal", new THREE.BufferAttribute(N, 3, true)); geo.setAttribute("color", new THREE.BufferAttribute(C, 3, true));
   geo.setAttribute("skinIndex", new THREE.BufferAttribute(new Uint8Array(buf, B + M.si, n * 4), 4)); geo.setAttribute("skinWeight", new THREE.BufferAttribute(new Uint8Array(buf, B + M.sw, n * 4), 4, true));
@@ -6086,7 +6168,7 @@ function qdinoParse(buf) {
     if (e.pr === "q") { const q = new Int16Array(buf, B + e.v, e.nk * 4), v = new Float32Array(e.nk * 4); for (let i = 0; i < v.length; i++) v[i] = q[i] / 32767; return new THREE.QuaternionKeyframeTrack(nm + ".quaternion", times, v); }
     return new THREE.VectorKeyframeTrack(nm + (e.pr === "p" ? ".position" : ".scale"), times, new Float32Array(buf, B + e.v, e.nk * 3));
   }));
-  return { js, geo, clips, inv: M.inv.map(a => new THREE.Matrix4().fromArray(a)), bind: new THREE.Matrix4().fromArray(M.bind), mat: grade(new THREE.MeshLambertMaterial({ vertexColors: true })) };
+  return { js, geo, clips, inv: M.inv.map(a => new THREE.Matrix4().fromArray(a)), bind: new THREE.Matrix4().fromArray(M.bind), mat: grade(SKIN.dino && QD_DINO[kind] ? dinoSkinOn(new THREE.MeshLambertMaterial({ vertexColors: true }), kind, geo.boundingBox) : new THREE.MeshLambertMaterial({ vertexColors: true })) };
 }
 const qaLin = c => Math.min(255, Math.round(255 * Math.min(1, (c <= .04045 ? c / 12.92 : Math.pow((c + .055) / 1.055, 2.4)) * 2.3)));
 function qdGeo(M, v, cols) {                                 // the shape with another coat: v = one of the file's colour swaps; cols = [main, patch, head, beak] for the birds
@@ -6195,7 +6277,7 @@ function qgunLoad(key) {
 function qgunParse(buf) {
   const dv = new DataView(buf), jl = dv.getUint32(12, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl))), bo = 20 + jl + 8;
   const ex = js.scenes[0].extras, group = new THREE.Group();
-  const mat = new THREE.MeshPhongMaterial({ vertexColors: true, fog: false, shininess: 34, specular: 0x333333 });
+  const mat = gunSkinOn(new THREE.MeshPhongMaterial({ vertexColors: true, fog: false, shininess: 34, specular: 0x333333 }));
   for (const nd of js.nodes) {
     const prim = js.meshes[nd.mesh].primitives[0], pa = js.accessors[prim.attributes.POSITION], ca = js.accessors[prim.attributes.COLOR_0];
     const pv = js.bufferViews[pa.bufferView], cv = js.bufferViews[ca.bufferView], n = pa.count, sc = nd.scale[0], P = new Float32Array(n * 3), C = new Float32Array(n * 3);
@@ -6204,6 +6286,8 @@ function qgunParse(buf) {
       const oc = bo + cv.byteOffset + i * cv.byteStride; C[i * 3] = dv.getUint8(oc) / 255; C[i * 3 + 1] = dv.getUint8(oc + 1) / 255; C[i * 3 + 2] = dv.getUint8(oc + 2) / 255;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(P, 3)); geo.setAttribute("color", new THREE.BufferAttribute(C, 3)); geo.computeVertexNormals();
+    const K = new Uint8Array(n * 3); for (let i = 0; i < n; i++) { const pt = GUN_PART[Math.round(C[i * 3] * 255) + "," + Math.round(C[i * 3 + 1] * 255) + "," + Math.round(C[i * 3 + 2] * 255)]; if (pt !== undefined) K[i * 3 + pt] = 255; }
+    geo.setAttribute("skinK", new THREE.BufferAttribute(K, 3, true));   // 2.16: metal / wood / plastic, for the skin
     const m = new THREE.Mesh(geo, mat); m.name = nd.name; m.position.fromArray(nd.translation || [0, 0, 0]);
     if (nd.name === "mag") m.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), ex.magTilt || 0);   // its own slot direction
     group.add(m);
