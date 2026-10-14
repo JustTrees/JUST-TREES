@@ -43,16 +43,17 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.18)
+## 4. The game now (v2.19)
 
 ### Modes
-- **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
+- **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
 
 ### World
 - **Settings:** latitude (climate), roughness, time of day, month (season), tree density, map size (XS 250 m, S 400, M 560, L 800, XL 1.2 km, XXL 1.6 km, XXXL 3 km — XXXL not on phones), edges (Island / Endless), landscape (Natural / Dramatic), weather.
 - **Environments by latitude:** `climateOf(lat)` bands (tropical <23°, temperate <50, boreal <62, tundra <72, polar); `envOptions(lat)` lists what occurs there with weights; `rollEnv()` picks one per map from the seed (`MAPENV`); `biomeOf(lat)` returns it. Environments: rainforest, palm jungle, tropical, desert, badlands (red rock country), swamp, temperate forest, birch-maple, redwood (redwoods, sequoias, eucalyptus), boreal, tundra, polar, plus the equator **archipelago** (Island + 0°, `ARCHI`, ~40% roll). `TROPIC(b)`, `DRY(b)`, `TB(b)` (temperate/boreal tables for look-alike biomes). **A new environment must be added to every per-biome table** (`GRASS`, `WATERC`, `SKYTOP`, water fraction, snow/tree lines, `dens`, rock tone/moss, logs, bushes, clouds, haze, weather, flocks, `NATIVE`) and to `envOptions` — or use `TB`.
 - **Terrain:** heightfield with erosion; `H(x,z)` is the surface. Dramatic maps get one landmark (`makeFeature`: canyons, rifts, cliffs, mesas, buttes, craters, volcanoes…; on XXXL `BIG` landforms ~half the map and mountain ranges). Volcano craters can hold lava (`LAVA`, `inLava`; stepping in = respawn).
 - **Trees:** trunk + branch cards in Pop: One style; fluffy forked crowns for some broadleafs (`FLUFFY`, patchy by `fluffPatch`), old pines, aspens, birches, maples, redwoods, sequoias, eucalyptus, cactus, Joshua trees, junipers, palms, cypress. Three distances with fades (`FADE_D`: detail → simple 3D → flat cards facing you; `NEAR` batches, `CARD` sheet baked per map). **The giant tree** (one per map, `PORCH`): a porch ~⅔ up with the only red 5★ sniper.
+- **Endless (2.19, VR hiking):** land built in 200 m squares (`EN_C`) round you, a little each frame (`endlessTick`, ~3 ms budget in a headset, less if the frame rate drops; 11 ms on menus), squares past ~1.4 km let go (`enUnload`). Everything in a square comes from the seed + its position (`enHash` of its wrapped index), so a spot is always the same, for everyone online too; **the world repeats every 25 km** (`EN_P`; `makePNoise` = noise that repeats; tree/colour patterns read at `enWrap(x)`). Pieces: `enWorld` (the island's `buildHeight` made periodic + swamp/desert/badlands touches; **no droplet erosion yet**), `enHeightsGen` (4 m grid + 8-cell border, summit weathering, borders shared with neighbours so seams are exact), `ENDLESS.make` (inside `generate`, so it uses the same `treeAt`, `pickVar`, `groundCol`, rock/log/bush rules as the island maps, scaled per square by `AREA`), near batches that grow (`enSlot`/`enNearTick`, 100 m cells), cards per square, tree shadows in a 3.2 km wrap-round picture stamped per square once all 8 neighbours exist (`enShadowGen`), solid rocks only within ~430 m (`enSolidGen`, per-square 1 m grids; `rockTopAt` branch), water plane + shallows texture following you (`uShoreC`), a coarse far-ground sheet under everything so nothing is missing at the haze (`enFarJob`/`enFarSink`), the hand map as a 1.6 km window (`MAPV`, explored 25 m squares in `ENDLESS.seen`). Start: the squares within ~430 m are built in `generate` (2.5–4 s on a PC); the rest grows during the little-map screen; dropping in builds the squares round your spot behind the fade (`enEnsureHere`). Online: a friend's pose is shifted by whole loops (`EN_P`). No giant tree / porch, animals, or biome changes yet. Test: `dev/test_endless.py` (seams, walk keeps up, revisit + loop give the same land, drop-in).
 - **Rocks/logs/bushes** on a 1 m grid (`rockGrid`, `rockTopAt`, overhangs `rockLow`). Look: ACES tone mapping, `grade()` colour shader, valley fog, sky/sun/moon/stars, lightning with delayed thunder; ambient sound synthesized.
 
 ### Animals (Hunting)
@@ -112,6 +113,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 - Call `updateMatrixWorld` before raycasts if things moved this frame.
 - Quaternius farm rig: the feet are IK targets under the root, not children of the legs (`animal_lib` snaps them to the leg ends).
 - A material's `onBeforeCompile` text isn't part of three's program cache key: anything that differs between materials sharing a hook must be a uniform, not baked into the shader text (`customProgramCacheKey` when the code differs).
+- Island maps must stay identical when generation code is shared: compare a content fingerprint (trees, rocks, heights) old vs new with seeded `Math.random`, not pixels (rendering varies run to run).
 - In the shell, `pkill -f` / `pgrep -f` can match the running shell and kill it; avoid them. Use the Bash timeout (up to 10 min) or nohup for long runs.
 
 ---
@@ -130,6 +132,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 7. Next up and backlog
 
+- **Endless next (Ron's plan):** animals in hiking (the hunting system, no guns), then biome changes as you travel (blend every per-biome table over a few hundred metres; latitude drifting as you walk north/south), landmarks every few km (canyons, volcanoes, mesas, a giant tree), real droplet erosion per square (overlapping windows blended), then group-hiking polish. Check frame rate on the Quest while gliding (`endlessTick` budget).
 - **Animal sounds (Ron, later, from his computer):** he'll upload a few packs; sort them by name + length/pitch/loudness/spectrogram, send a preview per animal, check licences. Sources found: NPS Yellowstone and Rocky Mountain sound libraries (public domain: elk bugle/bark/mew, wolves, grizzly, mountain lion, coyotes, red fox, bison, bald eagle, wild turkey, grouse, crane, loon, ~60 songbirds), Mixkit animals (free licence: lion, elephant, monkey, parrot), Sonniss GDC bundle (7.5 GB, royalty free). Plan: animals call on their own (elk bugles, night wolf howls, gobbles, coyote yips) and when shot.
 - **Offered:** restyle the PvP health/shield crosses as small floating pickups (first-aid kit, shield) to match the grenades and guns; the pack's wooden arrow instead of the carbon one.
 - **Model packs waiting:** nature kit (trees/rocks), village kit, farm buildings, fish pack (water animals), monster pack, medieval melee weapons.
@@ -144,6 +147,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.19** Endless hiking (VR solo and group): hiking in a headset is Island (3 km) or Endless — land built around you as you walk, repeating every 25 km.
 - **2.18** a new gator (and crocodile): built from scratch on the pig's bones in `build_animals.py` — one smooth flat body-to-tail skin blended along the spine bones (no cracks), sprawling upper legs, back plates and a tail crest, a big broad head and snout with raised eyes, nostrils and teeth, a pale jaw.
 - **2.17** textured skins on the hunting animals: fur, wrinkled hide (elephant, rhino), scales (gator, crocodile), feathers (birds).
 - **2.16** textured skins: scales on the dinosaurs (T. rex a little darker green, leathery pterosaur), brushed metal / wood grain / grip stipple on the guns. No new triangles; dino pattern fades out past ~60 m.
