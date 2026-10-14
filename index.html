@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.05</title>
+<title>JUST TREES 2.06</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.05";              // Just Trees 2.05
+const VERSION = "2.06";              // Just Trees 2.06
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -313,11 +313,13 @@ document.title = "JUST TREES " + VERSION;           // the browser tab always sh
      VR ................... "vrTick", "vrAfterMove", "your hands", "under water (VR)"
      guns ................. "the rifle you hold", "vrFire", "a real bullet", "castShot", "the gun wheel", "reloading by hand"
      grenades (VR) ........ "grenades (VR Hunting"
-     PvP loot (VR) ........ "PvP loot (VR)", "the little bar low in your view", "end of a round"
-     ammo and boxes ....... "ammo cans lying about"
-     online play .......... "Multiplayer (VR PvP"
+     the bow (VR Hunting) . "five bows", "function bowTick", "arrowsTick"
+     loot (VR) ............ "PvP loot (VR)", "function spawnLoot", "the little bar low in your view", "end of a round"
+     online play .......... "Multiplayer (VR PvP", "mpLobbyPanels"
      VR menus ............. "vruiParts", "vruiOpen", "the little map turning"
-     animals .............. "spawnAnimals", "updateAnimals"
+     animals .............. "spawnAnimals", "updateAnimals", "addGround", the models: "the hunting animals too" (qdAttach, qrAttach)
+     dinosaurs ............ "Prehistoric (1.75", "dinoTick", "huntTick" (the raptor), "rexTick", "Pterosaurs on the dinosaur maps", "the dinosaurs are Quaternius"
+     old hand-built models  "kept as hidden rigs" (animals, dinosaurs, guns: still used, see there)
      the main loop ........ "function loop("
    ================================================================================================ */
 /* ---------------- Tuning: the numbers that decide how the game plays, all in one place ---------------- */
@@ -337,7 +339,7 @@ const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"]; 
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
 const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
-const LOOT = { ammo: [30, 4], nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // ammo/grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
+const LOOT = { nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
@@ -3624,7 +3626,7 @@ function generate() {
   if (gameMode === "pvp" && !VR_ON) spawnSquad(); else clearSquad();          // VR PvP: real players, no bots
   perchTrees = allTrees.filter(t => t.kind !== "bare").map(t => ({ x: t.x, z: t.z, top: t.y + kinds[t.kind].vars[t.vi].h * t.s * t.sy * .78 })).filter(t => t.top - H(t.x, t.z) > 7);
   if (gameMode === "hunt") spawnAnimals(); else clearAnimals();
-  if (ARMED() && VR_ON) { resetArms(); spawnAmmo(); } else clearAmmo();
+  if (ARMED() && VR_ON) { resetArms(); spawnLoot(); } else clearLoot();
   startZone(); startCapture();
   soundEnv = { day: smooth(-2, 15, sunPos(lat, set.month, hourNow).el), cold: winterSnow, season, biome };
   footEnv = { snow: winterSnow, sandy, leaves: litter > .5, snowLine };
@@ -4251,6 +4253,9 @@ function clearAnimals() {
   if (animalGroup) { scene.remove(animalGroup); animalGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); if (o.skeleton) o.skeleton.dispose(); }); }
   animalGroup = null; beasts.length = 0; if (typeof MP !== "undefined") { MP.byNid.clear(); MP.nb.clear(); }
 }
+/* ---- the old hand-built animals: kept as hidden rigs (2.03). Every animal is still built here first: the pack-style models (models/animals) take their
+   size from it and hide it, the from-scratch ones (birds, ground birds, seal, monkey, Bigfoot, Yeti) are skinned onto its moving parts, its hit boxes
+   still count for those, and a copy of the game opened from disk (a backup file) can't load the models, so it shows these instead. Don't delete. ---- */
 const amat = c => grade(new THREE.MeshLambertMaterial({ color: c }));
 function aPart(par, geo, mat, x, y, z, rx, ry, rz) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx || 0, ry || 0, rz || 0); par.add(m); return m; }
 function aLeg(par, x, y, z, len, r0, r1, mat, hoof) {        // a pivot at the hip so the leg can swing
@@ -4801,6 +4806,7 @@ function buildBiped(r, q) {
   bagUV = 0;
   return finish({ root, body, head, jaw, legs, w: W, rad: q.rad || W * 1.2, step: q.step || 1, hit, walk: q.walk, run: q.run, stride: q.stride, swing: q.swing, graze: q.graze, range: q.range });
 }
+// (the hand-built dinosaurs below are kept as hidden rigs too: the Quaternius models sit on them, and backup files show them)
 const DINO_BIPED = {
   trex: r => buildBiped(r, { mat: dinoMat(true), uvT: .9, segs: 40, per: 5, legSegs: 20, brows: true, pal: [0x4e4532, 0x665a40, 0xb0a07c, 0x3e3628], hip: 4, L: 5, W: 1.1, D: 1.5, tail: [6.5, 1.1], neck: [1.4, .45, .66], hl: 2.1, hw: .62, hh: .78, ht: .04, teeth: true, jaw: true, arm: .9, lw: .95, eyeC: 0xd8a020,
     coat: (c, u, cy, cx) => { if (cy > -.2 && Math.sin(u * 40 + cx * 1.2) > .55) c.multiplyScalar(.6); }, face: (c, u, cy) => { if (cy > .3) c.multiplyScalar(.85); },
@@ -6119,7 +6125,7 @@ function qdinoMake(M, v) {                                   // one dinosaur: it
   Q.act = k => Q.acts[k] || (Q.acts[k] = Q.mixer.clipAction(M.clips[k]));
   return Q;
 }
-const _qdM = new THREE.Matrix4(), _qdM2 = new THREE.Matrix4(), _qdQ = new THREE.Quaternion(), _qdV = new THREE.Vector3(), _qdS = new THREE.Vector3();
+const _qdQ = new THREE.Quaternion(), _qdV = new THREE.Vector3();
 function qdAttach(A) {
   const fk = A.qf || A.kind, M = QDINO.models[fk]; if (!M) { qdinoLoad(fk); return false; }
   const Q = qdinoMake(M, A.qv), wrap = new THREE.Group(), r0 = A.root, sv = [r0.position.clone(), r0.quaternion.clone()];
@@ -6329,7 +6335,7 @@ function vrTick(dt) {
   if (main && huntV && edge("bmark", main.b)) markFromHand(main);                 // Hunting: tap B marks; A is tap for the gun, hold for the wheel (in wheelTick)
   if (huntV && main) wheelTick(dt, main, I); else if (vr.wheelM && vr.wheelM.visible) { vr.wheelM.visible = false; if (vr.wh) vr.wh.open = false; }
   vr.cool = (vr.cool || 0) - dt; if (!main || main.trig <= .6) vr.cool = Math.max(0, vr.cool);   // held trigger: keep the leftover time so shots stay on an even beat
-  if (huntV) { lootTick(I); nadeLootTick(I); dropsTick(I, dt); vr.lootT = Math.max(0, vr.lootT - dt); }
+  if (huntV) { nadeLootTick(I); dropsTick(I, dt); vr.lootT = Math.max(0, vr.lootT - dt); }
   const gunOn = canGun && vr.gunOut && !!main && !(gameMode === "pvp" && huntV && !(vr.own[vr.weapon] > 0));   // PvP with no gun at all (after drowning): empty hands
   const G = gunOn ? vrGun() : null; if (vr.gun) vr.gun.visible = !!G;
   if (G) {
@@ -8100,6 +8106,7 @@ const gun = new THREE.Group(); gunScene.add(gun);
   mk(cyl(.021, .027, .05, 10), dark, 0, .068, .13);           // scope eyepiece
   mk(B(.014, .03, .02), metal, 0, .045, -.08); mk(B(.014, .03, .02), metal, 0, .045, .05);   // mounts
 })();
+// (the hand-built guns are kept as hidden rigs too: the pack guns (models/guns) replace them once loaded; other players, the PC/phone game and backup files use them)
 const pvpRifle = new THREE.Group(); while (gun.children.length) pvpRifle.add(gun.children[0]); gun.add(pvpRifle);
 const sniper = new THREE.Group(), sniperBolt = new THREE.Group(); gun.add(sniper);
 (function buildSniper() {
@@ -8151,8 +8158,7 @@ function boltSounds() {                        // lift, pull back, push forward,
     sb.connect(bp).connect(g).connect(SND.master); sb.start(t + dt, Math.random()); sb.stop(t + dt + d + .02);
   });
 }
-/* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading, ammo cans ---------------- */
-const WHEEL_GUNS = ["hunt", "ar", "smg", "pistol"];
+/* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading (ammo is unlimited since 1.85) ---------------- */
 const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"] : ["hunt", "ar", "smg", "pistol", "gren"];   // clockwise from the top; Hunting has a bow (1.85)
 const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};
@@ -8400,7 +8406,7 @@ function reloadTick(dt, G, off) {
   glowParts(U.charge, A.phase === 2 ? pulse : 0);
   if (U.counter) drawCounter(U.counter, A);
 }
-/* ---- grenades (VR Hunting / PvP): a fifth slot on the wheel, up to 10, picked up from grenade boxes; aim shows the arc, trigger throws ---- */
+/* ---- grenades (VR Hunting / PvP): a fifth slot on the wheel, up to 10, picked up one at a time (2.05: floating red frag grenades); aim shows the arc, trigger throws ---- */
 const NADES = [], BOOMS = [];
 let nadeLoot = [], nadeLootMesh = null, nadeArc = null;
 let NADE_PARTS = null;
@@ -8829,7 +8835,7 @@ function drawCaptOnMap(ctx, W, Hh) {
   ctx.save(); ctx.beginPath(); ctx.arc(px, pz, r, 0, 6.283); ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fill(); ctx.lineWidth = Math.max(1.5, W / 100); ctx.strokeStyle = "#ffffff"; ctx.stroke(); ctx.restore();
 }
 /* ---- PvP loot (VR): you spawn with a 1-star pistol; find the other guns (1 to 5 stars), green crosses (health), blue crosses (shield),
-        ammo and grenades; a better gun upgrades the one you have; when you die it all spills on the ground where you fell ---- */
+        and grenades; a better gun upgrades the one you have (2.00: when you die you respawn; nothing is dropped) ---- */
 const GUN_NAME = { hunt: "Sniper", ar: "Assault rifle", smg: "SMG", pistol: "Pistol" };
 vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 };
 const lootMode = () => VR_ON && (gameMode === "pvp" || gameMode === "hunt");   // guns are found on the map, with stars
@@ -8850,7 +8856,7 @@ function crossMesh(col) {                                   // a glowing plus si
   g.add(new THREE.Mesh(_crossGeo[0], m), new THREE.Mesh(_crossGeo[1], m), new THREE.Mesh(_crossGeo[2], halo), new THREE.Mesh(_crossGeo[3], halo));
   return g;
 }
-let _boxGeo = null, _glowTex = null;
+let _glowTex = null;
 const _gunTpl = {};
 function bowTemplate(tier) {                                 // a bow lying on the map: the pack bow once it has loaded (until then the 1-star one)
   const key = "bow" + tier; if (_gunTpl[key]) return _gunTpl[key]; bowLoad(tier);
@@ -8886,11 +8892,6 @@ function dropObj(d) {
     const holder = new THREE.Group(); holder.rotation.y = Math.PI / 2; holder.scale.setScalar(d.kind === "bow" ? .85 : 1.5); spin.add(holder); g.userData.holder = holder;
     const tpl = gunTemplate(d.kind, d.tier), gl = gunGlow(d.kind, tpl, d.tier); holder.add(gl); g.userData.glow = gl; g.userData.glowQ = !!tpl.userData.qk;   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
-  else if (d.type === "nade") { const m = nadeModel(); m.scale.setScalar(2.6); spin.add(m); }
-  else {                                                    // spilled ammo or grenades: a little box with a coloured band
-    _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
-    spin.add(new THREE.Mesh(_boxGeo[0], new THREE.MeshLambertMaterial({ color: 0x3e4733 })), new THREE.Mesh(_boxGeo[1], new THREE.MeshBasicMaterial({ color: d.type === "nade" ? 0x9be05a : WEAP[d.kind].col })));
-  }
   g.position.set(d.x, d.y, d.z); scene.add(g); return g;
 }
 function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; if (d.y === undefined) d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
@@ -8934,8 +8935,8 @@ function dropsTick(I, dt) {
       else if (far > 75 && U.model) { U.holder.remove(U.model); U.model = null; }
     }
     if (!o.visible) continue;
-    const hover = d.type === "gun" ? (d.kind === "bow" ? .95 : .55) : d.type === "nade" ? .55 : d.type === "hp" || d.type === "sh" ? 1.1 : .12, ph = (d.x * 7 + d.z * 3) % 6.28;
-    U.spin.position.y = hover + (d.type === "ammo" ? 0 : Math.sin(t * 2 + ph) * .07); U.spin.rotation.y = t * 1.3 + ph;
+    const hover = d.type === "gun" ? (d.kind === "bow" ? .95 : .55) : 1.1, ph = (d.x * 7 + d.z * 3) % 6.28;
+    U.spin.position.y = hover + Math.sin(t * 2 + ph) * .07; U.spin.rotation.y = t * 1.3 + ph;
     if (state !== "play" || MP.dead > 0) continue;
     const dx = d.x - P.x, dz = d.z - P.z;
     const near = (dx * dx + dz * dz < 1.6 && Math.abs(d.y - P.y) < 2) || hs.some(h => h.pos.distanceTo(_v1.set(d.x, d.y + hover, d.z)) < .4);
@@ -8946,8 +8947,6 @@ function dropUse(d) {                                       // what grabbing it 
   let msg = "";
   if (d.type === "hp") { if (MP.hp >= 100) return false; MP.hp = Math.min(100, MP.hp + PICK.hp); msg = "+" + PICK.hp + " health"; }
   else if (d.type === "sh") { if (MP.sh >= 100) return false; MP.sh = Math.min(100, MP.sh + PICK.sh); msg = "+" + PICK.sh + " shield"; }
-  else if (d.type === "nade") { if (vr.nades >= NADE.MAX) return false; const n = Math.min(d.n, NADE.MAX - vr.nades); vr.nades += n; msg = "+" + n + (n === 1 ? " grenade" : " grenades"); }
-  else if (d.type === "ammo") { const A = arms[d.kind]; if (INF_AMMO || A.res >= AMMO_CAP) return false; const n = Math.min(d.n, AMMO_CAP - A.res); A.res += n; msg = "+" + n + " " + WEAP[d.kind].name + " ammo"; }
   else if (d.type === "gun" && d.kind === "bow") {            // 2.04: a better bow
     const had = vr.own.bow || 1; if (d.tier <= had) return false;
     vr.own.bow = d.tier; bowLoad(d.tier); msg = "Bow " + (had ? "upgraded " : "") + "\u2605".repeat(d.tier);
@@ -8972,17 +8971,6 @@ function pvpDrowned(burned) {                                     // PvP: drowni
   MP.kills = Math.max(0, MP.kills - 1); MP.sh = 0;
   if (zone && zone.vr) zoneSpawnInside();
   vr.lootMsg = burned ? "Burned: lost your gear and a kill" : "Drowned: lost your gear and a kill"; vr.lootT = 4; vr.wristT = 0;
-}
-function pvpSpill() {                                       // you died: everything you carried scatters round you
-  const items = [], put = o => { const a = Math.random() * 6.283, r = .8 + Math.random() * 2.2; o.x = P.x + Math.cos(a) * r; o.z = P.z + Math.sin(a) * r; o.id = mpMyId() + ":" + (++dropSeq); items.push(o); };
-  for (const k in WEAP) {
-    const t = vr.own[k] || 0, A = arms[k], n = A.res + A.mag;
-    if (t && !(k === "pistol" && t === 1)) put({ type: "gun", kind: k, tier: t });
-    if (n > 0 && !INF_AMMO) put({ type: "ammo", kind: k, n });
-  }
-  if (vr.nades > 0) put({ type: "nade", n: vr.nades });
-  for (const o of items) dropAdd(Object.assign({}, o));
-  if (items.length && MP.on) mpSend({ t: "drop", items });
 }
 // ---- the little bar low in your view: round clock, shield, health, kills
 const VHUD = { m: null, key: "", p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
@@ -9022,49 +9010,9 @@ function mpBoard() {                                         // everyone's score
   for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0 });
   rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
 }
-// ammo cans lying about the map, one kind for each gun
-let ammoCans = [], canMesh = null;
-function clearAmmo() {
-  if (canMesh) { scene.remove(canMesh.body, canMesh.band); canMesh.body.geometry.dispose(); canMesh.band.geometry.dispose(); canMesh.body.material.dispose(); canMesh.band.material.dispose(); }
-  canMesh = null; ammoCans = []; vrClearNades(); dropsClear();
-}
-function spawnAmmo() {
-  clearAmmo(); const R = mulberry32(seed * 91 + 5);           // seeded: both players get the same cans
-  const n = INF_AMMO ? 0 : Math.round(LOOT.ammo[0] + HALF / LOOT.ammo[1]), spots = [];
-  for (let i = 0; i < n; i++) {
-    let s = null;
-    for (let k = 0; k < 200 && !s; k++) {
-      let x, z;
-      if (i < 4) { const a = R() * 6.283, d = 10 + R() * 30; x = P.x + Math.cos(a) * d; z = P.z + Math.sin(a) * d; }   // a few close to where you start
-      else { x = (R() * 2 - 1) * (EDGE - 10); z = (R() * 2 - 1) * (EDGE - 10); }
-      if (okSpot(x, z)) s = [x, z];
-    }
-    if (s) spots.push(s);
-  }
-  const body = new THREE.InstancedMesh(new THREE.BoxGeometry(.32, .18, .15), grade(new THREE.MeshLambertMaterial({ color: 0x3e4733 })), spots.length);
-  const band = new THREE.InstancedMesh(new THREE.BoxGeometry(.326, .05, .156), new THREE.MeshBasicMaterial({ color: 0xffffff }), spots.length);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
-  spots.forEach(([x, z], i) => {
-    const kind = WHEEL_GUNS[i % 4], y = H(x, z) + .09;   // (the 5th slice, grenades, has its own boxes) q.setFromAxisAngle(_UPv, R() * 6.283);
-    m4.compose(new THREE.Vector3(x, y, z), q, one); body.setMatrixAt(i, m4); m4.compose(new THREE.Vector3(x, y + .03, z), q, one); band.setMatrixAt(i, m4);
-    band.setColorAt(i, col.set(WEAP[kind].col)); ammoCans.push({ x, y, z, kind, got: false });
-  });
-  body.frustumCulled = band.frustumCulled = false; scene.add(body, band); canMesh = { body, band };
-  spawnNadeLoot(); if (lootMode()) spawnPvpLoot();
-}
-function lootTick(I) {
-  if (!canMesh || !ammoCans.length) return;
-  const hs = [I.hands.left, I.hands.right].filter(Boolean);
-  for (let i = 0; i < ammoCans.length; i++) {
-    const c = ammoCans[i]; if (c.got) continue;
-    const dx = c.x - P.x, dz = c.z - P.z; if (dx * dx + dz * dz > 9) continue;
-    const near = (dx * dx + dz * dz < 1.44 && Math.abs(c.y - P.y) < 2) || hs.some(h => (h.pos.x - c.x) ** 2 + (h.pos.y - c.y) ** 2 + (h.pos.z - c.z) ** 2 < .12);
-    if (!near) continue;
-    const A = arms[c.kind]; if (A.res >= AMMO_CAP) continue;          // already full of this ammo: leave it
-    const got = Math.min(WEAP[c.kind].can, AMMO_CAP - A.res); A.res += got; c.got = true; if (MP.on) mpSend({ t: "can", i });
-    const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true;
-    gunFoley(SFX.loot); buzz("L", .3, 25); buzz("R", .3, 25); vr.lootMsg = "+" + got + " " + WEAP[c.kind].name + " ammo"; vr.lootT = 2.5; vr.wristT = 0;
-  }
+function clearLoot() { vrClearNades(); dropsClear(); }
+function spawnLoot() {                                       // the things lying about the map (seeded: everyone gets the same): grenades, and in VR PvP / Hunting the guns, bows and crosses
+  clearLoot(); spawnNadeLoot(); if (lootMode()) spawnPvpLoot();
 }
 /* ---------------- Multiplayer (VR PvP, up to 8 players): join by a 4-digit code; everyone builds the same map from its number and
         everyone connects straight to everyone else (peer to peer). Before a round the others see the host's settings and the same map preview,
@@ -9259,24 +9207,6 @@ function mpRoster() {
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
   const c = set.comms === undefined ? 1 : set.comms | 0;
   if (c === 0) return [1, true]; if (c === 1) return [1, false]; if (!mpMate(L)) return [0, true]; if (c === 2) return [1, true]; return [L.bumped ? 1 : 0, true];
-}
-function soldierTint(S, hex) {                               // a uniform in one colour (the light camo under it), or back to its own
-  const snow = camoTex("snow");
-  S.group.traverse(o => { const m = o.material; if (!m || !m.map) return; if (m.userData.map0 === undefined) { if (!CAMO_KEYS.some(k => texCache[k] === m.map)) return; m.userData.map0 = m.map; m.userData.c0 = m.color.getHex(); }
-    if (hex == null) { m.map = m.userData.map0; m.color.setHex(m.userData.c0); } else { m.map = snow; m.color.set(hex); } m.needsUpdate = true; });
-}
-function mpDress(R, L) {}                                  // (Ron: no armbands: talk to know who is who)
-function mpLobbyTick(L, k, room) {                           // their avatar in the lobby room, standing round you, moving as they move
-  if (!room || !L.lrx || !L.lrx.length) { if (L.LR) L.LR.S.group.visible = L.LR.S.shadow.visible = false; return; }
-  const s0 = mpSample(L, L.lrx); if (!s0) return;
-  if (!L.LR) L.LR = mpRemoteMake();
-  const R = L.LR, S = R.S; mpDress(R, L);
-  const a = [100, -100, 128, -128, 154, -154, 180][k % 7] * Math.PI / 180;
-  VRUI.root.updateMatrixWorld(true);
-  const M = VRUI.root.matrixWorld.clone().multiply(new THREE.Matrix4().makeRotationY(Math.PI - a).setPosition(Math.sin(a) * 1.9, 0, -Math.cos(a) * 1.9)), mq = new THREE.Quaternion().setFromRotationMatrix(M);
-  const tf = o => o ? { p: o.p.clone().applyMatrix4(M), q: mq.clone().multiply(o.q) } : null, feet = new THREE.Vector3().applyMatrix4(M).y;
-  const s = { h: tf(s0.h), l: tf(s0.l), r: tf(s0.r), feet, gl: false }; R.head.copy(s.h.p); R.feet = feet;
-  S.group.visible = S.shadow.visible = true; mpPoseSoldier(S, s, 1 / 60);
 }
 function mpBumpTick() {                                      // a fist bump: your closed fist against a teammate's
   const I = vr.I, mine = [I.hands.left, I.hands.right].filter(hd => hd && hd.grip > .5); if (!mine.length) return;
@@ -9562,13 +9492,11 @@ function mpRecv(o, L) {
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
-  if (o.t === "drop") { for (const it of o.items || []) dropAdd(Object.assign({}, it)); return; }
   if (o.t === "take") { dropTake(o.id, true); return; }
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
   if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
   if (o.t === "die") { if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
-  if (o.t === "can") { mpTakeCan(o.i, true); return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
@@ -9605,7 +9533,7 @@ function mpRemoteTick(L, dt) {
   const s = mpSample(L); if (!s) return;
   if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); L.R = null; }   // they changed uniform
   if (!L.R) L.R = mpRemoteMake(L);
-  const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive; mpDress(R, L);
+  const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
   for (const k in R.guns) R.guns[k].visible = false;
   if (!s.alive) {                                           // shot down: they fall back, then vanish within 3 seconds
     R.deadT = (R.deadT || 0) + dt; const e0 = Math.min(1, R.deadT * 1.8), e = e0 * e0 * (3 - 2 * e0);
@@ -9675,10 +9603,6 @@ function mpHurtMesh() {
   if (MP.hurtM) return MP.hurtM;
   MP.hurtM = new THREE.Mesh(new THREE.SphereGeometry(.27, 20, 12), new THREE.MeshBasicMaterial({ color: 0x9a0d0d, side: THREE.BackSide, transparent: true, opacity: 0, depthTest: false, depthWrite: false, fog: false }));
   MP.hurtM.renderOrder = 999; MP.hurtM.frustumCulled = false; scene.add(MP.hurtM); return MP.hurtM;
-}
-function mpTakeCan(i) {                            // an ammo can someone picked up disappears for everyone
-  const c = ammoCans[i]; if (!c || c.got) return; c.got = true;
-  if (canMesh) { const z0 = new THREE.Matrix4().makeScale(0, 0, 0); canMesh.body.setMatrixAt(i, z0); canMesh.band.setMatrixAt(i, z0); canMesh.body.instanceMatrix.needsUpdate = canMesh.band.instanceMatrix.needsUpdate = true; }
 }
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {                                       // (also runs offline in VR PvP, for dying and respawning)

@@ -1,5 +1,5 @@
 """Online PvP (1.33): two game windows connect through a local PeerJS server, build the same map, see each other move,
-shoot and hit, die and respawn, share ammo cans, and set up voice.
+shoot and hit, die and respawn, share the map's loot, and set up voice.
 Needs a local PeerJS server on 127.0.0.1:9000/jt (see dev/peer_server.js).
 Usage: python3 dev/make_debug.py index.html /tmp/dbg.html && python3 dev/test_mp.py /tmp/dbg.html"""
 import os, sys, asyncio, json
@@ -45,8 +45,8 @@ async def main():
             await B.wait_for_timeout(250)
             if await B.evaluate("() => D.state === 'play' && D.seed === 4242"): break
         await B.evaluate("() => { placeAt(D.P.x, D.P.z); frames(3); return 1; }")
-        print("guest built map", flush=True); hA = await A.evaluate("() => [D.water, D.H(10, 20), D.H(-60, 35), D.ammoCans.length, D.ammoCans[3] && D.ammoCans[3].x]")
-        hB = await B.evaluate("() => [D.water, D.H(10, 20), D.H(-60, 35), D.ammoCans.length, D.ammoCans[3] && D.ammoCans[3].x]")
+        print("guest built map", flush=True); hA = await A.evaluate("() => [D.water, D.H(10, 20), D.H(-60, 35), D.nadeLoot.length, D.nadeLoot[3] && D.nadeLoot[3].x]")
+        hB = await B.evaluate("() => [D.water, D.H(10, 20), D.H(-60, 35), D.nadeLoot.length, D.nadeLoot[3] && D.nadeLoot[3].x]")
         out["sameMap"] = hA == hB; out["mapA"] = [round(v, 2) if isinstance(v, float) else v for v in hA]
         print("sameMap", out.get("sameMap"), flush=True)
         out["guestSpawnDistM"] = await B.evaluate("() => 0") or round(await A.evaluate("() => Math.hypot(D.P.x, D.P.z)"), 1)
@@ -91,9 +91,6 @@ async def main():
         await asyncio.gather(run_frames(A, 120, 30), run_frames(B, 120, 30))
         out["guestBackAfter5s"] = await B.evaluate("() => [D.MP.dead <= 0, D.MP.hp]")
         print("guestBackAfter5s", out.get("guestBackAfter5s"), flush=True)
-        # 1.85: unlimited ammo, so no ammo cans on either side
-        out["noCans"] = [await B.evaluate("() => D.ammoCans.length === 0"), await A.evaluate("() => D.ammoCans.length === 0")]
-        print("noCans", out.get("noCans"), flush=True)
         out["voice"] = [await A.evaluate("() => !!D.MP.mic && !!D.MP.call"), await B.evaluate("() => !!D.MP.mic && !!D.MP.call")]
         print("voice", out.get("voice"), flush=True)
         # the guest leaves: the host is told

@@ -1,6 +1,6 @@
 """The recurve bow (1.85, VR Hunting) and unlimited ammo. Bow on the gun wheel (Hunting only), quiver over the gun-hand shoulder:
 trigger behind your shoulder takes an arrow, it nocks at the string, draw back, let go to shoot; the arrow arcs down; a good shot drops
-a deer, a weak one only sends it running; the shot itself doesn't scatter the herd; tap A goes back to the gun. Unlimited ammo: no ammo cans.
+a deer, a weak one only sends it running; the shot itself doesn't scatter the herd; tap A goes back to the gun. Unlimited ammo.
 Usage: python3 dev/test_bow.py /tmp/dbg.html [/tmp/bow.jpg]"""
 import os, sys, asyncio, json, base64
 from playwright.async_api import async_playwright
@@ -15,7 +15,7 @@ async def main():
         r = await pg.evaluate("""() => { window.FREEZE = true; const out = {};
           D.setVR(true); D.setMode('pvp'); out.pvpWheel = D.wheelKeys().join(',');
           D.setMode('hunt'); D.set.size = 'small'; D.set.weather = 'clear'; D.set.lat = 45; D.set.dino = false; D.generate(); D.state = 'play';
-          out.huntWheel = D.wheelKeys().join(','); out.cans = D.ammoCans.length; out.inf = D.INF_AMMO;
+          out.huntWheel = D.wheelKeys().join(','); out.inf = D.INF_AMMO;
           const T = D.THREE, V = D.vr; V.on = true; V.yaw = 0; V.cl = null; V.goodX = undefined; V.ox = D.P.x; V.oz = D.P.z; V.oy = D.P.y;
           const L = { head: new T.Vector3(0, 1.7, 0), R: new T.Vector3(.2, 1.35, -.35), Lh: new T.Vector3(-.05, 1.55, -.5) };
           const pad = { R: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 }, L: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 } };
@@ -67,7 +67,7 @@ async def main():
         if SHOT:
             img = await pg.evaluate("""() => { const T = D.THREE, V = D.vr; D.pickGun('bow'); return 1; }""")
         print(json.dumps(r)); print("errors:", errs or "none")
-        ok = (r["huntWheel"] == "hunt,ar,smg,pistol,bow,gren" and r["pvpWheel"] == "hunt,ar,smg,pistol,gren" and r["cans"] == 0 and r["inf"]
+        ok = (r["huntWheel"] == "hunt,ar,smg,pistol,bow,gren" and r["pvpWheel"] == "hunt,ar,smg,pistol,gren" and r["inf"]
               and r["bowShown"] and r["gunHidden"] and not r["arrowFromFront"] and r["arrowFromQuiver"] and r["nocked"] and r["drawF"] > .8
               and r["arrowsFlying"] == 1 and r["handEmpty"] and r["deerDown"] and r["score"] > 0 and r["flightFrames"] < 60
               and r["weakF"] < .25 and not r["weakDeer"]["dead"] and r["weakDeer"]["fleeing"] and r["droppedNoShot"] and r["backToGun"] and not errs)

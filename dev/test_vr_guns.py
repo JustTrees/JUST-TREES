@@ -1,4 +1,4 @@
-"""VR Hunting guns (1.22): magazines, reload by hand, gun wheel, auto fire, ammo cans, shooting while hanging.
+"""VR Hunting guns (1.22): magazines, reload by hand, gun wheel, auto fire, unlimited ammo, shooting while hanging.
 Usage: python3 dev/make_debug.py index.html /tmp/dbg.html && python3 dev/test_vr_guns.py /tmp/dbg.html"""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
@@ -23,7 +23,7 @@ async def main():
           const frames = n => { for (let i = 0; i < n; i++) { D.vrTick(1 / 60); if (!V.climbing) D.update(1 / 60); D.vrAfterMove(1 / 60); D.updateGun(1 / 60); } };
           const A = () => D.arms[V.gunKind];
           frames(30);
-          out.cans = D.ammoCans.length; out.start = { gun: V.gunKind, mag: A().mag, res: A().res };
+          out.start = { gun: V.gunKind, mag: A().mag, res: A().res };
           // 1. empty the sniper: five shots, bolt time between
           let shots = 0; const nT = () => D.tracers.length;
           const cock = () => { const G0 = V.gun, S0 = D.GUNSPOT[V.gunKind], hw = G0.localToWorld(new T.Vector3(...S0.handle)); L.Lh.copy(toL(hw.add(new T.Vector3(-.15, 0, .1)))); frames(2); pad.L.grip = 1; frames(2);
@@ -111,8 +111,8 @@ async def main():
           L.Lh.copy(toL(V.gun.localToWorld(new T.Vector3(...D.GUNSPOT.pistol.fore)))); frames(2); pad.L.grip = 1; frames(3); out.pistolTwoHand = V.two; pad.L.grip = 0; L.Lh.set(-.25, 1.2, -.3); frames(3);
           // the off hand far from the pistol does not snap on
           pad.L.grip = 1; frames(3); out.pistolFarSnap = V.two; pad.L.grip = 0; frames(3);
-          // 8. (1.85) unlimited ammo: no ammo cans on the map
-          out.can = { cans: D.ammoCans.length, inf: D.INF_AMMO };
+          // 8. (1.85) unlimited ammo: ammo never runs out
+          out.can = { inf: D.INF_AMMO };
           // 9. hang on a trunk with the off hand, gun out: shoot while hanging, no scope
           pick(.45, new T.Vector3(0, 1, 0)); // still pistol
           let tree = null, bd = 1e9; for (const list of D.obstacles.values()) for (const o of list) if (o.t && o.t.hold && o.h > 7 && !o.t.tx) { const d = Math.hypot(o.x - D.P.x, o.z - D.P.z); if (d < bd) { bd = d; tree = o; } }

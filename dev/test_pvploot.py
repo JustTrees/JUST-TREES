@@ -1,5 +1,5 @@
 """VR PvP loot (1.40): 1-star pistol start, locked guns on the wheel, gun drops unlock/upgrade (stars), green/blue crosses,
-shield soaks damage, dying spills your loot and freezes your view, HUD bar. Usage: python3 dev/test_pvploot.py /tmp/dbg.html [/tmp/wheel.png]"""
+shield soaks damage, dying (2.00: nothing is dropped) freezes your view, HUD bar. Usage: python3 dev/test_pvploot.py /tmp/dbg.html [/tmp/wheel.png]"""
 import os, sys, asyncio, json, base64
 from playwright.async_api import async_playwright
 TARGET = 'file://' + os.path.abspath(sys.argv[1]); SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/wheel.png'
@@ -22,7 +22,7 @@ async def main():
           const go = (x, z) => { D.P.x = x; D.P.z = z; D.P.y = D.groundAt(x, z); V.ox = x; V.oz = z; V.oy = D.P.y; V.placeAt = true; frames(4); };
           frames(20);
           out.start = { own: JSON.stringify(V.own), weapon: V.weapon, arMag: D.arms.ar.mag, pistolMag: D.arms.pistol.mag, nades: V.nades };
-          const drops = [...D.DROPS.values()]; out.guns = drops.filter(d => d.type === 'gun').length; out.crosses = drops.filter(d => d.type === 'hp' || d.type === 'sh').length; out.ammoCans = D.ammoCans.length;
+          const drops = [...D.DROPS.values()]; out.guns = drops.filter(d => d.type === 'gun').length; out.crosses = drops.filter(d => d.type === 'hp' || d.type === 'sh').length;
           out.tiers = drops.filter(d => d.type === 'gun').map(d => d.tier).join('');
           D.pickGun('ar'); out.lockedPickRefused = V.weapon === 'pistol';
           // walk onto a gun
@@ -38,7 +38,7 @@ async def main():
           go(sc.x, sc.z); out.shieldAfterBlue = D.MP.sh;
           D.mpTakeHit(50, false); out.afterHit50 = [D.MP.hp, D.MP.sh];
           out.hudShown = !!(D.VHUD.m && D.VHUD.m.visible);
-          // die with loot: it spills, you're back to a pistol, your view holds still
+          // die with loot: (2.00) nothing drops, you're back to a pistol, your view holds still
           V.own.ar = 3; V.nades = 4; D.arms.ar.res = 60; const n0 = D.DROPS.size, here = [D.P.x, D.P.z];
           D.mpTakeHit(999, false); out.dead = D.MP.dead; out.spilled = D.DROPS.size - n0; out.ownAfterDeath = JSON.stringify(V.own);
           out.spilledGunTier = [...D.DROPS.values()].filter(d => String(d.id).includes(':') && d.type === 'gun').map(d => d.kind + d.tier).join(',');
