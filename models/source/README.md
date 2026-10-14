@@ -20,3 +20,5 @@ Models actually used by the game get converted to small `.glb` files in `models/
 **Not kept here:** packs under the *Quaternius Asset License (QAL)* (e.g. Bestiary – Dungeon Monsters Kit) may be used in the game but must **not** be redistributed as assets, and this repo is public — keep those zips on Ron's computer and only commit models converted into the game.
 
 **Also not kept here:** *Dinosaurs* sound pack by Riria/Ririsaurus (itch.io, ateliermagicae) — terms: commercial/non-commercial use OK, "Do not redistribute". The original .rar stays with Ron; 10 of its sounds, loudness-evened, are used in the game (`sounds/trex/` growl3–5, bellow1–2, soft1–3, grunt, pant; 1.98). Ron may ask the creator to confirm a public-repo web game is fine.
+
+**Also not kept here:** *Beasts* sound pack by Riria/Ririsaurus — same terms ("Do not redistribute"). 27 of its sounds, loudness-evened (not pitched), are in `sounds/beast/` (1.99); the pitch for each dinosaur is set in the game (`DINO_SFX` "name@rate").

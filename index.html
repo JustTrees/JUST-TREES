@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.98</title>
+<title>JUST TREES 1.99</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.98";              // Just Trees 1.98
+const VERSION = "1.99";              // Just Trees 1.99
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5083,14 +5083,14 @@ function dSub(out, f0, f1, t0, dur, vol) {                   // a low body you f
 }
 function dinoCall(A, type) {
   if (!SND.ctx || !SND.on || !A) return;
-  if (dinoSample(A, type)) return;                           // a recording, when there is one for this animal and call
+  let sub = null;
+  if (A.kind === "raptor" && type === "stalk") { const opts = ["click", "call", "hiss", "bark", "sniff"].filter(s => s !== A.lastSnd); sub = opts[Math.floor(Math.random() * opts.length)]; A.lastSnd = sub; if (dinoSample(A, "s_" + sub)) return; }
+  else if (dinoSample(A, type)) return;                      // a recording, when there is one for this animal and call
   const loud = type === "hurt" || type === "die" || type === "charge" || type === "bite" || type === "rush", O = dinoOut(A, loud ? 1.3 : 1); if (!O) return;
   const out = O.node, t = SND.ctx.currentTime + .02 + O.delay, k = A.kind, j = 1 + (Math.random() - .5) * .16, pain = type === "hurt" || type === "die", dl = type === "die" ? 1.8 : 1, pu = pain ? 1.3 : 1;
   const huff = (f, d, v) => dNoise(out, "bandpass", f, .7, t, d, v);                          // a breath before the call
   if (k === "raptor") {
-    let ty = type;
-    if (type === "stalk") { const opts = ["click", "call", "hiss", "bark", "sniff"].filter(s => s !== A.lastSnd); ty = opts[Math.floor(Math.random() * opts.length)]; }
-    A.lastSnd = ty;
+    const ty = sub || type; A.lastSnd = ty;
     if (ty === "sniff") for (let i = 0; i < 2 + Math.floor(Math.random() * 3); i++) { const s0 = t + i * (.22 + Math.random() * .08); dNoise(out, "bandpass", 2300 * j, 2.2, s0, .13, .28); }   // sniff sniff
     else if (ty === "click") { for (let i = 0; i < 3 + Math.floor(Math.random() * 4); i++) dNoise(out, "bandpass", 1900 * j, 6, t + i * (.07 + Math.random() * .06), .04, .3); }   // tongue clicks
     else if (ty === "hiss") dNoise(out, "highpass", 2800 * j, .7, t, .9, .2);
@@ -5121,22 +5121,24 @@ const DSND = { buf: {}, loading: {} };
 const DINO_SFX = {
   trex: { announce: ["trex/announce"], start: ["trex/start"], scream: ["trex/start"], growl: ["trex/growl1", "trex/growl2", "trex/growl3", "trex/growl4", "trex/growl5"],
     call: ["trex/bellow1", "trex/bellow2"], near: ["trex/soft1", "trex/soft2", "trex/soft3", "trex/pant"], pant: ["trex/pant"], charge: ["trex/charge"], bite: ["trex/charge"], hurt: ["trex/hurt", "trex/grunt"] },   // 1.98: + Ririsaurus' pack
-  raptor: { rush: ["dino/monster_13", "dino/monster_08"], charge: ["dino/monster_13", "dino/monster_08"], bite: ["dino/monster_08"], hurt: ["dino/monster_08"], die: ["dino/monster_13"] },
-  triceratops: { call: ["dino/monster_09", "dino/weird_08"], hurt: ["dino/monster_09"], die: ["dino/monster_09"] },
-  parasaur: { call: ["dino/weird_06"], hurt: ["dino/weird_06"], die: ["dino/weird_06"] },
-  stego: { call: ["dino/monster_12"], hurt: ["dino/monster_12"], die: ["dino/monster_12"] },
-  bronto: { call: ["dino/roar_05"], hurt: ["dino/roar_05"], die: ["dino/roar_05"] }
+  // 1.99: + Ririsaurus' Beasts pack (sounds/beast/): "name@r" plays it at pitch r instead of the animal's own
+  raptor: { rush: ["dino/monster_13", "dino/monster_08"], charge: ["dino/monster_13", "dino/monster_08"], bite: ["dino/monster_08"], hurt: ["dino/monster_08"], die: ["dino/monster_13"],
+    s_sniff: ["beast/sniff@1.25", "beast/sniff2@1.25"], s_bark: ["beast/grunt2@1.3", "beast/grunt@1.35"], s_call: ["beast/growl2@1.2", "beast/growl5@1.3", "beast/growl1@1.3"] },   // (while stalking; clicks and hisses stay made-up)
+  triceratops: { call: ["dino/monster_09", "dino/weird_08", "beast/snort@.9", "beast/shortbellow@.9", "beast/shortbellow2@.9", "beast/grunt4@.9"], hurt: ["dino/monster_09", "beast/grunt3@.9"], die: ["dino/monster_09"] },
+  parasaur: { call: ["dino/weird_06", "beast/warble@1", "beast/hooting@.95", "beast/bellow9@1", "beast/bellow2@.9"], hurt: ["dino/weird_06"], die: ["beast/defeated@1"] },
+  stego: { call: ["dino/monster_12", "beast/croak@.8", "beast/croak3@.8", "beast/softgrowl@.85", "beast/bellow3@.85"], hurt: ["dino/monster_12", "beast/croak2@.85"], die: ["dino/monster_12"] },
+  bronto: { call: ["dino/roar_05", "beast/bellow1@.85", "beast/bellow6@.85", "beast/bellow7@.85", "beast/bellow5@.8"], hurt: ["dino/roar_05"], die: ["dino/roar_05", "beast/defeated2@.75"] }
 };
 const DINO_RATE = { trex: 1, raptor: 1, triceratops: .82, parasaur: .9, stego: .72, bronto: .58 };   // each animal's own pitch
-const DSND_ALL = () => { const s = new Set(["dino/stomp_01"]); for (const k in DINO_SFX) for (const t in DINO_SFX[k]) DINO_SFX[k][t].forEach(n => s.add(n)); return [...s]; };
+const DSND_ALL = () => { const s = new Set(["dino/stomp_01"]); for (const k in DINO_SFX) for (const t in DINO_SFX[k]) DINO_SFX[k][t].forEach(n => s.add(n.split("@")[0])); return [...s]; };
 function dsndLoad(names) {
   if (!SND.ctx || typeof fetch === "undefined" || location.protocol === "file:") return;
   for (const n of names) { if (DSND.buf[n] || DSND.loading[n]) continue; DSND.loading[n] = true;
     fetch("sounds/" + n + ".mp3").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(b => SND.ctx.decodeAudioData(b)).then(ab => { DSND.buf[n] = ab; }).catch(() => {}); }
 }
 function dinoSample(A, type, far, delay) {                    // play a recorded call from this animal; false if there's none (or it isn't loaded)
-  const T0 = DINO_SFX[A.kind], list = T0 && T0[type]; if (!list) return false; const n = list[Math.floor(Math.random() * list.length)], b = DSND.buf[n]; if (!b) return false;
-  const rate = (DINO_RATE[A.kind] || 1) / Math.pow(A.size || 1, A.kind === "trex" ? .3 : .5) * (type === "die" ? .85 : type === "hurt" ? 1.08 : 1) * (A.kind === "trex" ? 1 : 1 + (Math.random() - .5) * .1);
+  const T0 = DINO_SFX[A.kind], list = T0 && T0[type]; if (!list) return false; const [n, r0] = list[Math.floor(Math.random() * list.length)].split("@"), b = DSND.buf[n]; if (!b) return false;
+  const rate = (r0 ? +r0 : DINO_RATE[A.kind] || 1) / Math.pow(A.size || 1, A.kind === "trex" ? .3 : .5) * (type === "die" ? .85 : type === "hurt" ? 1.08 : 1) * (A.kind === "trex" ? 1 : 1 + (Math.random() - .5) * .1);
   const O = dinoOut(A, far ? 1.6 : 1.25, false, far, b.duration / rate + 1.5); if (!O) return true;
   const t = SND.ctx.currentTime + (delay || .02) + O.delay, play = (t0, r) => { const s = SND.ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = r; s.connect(O.node); s.start(t0); };
   play(t, rate);
