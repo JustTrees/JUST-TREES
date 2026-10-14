@@ -13,5 +13,6 @@ Models actually used by the game get converted to small `.glb` files in `models/
 | `Farm_Animals_Animated_by_Quaternius.zip` (7 MB) | Quaternius | CC0 (its itch.io page; no license file in the zip) | 7 animated animals in FBX, OBJ and Blender: cow, horse, llama, pig, pug, sheep, zebra |
 | `Farm_Buildings_by_Quaternius.zip` (3.6 MB) | Quaternius | older pack, released free (no license file in the zip) | 13 models in FBX, OBJ and Blender: barns (4: barn, big, small, open), silo, silo house, chicken coop, windmill, tower windmill, water tower, well, fences (2) |
 | `Fish_Pack_Animated_by_Quaternius.zip` (1 MB) | Quaternius | older pack, released free (no license file in the zip) | 7 animated sea creatures in FBX, OBJ and Blender: 3 fish, dolphin, manta ray, shark, whale |
+| `t-rex_calls_by_CaveboyTup_CC0.mp3` (740 KB) | CaveboyTup ([OpenGameArt](https://opengameart.org/content/t-rex-calls)) | CC0 | 9 T. rex calls in a row; cut apart into `sounds/trex/` (1.94): announce = 08 long bellow, start = 09 bellow-scream, growl1/2 = 03/04, charge = 01, hurt = 02 |
 
 **Not kept here:** packs under the *Quaternius Asset License (QAL)* (e.g. Bestiary – Dungeon Monsters Kit) may be used in the game but must **not** be redistributed as assets, and this repo is public — keep those zips on Ron's computer and only commit models converted into the game.
