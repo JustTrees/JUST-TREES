@@ -18,3 +18,5 @@ Models actually used by the game get converted to small `.glb` files in `models/
 | `80-CC0-creature-sfx-2.zip` | rubberduck ([OpenGameArt](https://opengameart.org/content/80-cc0-creture-sfx-2)) | CC0 | 80 creature sounds; Ron's picks in `sounds/dino/` (1.96): monster_08/09/12/13, roar_05, stomp_01 (EQ'd + compressed, it was very soft), weird_06/08 |
 
 **Not kept here:** packs under the *Quaternius Asset License (QAL)* (e.g. Bestiary – Dungeon Monsters Kit) may be used in the game but must **not** be redistributed as assets, and this repo is public — keep those zips on Ron's computer and only commit models converted into the game.
+
+**Also not kept here:** *Dinosaurs* sound pack by Riria/Ririsaurus (itch.io, ateliermagicae) — terms: commercial/non-commercial use OK, "Do not redistribute". The original .rar stays with Ron; 10 of its sounds, loudness-evened, are used in the game (`sounds/trex/` growl3–5, bellow1–2, soft1–3, grunt, pant; 1.98). Ron may ask the creator to confirm a public-repo web game is fine.

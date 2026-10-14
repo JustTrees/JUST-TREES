@@ -27,7 +27,7 @@ async def main():
           // the announce: only once you hold the red sniper, once a round, from across the map
           D.SND.on = true; const rex = D.beasts.find(A => A.kind === 'trex'); out.rex = !!rex; out.loot = D.lootMode();
           if (rex) { out.rexD = Math.round(Math.hypot(rex.x - D.P.x, rex.z - D.P.z));
-            D.dinoTick(1 / 30); for (let i = 0; i < 100 && Object.keys(D.DSND.buf).length < 14; i++) await new Promise(r => setTimeout(r, 100)); out.loaded = Object.keys(D.DSND.buf).sort();
+            D.dinoTick(1 / 30); for (let i = 0; i < 100 && Object.keys(D.DSND.buf).length < 24; i++) await new Promise(r => setTimeout(r, 100)); out.loaded = Object.keys(D.DSND.buf).sort();
             out.durs = Object.fromEntries(Object.entries(D.DSND.buf).map(([k, b]) => [k, +b.duration.toFixed(1)]));
             D.setLoot({ hunt: 4 }); D.rexAnnounce(); out.before = !!D.DINO.rexHeard;
             D.setLoot({ hunt: 5 }); D.rexAnnounce(); out.after = !!D.DINO.rexHeard; out.voices = D.DINO.voices.length;
@@ -38,7 +38,7 @@ async def main():
         w = r.pop("wav")
         if OUT: open(os.path.join(OUT, "rex_scream.wav"), "wb").write(base64.b64decode(w))
         print(json.dumps(r)); print("errors", errs[:5])
-        ok = r["scream"]["peak"] > .05 and not r["scream"]["nan"] and r.get("rex") and not r["before"] and r["after"] and r["step300"] > 0 and r["step360"] == 0 and not errs and len(r.get("loaded", [])) == 14 and all(r.get("otherSamples", [])) and r.get("startSample")
+        ok = r["scream"]["peak"] > .05 and not r["scream"]["nan"] and r.get("rex") and not r["before"] and r["after"] and r["step300"] > 0 and r["step360"] == 0 and not errs and len(r.get("loaded", [])) == 24 and all(r.get("otherSamples", [])) and r.get("startSample")
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 try: ok = asyncio.run(main())
 finally: srv.terminate(); shutil.rmtree(srvdir, ignore_errors=True)
