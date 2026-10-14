@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.88</title>
+<title>JUST TREES 1.89</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.88";              // Just Trees 1.88
+const VERSION = "1.89";              // Just Trees 1.89
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5833,6 +5833,7 @@ const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, 
                   smg:    { grip: [0, -.075, .08], fore: [0, -.02, -.15], eye: [0, .062, .17], muzzle: [0, .012, -.265], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [-.047, .03, -.13], pull: .1 },
                   pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .07, snap: .15 },
                   pvp:  { grip: [0, -.085, .1], fore: [0, -.03, -.27], eye: [0, .068, .16], muzzle: [0, .012, -.71], fov: [6, 3.4] } };
+const GUNSPOT0 = JSON.parse(JSON.stringify(GUNSPOT));          // 1.89: the old guns' hold points (each pack gun brings its own)
 let lensRT = null, lensCam = null, lensMat = null;
 function makeLens(r) {
   if (!lensRT) { lensRT = new THREE.WebGLRenderTarget(isTouch ? 320 : 448, isTouch ? 320 : 448); lensCam = new THREE.PerspectiveCamera(6, 1, .1, 5000); lensMat = new THREE.MeshBasicMaterial({ map: lensRT.texture, fog: false, toneMapped: false }); }
@@ -5843,17 +5844,56 @@ function makeLens(r) {
   const ov = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false }));
   ov.position.z = .0008; g.add(ov); return g;
 }
+/* ---------------- 1.89: Quaternius guns, a different one for every star (Ron's picks) ----------------
+   models/guns/<kind>_<tier>.glb (made by dev/build_guns.py from the Ultimate Gun Pack): three pieces — body, mag, charge (the
+   sniper's bolt handle, the pistol's slide, or a small charging handle) — plus the gun's hold points in the file's extras.
+   Loaded when first needed; until then the old gun shows. */
+const QGUN = { models: {}, loading: {}, failed: 0 };
+const qgunKey = (kind, tier) => kind + "_" + Math.max(1, Math.min(5, tier || 1));
+function qgunLoad(key) {
+  if (QGUN.models[key] || QGUN.loading[key] || typeof fetch === "undefined" || location.protocol === "file:") return;   // (a saved copy opened from disk can't load them: it keeps the old guns)
+  QGUN.loading[key] = true;
+  fetch("models/guns/" + key + ".glb").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QGUN.models[key] = qgunParse(buf); })
+    .catch(() => { QGUN.failed++; });
+}
+function qgunParse(buf) {
+  const dv = new DataView(buf), jl = dv.getUint32(12, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl))), bo = 20 + jl + 8;
+  const ex = js.scenes[0].extras, group = new THREE.Group();
+  const mat = new THREE.MeshPhongMaterial({ vertexColors: true, fog: false, shininess: 34, specular: 0x333333 });
+  for (const nd of js.nodes) {
+    const prim = js.meshes[nd.mesh].primitives[0], pa = js.accessors[prim.attributes.POSITION], ca = js.accessors[prim.attributes.COLOR_0];
+    const pv = js.bufferViews[pa.bufferView], cv = js.bufferViews[ca.bufferView], n = pa.count, sc = nd.scale[0], P = new Float32Array(n * 3), C = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const o = bo + pv.byteOffset + i * pv.byteStride; P[i * 3] = dv.getInt16(o, true) * sc; P[i * 3 + 1] = dv.getInt16(o + 2, true) * sc; P[i * 3 + 2] = dv.getInt16(o + 4, true) * sc;
+      const oc = bo + cv.byteOffset + i * cv.byteStride; C[i * 3] = dv.getUint8(oc) / 255; C[i * 3 + 1] = dv.getUint8(oc + 1) / 255; C[i * 3 + 2] = dv.getUint8(oc + 2) / 255;
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(P, 3)); geo.setAttribute("color", new THREE.BufferAttribute(C, 3)); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat); m.name = nd.name; m.position.fromArray(nd.translation || [0, 0, 0]);
+    if (nd.name === "mag") m.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), ex.magTilt || 0);   // its own slot direction
+    group.add(m);
+  }
+  group.visible = false;
+  const spots = { grip: ex.grip, fore: ex.fore, muzzle: ex.muzzle, eye: ex.eye, handle: ex.handle, counter: ex.counter, drop: ex.drop, magC: ex.magC, pull: ex.pull };
+  return { group, spots, lensR: ex.lensR, name: ex.name };
+}
+function qgunFor(kind, tier) {                               // the pack gun for this kind and star (loading it, and the kind's others, if needed)
+  if (kind === "pvp") return null;
+  const key = qgunKey(kind, tier); if (!QGUN.models[key]) { qgunLoad(key); for (let t = 1; t <= 5; t++) qgunLoad(qgunKey(kind, t)); }
+  return QGUN.models[key] || null;
+}
 function vrGun() {
-  const kind = ARMED() ? (vr.weapon || "hunt") : "pvp";
-  if (vr.gun && vr.gunKind === kind) return vr.gun;
+  const kind = ARMED() ? (vr.weapon || "hunt") : "pvp", tier = Math.max(1, tierOf(kind) || 1), Q = qgunFor(kind, tier), key = Q ? qgunKey(kind, tier) : kind;
+  if (vr.gun && vr.gunKind === kind && vr.gunKey === key) return vr.gun;
   if (vr.gun) vr.gun.visible = false;
   vr.guns = vr.guns || {};
-  let g = vr.guns[kind];
+  if (kind !== "pvp") GUNSPOT[kind] = Object.assign({}, GUNSPOT0[kind], Q ? Q.spots : {});   // this gun's own hold points
+  let g = vr.guns[key];
   if (!g) {
-    g = new THREE.Group(); const model = (kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
-    if (kind === "hunt") { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(7, 7);
+    g = new THREE.Group(); const model = (Q ? Q.group : kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
+    if (Q) model.traverse(o => { if (o.isMesh) o.material = o.material.clone(); });
+    if (kind === "hunt" && !Q) { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(7, 7);
       model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.map = t; o.material.color.set("#ffffff"); o.material.needsUpdate = true; } }); }   // camo sniper stock
-    if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? .024 : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
+    if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? (Q && Q.lensR ? Math.max(.016, Q.lensR * 1.05) : .024) : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
     if (kind !== "pvp") {                                     // the parts you reload by hand get their own materials, so they can glow
       const U = g.userData; U.mag = model.getObjectByName("mag"); U.charge = model.getObjectByName("charge");
       for (const o of [U.mag, U.charge]) if (o) { if (o.isMesh) o.material = o.material.clone(); o.traverse(c => { if (c.isMesh && c !== o) c.material = c.material.clone(); }); }
@@ -5861,9 +5901,9 @@ function vrGun() {
       U.chargeBase = U.charge.position.clone();
       U.counter = makeCounter(kind); g.add(U.counter);
     }
-    scene.add(g); vr.guns[kind] = g;
+    scene.add(g); vr.guns[key] = g;
   }
-  vr.gun = g; vr.gunKind = kind; return g;
+  vr.gun = g; vr.gunKind = kind; vr.gunKey = key; return g;
 }
 let binos = null;
 function vrBinos() {
@@ -5989,7 +6029,7 @@ function vrTick(dt) {
       if (edge("drop", main.stickBtn) && A.phase !== 1) {                 // click the gun-hand stick: drop the magazine early (its rounds go back to your spare ammo)
         A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoley(SFX.magOut); buzz(mainSide, .3, 25);
       }
-      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoley(SFX.dry); } else if (vr.cool <= 0) vrFire(); }
+      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoley(SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
     } else {
       fireHeld = main.trig > .6 && state === "play";
       if (edge("trig", main.trig) && !GUN.auto) fire();
@@ -6170,7 +6210,7 @@ function vrFire() {
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, gun: W ? vr.gunKind : null, online });
   legendShot(from, v.clone().normalize(), vr.scoped ? 3200 : W ? W.reach : 900, v.length());
   if (online) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
-  gunshot(huntM ? vr.gunKind : undefined);
+  gunshot(huntM ? vr.gunKind : undefined, W && W.auto ? Math.max(0, AUTO_LAT - late) : 0);   // 1.89: automatic shots sound on an even beat
 }
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
 function vrAvatar(dt) {
@@ -8427,9 +8467,10 @@ function crossMesh(col) {                                   // a glowing plus si
 }
 let _boxGeo = null, _glowTex = null;
 const _gunTpl = {};
-function gunTemplate(kind) { if (!_gunTpl[kind]) { const m = (kind === "hunt" ? sniper : GUNMODEL[kind] || sniper).clone(true); m.visible = true; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1); _gunTpl[kind] = m; } return _gunTpl[kind]; }
+function gunTemplate(kind, tier) { const Q = tier ? qgunFor(kind, tier) : null, tk = Q ? qgunKey(kind, tier) : kind; if (!_gunTpl[tk]) { const m = (Q ? Q.group : kind === "hunt" ? sniper : GUNMODEL[kind] || sniper).clone(true); m.visible = true; m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1); m.userData.qk = Q ? tk : ""; _gunTpl[tk] = m; } return _gunTpl[tk]; }
 const _glowGeo = {};
-function gunGlow(kind, model, tier) {                       // lots of soft dots spread over the gun's surface: together they make a glow about 10 cm round its outline
+function gunGlow(kind0, model, tier) {                      // lots of soft dots spread over the gun's surface: together they make a glow about 10 cm round its outline
+  const kind = kind0 + "|" + (model.userData.qk || "");     // (1.89: one glow shape per pack gun)
   if (!_glowTex) { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const g = cv.getContext("2d"), rg = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     rg.addColorStop(0, "rgba(255,255,255,1)"); rg.addColorStop(.35, "rgba(255,255,255,.55)"); rg.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = rg; g.fillRect(0, 0, 64, 64); _glowTex = new THREE.CanvasTexture(cv); }
   if (!_glowGeo[kind]) {
@@ -8452,7 +8493,7 @@ function dropObj(d) {
   const g = new THREE.Group(), spin = new THREE.Group(); g.add(spin); g.userData.spin = spin;
   if (d.type === "gun") {
     const holder = new THREE.Group(); holder.rotation.y = Math.PI / 2; holder.scale.setScalar(1.5); spin.add(holder); g.userData.holder = holder;
-    holder.add(gunGlow(d.kind, gunTemplate(d.kind), d.tier));   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
+    holder.add(gunGlow(d.kind, gunTemplate(d.kind, d.tier), d.tier));   // a soft neon glow hugging the gun's shape, in its star colour (the gun itself appears when you're close)
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
   else {                                                    // spilled ammo or grenades: a little box with a coloured band
     _boxGeo = _boxGeo || [new THREE.BoxGeometry(.3, .16, .16), new THREE.BoxGeometry(.306, .05, .166)];
@@ -8489,7 +8530,7 @@ function dropsTick(I, dt) {
     o.visible = far < (d.type === "gun" ? 320 : 140);
     if (U.holder) {
       U.spin.visible = far < 160;
-      if (far < 55 && !U.model) { U.model = gunTemplate(d.kind).clone(true); U.model.visible = true; U.holder.add(U.model); }
+      if (far < 55 && !U.model) { U.model = gunTemplate(d.kind, d.tier).clone(true); U.model.visible = true; U.holder.add(U.model); }
       else if (far > 75 && U.model) { U.holder.remove(U.model); U.model = null; }
     }
     if (!o.visible) continue;
@@ -9336,9 +9377,10 @@ function updateGun(dt) {
     if (f.life <= 0) { scene.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); puffs.splice(i, 1); }
   }
 }
-function gunshot(kind) {
+const AUTO_LAT = .035;                                      // automatic fire: each shot's sound is placed this long after its true moment (the same for every shot, so the rhythm is exact)
+function gunshot(kind, lead) {
   if (!SND.ctx || !SND.on) return;
-  const c = SND.ctx, t = c.currentTime, pr = { ar: [.75, 3000, .5, .55], smg: [.5, 4200, .3, .32], pistol: [.6, 3800, .4, .4] }[kind];
+  const c = SND.ctx, t = c.currentTime + (lead || 0), pr = { ar: [.75, 3000, .5, .55], smg: [.5, 4200, .3, .32], pistol: [.6, 3800, .4, .4] }[kind];
   if (pr) {                                                  // VR Hunting's assault rifle, SMG and pistol
     const [v, f, e, b] = pr, cr = (delay, vol, fq) => { const s = c.createBufferSource(); s.buffer = SND.noise; const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = fq;
       const g = c.createGain(); g.gain.setValueAtTime(0, t + delay); g.gain.linearRampToValueAtTime(vol, t + delay + .003); g.gain.exponentialRampToValueAtTime(.001, t + delay + .25);

@@ -48,7 +48,7 @@ async def main():
           const up = G.localToWorld(U.magDir.clone()).sub(G.localToWorld(new T.Vector3())).normalize().multiplyScalar(-.012); for (let i = 0; i < 20 && A().phase === 1; i++) { L.Lh.copy(toL(toW(L.Lh).add(up))); frames(1); }
           out.afterInsert = { mag: A().mag, res: A().res, phase: A().phase }; pad.L.grip = 0; frames(3);
           pad.R.trig = 1; const t2 = nT(); frames(2); out.shotBeforeBolt = nT() - t2; pad.R.trig = 0; frames(2);
-          out.boltGlow = +(U.charge.children[0].material.emissive.r).toFixed(2);
+          out.boltGlow = +((U.charge.children[0] || U.charge).material.emissive.r).toFixed(2);
           // 3. grab the bolt and pull it back, let go
           const hW = () => G.localToWorld(new T.Vector3(...S.handle));
           L.Lh.copy(toL(G.localToWorld(new T.Vector3(...S.fore)))); frames(2); pad.L.grip = 1; frames(2); out.unchamberedFrontGripSnap = V.two; out.grabAtFore = V.rl.grab; pad.L.grip = 0; frames(2);
