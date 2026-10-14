@@ -16,7 +16,7 @@ async def main():
             r = await pg.evaluate("""([size, dino]) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setSeed(3); D.setVR(true); D.setMode('hunt'); D.set.dino = dino; D.set.size = size; D.set.lat = 42; D.set.density = .5; D.set.env = 'climate';
               const t0 = performance.now(); D.generate(); const gen = performance.now() - t0; D.state = 'play';
               let lo = 0; for (const t of D.tiles) if (t.lo) for (const m of t.lo.children) lo += m.count || 0;   // the far (light) copy of every tree inside the map
-              const ground = () => D.beasts.filter(A => !A.dead && !A.gone && !A.wings && !A.hunter);
+              const ground = () => D.beasts.filter(A => !A.dead && !A.gone && !A.wings && !A.hunter && !D.LEGEND[A.kind]);   // (Bigfoot and the T. rexes roam the whole map)
               const far = r => ground().filter(A => Math.hypot(A.x - D.P.x, A.z - D.P.z) > r).length;
               const b0 = ground().length, far0 = far(1000 + 300);
               // travel 1.4 km across the map, then play two minutes there

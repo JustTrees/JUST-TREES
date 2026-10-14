@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.00</title>
+<title>JUST TREES 2.01</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.00";              // Just Trees 2.00
+const VERSION = "2.01";              // Just Trees 2.01
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2189,10 +2189,11 @@ function buildLava() {                                      // a flat glowing su
 //            crater lake, sinkhole or volcano. Raised blobs are sometimes split by a crevasse. Sized to the map, eroded like everything else.
 function makeFeature(r, base, wGuess) {
   const pick = a => a[Math.floor(r() * a.length)], sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-  const R = Math.max(40, Math.min(150, HALF * .26)) * (.8 + r() * .45), reach = R * 2.2;
+  const BIG = BIG3(), KH = BIG ? 4 : 1, KV = BIG ? 2.6 : 1;   // 2.01 (Ron): on a 3 km map the landform runs about half the map, at the scale of real mountains
+  const R = BIG ? HALF * (.4 + r() * .08) : Math.max(40, Math.min(150, HALF * .26)) * (.8 + r() * .45), reach = R * (BIG ? 1.35 : 2.2);
   let cx = 0, cz = 0, ok = false;
   for (let t = 0; t < 60 && !ok; t++) {
-    const a = r() * 6.283, d = r() * HALF * .45; cx = Math.cos(a) * d; cz = Math.sin(a) * d;
+    const a = r() * 6.283, d = r() * HALF * (BIG ? .25 : .45); cx = Math.cos(a) * d; cz = Math.sin(a) * d;
     ok = Math.max(Math.abs(cx), Math.abs(cz)) + reach < EDGE - 10 && (!edgeShape.island || Math.hypot(cx, cz) + reach < edgeShape.R0 * .84 - 40);
   }
   if (!ok) { cx = 0; cz = 0; }
@@ -2218,18 +2219,18 @@ function makeFeature(r, base, wGuess) {
     return out;
   };
   const near = (segs, x, z) => {                               // distance to the nearest path, a fade near free ends, and which side you're on
-    let bd = 1e9, bf = 0, side = 1;
+    let bd = 1e9, bf = 0, side = 1, bt = 0;
     for (const [ax, az, bx, bz, t0, t1, fs, fe] of segs) {
       const vx = bx - ax, vz = bz - az, L2 = vx * vx + vz * vz || 1, k = Math.max(0, Math.min(1, ((x - ax) * vx + (z - az) * vz) / L2));
       const px = ax + vx * k - x, pz = az + vz * k - z, d = Math.hypot(px, pz);
-      if (d < bd) { bd = d; const t = t0 + (t1 - t0) * k; bf = (fs ? sm(0, .18, t) : 1) * (fe ? sm(1, .82, t) : 1); side = (vx * (z - az) - vz * (x - ax)) >= 0 ? 1 : -1; }
+      if (d < bd) { bd = d; const t = t0 + (t1 - t0) * k; bt = t; bf = (fs ? sm(0, .18, t) : 1) * (fe ? sm(1, .82, t) : 1); side = (vx * (z - az) - vz * (x - ax)) >= 0 ? 1 : -1; }
     }
-    return [bd, bf, side];
+    return [bd, bf, side, bt];
   };
-  if (r() < .5) {
+  if (r() < (BIG ? .7 : .5)) {                                // (XXXL: long landforms more often)
     const shape = pick(["winding", "fork", "cross", "zigzag", "horseshoe", "twin", "star"]);
     const single = shape === "winding" || shape === "zigzag" || shape === "horseshoe";
-    const act = pick(single ? ["crevasse", "canyon", "rift", "wall", "cliff", "cliff"] : ["crevasse", "canyon", "rift", "wall"]);
+    const act = BIG ? pick(single ? ["range", "range", "range", "canyon", "rift", "cliff"] : ["range", "range", "range", "canyon", "rift"]) : pick(single ? ["crevasse", "canyon", "rift", "wall", "cliff", "cliff"] : ["crevasse", "canyon", "rift", "wall"]);   // (XXXL: a mountain range most often)
     const L = R * (shape === "star" ? .95 : 1.25), br = [];
     if (shape === "winding") br.push({ pts: walk(cx - Math.cos(dir) * L, cz - Math.sin(dir) * L, dir, L * 2, 1, false), fs: 1, fe: 1 });
     else if (shape === "zigzag") br.push({ pts: walk(cx - Math.cos(dir) * L, cz - Math.sin(dir) * L, dir, L * 2, 0, true), fs: 1, fe: 1 });
@@ -2237,22 +2238,26 @@ function makeFeature(r, base, wGuess) {
     else if (shape === "twin") { const ox = -Math.sin(dir) * R * .5, oz = Math.cos(dir) * R * .5; for (const s of [1, -1]) br.push({ pts: walk(cx + ox * s - Math.cos(dir) * L, cz + oz * s - Math.sin(dir) * L, dir + (r() - .5) * .3, L * 2, 1, false), fs: 1, fe: 1 }); }
     else { const n = shape === "fork" ? 3 : shape === "cross" ? 4 : 5 + Math.floor(r() * 2); for (let i = 0; i < n; i++) br.push({ pts: walk(cx, cz, dir + i / n * 6.283 + (r() - .5) * .5, L * (.65 + r() * .45), .7, false), fs: 0, fe: 1 }); }
     const segs = segsOf(br);
-    const P = act === "crevasse" ? { w: 2.5 + r() * 3, D: 18 + r() * 14, soft: 2.5, rim: 3, rimW: 22 }
-            : act === "canyon" ? { w: 7 + r() * 8, D: 22 + r() * 14, soft: 9, rim: 10 + r() * 8, rimW: R * .55 }
-            : act === "rift" ? { w: 22 + r() * 14, D: 18 + r() * 10, soft: 16, rim: 8 + r() * 6, rimW: 34 }
+    const P = act === "range" ? { w: 50 + r() * 40, H: 140 + r() * 90, soft: 230 + r() * 80 }   // a mountain range: peaks and saddles along a long ridge
+            : act === "crevasse" ? { w: 2.5 + r() * 3, D: 18 + r() * 14, soft: 2.5, rim: 3, rimW: 22 }
+            : act === "canyon" ? { w: (7 + r() * 8) * KH, D: (22 + r() * 14) * KV, soft: 9 * KH, rim: (10 + r() * 8) * KV, rimW: R * .55 }
+            : act === "rift" ? { w: (22 + r() * 14) * KH, D: (18 + r() * 10) * KV, soft: 16 * KH, rim: (8 + r() * 6) * KV, rimW: 34 * KH }
             : act === "wall" ? { w: 6 + r() * 7, H: 26 + r() * 16, soft: 9 }
-            : { H: 18 + r() * 16 };                                // cliff
-    const spread = act === "cliff" ? R * 1.8 : act === "wall" ? P.w + P.soft + 25 : P.w + P.soft + P.rimW + 20;
+            : { H: (18 + r() * 16) * KV };                         // cliff
+    const spread = act === "cliff" ? R * 1.8 : act === "range" ? P.w + P.soft + 40 : act === "wall" ? P.w + P.soft + 25 : P.w + P.soft + P.rimW + 20 * KH;
     const words = { winding: "Winding", fork: "Forked", cross: "Crossed", zigzag: "Zigzag", horseshoe: "Horseshoe", twin: "Twin", star: "Star" };
-    const nouns = { crevasse: "crevasse", canyon: "canyon", rift: "rift valley", wall: "ridge wall", cliff: "cliff" }, plural = shape === "twin" ? (act === "rift" ? "rift valleys" : nouns[act] + "s") : nouns[act];
+    const nouns = { crevasse: "crevasse", canyon: "canyon", rift: "rift valley", wall: "ridge wall", cliff: "cliff", range: "mountain range" }, plural = shape === "twin" ? (act === "rift" ? "rift valleys" : act === "range" ? "mountain ranges" : nouns[act] + "s") : nouns[act];
     return { type: act, shape, name: words[shape] + " " + plural, x: cx, z: cz, R,
       mask: (x, z) => { if (box(x, z, reach + spread)) return 0; const [d, f] = near(segs, x, z); return sm(spread, spread * .7, d) * f; },
       apply: (x, z, h) => {
         if (box(x, z, reach + spread)) return h;
-        const [d, f, side] = near(segs, x, z); if (f <= 0) return h;
-        if (act === "cliff") { const sd = d * side; return h + P.H * sm(-7, 7, sd) * sm(R * 1.7, R * .9, sd) * f; }
+        const [d, f, side, t] = near(segs, x, z); if (f <= 0) return h;
+        if (act === "range") {                                   // peaks and saddles along it, rounded shoulders falling to the valleys either side
+          const pk = .55 + .3 * Math.sin(t * 8.5 + ph[1]) + .15 * Math.sin(t * 21 + ph[2]), q = Math.max(0, 1 - Math.max(0, d - P.w * .3) / (P.w + P.soft));
+          return h + P.H * Math.max(.25, pk) * Math.pow(q, 1.6) * (3 - 2 * q) * .85 * f; }
+        if (act === "cliff") { const sd = d * side; return h + P.H * sm(-7 * KH, 7 * KH, sd) * sm(R * 1.7, R * .9, sd) * f; }
         if (act === "wall") return h + P.H * sm(P.w + P.soft, P.w, d) * f;
-        const lift = Math.min(45, Math.max(P.rim, wGuess + 3 + P.D - h)), up = h + lift * sm(P.w + P.rimW, P.w + P.soft, d) * f, cut = sm(P.w + P.soft, P.w, d) * f;   // low ground is raised into a tableland first, so the cut has room
+        const lift = Math.min(45 * KV, Math.max(P.rim, wGuess + 3 + P.D - h)), up = h + lift * sm(P.w + P.rimW, P.w + P.soft, d) * f, cut = sm(P.w + P.soft, P.w, d) * f;   // low ground is raised into a tableland first, so the cut has room
         return cut > 0 ? Math.max(up - P.D * cut, Math.min(up, wGuess + 2.5)) : up;     // the floor stays just above the water, so the shape reads instead of flooding
       } };
   }
@@ -2275,8 +2280,8 @@ function makeFeature(r, base, wGuess) {
     }
     return best;
   };
-  const top = h0 + (act === "butte" ? 34 + r() * 16 : act === "volcano" ? 40 + r() * 30 : 20 + r() * 16) + R * .1, steps = 3 + Math.floor(r() * 3);
-  const floor = wGuess - (4 + R * .04), sinkD = 22 + r() * 14, rimH = 12 + R * .12, wallW = R * (act === "butte" ? .12 : .2);
+  const top = h0 + (act === "butte" ? 34 + r() * 16 : act === "volcano" ? 40 + r() * 30 : 20 + r() * 16) * KV + R * (BIG ? .06 : .1), steps = 3 + Math.floor(r() * 3) + (BIG ? 2 : 0);
+  const floor = wGuess - (4 + R * (BIG ? .02 : .04)), sinkD = (22 + r() * 14) * KV, rimH = 12 * KV + R * (BIG ? .07 : .12), wallW = R * (act === "butte" ? .12 : .2);
   const split = (act === "mesa" || act === "butte" || act === "terrace") && r() < .4 ? segsOf([{ pts: walk(cx - Math.cos(dir + 1.3) * R * 1.3, cz - Math.sin(dir + 1.3) * R * 1.3, dir + 1.3, R * 2.6, 1, false), fs: 1, fe: 1 }]) : null;
   const ext = R * 2;
   const words = { round: "", oval: "Long ", lobed: "Lobed ", crescent: "Crescent ", ring: "Ring ", cluster: subs.length === 2 ? "Twin " : "Triple " };
@@ -2292,7 +2297,7 @@ function makeFeature(r, base, wGuess) {
       else if (act === "crater") { const ring = rimH * Math.exp(-Math.pow(sd / (sd < 0 ? R * .18 : R * .38), 2)), dig = sm(-R * .02, -R * .35, sd); o = (h + ring) * (1 - dig) + Math.min(floor, h) * dig; }
       else if (act === "sink") { const dig = sm(R * .04, -R * .12, sd); o = h * (1 - dig) + (Math.min(h, h0) - sinkD) * dig; }
       else { const k = sm(R * .9, -R * .7, sd), cone = (top - h0) * Math.pow(k, 1.5), crater = sm(-R * .62, -R * .8, sd) * (top - h0) * .28; o = h + cone - crater; }   // volcano with a crater on top
-      if (split) { const [d, f] = near(split, x, z), c = 26 * sm(6, 3, d) * f * sm(R * .4, -R * .2, sd); if (c > 0) o = Math.max(o - c, Math.min(o, wGuess + 2.5)); }
+      if (split) { const [d, f] = near(split, x, z), c = 26 * KV * sm(6 * KH, 3 * KH, d) * f * sm(R * .4, -R * .2, sd); if (c > 0) o = Math.max(o - c, Math.min(o, wGuess + 2.5)); }
       return o;
     } };
 }
@@ -4993,7 +4998,8 @@ function rexTick(A, dt) {
   if (!A.rexOn) {                                            // roaming: anywhere on the map, at a steady walk
     if (!A.target || (A.roamT = (A.roamT || 0) - dt) <= 0 || Math.hypot(A.target[0] - A.x, A.target[1] - A.z) < 8) { A.target = rexRoamTarget(A); A.roamT = 90; A.steerT = 0; }
     A.mode = "walk"; A.want = A.walk; A.fleeT = 0; A.look = 0;
-    if (rexSeen() && (A.roarT = (A.roarT || 10 + Math.random() * 20) - dt) <= 0) { A.roarT = 25 + Math.random() * 30; dinoCall(A, d < 90 ? "near" : "call"); }   // a far-off bellow to follow (close by: a low growl)
+    if (rexSeen() && (A.roarT = (A.roarT || 10 + Math.random() * 20) - dt) <= 0) {   // 2.01 (Ron): a scream every so often, so you can hear where it is
+      const nR = beasts.filter(b => b.kind === "trex" && !b.dead && !b.gone).length; A.roarT = (30 + Math.random() * 30) * Math.max(1, nR / 2); dinoCall(A, d < 90 ? "near" : "roam"); }   // a far-off bellow to follow (close by: a low growl)
     return;
   }
   A.rexT += dt; A.fleeT = 0;                                 // (1.98: no snap turns: it sweeps round in curves)
@@ -5045,10 +5051,14 @@ function sndListener() {                                     // your ears: where
 function sndPool() {                                         // a few 3D voices made once and reused (making a new 3D voice for every call cost frames)
   if (DINO.pool || !SND.ctx) return DINO.pool; const c = SND.ctx; DINO.pool = [];
   for (let i = 0; i < 8; i++) { const cheap = i >= 6, pn = c.createPanner(); pn.panningModel = cheap ? "equalpower" : "HRTF"; pn.distanceModel = "inverse"; pn.rolloffFactor = 1; pn.maxDistance = 3000;
-    const lp = c.createBiquadFilter(); lp.type = "lowpass"; const inp = c.createGain(); inp.connect(lp).connect(pn).connect(SND.master);
+    const lp = c.createBiquadFilter(); lp.type = "lowpass"; const inp = c.createGain(); inp.connect(lp).connect(pn).connect(dinoLimiter());
     let wet = null; if (!cheap) { wet = c.createGain(); wet.gain.value = 0; inp.connect(wet).connect(sndVerb()); }
     DINO.pool.push({ pn, lp, wet, inp, A: null, until: 0, y: 0, cheap }); }
   return DINO.pool;
+}
+function dinoLimiter() {                                     // 2.01: every dinosaur sound goes through one limiter, so a herd running can't clip the headset
+  if (DINO.lim) return DINO.lim; const c = SND.ctx, L = c.createDynamicsCompressor();
+  L.threshold.value = -12; L.knee.value = 8; L.ratio.value = 14; L.attack.value = .002; L.release.value = .25; L.connect(SND.master); return DINO.lim = L;
 }
 function dinoOut(A, k, cheap, far, hold) {
   const c = SND.ctx, d = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), big = DINO_SIZE[A.kind] || .5; if (d > 900 && !far) return null;
@@ -5100,7 +5110,7 @@ function dinoCall(A, type) {
   if (!SND.ctx || !SND.on || !A) return;
   let sub = null;
   if (A.kind === "raptor" && type === "stalk") { const opts = ["click", "call", "hiss", "bark", "sniff"].filter(s => s !== A.lastSnd); sub = opts[Math.floor(Math.random() * opts.length)]; A.lastSnd = sub; if (dinoSample(A, "s_" + sub)) return; }
-  else if (dinoSample(A, type)) return;                      // a recording, when there is one for this animal and call
+  else if (A.kind === "trex" && type === "roam" ? dinoSample(A, "scream", true, .1) : dinoSample(A, type)) return;   // (2.01: a roaming scream carries across the map)                      // a recording, when there is one for this animal and call
   const loud = type === "hurt" || type === "die" || type === "charge" || type === "bite" || type === "rush", O = dinoOut(A, loud ? 1.3 : 1); if (!O) return;
   const out = O.node, t = SND.ctx.currentTime + .02 + O.delay, k = A.kind, j = 1 + (Math.random() - .5) * .16, pain = type === "hurt" || type === "die", dl = type === "die" ? 1.8 : 1, pu = pain ? 1.3 : 1;
   const huff = (f, d, v) => dNoise(out, "bandpass", f, .7, t, d, v);                          // a breath before the call
@@ -5172,7 +5182,7 @@ function rexScream(out0, t, L, j) {                          // L: length (1 = t
 }
 function rexAnnounce() {                                     // 1.93: the moment you hold the red sniper, the T. rex screams from wherever it is on the map
   if (!SND.ctx || !SND.on || DINO.rexHeard || !rexSeen()) return;
-  const A = beasts.find(a => a.kind === "trex" && !a.dead && !a.gone); if (!A) return;
+  const A = beasts.filter(a => a.kind === "trex" && !a.dead && !a.gone).sort((a, b) => Math.hypot(a.x - P.x, a.z - P.z) - Math.hypot(b.x - P.x, b.z - P.z))[0]; if (!A) return;   // (the nearest one)
   DINO.rexHeard = true; if (dinoSample(A, "announce", true, .4)) return; const O = dinoOut(A, 1.6, false, true); if (!O) return;
   rexScream(O.node, SND.ctx.currentTime + .4 + O.delay, 1.15, .95);
 }
@@ -5186,10 +5196,10 @@ function dinoSteps(dt) {                                     // the big ones sha
     if (A.dead || A.gone || !(A.kind === "bronto" || A.kind === "triceratops" || (A.kind === "trex" && rexSeen())) || A.speed < .2) continue;
     const d = Math.hypot(A.x - P.x, A.z - P.z); if (d > (A.kind === "trex" ? 330 : 90)) continue;   // (1.93: the T. rex out to a third of a km)
     A.stepAcc = (A.stepAcc || 0) + A.speed * dt; if (A.stepAcc < A.stride * .5) continue; A.stepAcc = 0;
-    const rx = A.kind === "trex", O = dinoOut(A, rx ? 2.2 * Math.max(1, Math.min(2.2, d / 120)) : A.kind === "bronto" ? 1.4 : .7, true); if (!O) continue; const t = SND.ctx.currentTime + O.delay;
+    const rx = A.kind === "trex", O = dinoOut(A, rx ? 2.2 * Math.max(1, Math.min(2.2, d / 120)) : A.kind === "bronto" ? .7 : .35, true); /* (2.01: the plant-eaters much softer) */ if (!O) continue; const t = SND.ctx.currentTime + O.delay;
     if (rx) O.node.gain.value *= A.size || 1;                 // (heavier ones land harder)
     dSub(O.node, rx ? 38 : 44, rx ? 22 : 26, t, rx ? .5 : .35, .5); dNoise(O.node, "lowpass", 140, .8, t, rx ? .45 : .3, .28);
-    const sb = DSND.buf["dino/stomp_01"]; if (sb) { const s = SND.ctx.createBufferSource(), g = SND.ctx.createGain(); s.buffer = sb; s.playbackRate.value = (rx ? .7 : A.kind === "bronto" ? .62 : .85) / Math.sqrt(A.size || 1) * (1 + (Math.random() - .5) * .08); g.gain.value = 1.8; s.connect(g).connect(O.node); s.start(t); }   // 1.96: a real stomp under the rumble
+    const sb = DSND.buf["dino/stomp_01"]; if (sb && (rx || A.speed < A.walk * 1.6)) { /* (running plant-eaters: just the soft rumble) */ const s = SND.ctx.createBufferSource(), g = SND.ctx.createGain(); s.buffer = sb; s.playbackRate.value = (rx ? .7 : A.kind === "bronto" ? .62 : .85) / Math.sqrt(A.size || 1) * (1 + (Math.random() - .5) * .08); g.gain.value = rx ? 1.8 : .4; s.connect(g).connect(O.node); s.start(t); }   // 1.96: a real stomp under the rumble
   }
 }
 function dinoCue() {                                         // you've been seen: a sudden low, deep swell (a warning, not a jump scare)
@@ -5512,9 +5522,9 @@ function spawnAnimals() {
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12; stockInit();
   const nearSecs = BIG3() ? STOCK.land.filter(q => { const b = secBox(q); return inBubble((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, BUBBLE - 100); }) : null;   // XXXL: only the sections round you
-  const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl";   // Bigfoot / Yeti: Large and up, one per map
+  const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl" || set.size === "xxxl";   // Bigfoot / Yeti: Large and up, one per map
   DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
-  const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));
+  const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: kind === "trex" ? ({ large: 1, xl: 2, xxl: 3, xxxl: 4 }[set.size] || 0) : LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));   // (2.01: more T. rexes on bigger maps)
   const netG = mpNetGuest();                                   // 2.00: an online guest's ground animals come from the host
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
@@ -7126,11 +7136,12 @@ function buildDiorama() {
   const wm = new THREE.Mesh(new THREE.PlaneGeometry(S, S).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: iced ? 0xcfe6f0 : new THREE.Color(WATERC[b]), transparent: true, opacity: .82, fog: false, toneMapped: false }));
   wm.position.y = .2; spin.add(wm);
   const trees = []; for (const list of obstacles.values()) for (const o of list) if (o.t && o.h > 1) trees.push(o);
+  const hCap = trees.length ? trees.map(o => o.h).sort((a, b) => a - b)[Math.floor(trees.length * .97)] : 99;   // 2.01 (Ron): no spike for the giant tree
   const n = Math.min(trees.length, 6000), cone = new THREE.ConeGeometry(1, 1, 5).translate(0, .5, 0);
   const tm = new THREE.InstancedMesh(cone, new THREE.MeshBasicMaterial({ fog: false, toneMapped: false }), n), m4 = new THREE.Matrix4(), c = new THREE.Color();
   const colOf = k => k === "fir" || k === "pine" ? "#2c5233" : k === "palm" ? "#4a9a3a" : k === "bare" ? "#7a6a58" : seas === "fall" ? "#b0702a" : seas === "winter" ? "#7a6a58" : "#4f8a35";
   for (let i = 0; i < n; i++) {
-    const o = trees[Math.floor(i * trees.length / n)], h = Math.max(2, o.h) * 2.4, r = Math.max(1, o.r) * 1.2;
+    const o = trees[Math.floor(i * trees.length / n)], h = Math.max(2, Math.min(o.h, hCap)) * 2.4, r = Math.max(1, Math.min(o.r, 1.6)) * 1.2;
     m4.compose(new THREE.Vector3(o.x, (H(o.x, o.z) - water) * ex, o.z), new THREE.Quaternion(), new THREE.Vector3(r, h, r)); tm.setMatrixAt(i, m4);
     tm.setColorAt(i, c.set(colOf(o.t.kind)).multiplyScalar(.85 + Math.random() * .3));
   }
