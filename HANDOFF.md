@@ -17,7 +17,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 2. How we work
 
-- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.10.**
+- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.11.**
 - **"Answer first" / "respond first" / a plain question** → only answer (or write notes here). No build.
 - **Notes in this file go up with the next build.** A stop hook asks to commit lone note changes: decline until the next build (Ron's rule).
 - **Testing (Ron, Oct 13):** each build = `check_code` + the 1–2 tests for what changed. Full suite only before big risky changes or when Ron asks (say so). Last full run: **2.06** (cleanup). `--only` takes full test names (`--only test_dino,test_online`).
@@ -43,7 +43,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.09)
+## 4. The game now (v2.10)
 
 ### Modes
 - **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -75,7 +75,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 - PLAY IN VR → height check → intro → curved menu panels. Before each map: spin a mini-map, pick your start. Pause: Y.
 - **Controls** (right-handed default): off-hand stick walks (click = sprint), gun-hand stick snap-turns 30° (zooms while scoped); tap A gun in/out, hold A wheel; tap B mark; off-hand trigger map; off-hand grip two-handed hold. Real crouching.
 - **Climb anything** (trunks, limbs, rocks, cliffs), fling, glide with arms out (`GLIDE_VR` 22 m/s). Under water: walk the bed, 5 s breath. Body: camo soldier with arm IK.
-- **Guns:** sniper (bolt, the only scope; zoom steps by stars), assault rifle, SMG, pistol (pack models per star, hands wrapped round the grips). Real bullets, no drop, no scatter. **Recoil (2.08, auto guns only):** each shot climbs the muzzle (and the aim) by `RECOIL.up[level]` degrees — level 1 = 5★ (.25°) … 5 = 1★ (1°), 6 = held one-handed (2.5°); looking down the gun (`vr.ads`) 15% less; max 25°; settles back when you stop (`vr.climb`). Fire rate unchanged. **Sounds (2.09):** real recordings in `sounds/guns/` (Snake's packs: sniper .308, AR 7.62x39, SMG/pistol 9mm with outdoor echo; reload, bolt, charging handle, slide, empty click), `GSND` (per-gun volume/pitch, ±3% pitch per shot, a compressor bus so full auto never clips), `gunshot(kind, lead, dist)` (other players: quieter and delayed by distance), `gunFoleyK`; cut by `dev/guns/make_gun_sounds.py`; made-up sounds stay as the fallback (and on PC/phone). Ron will fine-tune pitch/files later. Reload by hand. **Unlimited ammo** (`INF_AMMO`). Binoculars: both empty hands at your face.
+- **Guns:** sniper (bolt, the only scope; zoom steps by stars), assault rifle, SMG, pistol (pack models per star, hands wrapped round the grips). Real bullets, no drop, no scatter. **Recoil (2.08, auto guns only):** each shot climbs the muzzle (and the aim) by `RECOIL.up[level]` degrees — level 1 = 5★ (.25°) … 5 = 1★ (1°), 6 = held one-handed (2.5°); looking down the gun (`vr.ads`) 15% less; max 25°; settles back when you stop (`vr.climb`). Fire rate unchanged. **Sounds (2.09):** real recordings in `sounds/guns/` (Snake's packs: sniper .308, AR 7.62x39, SMG/pistol 9mm with outdoor echo; reload, bolt, charging handle, slide, empty click), `GSND` (per-gun volume/pitch, ±3% pitch per shot; 2.10: the sniper at .87 pitch with a +7 dB low shelf at 200 Hz and a 62→32 Hz sub thump (`thick`); every gun sound through one compressor (-18 dB, 6:1) and ×.72 out gain), `gunshot(kind, lead, dist)` (other players: quieter and delayed by distance), `gunFoleyK`; cut by `dev/guns/make_gun_sounds.py`; made-up sounds stay as the fallback (and on PC/phone). Ron will fine-tune pitch/files later. Reload by hand. **Unlimited ammo** (`INF_AMMO`). Binoculars: both empty hands at your face.
 - **Loot (VR Hunting and PvP):** start with a 1★ pistol (Hunting also a 1★ bow); guns of 1–5★ glow on the map (`spawnPvpLoot`; a better one upgrades; ones you can't use aren't drawn). Hunting: ~16% of the loot spots are bows (2–5★). **Grenades:** floating red frag grenades, one each (2.05), up to 10; aim shows the arc. PvP: green crosses +30 health, blue +35 shield, back after 40 s.
 - **Bow** (Hunting): off hand holds it, take an arrow from behind your shoulder, nock, draw, release; real arc; quiet shot. Five looks by stars (2.04: 1 = the game's own, then Wooden 2, Wooden, Golden, Evil); stars add damage against dinosaurs only.
 - Hunting HUD: score and your mark on the VR map (off-hand trigger); frame-rate readout top-left of the map.
@@ -143,6 +143,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.10** sniper deeper and thicker; gun sounds compressed and a bit quieter in the mix.
 - **2.09** real recorded gun sounds (Snake's Authentic Gun Sounds 1 + 2) for every VR gun, shots and reloads. Test `dev/test_gunsounds.py`.
 - **2.08** recoil on the assault rifle and SMG: by stars, much more one-handed, 15% less looking down the gun. Test `dev/test_recoil.py`.
 - **2.07** animal hips (Ron: elephants and bears "look crazy"): when `legs()` lengthens legs, the haunch above the hip joint now rides with the body instead of stretching up over the back; elephant back legs a bit shorter so its back is level. All animal models rebuilt.
