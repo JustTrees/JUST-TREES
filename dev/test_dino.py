@@ -102,7 +102,7 @@ async def main():
         on = r["on"]
         ok = r["huntOnBtns"] == 1 and r["switched"] and r["hikeOnBtns"] == 0 \
              and not r["pc"]["on"] and "triceratops" not in r["pc"]["kinds"] and not r["off"]["on"] and r["off"]["dinos"] == 0 \
-             and on["on"] and set(on["kinds"]) == {"triceratops", "parasaur", "stego", "bronto", "trex"} and on["kinds"]["trex"] == 1 and on["allHp"] and on["n"] > 60 \
+             and on["on"] and set(on["kinds"]) == {"triceratops", "parasaur", "stego", "bronto", "trex", "ptero"} and on["kinds"]["trex"] == 1 and on["allHp"] and on["n"] > 60 \
              and r["tri1"]["hp"] == 300 and not r["tri1"]["dead"] and not r["tri1"]["bar"] and not r["tri1"]["angry"] and r["tri2"]["hp"] == 120 and r["tri3"]["dead"] and not r["tri3"]["bar"] and r["tri3"]["pts"] > 10 \
              and 8 <= r["raptorShots"]["sniper"] <= 10 and r["raptorShots"]["ar"] >= 50 \
              and r["rayBody"]["who"] == "stego" and not r["rayBody"]["head"] and r["rayHead"]["who"] == "stego" and r["rayHead"]["head"] \

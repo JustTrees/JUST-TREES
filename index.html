@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.01</title>
+<title>JUST TREES 2.02</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.01";              // Just Trees 2.01
+const VERSION = "2.02";              // Just Trees 2.02
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4753,10 +4753,10 @@ function buildApe(r, yeti) {                                // Bigfoot and the Y
    watching you. Hit it and it speeds up, then heals and slows down again; worn down to 3 bars it commits and charges. Leave it alone long
    enough and it comes for you anyway, too tough to stop in time. A bite or a gouge: you black out red and wake up somewhere else. */
 const DINO = { on: false, hunter: null, gap: 60, pending: 0, callT: 6, drone: null, hunts: 0, voices: [] };
-const DINO_HP = { trex: 3500, raptor: 1000, parasaur: 264, triceratops: 420, stego: 360, bronto: 840 };
+const DINO_HP = { trex: 3500, raptor: 1000, parasaur: 264, triceratops: 420, stego: 360, bronto: 840, ptero: 300 };
 const DINO_DMG = { hunt: 120, ar: 18, smg: 10, pistol: 20 };   // per hit against a dinosaur (gun stars add more; a head hit 1.5x)
 const RAPTOR_DMG = { hunt: 200, ar: 20, smg: 11, pistol: 22 };  // the raptor: ~5 sniper hits (they never heal), ~50 AK bullets (those heal)
-const DINO_BONUS = { raptor: 75, trex: 200 };
+const DINO_BONUS = { raptor: 75, trex: 200, ptero: 60 };
 const DINO_SIZE = { trex: 1.3, raptor: .4, parasaur: .6, stego: .55, triceratops: .7, bronto: 1 };
 const DINO_NATIVE = [["triceratops", 8, [2, 4]], ["parasaur", 8, [3, 6]], ["stego", 6, [1, 2]], ["bronto", 4, [2, 3]], ["trex", 1]];   // (the T. rex: one, Large maps and up)
 // a dinosaur on two legs: the body balanced over the hips, a long tail held out behind, the neck up to the head
@@ -4846,6 +4846,7 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (A.net && mpNetGuest()) { mpSendHost({ t: "ah", n: A.nid, d: dist || 0, dmg: dmg || 0, hd: head ? 1 : 0, g: gun || null, ti: gun ? tierOf(gun) : 0 }); if (A.hpMax) { A.flinch = 1; hitTick(); } return; }
   if (!A.hpMax) { killAnimal(A, dist); return; }
   const tbl = A.hunter || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
+  if (A.ptero) A.aggro = A.killBy || "me";                     // (a shot pteranodon comes for the shooter)
   A.hp -= hit; A.flinch = 1;                                  // it reacts with its body, not a cry every time
   if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
   dinoBar(A); hitTick();
@@ -5152,9 +5153,10 @@ const DINO_SFX = {
   triceratops: { call: ["dino/monster_09", "dino/weird_08", "beast/snort@.9", "beast/shortbellow@.9", "beast/shortbellow2@.9", "beast/grunt4@.9"], hurt: ["dino/monster_09", "beast/grunt3@.9"], die: ["dino/monster_09"] },
   parasaur: { call: ["dino/weird_06", "beast/warble@1", "beast/hooting@.95", "beast/bellow9@1", "beast/bellow2@.9"], hurt: ["dino/weird_06"], die: ["beast/defeated@1"] },
   stego: { call: ["dino/monster_12", "beast/croak@.8", "beast/croak3@.8", "beast/softgrowl@.85", "beast/bellow3@.85"], hurt: ["dino/monster_12", "beast/croak2@.85"], die: ["dino/monster_12"] },
+  ptero: { screech: ["beast/growl2@1.45", "dino/monster_13@1.05", "beast/growl1@1.5"], call: ["beast/growl5@1.55", "beast/hooting@1.35"], hurt: ["beast/grunt2@1.4"], die: ["dino/monster_13@.75"] },   // 2.02
   bronto: { call: ["dino/roar_05", "beast/bellow1@.85", "beast/bellow6@.85", "beast/bellow7@.85", "beast/bellow5@.8"], hurt: ["dino/roar_05"], die: ["dino/roar_05", "beast/defeated2@.75"] }
 };
-const DINO_RATE = { trex: 1, raptor: 1, triceratops: .82, parasaur: .9, stego: .72, bronto: .58 };   // each animal's own pitch
+const DINO_RATE = { ptero: 1, trex: 1, raptor: 1, triceratops: .82, parasaur: .9, stego: .72, bronto: .58 };   // each animal's own pitch
 const DSND_ALL = () => { const s = new Set(["dino/stomp_01"]); for (const k in DINO_SFX) for (const t in DINO_SFX[k]) DINO_SFX[k][t].forEach(n => s.add(n.split("@")[0])); return [...s]; };
 function dsndLoad(names) {
   if (!SND.ctx || typeof fetch === "undefined" || location.protocol === "file:") return;
@@ -5252,10 +5254,10 @@ const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORC
 const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
 const DINO_GROW = { trex: () => 1 + Math.random() * .5, raptor: () => 1.2, triceratops: () => .5 + Math.random(), stego: () => .5 + Math.random(), parasaur: () => .5 + Math.random(), bronto: () => .5 + Math.random() };   // 1.92: every one a different size (the raptor always the same)
 const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
-const SCORE = { gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
+const SCORE = { ptero: .3, gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
   coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5, raptor: 1, parasaur: .3, triceratops: .25, stego: .25, bronto: .15, trex: 1 };
-const BEAST_NAME = { gator: "Alligator", heron: "Heron", bighorn: "Bighorn sheep", pronghorn: "Pronghorn", tapir: "Tapir", capybara: "Capybara", oryx: "Oryx", camel: "Camel", roadrunner: "Roadrunner", vulture: "Vulture", buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
+const BEAST_NAME = { ptero: "Pteranodon", gator: "Alligator", heron: "Heron", bighorn: "Bighorn sheep", pronghorn: "Pronghorn", tapir: "Tapir", capybara: "Capybara", oryx: "Oryx", camel: "Camel", roadrunner: "Roadrunner", vulture: "Vulture", buck: "Buck", bear: "Bear", baboon: "Baboon", bird: "Big bird", panther: "Panther", wolf: "Wolf", polar: "Polar bear", seal: "Seal", rabbit: "Rabbit", monkey: "Monkey",
   elephant: "Elephant", giraffe: "Giraffe", zebra: "Zebra", rhino: "Rhino", lion: "Lion", crocodile: "Crocodile", parrot: "Parrot", goat: "Mountain goat", horse: "Wild horse",
   elk: "Elk", moose: "Moose", boar: "Boar", coyote: "Coyote", fox: "Fox", turkey: "Turkey", eagle: "Eagle", caribou: "Caribou", muskox: "Musk ox", arcticfox: "Arctic fox",
   owl: "Snowy owl", bigfoot: "BIGFOOT", yeti: "YETI", raptor: "Raptor", parasaur: "Parasaurolophus", triceratops: "Triceratops", stego: "Stegosaurus", bronto: "Brontosaurus", trex: "T. REX" };
@@ -5533,6 +5535,7 @@ function spawnAnimals() {
   for (const A of beasts) if (STOCKED(A)) { STOCK.n0[A.kind] = STOCK.n0[A.kind] || new Set(); STOCK.n0[A.kind].add(A.grp); }
   for (const k in STOCK.n0) STOCK.n0[k] = STOCK.n0[k].size;     // how many groups of each kind the map started with
   STOCK.peak = peak;
+  if (DINO.on && !netG) { const nP = { xs: 1, small: 2, medium: 2, large: 3, xl: 4, xxl: 5, xxxl: 5 }[set.size] || 2; for (let i = 0; i < nP; i++) pteroSpawn(); }   // 2.02: pteranodons over the dinosaur maps
   hunt.score = 0; hunt.kills = 0; hunt.longest = 0; showHuntScore(); sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
   updateAnimals(0);
 }
@@ -5682,6 +5685,7 @@ function updateAnimals(dt) {
   senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
+    if (A.ptero) { pteroTick(A, dt); continue; }                 // 2.02: the pteranodons fly their own way
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
     if (FLY[A.kind]) { updateBird(A, dt, T); A.root.visible = Math.hypot(A.x - camera.position.x, A.z - camera.position.z) < far * 1.4; continue; }
     if (A.gone) { A.root.visible = false; continue; }
@@ -5951,7 +5955,95 @@ const qgunKey = (kind, tier) => kind + "_" + Math.max(1, Math.min(5, tier || 1))
    The old hand-built dinosaur stays underneath, hidden: its hit spheres still do the hitting (the head ones ride on the model's head),
    and a copy opened from disk, which can't load the files, just keeps the old ones. */
 const QDINO = { models: {}, loading: {}, failed: 0, fit: {} };
-const QD_KINDS = { trex: 1, raptor: 1, parasaur: 1, triceratops: 1, stego: 1, bronto: 1 };
+const QD_KINDS = { trex: 1, raptor: 1, parasaur: 1, triceratops: 1, stego: 1, bronto: 1, ptero: 1 };
+/* ---------------- 2.02: Pteranodons (Ron): huge (9 m wings), circling high over the dinosaur maps. Pass under one and it screeches and dives at
+   you; if it reaches you, you black out like a raptor bite. Shoot one and it comes for you. Quaternius' Dragon reshaped (dev/dinos/exp_ptero.*):
+   long beak, swept crest, stub tail, flat colours, a little less boxy. Its own flight, not the ground animals' walking. */
+const PT = { span: 11, alt: [45, 80], trig: 90, cruise: 14, dive: 27 };
+function pteroAdd(x, z, y) {
+  const root = new THREE.Group(), pitchG = new THREE.Group(), body = new THREE.Group(); root.add(pitchG); pitchG.add(body);
+  const g = groundAt(x, z), A = { kind: "ptero", ptero: true, thru: true, wings: [], root, pitchG, body, head: body, legs: [], hit: [], x, z, y: y !== undefined ? y : Math.max(g, water) + PT.alt[0] + Math.random() * (PT.alt[1] - PT.alt[0]),
+    yaw: Math.random() * 6.283, speed: PT.cruise, pitch: 1.2, bank: 0, scale: 1, size: 1, dead: false, deadT: 0, vy: 0, state: "circle", cd: 15 + Math.random() * 25,
+    cx: x, cz: z, rad: 60 + Math.random() * 80, ang: Math.random() * 6.283, w: (Math.random() < .5 ? 1 : -1) * (.12 + Math.random() * .06), alt: PT.alt[0] + Math.random() * (PT.alt[1] - PT.alt[0]), mode: "fly", look: 0 };
+  A.hp = A.hpMax = DINO_HP.ptero; A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); qdinoLoad("ptero");
+  if (animalGroup) animalGroup.add(root); beasts.push(A); return A;
+}
+function pteroSpawn() {
+  const bR = BIG3() ? Math.min(HALF * .6, BUBBLE * .7) : HALF * .65, ox = BIG3() ? P.x : 0, oz = BIG3() ? P.z : 0;
+  for (let k = 0; k < 30; k++) { const x = ox + (Math.random() * 2 - 1) * bR, z = oz + (Math.random() * 2 - 1) * bR; if (Math.abs(x) < EDGE - 60 && Math.abs(z) < EDGE - 60 && Math.hypot(x - P.x, z - P.z) > 150) return pteroAdd(x, z); }
+  return null;
+}
+function pteroAttach(A) {
+  const M = QDINO.models.ptero; if (!M) { qdinoLoad("ptero"); return false; }
+  const Q = qdinoMake(M); if (!M.sph) M.sph = qdSpheres(M, Q);
+  const bb = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld), s = PT.span / Math.max(1, bb.max.x - bb.min.x), cy = (bb.min.y + bb.max.y) / 2;
+  const wrap = new THREE.Group(); wrap.scale.setScalar(s); wrap.position.y = -cy * s; wrap.add(Q.top); A.body.add(wrap);   // turns about its middle
+  A.qhit = M.sph.map(([b, x, y, z, r, hd]) => [Q.mesh.skeleton.bones[b], x, y, z, r * s, hd]); A.bR = PT.span * .75 + 2;
+  Q.wrap = wrap; A.qd = Q; return true;
+}
+function pteroTargets() {                                    // everyone it could go for: [x, y (head), z, id]
+  const out = [[P.x, P.y + 1.6, P.z, "me"]];
+  if (MP.on && MP.host) for (const L of mpOpen()) if (L.R && L.R.cur && L.R.alive) out.push([L.R.head.x, L.R.head.y, L.R.head.z, L.id]);
+  return out;
+}
+function pteroGot(A, id) {                                   // it reached you
+  dinoCall(A, "screech"); A.state = "climb"; A.clT = 6; A.cd = 40 + Math.random() * 30; A.aggro = null;
+  if (id === "me") { if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner("A pteranodon got you", 3.5, 1); } else uwRespawn(); }
+  else { const L = MP.links.get(id); if (L) mpSendTo(L, { t: "got", text: "A pteranodon got you", call: "screech" }); }
+}
+function pteroMind(A, dt) {
+  const turn = (want, rate) => { A.yaw += Math.max(-rate * dt, Math.min(rate * dt, angDiff(want, A.yaw))); };
+  const fly = (sp, ty, vr) => { A.speed += (sp - A.speed) * Math.min(1, dt * 1.5); A.x += Math.sin(A.yaw) * A.speed * dt; A.z += Math.cos(A.yaw) * A.speed * dt;
+    const dy = Math.max(-vr * dt, Math.min(vr * dt, ty - A.y)); A.y += dy; A.vyS = dy / Math.max(dt, 1e-3); };
+  const T = pteroTargets(), tg = id => T.find(t => t[3] === id), floor = Math.max(groundAt(A.x, A.z), water) + 4;
+  A.cd = Math.max(0, A.cd - dt); A.doomT = 0;
+  if (A.state === "circle") {
+    A.ang += A.w * dt; const tx = A.cx + Math.cos(A.ang) * A.rad, tz = A.cz + Math.sin(A.ang) * A.rad, ty = Math.max(groundAt(tx, tz), water) + A.alt;
+    turn(Math.atan2(tx - A.x, tz - A.z), .9); fly(PT.cruise, ty, 6);
+    if (Math.random() < dt * .02) { A.cx += (Math.random() - .5) * 120; A.cz += (Math.random() - .5) * 120; const l = EDGE - 120; A.cx = Math.max(-l, Math.min(l, A.cx)); A.cz = Math.max(-l, Math.min(l, A.cz)); }
+    if (Math.random() < dt * .03) dinoCall(A, "call");
+    let pick = A.aggro ? tg(A.aggro) : null;                 // shot: it comes for the shooter
+    if (!pick && A.cd <= 0) for (const t of T) if (Math.hypot(t[0] - A.x, t[2] - A.z) < PT.trig && A.y - t[1] > 15) { pick = t; break; }   // you passed under it
+    if (pick) { A.state = "screech"; A.tgt = pick[3]; A.stT = 1.1; A.dvT = 0; dinoCall(A, "screech"); }
+  } else if (A.state === "screech") {                        // a beat to turn and scream
+    const t = tg(A.tgt); if (!t) { A.state = "circle"; return; }
+    turn(Math.atan2(t[0] - A.x, t[2] - A.z), 1.8); fly(PT.cruise * .8, A.y, 3);
+    if ((A.stT -= dt) <= 0) A.state = "dive";
+  } else if (A.state === "dive") {
+    const t = tg(A.tgt); if (!t) { A.state = "climb"; A.clT = 5; return; }
+    const dx = t[0] - A.x, dy = t[1] - .3 - A.y, dz = t[2] - A.z, dh = Math.hypot(dx, dz), d = Math.hypot(dh, dy);
+    turn(Math.atan2(dx, dz), 2.2); fly(PT.dive, Math.max(t[1] - .3, d < 12 ? -1e9 : floor), Math.max(8, PT.dive * Math.abs(dy) / Math.max(1, d) * 1.4));
+    A.doomT = 1; A.dvT += dt;
+    if (d < 2.8) pteroGot(A, A.tgt);
+    else if (A.dvT > 10) { A.state = "climb"; A.clT = 5; A.cd = 25; A.aggro = null; }
+  } else {                                                   // climbing away, back up to circle
+    A.clT -= dt; fly(PT.cruise * 1.3, Math.max(groundAt(A.x, A.z), water) + A.alt, 7);
+    if (A.clT <= 0) { A.state = "circle"; A.cx = A.x + Math.sin(A.yaw) * A.rad; A.cz = A.z + Math.cos(A.yaw) * A.rad; A.ang = Math.atan2(A.z - A.cz, A.x - A.cx); }
+  }
+  A.y = Math.max(A.y, A.state === "dive" ? Math.max(groundAt(A.x, A.z), water) + .8 : floor);
+  if (Math.abs(A.x) > EDGE - 30 || Math.abs(A.z) > EDGE - 30) { A.x = Math.max(-EDGE + 30, Math.min(EDGE - 30, A.x)); A.z = Math.max(-EDGE + 30, Math.min(EDGE - 30, A.z)); A.yaw += Math.PI * .5; }
+}
+function pteroTick(A, dt) {
+  if (A.gone) { A.root.visible = false; return; }
+  const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), far = scene.fog.far * 1.4;
+  if (!A.qd && !pteroAttach(A)) { A.root.visible = false; return; }
+  const py = A.y;
+  if (A.net) mpNetBeast(A, dt);
+  else if (A.dead) { A.deadT += dt; if (A.y > Math.max(groundAt(A.x, A.z), water) + .3) { A.vy -= 12 * dt; A.y = Math.max(Math.max(groundAt(A.x, A.z), water) + .3, A.y + A.vy * dt); A.x += Math.sin(A.yaw) * A.speed * dt * .5; A.z += Math.cos(A.yaw) * A.speed * dt * .5; } else A.speed = 0; }
+  else pteroMind(A, dt);
+  const vy = A.net ? (A.y - py) / Math.max(dt, 1e-3) : A.vyS || 0;
+  const pWant = A.dead ? (A.y > groundAt(A.x, A.z) + 1 ? .5 : 0) : Math.max(-.5, Math.min(.6, -Math.atan2(vy, Math.max(4, A.speed || 4)) * .9));   // nose follows the flight path
+  A.pitch += (pWant - A.pitch) * Math.min(1, dt * 3); A.bank += ((A.dead ? 0 : -angDiff(A.yaw, A.yawP === undefined ? A.yaw : A.yawP) / Math.max(dt, 1e-3) * .35) - A.bank) * Math.min(1, dt * 3); A.yawP = A.yaw;
+  A.bank = Math.max(-.6, Math.min(.6, A.bank));
+  A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0); A.pitchG.rotation.set(A.pitch, 0, A.bank + (A.body.rotation.z || 0));
+  A.root.visible = cd < far; if (!A.root.visible) return;
+  if (!A.net && (A.flapT = (A.flapT || 0) - dt) < -6 - Math.random() * 8) A.flapT = 2.5 + Math.random() * 2;   // soaring, with a few slow flaps now and then
+  const Q = A.qd, want = A.dead ? "Death" : A.doomT > 0 ? "Attack" : A.state === "climb" || A.state === "screech" || A.flapT > 0 || (A.net && A.speed > PT.cruise * 1.15) ? "Flying" : "Glide";
+  if (want !== Q.cur) { const a = Q.act(want); a.reset(); a.setLoop(want === "Death" ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = want === "Death"; if (Q.curA) a.crossFadeFrom(Q.curA, .25, false); a.play(); Q.cur = want; Q.curA = a; }
+  if (want === "Flying") Q.curA.timeScale = A.state === "climb" ? 1.2 : .85;
+  if (A.dead && Q.cur === "Death" && (Q.deadT += dt) > 2) return;
+  Q.acc += dt; if (Q.acc < (cd < 120 ? 0 : cd < 300 ? 1 / 30 : 1 / 12)) return; Q.mixer.update(Q.acc); Q.acc = 0;
+}
 function qdinoLoad(kind) {
   if (!QD_KINDS[kind] || QDINO.models[kind] || QDINO.loading[kind] || typeof fetch === "undefined" || location.protocol === "file:") return;
   QDINO.loading[kind] = true;
@@ -9145,7 +9237,7 @@ function mpBeastSend(dt) {                                   // host: the animal
     const R = L.R; if (!R || !R.cur) continue; const a = [];
     for (const A of beasts) {
       if (A.gone || !A.nid || FLY[A.kind] || A.kind === "monkey") continue;
-      const d = Math.hypot(A.x - R.head.x, A.z - R.head.z), big = A.kind === "trex" || A.hunter;
+      const d = Math.hypot(A.x - R.head.x, A.z - R.head.z), big = A.kind === "trex" || A.hunter || A.ptero;
       if (d > 480 && !big) continue; if (d > 160 && (MP.anN + A.nid) % 3) continue;
       a.push(A.nid, A.kind, Math.round(A.x * 10) / 10, Math.round(A.y * 100) / 100, Math.round(A.z * 10) / 10, Math.round(A.yaw * 100) / 100, Math.round((A.speed || 0) * 10) / 10,
         mpBeastFlags(A), Math.round((A.look || 0) * 100) / 100, Math.round((A.size || 1) * 100) / 100, Math.round((A.flinch || 0) * 10) / 10);
@@ -9158,7 +9250,7 @@ function mpBeastRecv(a) {                                    // guest: make or m
   for (let i = 0; i + 10 < a.length; i += 11) {
     const nid = a[i]; let A = MP.nb.get(nid);
     if (A && A.gone) { MP.nb.delete(nid); A = null; }
-    if (!A) { if (!BEAST_NAME[a[i + 1]] && !QSPEC[a[i + 1]] && !DINO_BIPED[a[i + 1]]) continue; A = addGround(a[i + 1], a[i + 2], a[i + 4], null, a[i + 9]); MP.byNid.delete(A.nid); A.net = true; A.nid = nid; A.nrx = []; A.y = a[i + 3]; A.yaw = a[i + 5]; MP.nb.set(nid, A); }
+    if (!A) { if (!BEAST_NAME[a[i + 1]] && !QSPEC[a[i + 1]] && !DINO_BIPED[a[i + 1]]) continue; A = a[i + 1] === "ptero" ? pteroAdd(a[i + 2], a[i + 4], a[i + 3]) : addGround(a[i + 1], a[i + 2], a[i + 4], null, a[i + 9]); MP.byNid.delete(A.nid); A.net = true; A.nid = nid; A.nrx = []; A.y = a[i + 3]; A.yaw = a[i + 5]; MP.nb.set(nid, A); }
     A.nrx.push({ at: now, x: a[i + 2], y: a[i + 3], z: a[i + 4], yaw: a[i + 5], sp: a[i + 6], f: a[i + 7], lk: a[i + 8], fl: a[i + 10] }); if (A.nrx.length > 12) A.nrx.shift();
     A.netT = now;
   }
