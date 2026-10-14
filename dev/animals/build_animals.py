@@ -334,20 +334,79 @@ def _elephant():                                       # grey, pillar legs, the 
     return moves(m, eat=(.35, .3))
 
 @recipe("gator")
-def _gator():                                          # long, flat, low; a long snout and a heavy tapering tail
+def _gator():                                          # 2.17 (Ron: "the gator's shape looks kinda dumb", "make his head and snout bigger"): built from scratch on the pig's bones
     m = base("Pig"); pig_tail_off(m); pig_ears_off(m)
-    legs(m, .5, .52, thick=1.45); body(m, L=1.5, G=1.25, H=.6); neck(m, .5, 1.1, tilt=.25); head(m, .9, snout=2.6, sy=.5, sx=1.0)
-    r, dep, ln = rear(m); y0 = r[1] - dep * .45
-    m.tube([np.array([0, y0, r[2] + 30]), np.array([0, y0 - 15, r[2] - .35 * ln]), np.array([0, y0 - 30, r[2] - .75 * ln]), np.array([0, y0 - 38, r[2] - 1.1 * ln])],
-           [dep * .5, dep * .4, dep * .24, dep * .05], 0x2c3220, "Back", sides=6)
+    legs(m, .5, .52, thick=1.45); body(m, L=1.5, G=1.25, H=.6); neck(m, .5, 1.1, tilt=.25); head(m, .9, snout=2.6, sy=.5, sx=1.0)   # (just to place the bones)
+    C, B, K = tri_info(m); m.drop(np.array([not is_leg(b) or "UpLeg" in b for b in B]))      # keep only the lower legs and feet; short sprawling upper legs below
+    TOP, TOP2, BELLY, TOOTH, EYE = 0x2c3220, 0x22261a, 0x9a967a, 0xe8e2c8, 0xb89a30
+    # one smooth skin from the tail tip to the nose: (z, centre height, half width, half height); a long flat body, a heavy tail, a big broad head and snout
+    S = [(-1510, 24, 4, 8), (-1440, 32, 12, 16), (-1300, 45, 22, 26), (-1150, 58, 32, 33), (-1000, 70, 42, 39), (-850, 82, 56, 44), (-700, 92, 72, 48), (-570, 98, 92, 50),
+         (-470, 101, 112, 50), (-380, 102, 126, 49), (-250, 102, 134, 47), (-100, 102, 138, 47), (50, 102, 138, 47), (200, 102, 134, 47), (300, 102, 126, 46),
+         (360, 104, 112, 47), (410, 108, 110, 53), (470, 111, 118, 57), (540, 107, 106, 47), (620, 101, 92, 38), (700, 95, 80, 31), (770, 91, 72, 27),
+         (830, 89, 66, 25), (858, 88, 56, 20), (872, 87, 33, 12)]
+    HZ = lambda z: 360 + (z - 360) * 1.14 if z > 360 else z                                   # the head a bit longer ...
+    TZ = lambda z: -470 + (z + 470) * .86 if z < -470 else z                                 # ... and the tail a bit shorter
+    S = [(TZ(HZ(z)), cy + (ry * .12 if z > 360 else 0), rx * (1.17 if z > 400 else 1), ry * (1.17 if z > 400 else 1)) for z, cy, rx, ry in S]
+    def at(z):                                              # the skin's section at any z
+        for (z0, *a), (z1, *b) in zip(S[:-1], S[1:]):
+            if z0 <= z <= z1: t = (z - z0) / (z1 - z0); return [a[i] + (b[i] - a[i]) * t for i in range(3)]
+        return list(S[0][1:]) if z < S[0][0] else list(S[-1][1:])
+    def sect(z, cy, rx, ry, n=14):                           # a rounded section, a little flatter underneath
+        return [np.array([rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n) * (.82 if math.sin(2 * math.pi * k / n) < 0 else 1), z]) for k in range(n)]
+    STOPS = [(TZ(-1510), "Back"), (-560, "Back"), (-330, "Hips"), (0, "Body"), (170, "Shoulders"), (330, "Shoulders"), (400, "Neck"), (440, "Head")]
+    def blend(n0, n1):                                      # each new corner follows the bones near it along the body (no cracks when it bends)
+        for i in range(n0, n1):
+            z = m.pos[i][2]
+            if z <= STOPS[0][0]: m.si[i] = [m.idx(STOPS[0][1]), 0, 0, 0]; m.sw[i] = [1, 0, 0, 0]; continue
+            if z >= STOPS[-1][0]: m.si[i] = [m.idx(STOPS[-1][1]), 0, 0, 0]; m.sw[i] = [1, 0, 0, 0]; continue
+            for (z0, b0), (z1, b1) in zip(STOPS[:-1], STOPS[1:]):
+                if z0 <= z <= z1: t = (z - z0) / (z1 - z0); m.si[i] = [m.idx(b0), m.idx(b1), 0, 0]; m.sw[i] = [1 - t, t, 0, 0]; break
+    n0 = len(m.pos); m.add_loft([sect(z, cy, rx, ry) for z, cy, rx, ry in S], TOP, "Body", out=lambda c: np.array([0, at(c[2])[0], c[2]]))
+    # bumps on top: two rows of plates down the back, then a double crest and a single fin row along the tail
+    def spike(c, h, w, col=TOP2, ln=None):
+        ln = ln or w; c = np.array(c, float); tip = c + np.array([0, h, 0]); q = [c + np.array([-w, 0, 0]), c + np.array([0, 0, ln]), c + np.array([w, 0, 0]), c + np.array([0, 0, -ln])]
+        m.add_tris([v for k in range(4) for v in (q[k], q[(k + 1) % 4], tip)], col, "Body", out=c - np.array([0, 10, 0]))
+    for z in range(-470, 330, 42):
+        cy, rx, ry = at(z)
+        for xs in (.3, .6):
+            for sg in (1, -1): x = sg * rx * xs; spike((x, cy + ry * math.sqrt(max(0, 1 - xs * xs)) - 3, z), 11, 13)
+    for z in range(int(TZ(-500)), int(TZ(-1000)), -40):
+        cy, rx, ry = at(z)
+        for sg in (1, -1): spike((sg * rx * .35, cy + ry * .93 - 3, z), 20, 9, ln=18)
+    for z in range(int(TZ(-1000)), int(TZ(-1470)), -36):
+        cy, rx, ry = at(z); spike((0, cy + ry - 3, z), 22 * (1 - (TZ(-1000) - z) / (TZ(-1000) - TZ(-1600))) + 6, 4, ln=16)
+    nlg = len(m.pos)
+    # upper legs: out sideways from the trunk, down to the knee (each rides its own upper-leg bone)
+    for sg, sd in ((1, "L"), (-1, "R")):
+        for fb, z0, z1, r0, r1 in (("Back", -395, -457, 36, 27), ("Front", 280, 290, 30, 23)):
+            a, b_ = np.array([sg * 80, 98, z0]), np.array([sg * 152, 40, z1])
+            m.tube([a, a + (b_ - a) * .55, b_], [r0, (r0 + r1) / 2 * 1.05, r1], TOP, fb + "UpLeg" + sd, sides=7)
+            blob(m, b_ + np.array([0, -4, 0]), r1 * 1.05, TOP, fb + "UpLeg" + sd, n=7, rows=3)
+    nl = len(m.pos)
+    # the head: eyes up on top, nostrils at the tip, teeth along the jaw
+    hb = len(m.pos)
+    for sg in (1, -1):
+        cy, rx, ry = at(HZ(452)); blob(m, (sg * 64, cy + ry - 4, HZ(452)), 23, TOP, "Head", n=8, rows=4, sq=(1, .8, 1.15))
+        blob(m, (sg * 76, cy + ry + 5, HZ(462)), 9, EYE, "Head", n=6, rows=3, sq=(.6, 1, 1))
+        cy, rx, ry = at(HZ(842)); blob(m, (sg * 17, cy + ry - 3, HZ(842)), 11, TOP2, "Head", n=6, rows=3, sq=(1, .6, 1.2))
+        for z in range(int(HZ(478)), int(HZ(850)), 28):
+            cy, rx, ry = at(z); x = sg * rx * .985; y = cy - ry * .08; L_ = 10 if (z // 28) % 2 else 15
+            m.add_tris([(x, y, z - 6), (x, y, z + 6), (x + sg * 2, y - L_, z), (x, y, z - 6), (x + sg * 2, y - L_, z), (x - sg * 6, y, z)], TOOTH, "Head", out=(0, y, z))
+    blend(n0, nlg); blend(nl, len(m.pos))
     def f(c, b, k, L):
-        if c[1] < L["belly"] - 5 and not is_leg(b): return 0x9a967a
-        return 0x22261a if int(c[2] / 30) % 2 else 0x2c3220
-    paint_rule(m, f)
-    o, Lh = hunits(m)
-    for s_ in (1, -1): blob(m, o + np.array([s_ * .2, .02, .25]) * Lh, .08 * Lh, 0x3a4228, "Head", n=6, rows=3)
+        if is_leg(b) or k is None: return None
+        if np.abs(k - rgb(TOOTH)).max() < .02 or np.abs(k - rgb(EYE)).max() < .02: return None
+        z = c[2]; cy, rx, ry = at(z)
+        if z > 380 and c[1] < cy - ry * .12: return BELLY                                     # the pale lower jaw
+        if c[1] < cy - ry * .45: return BELLY
+        if np.abs(k - rgb(TOP2)).max() < .02: return None
+        if z > 380: return TOP
+        seg = max(i for i in range(len(S)) if S[i][0] <= z) if z >= S[0][0] else 0
+        return TOP2 if seg % 2 else TOP                                                         # bands, one per section of the skin
+    paint(m, lambda c, b, k: f(c, b, k, None))
+    paint(m, lambda c, b, k: (0x1e2216 if "Foot" in b else 0x2a301e) if is_leg(b) else None)
     m = moves(m, eat=None, run=2.2)
-    m.variants = [{}, {0x22261a: 0x3a4228, 0x2c3220: 0x4a5232, 0x9a967a: 0xb4ac80}]                     # (the crocodile: lighter, more olive)
+    m.variants = [{}, {0x22261a: 0x3a4228, 0x2c3220: 0x4a5232, 0x9a967a: 0xb4ac80, 0x1e2216: 0x30361f, 0x2a301e: 0x3e4630}]   # (the crocodile: lighter, more olive)
     return m
 
 # ---------------- the dog's family (the pug: a longer nose, longer legs, upright ears, a proper tail)

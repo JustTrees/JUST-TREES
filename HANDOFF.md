@@ -43,7 +43,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.17)
+## 4. The game now (v2.18)
 
 ### Modes
 - **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -144,6 +144,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.18** a new gator (and crocodile): built from scratch on the pig's bones in `build_animals.py` — one smooth flat body-to-tail skin blended along the spine bones (no cracks), sprawling upper legs, back plates and a tail crest, a big broad head and snout with raised eyes, nostrils and teeth, a pale jaw.
 - **2.17** textured skins on the hunting animals: fur, wrinkled hide (elephant, rhino), scales (gator, crocodile), feathers (birds).
 - **2.16** textured skins: scales on the dinosaurs (T. rex a little darker green, leathery pterosaur), brushed metal / wood grain / grip stipple on the guns. No new triangles; dino pattern fades out past ~60 m.
 - **2.15** grabs happen right at the surface of trunks and rocks (rocks used to catch 15 cm early); hands holding a gun, bow, arrow or grenade never catch hold.
