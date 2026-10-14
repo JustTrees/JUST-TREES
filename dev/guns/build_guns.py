@@ -12,6 +12,7 @@ PICKS = {   # Ron's picks, tier 1 (white) .. 5 (red)
     "smg":    ["SubmachineGun_1", "SubmachineGun_4", "SubmachineGun_3", "SubmachineGun_2", "SubmachineGun_5"],
     "pistol": ["Pistol_2", "Pistol_1", "Pistol_5", "Pistol_4", "Pistol_6"],
 }
+GUN_SIZE = 1.15                                                       # 1.95 (Ron): all the guns 15% bigger
 SCALE = {"hunt": .158, "ar": .162, "smg": .15, "pistol": .115}       # pack units -> metres (sniper ~1.15 m, AK ~0.9 m, pistol ~0.21 m)
 GRIP0 = {"hunt": (-.2, -.18), "ar": (.07, .05), "smg": (-.03, -.05), "pistol": (-.03, -.03)}   # where the trigger hand holds (pack x, y), refined below
 COLS = {"Black": (50, 52, 56), "Black2": (40, 40, 43), "DarkMetal": (72, 76, 82), "Metal": (118, 122, 128), "LightMetal": (176, 180, 186),
@@ -22,7 +23,7 @@ def to_game(p, s):            # pack (x fwd, y up, z right) -> game (x right, y 
 
 def build(kind, name):
     isl, V, tris, kd = islands(name)
-    s = SCALE[kind]
+    s = SCALE[kind] * GUN_SIZE
     allv = [V[i] for t in tris for i in t[:3]]
     gx0, gy0 = GRIP0[kind]
     def cen(o): b = o['bb']; return ((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, (b[4] + b[5]) / 2)
