@@ -43,7 +43,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.16)
+## 4. The game now (v2.17)
 
 ### Modes
 - **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -69,7 +69,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 - **Raptor hunts** (`dinoTick`, `huntTick`): random times, warning cue, circles far and fast, feints, heals unless hit by the sniper, charges at ≤30%, inside 15 m it gets you (red blackout, respawn).
 - **T. rex** (Large+: 1/2/3/4 by size; `rexTick`): revealed by the red sniper (scream across the map), roams and screams every 30–60 s; shot → chases in wide S-curves with screaming stops; 3500 HP; a climb over 6 m saves you.
 - **Pterosaurs** (2.02, `PT`, `pteroTick`): circle 45–80 m up, pass under one (or shoot it) → screech and dive; reaching you = blackout.
-- Models: Quaternius dinosaurs (`models/dinos`, `dev/dinos/exp.py`), from-scratch pterosaur (`make_ptero.py`). **Skins (2.16):** a scaly pattern over the plain colours (`dinoSkinOn`, `DINO_SKIN`: the 1.82 `dinoSkin` Voronoi scales, big for the large ones, small for the raptor; a leathery `leatherSkin` for the pterosaur), projected three ways in the model's own space (no UVs needed; rides with the bones), fades out 45–70 m away (`SKIN.fade`); T. rex a bit darker green (`DINO_RECOL`). Hunting animals have no skin. Sounds: `DINO_SFX` / `DINO_RATE` (recordings pitched per animal, `name@rate`), 3D voices with forest reverb, one limiter; made-up fallbacks.
+- Models: Quaternius dinosaurs (`models/dinos`, `dev/dinos/exp.py`), from-scratch pterosaur (`make_ptero.py`). **Skins (2.16):** a scaly pattern over the plain colours (`dinoSkinOn`, `DINO_SKIN`: the 1.82 `dinoSkin` Voronoi scales, big for the large ones, small for the raptor; a leathery `leatherSkin` for the pterosaur), projected three ways in the model's own space (no UVs needed; rides with the bones), fades out 45–70 m away (`SKIN.fade`); T. rex a bit darker green (`DINO_RECOL`). 2.17: the hunting animals too (`ANIMAL_SKIN`, `SKIN.animal`): fine short fur in soft clumps (`furSkin`), wrinkled hide on elephant / rhino, scales on gator / crocodile, overlapping feathers (`featherSkin`) on the birds (all birds share `bird`), turkey, roadrunner, heron. Per-pattern strength `SKIN.amt`; an entry's 3rd number scales it (seal, tapir, panther lighter). It multiplies the coat, so near-black coats (black bear, Bigfoot) barely show it. Sounds: `DINO_SFX` / `DINO_RATE` (recordings pitched per animal, `name@rate`), 3D voices with forest reverb, one limiter; made-up fallbacks.
 
 ### VR
 - PLAY IN VR → height check → intro → curved menu panels. Before each map: spin a mini-map, pick your start. Pause: Y.
@@ -144,6 +144,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.17** textured skins on the hunting animals: fur, wrinkled hide (elephant, rhino), scales (gator, crocodile), feathers (birds).
 - **2.16** textured skins: scales on the dinosaurs (T. rex a little darker green, leathery pterosaur), brushed metal / wood grain / grip stipple on the guns. No new triangles; dino pattern fades out past ~60 m.
 - **2.15** grabs happen right at the surface of trunks and rocks (rocks used to catch 15 cm early); hands holding a gun, bow, arrow or grenade never catch hold.
 - **2.14** far gunshots turn into a rolling echo with distance (a dull pop, then thunder off the hills).
