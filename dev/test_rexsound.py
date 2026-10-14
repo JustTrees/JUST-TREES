@@ -27,18 +27,18 @@ async def main():
           // the announce: only once you hold the red sniper, once a round, from across the map
           D.SND.on = true; const rex = D.beasts.find(A => A.kind === 'trex'); out.rex = !!rex; out.loot = D.lootMode();
           if (rex) { out.rexD = Math.round(Math.hypot(rex.x - D.P.x, rex.z - D.P.z));
-            D.dinoTick(1 / 30); for (let i = 0; i < 100 && Object.keys(D.DSND.buf).length < 6; i++) await new Promise(r => setTimeout(r, 100)); out.loaded = Object.keys(D.DSND.buf).sort();
+            D.dinoTick(1 / 30); for (let i = 0; i < 100 && Object.keys(D.DSND.buf).length < 14; i++) await new Promise(r => setTimeout(r, 100)); out.loaded = Object.keys(D.DSND.buf).sort();
             out.durs = Object.fromEntries(Object.entries(D.DSND.buf).map(([k, b]) => [k, +b.duration.toFixed(1)]));
             D.setLoot({ hunt: 4 }); D.rexAnnounce(); out.before = !!D.DINO.rexHeard;
             D.setLoot({ hunt: 5 }); D.rexAnnounce(); out.after = !!D.DINO.rexHeard; out.voices = D.DINO.voices.length;
             // footsteps at 300 m
-            out.startSample = D.rexSample(rex, 'start'); rex.x = D.P.x + 300; rex.z = D.P.z; rex.speed = 2.4; rex.stepAcc = 99; D.DINO.voices.length = 0; for (const v of D.DINO.pool) v.until = 0; D.dinoSteps(1 / 30); out.step300 = D.DINO.voices.length;
+            out.startSample = D.dinoSample(rex, 'start'); out.otherSamples = ['raptor','triceratops','parasaur','stego','bronto'].map(k => D.dinoSample(Object.assign({ kind: k, x: rex.x, y: rex.y, z: rex.z, size: 1 }), k === 'raptor' ? 'rush' : 'call')); rex.x = D.P.x + 300; rex.z = D.P.z; rex.speed = 2.4; rex.stepAcc = 99; D.DINO.voices.length = 0; for (const v of D.DINO.pool) v.until = 0; D.dinoSteps(1 / 30); out.step300 = D.DINO.voices.length;
             rex.x = D.P.x + 360; rex.stepAcc = 99; for (const v of D.DINO.pool) v.until = 0; D.DINO.voices.length = 0; D.dinoSteps(1 / 30); out.step360 = D.DINO.voices.length; }
           return out; }""")
         w = r.pop("wav")
         if OUT: open(os.path.join(OUT, "rex_scream.wav"), "wb").write(base64.b64decode(w))
         print(json.dumps(r)); print("errors", errs[:5])
-        ok = r["scream"]["peak"] > .05 and not r["scream"]["nan"] and r.get("rex") and not r["before"] and r["after"] and r["step300"] > 0 and r["step360"] == 0 and not errs and len(r.get("loaded", [])) == 6 and r.get("startSample")
+        ok = r["scream"]["peak"] > .05 and not r["scream"]["nan"] and r.get("rex") and not r["before"] and r["after"] and r["step300"] > 0 and r["step360"] == 0 and not errs and len(r.get("loaded", [])) == 14 and all(r.get("otherSamples", [])) and r.get("startSample")
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 try: ok = asyncio.run(main())
 finally: srv.terminate(); shutil.rmtree(srvdir, ignore_errors=True)

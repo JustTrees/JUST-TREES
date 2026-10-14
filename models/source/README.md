@@ -15,5 +15,6 @@ Models actually used by the game get converted to small `.glb` files in `models/
 | `Fish_Pack_Animated_by_Quaternius.zip` (1 MB) | Quaternius | older pack, released free (no license file in the zip) | 7 animated sea creatures in FBX, OBJ and Blender: 3 fish, dolphin, manta ray, shark, whale |
 | `Monster_Pack_Animated_by_Quaternius.zip` (1.4 MB) | Quaternius | older pack, released free (no license file in the zip) | 4 animated monsters in FBX, OBJ and Blender: bat, dragon, skeleton, slime |
 | `t-rex_calls_by_CaveboyTup_CC0.mp3` (740 KB) | CaveboyTup ([OpenGameArt](https://opengameart.org/content/t-rex-calls)) | CC0 | 9 T. rex calls in a row; cut apart into `sounds/trex/` (1.94): announce = 08 long bellow, start = 09 bellow-scream, growl1/2 = 03/04, charge = 01, hurt = 02 |
+| `80-CC0-creature-sfx-2.zip` | rubberduck ([OpenGameArt](https://opengameart.org/content/80-cc0-creture-sfx-2)) | CC0 | 80 creature sounds; Ron's picks in `sounds/dino/` (1.96): monster_08/09/12/13, roar_05, stomp_01 (EQ'd + compressed, it was very soft), weird_06/08 |
 
 **Not kept here:** packs under the *Quaternius Asset License (QAL)* (e.g. Bestiary – Dungeon Monsters Kit) may be used in the game but must **not** be redistributed as assets, and this repo is public — keep those zips on Ron's computer and only commit models converted into the game.

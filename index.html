@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.95</title>
+<title>JUST TREES 1.96</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.95";              // Just Trees 1.95
+const VERSION = "1.96";              // Just Trees 1.96
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4851,7 +4851,7 @@ function dinoTick(dt) {
   if (!DINO.warm && SND.ctx) {                                // get the slow one-time sound set-up out of the way now, not in the middle of a fight
     DINO.warm = true; sndVerb(); sndPool(); for (const k of [3.5, 4, 5, 6, 7, 8, 9, 11]) driveCurve(k); }
   if ((DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
-  dinoSteps(dt); dinoVoices(); if (SND.ctx && !DSND.asked && beasts.some(a => a.kind === "trex")) { DSND.asked = true; dsndLoad(["announce", "start", "growl1", "growl2", "charge", "hurt"]); } rexAnnounce();
+  dinoSteps(dt); dinoVoices(); if (SND.ctx && !DSND.asked) { DSND.asked = true; dsndLoad(DSND_ALL()); } rexAnnounce();
   for (const A of beasts) {                                   // a dinosaur that hasn't got anywhere for a while pushes straight on through
     if (!A.hpMax || A.hunter || A.dead || A.gone) continue;
     if ((A.pgT = (A.pgT || 0) + dt) < 2.5) continue; const moved = A.pgP ? Math.hypot(A.x - A.pgP[0], A.z - A.pgP[1]) : 99; A.pgT = 0; A.pgP = [A.x, A.z];
@@ -5081,7 +5081,7 @@ function dSub(out, f0, f1, t0, dur, vol) {                   // a low body you f
 }
 function dinoCall(A, type) {
   if (!SND.ctx || !SND.on || !A) return;
-  if (A.kind === "trex" && rexSample(A, type)) return;
+  if (dinoSample(A, type)) return;                           // a recording, when there is one for this animal and call
   const loud = type === "hurt" || type === "die" || type === "charge" || type === "bite" || type === "rush", O = dinoOut(A, loud ? 1.3 : 1); if (!O) return;
   const out = O.node, t = SND.ctx.currentTime + .02 + O.delay, k = A.kind, j = 1 + (Math.random() - .5) * .16, pain = type === "hurt" || type === "die", dl = type === "die" ? 1.8 : 1, pu = pain ? 1.3 : 1;
   const huff = (f, d, v) => dNoise(out, "bandpass", f, .7, t, d, v);                          // a breath before the call
@@ -5114,16 +5114,31 @@ function dinoCall(A, type) {
    the bellow-scream when you first shoot it and the hunt starts, two growls when it stops on the way. The made-up scream stays as the
    fallback (a copy opened from disk can't load them). */
 const DSND = { buf: {}, loading: {} };
-const REX_SND = { announce: ["announce"], start: ["start"], call: ["growl1", "growl2"], charge: ["charge"], bite: ["charge"], hurt: ["hurt"] };
+/* 1.96: the other dinosaurs too (Ron's picks from "80 CC0 creature SFX 2", OpenGameArt, CC0, in sounds/dino/): short calls, pitched to each
+   animal and its size (bigger: deeper and slower). Calls without a recording (the raptor's clicks, sniffs, hisses) stay made-up. */
+const DINO_SFX = {
+  trex: { announce: ["trex/announce"], start: ["trex/start"], call: ["trex/growl1", "trex/growl2"], charge: ["trex/charge"], bite: ["trex/charge"], hurt: ["trex/hurt"] },
+  raptor: { rush: ["dino/monster_13", "dino/monster_08"], charge: ["dino/monster_13", "dino/monster_08"], bite: ["dino/monster_08"], hurt: ["dino/monster_08"], die: ["dino/monster_13"] },
+  triceratops: { call: ["dino/monster_09", "dino/weird_08"], hurt: ["dino/monster_09"], die: ["dino/monster_09"] },
+  parasaur: { call: ["dino/weird_06"], hurt: ["dino/weird_06"], die: ["dino/weird_06"] },
+  stego: { call: ["dino/monster_12"], hurt: ["dino/monster_12"], die: ["dino/monster_12"] },
+  bronto: { call: ["dino/roar_05"], hurt: ["dino/roar_05"], die: ["dino/roar_05"] }
+};
+const DINO_RATE = { trex: 1, raptor: 1, triceratops: .82, parasaur: .9, stego: .72, bronto: .58 };   // each animal's own pitch
+const DSND_ALL = () => { const s = new Set(["dino/stomp_01"]); for (const k in DINO_SFX) for (const t in DINO_SFX[k]) DINO_SFX[k][t].forEach(n => s.add(n)); return [...s]; };
 function dsndLoad(names) {
   if (!SND.ctx || typeof fetch === "undefined" || location.protocol === "file:") return;
   for (const n of names) { if (DSND.buf[n] || DSND.loading[n]) continue; DSND.loading[n] = true;
-    fetch("sounds/trex/" + n + ".mp3").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(b => SND.ctx.decodeAudioData(b)).then(ab => { DSND.buf[n] = ab; }).catch(() => {}); }
+    fetch("sounds/" + n + ".mp3").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(b => SND.ctx.decodeAudioData(b)).then(ab => { DSND.buf[n] = ab; }).catch(() => {}); }
 }
-function rexSample(A, type, far, delay) {                     // play a recorded call from the T. rex; false if not loaded
-  const list = REX_SND[type]; if (!list) return false; const n = list[Math.floor(Math.random() * list.length)], b = DSND.buf[n]; if (!b) return false;
-  const O = dinoOut(A, far ? 1.6 : 1.25, false, far, b.duration + 1.5); if (!O) return true;
-  const s = SND.ctx.createBufferSource(); s.buffer = b; s.connect(O.node); s.start(SND.ctx.currentTime + (delay || .02) + O.delay); return true;
+function dinoSample(A, type, far, delay) {                    // play a recorded call from this animal; false if there's none (or it isn't loaded)
+  const T0 = DINO_SFX[A.kind], list = T0 && T0[type]; if (!list) return false; const n = list[Math.floor(Math.random() * list.length)], b = DSND.buf[n]; if (!b) return false;
+  const rate = (DINO_RATE[A.kind] || 1) / Math.pow(A.size || 1, A.kind === "trex" ? .3 : .5) * (type === "die" ? .85 : type === "hurt" ? 1.08 : 1) * (A.kind === "trex" ? 1 : 1 + (Math.random() - .5) * .1);
+  const O = dinoOut(A, far ? 1.6 : 1.25, false, far, b.duration / rate + 1.5); if (!O) return true;
+  const t = SND.ctx.currentTime + (delay || .02) + O.delay, play = (t0, r) => { const s = SND.ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = r; s.connect(O.node); s.start(t0); };
+  play(t, rate);
+  if (A.kind === "parasaur" && type === "call" && Math.random() < .6) play(t + b.duration / rate + .25, rate * 1.06);   // the parasaur honks twice
+  return true;
 }
 function rexScream(out0, t, L, j) {                          // L: length (1 = the full scream)
   const out = SND.ctx.createGain(); out.gain.value = .55; out.connect(out0);                    // (all the layers together: kept under clipping)
@@ -5138,7 +5153,7 @@ function rexScream(out0, t, L, j) {                          // L: length (1 = t
 function rexAnnounce() {                                     // 1.93: the moment you hold the red sniper, the T. rex screams from wherever it is on the map
   if (!SND.ctx || !SND.on || DINO.rexHeard || !legendSeen()) return;
   const A = beasts.find(a => a.kind === "trex" && !a.dead && !a.gone); if (!A) return;
-  DINO.rexHeard = true; if (rexSample(A, "announce", true, .4)) return; const O = dinoOut(A, 1.6, false, true); if (!O) return;
+  DINO.rexHeard = true; if (dinoSample(A, "announce", true, .4)) return; const O = dinoOut(A, 1.6, false, true); if (!O) return;
   rexScream(O.node, SND.ctx.currentTime + .4 + O.delay, 1.15, .95);
 }
 function dinoAmbient() {                                     // somebody out there calls now and then (the hunter keeps quiet unless stalking)
@@ -5154,6 +5169,7 @@ function dinoSteps(dt) {                                     // the big ones sha
     const rx = A.kind === "trex", O = dinoOut(A, rx ? 2.2 * Math.max(1, Math.min(2.2, d / 120)) : A.kind === "bronto" ? 1.4 : .7, true); if (!O) continue; const t = SND.ctx.currentTime + O.delay;
     if (rx) O.node.gain.value *= A.size || 1;                 // (heavier ones land harder)
     dSub(O.node, rx ? 38 : 44, rx ? 22 : 26, t, rx ? .5 : .35, .5); dNoise(O.node, "lowpass", 140, .8, t, rx ? .45 : .3, .28);
+    const sb = DSND.buf["dino/stomp_01"]; if (sb) { const s = SND.ctx.createBufferSource(), g = SND.ctx.createGain(); s.buffer = sb; s.playbackRate.value = (rx ? .7 : A.kind === "bronto" ? .62 : .85) / Math.sqrt(A.size || 1) * (1 + (Math.random() - .5) * .08); g.gain.value = 1.8; s.connect(g).connect(O.node); s.start(t); }   // 1.96: a real stomp under the rumble
   }
 }
 function dinoCue() {                                         // you've been seen: a sudden low, deep swell (a warning, not a jump scare)
