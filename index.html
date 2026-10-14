@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 1.91</title>
+<title>JUST TREES 1.92</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "1.91";              // Just Trees 1.91
+const VERSION = "1.92";              // Just Trees 1.92
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4895,7 +4895,7 @@ function dinoLeave(A) {
   A.hs = "leave"; A.hsT = 0; const a = Math.atan2(A.x - P.x, A.z - P.z) + (Math.random() - .5) * .8, cl = v => Math.max(-EDGE + 20, Math.min(EDGE - 20, v));
   A.target = [cl(A.x + Math.sin(a) * 300), cl(A.z + Math.cos(a) * 300)]; A.steerT = 0;
 }
-function playerHigh() { return vr.climbing || !!vr.cl || P.y - groundAt(P.x, P.z) > 2.2; }
+function playerHigh() { return vr.climbing || !!(vr.cl && vr.cl.hold) || P.y - groundAt(P.x, P.z) > 2.2; }
 function inMap(t) {                                         // keep a goal on the map (off the edge it can't find its way back)
   let x = Math.max(-EDGE + 25, Math.min(EDGE - 25, t[0])), z = Math.max(-EDGE + 25, Math.min(EDGE - 25, t[1]));
   if (edgeShape.island) { const r = Math.hypot(x, z), R = edgeR(x, z) - 25; if (r > R) { x *= R / r; z *= R / r; } }
@@ -4974,7 +4974,7 @@ function rexRoamTarget(A) {                                  // somewhere far ac
 function rexStart(A) { if (A.rexOn || A.dead) return; if (DINO.hunter && !DINO.hunter.dead) dinoLeave(DINO.hunter); /* the raptor clears off */ A.rexOn = true; A.rexT = 0; A.stops = 2 + Math.floor(Math.random() * 2); A.stopIn = 2.5 + Math.random() * 1.5; A.side = Math.random() < .5 ? 1 : -1; A.sideT = 3; A.doomT = 0; A.rearT = 0; A.jawT = 1.5; dinoCall(A, "charge"); }
 function rexTick(A, dt) {
   A.timer = 25; A.trek = false; A.fleeT = 1;
-  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, toP = Math.atan2(dx, dz), climbH = P.y - groundAt(P.x, P.z), safe = (vr.climbing || !!vr.cl || climbH > 2.2) && climbH > 6;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, toP = Math.atan2(dx, dz), climbH = P.y - groundAt(P.x, P.z), safe = (vr.climbing || !!(vr.cl && vr.cl.hold) || climbH > 2.2) && climbH > 6;
   A.jawT -= dt; A.jawK = (A.jawK || 0) + ((A.jawT > 0 || A.rearT > 0 ? .7 : .05) - (A.jawK || 0)) * Math.min(1, dt * 8); if (A.jaw) A.jaw.rotation.x = A.jawK;
   A.rearK = (A.rearK || 0) + ((A.rearT > 0 ? 1 : 0) - (A.rearK || 0)) * Math.min(1, dt * 3);
   if (!A.rexOn) {                                            // roaming: anywhere on the map, at a steady walk
@@ -5172,6 +5172,7 @@ function bannerTick(I, dt) {
 }
 const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
 const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
+const DINO_GROW = { trex: () => 1 + Math.random() * .5, raptor: () => 1.2, triceratops: () => .5 + Math.random(), stego: () => .5 + Math.random(), parasaur: () => .5 + Math.random(), bronto: () => .5 + Math.random() };   // 1.92: every one a different size (the raptor always the same)
 const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
 const SCORE = { gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
@@ -5383,8 +5384,8 @@ function addGround(kind, x, z, home) {
           : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
           : kind === "panther" ? buildPanther(r, TROPIC(biomeOf(lat))) : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
-  const sc = BEAST_SCALE[kind] || 1; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
-  const A = Object.assign({ range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
+  const size = DINO_GROW[kind] ? DINO_GROW[kind]() : 1, sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
+  const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
   qdinoLoad(kind); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
   animalGroup.add(A.root); beasts.push(A); return A;
@@ -5773,7 +5774,7 @@ let popT = 0;
 function killAnimal(A, dist) {
   if (!A || A.dead) return;
   A.dead = true; A.deadT = 0; A.vy = 0; bing();
-  const d = dist || 0, pts = Math.round((d * (SCORE[A.kind] || .1) + (DINO_BONUS[A.kind] || 0)) * 10) / 10;   // a raptor is worth a big bonus
+  const d = dist || 0, pts = Math.round((d * (SCORE[A.kind] || .1) + (DINO_BONUS[A.kind] || 0)) * (A.kind === "raptor" ? 1 : A.size || 1) * 10) / 10;   // (1.92: bigger dinosaurs, more points)   // a raptor is worth a big bonus
   hunt.score += pts; hunt.kills++; hunt.longest = Math.max(hunt.longest, d); showHuntScore(); if (vr.on) drawMap($("miniMap"));
   const el = $("scorePop"); el.textContent = "+" + pts.toFixed(1) + " · " + BEAST_NAME[A.kind] + " · " + Math.round(d) + " m"; el.style.opacity = 1;
   clearTimeout(popT); popT = setTimeout(() => { el.style.opacity = 0; }, 2400);
@@ -5893,7 +5894,7 @@ function qdinoMake(M) {                                      // one dinosaur: it
   (js.mesh.p < 0 ? top : objs[js.mesh.p]).add(mesh); top.updateMatrixWorld(true);
   mesh.bind(new THREE.Skeleton(js.mesh.bones.map(i => objs[i]), M.inv), M.bind);
   const head = top.getObjectByName("Head"), neck = top.getObjectByName("Neck"), up = o => new THREE.Vector3(0, 1, 0).applyQuaternion(o.getWorldQuaternion(new THREE.Quaternion()).invert()).normalize();
-  const Q = { top, mesh, head, neck, upH: up(head), upN: up(neck), mixer: new THREE.AnimationMixer(top), acts: {}, cur: null, curA: null, acc: 0, deadT: 0 };
+  const Q = { top, mesh, head, neck, upH: up(head), upN: up(neck), mixer: new THREE.AnimationMixer(top), acts: {}, cur: null, curA: null, acc: 0, deadT: 0, nq: new THREE.Quaternion(), hq: new THREE.Quaternion(), looked: false, pitch: 0, roll: 0 };
   Q.act = k => Q.acts[k] || (Q.acts[k] = Q.mixer.clipAction(M.clips[k]));
   return Q;
 }
@@ -5944,13 +5945,17 @@ function qdTick(A, dt, cd) {                                 // pick the move, m
     const a = Q.act(want); a.reset(); a.setLoop(want === "Death" ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = want === "Death"; a.timeScale = 1;
     if (Q.curA) a.crossFadeFrom(Q.curA, want === "Death" ? .15 : .3, false); a.play(); Q.cur = want; Q.curA = a;
   }
-  if (want === "Walk" || want === "Run") Q.curA.timeScale = Math.max(.4, Math.min(2.2, v / (A.stride * (want === "Run" ? 1.6 : 1) * (A.scale || 1)) * Q.curA.getClip().duration));
-  Q.wrap.rotation.z = A.body.rotation.z;                     // the flinch when hit
+  if (want === "Walk" || want === "Run") Q.curA.timeScale = Math.max(.4, Math.min(2.2, v / (A.stride * (want === "Run" ? 1.6 : 1)) * Q.curA.getClip().duration));
+  const F = QDINO.fit[A.kind], hl = F.len * .35 * (A.scale || 1), hw = Math.max(.4, F.len * .06 * (A.scale || 1)), fx = Math.sin(A.yaw), fz = Math.cos(A.yaw);   // 1.92: lean with the ground
+  const pT = Math.atan2(groundAt(A.x - fx * hl, A.z - fz * hl) - groundAt(A.x + fx * hl, A.z + fz * hl), hl * 2), rT = Math.atan2(groundAt(A.x + fz * hw, A.z - fx * hw) - groundAt(A.x - fz * hw, A.z + fx * hw), hw * 2);
+  const kT = Math.min(1, dt * 5); Q.pitch += (Math.max(-.6, Math.min(.6, pT)) - Q.pitch) * kT; Q.roll += (Math.max(-.3, Math.min(.3, rT * .6)) - Q.roll) * kT;
+  Q.wrap.rotation.set(Q.pitch, 0, Q.roll + A.body.rotation.z, "YXZ");   // (and the flinch when hit)
   Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn ? 0 : cd < 140 ? 1 / 30 : 1 / 12;   // far ones move a little less often
   if (Q.acc < every) return;
+  if (Q.looked) { Q.neck.quaternion.copy(Q.nq); Q.head.quaternion.copy(Q.hq); Q.looked = false; }   // (1.92: the turn was piling up on moves that don't move the neck: the head spun)
   Q.mixer.update(Q.acc); Q.acc = 0;
   const look = !A.dead && (A.hunter || A.kind === "trex") ? A.look || 0 : 0;
-  if (look) { Q.neck.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upN, look * .45)); Q.head.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upH, look * .55)); }
+  if (look) { Q.nq.copy(Q.neck.quaternion); Q.hq.copy(Q.head.quaternion); Q.looked = true; Q.neck.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upN, look * .45)); Q.head.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upH, look * .55)); }
 }
 function qgunLoad(key) {
   if (QGUN.models[key] || QGUN.loading[key] || typeof fetch === "undefined" || location.protocol === "file:") return;   // (a saved copy opened from disk can't load them: it keeps the old guns)

@@ -33,6 +33,15 @@ async def main():
           const o = hp.clone().add(fwd.clone().multiplyScalar(.6)).add(side.clone().multiplyScalar(-20)), d = hp.clone().add(fwd.clone().multiplyScalar(.6)).sub(o).normalize(); const ray = D.animalRay(o, d, .5);
           out.headShot = { who: ray[1] && ray[1].kind, head: ray[2] };
           const ob = new T.Vector3(tri.x, tri.y + 1.5, tri.z), o2 = ob.clone().add(side.clone().multiplyScalar(-20)), r2 = D.animalRay(o2, ob.clone().sub(o2).normalize(), .5); out.bodyShot = { who: r2[1] && r2[1].kind, head: r2[2] };
+          // 1.92: sizes, the lean on a slope, no head spin, the raptor bites you in VR
+          const sz = {}; for (const k of ['trex', 'raptor', 'stego']) { const a = []; for (let n = 0; n < 12; n++) { const B = D.addGround(k, x0, z0); a.push(B.size); B.gone = true; } sz[k] = [Math.min(...a), Math.max(...a)].map(v => +v.toFixed(2)); } out.sizes = sz;
+          let best = null; for (let n = 0; n < 400 && !best; n++) { const x = x0 + (Math.random() - .5) * 300, z = z0 + (Math.random() - .5) * 300, g = D.groundAt(x + 4, z) - D.groundAt(x - 4, z); if (Math.abs(g) > 1.5 && D.groundAt(x, z) > D.water + 1) best = [x, z, g]; }
+          if (best) { const sl = mk.stego; sl.x = best[0]; sl.z = best[1]; sl.y = D.groundAt(sl.x, sl.z); sl.yaw = best[2] > 0 ? -Math.PI / 2 : Math.PI / 2; sl.speed = 0; sl.mode = 'idle'; sl.timer = 99; sl.want = 0; for (let f = 0; f < 40; f++) D.qdTick(sl, 1 / 30, 10); out.tilt = { slope: +best[2].toFixed(2), pitch: +sl.qd.pitch.toFixed(2) }; }
+          const rp = mk.raptor; rp.hunter = true; rp.look = 1.2; rp.speed = 0; const hq = () => rp.qd.head.getWorldQuaternion(new T.Quaternion()); for (let f = 0; f < 30; f++) D.qdTick(rp, 1 / 30, 10); const q1 = hq(); for (let f = 0; f < 30; f++) D.qdTick(rp, 1 / 30, 10); out.headDrift = +q1.angleTo(hq()).toFixed(3); rp.hunter = false;
+          D.vr.cl = { hold: null }; D.vr.climbing = false; D.vr.on = true; D.UW.drown = 0; P.y = D.groundAt(P.x, P.z);
+          D.DINO.gap = 0; D.DINO.pending = 0; D.dinoStartHunt(); let t = 0; while (!D.DINO.hunter && t < 6) { D.dinoTick(1 / 30); t += 1 / 30; } const H = D.DINO.hunter;
+          if (H) { H.hs = 'approach'; H.hsT = 0; let got = false; for (let f = 0; f < 30 * 40 && !got; f++) { D.updateAnimals(1 / 30); got = D.UW.drown > 0 || D.UW.red > 0; } out.bite = { got, hs: H.hs, d: Math.round(Math.hypot(H.x - P.x, H.z - P.z)) }; }
+          D.vr.cl = null;
           D.updateAnimals(1 / 30); D.renderer.render(D.scene, D.camera);
           const pz = mk.parasaur; D.killAnimal(pz, 30); for (let f = 0; f < 90; f++) D.updateAnimals(1 / 30); out.death = [pz.qd.cur, pz.dead];
           // a picture: the six in a row side-on (and an old T. rex at the end, for comparison)
@@ -46,7 +55,7 @@ async def main():
         png = r.pop("png"); print(json.dumps(r))
         if OUT: import base64; open(os.path.join(OUT, "qdino.png"), "wb").write(base64.b64decode(png.split(",")[1]))
         ok = r["failed"] == 0 and all(v["qd"] and v["hidden"] for v in r["fit"].values()) and r["walk"][0] == "Walk" and r["run"][0] == "Run" and r["attack"] == "Attack" \
-             and r["headShot"]["head"] and r["headShot"]["who"] == "triceratops" and r["bodyShot"]["who"] == "triceratops" and not r["bodyShot"]["head"] and r["death"][0] == "Death" and not errs
+             and r["headShot"]["head"] and r["headShot"]["who"] == "triceratops" and r["bodyShot"]["who"] == "triceratops" and not r["bodyShot"]["head"] and r["death"][0] == "Death" and not errs and r["sizes"]["raptor"] == [1.2, 1.2] and r["sizes"]["stego"][0] < .8 and r["sizes"]["stego"][1] > 1.2 and 1 <= r["sizes"]["trex"][0] and r["sizes"]["trex"][1] <= 1.5 and r.get("tilt", {}).get("pitch", 0) > .08 and r["headDrift"] < .05 and r.get("bite", {}).get("got")
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 try: ok = asyncio.run(main())
 finally: srv.terminate(); shutil.rmtree(srvdir, ignore_errors=True)
