@@ -17,7 +17,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 2. How we work
 
-- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.07.**
+- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.08.**
 - **"Answer first" / "respond first" / a plain question** → only answer (or write notes here). No build.
 - **Notes in this file go up with the next build.** A stop hook asks to commit lone note changes: decline until the next build (Ron's rule).
 - **Testing (Ron, Oct 13):** each build = `check_code` + the 1–2 tests for what changed. Full suite only before big risky changes or when Ron asks (say so). Last full run: **2.06** (cleanup). `--only` takes full test names (`--only test_dino,test_online`).
@@ -43,7 +43,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.06)
+## 4. The game now (v2.07)
 
 ### Modes
 - **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -143,6 +143,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.07** animal hips (Ron: elephants and bears "look crazy"): when `legs()` lengthens legs, the haunch above the hip joint now rides with the body instead of stretching up over the back; elephant back legs a bit shorter so its back is level. All animal models rebuilt.
 - **2.06** cleanup: dead code out (ammo cans, death-drop of gear, lobby avatars, unused helpers), old models labelled as kept rigs, these notes rewritten. No gameplay change.
 - **2.05** grenades float on the map like the guns, one each, red frag style.
 - **2.04** five bows by star, looted like the guns.

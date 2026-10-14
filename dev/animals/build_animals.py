@@ -323,7 +323,7 @@ def _rhino():                                          # grey, heavy, two horns 
 @recipe("elephant")
 def _elephant():                                       # grey, pillar legs, the trunk, big ears, tusks
     m = base("Pig"); pig_tail_off(m); pig_ears_off(m)
-    legs(m, 2.0, 1.75, thick=1.5); body(m, L=1.0, G=1.0, H=1.12); neck(m, .45, 1.15, tilt=-.15); head(m, 1.45, snout=.55, sy=1.15)
+    legs(m, 2.0, 1.55, thick=1.5); body(m, L=1.0, G=1.0, H=1.12); neck(m, .45, 1.15, tilt=-.15); head(m, 1.45, snout=.55, sy=1.15)
     paint_rule(m, lambda c, b, k, L: 0x625e5a if "Foot" in b else 0x77736e)
     o, Lh = hunits(m); hb0, hb1 = headbox(m); zt = hb1[2] - 10; yt = hb0[1] + (hb1[1] - hb0[1]) * .45
     m.tube([np.array([0, yt, zt - 15]), np.array([0, yt - .4 * Lh, zt + .15 * Lh]), np.array([0, yt - 1.0 * Lh, zt + .2 * Lh]), np.array([0, yt - 1.6 * Lh, zt + .12 * Lh]),

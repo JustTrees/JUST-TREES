@@ -280,7 +280,7 @@ def legs(m, fF, fB=None, thick=1.0, thickB=None):
             if is_leg(n):
                 s = "Front" if is_front(n) else "Back"; f = fF if s == "Front" else fB; th = thick if s == "Front" else thickB
                 yt = top[s][1]; u = max(0.0, min(1.0, y / yt)); cx = abs(top[s][0]) * (1 if x >= 0 else -1); cz = foot[s][2] + (top[s][2] - foot[s][2]) * u
-                P[i] = [cx + (x - cx) * th, y * f, cz + (z - cz) * th]
+                P[i] = [cx + (x - cx) * th, y * f if y <= yt else y + yt * (f - 1), cz + (z - cz) * th]   # (the haunch above the hip joint rides with the body, or it pokes up over the back)
             else:
                 t = max(0.0, min(1.0, (z - zB) / (zF - zB))); P[i, 1] = y + yB * (fB - 1) * (1 - t) + yF * (fF - 1) * t
         return P
