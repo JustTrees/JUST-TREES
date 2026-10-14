@@ -7,6 +7,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 srvdir = tempfile.mkdtemp(); shutil.copy(sys.argv[1], os.path.join(srvdir, "dbg.html")); os.symlink(os.path.join(REPO, "sounds"), os.path.join(srvdir, "sounds"))
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8782", "--bind", "127.0.0.1"], cwd=srvdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1.2)
 TARGET = "http://127.0.0.1:8782/dbg.html"; OUT = sys.argv[2] if len(sys.argv) > 2 else None
+if OUT and OUT.endswith(".png"): OUT = os.path.dirname(OUT)   # (run_all passes a picture path)
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"])
