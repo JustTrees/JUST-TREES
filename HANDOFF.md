@@ -17,7 +17,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 2. How we work
 
-- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.12.**
+- **Each request: build, test, push live, send a backup file** `just-trees-2-xx.html` (+ pictures when something looks different), reply briefly. **Next version: 2.13.**
 - **"Answer first" / "respond first" / a plain question** → only answer (or write notes here). No build.
 - **Notes in this file go up with the next build.** A stop hook asks to commit lone note changes: decline until the next build (Ron's rule).
 - **Testing (Ron, Oct 13):** each build = `check_code` + the 1–2 tests for what changed. Full suite only before big risky changes or when Ron asks (say so). Last full run: **2.06** (cleanup). `--only` takes full test names (`--only test_dino,test_online`).
@@ -43,7 +43,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.11)
+## 4. The game now (v2.12)
 
 ### Modes
 - **Hiking** (no guns, no fog), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -82,7 +82,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ### Online (VR, peer to peer, up to 8)
 - Main menu → Online → Host / Join (4-digit code) → gamer-tag keyboard → **lobby** (`mpLobbyPanels`): player grid (tag, team, camo uniform: brown/green/grey/white/black, last score), host picks mode, PvP Solo / 2 Teams / Random, Prehistoric, comms (Open, Open proximity, Team, Team fist bump), round length, map settings (mirrored live), Start. Round end → back to the lobby with the board.
-- **PvP:** deathmatch — die and respawn with your guns (nothing is dropped); kills/deaths on the board; no friendly fire; teammates see each other's map marks. Optional closing zone and capture point. Voice connects on join (`mpHear` per comms setting; fist bump = both fists within 17 cm).
+- **PvP:** deathmatch — die and respawn with your guns (nothing is dropped); kills/deaths on the board; no friendly fire; teammates see each other's map marks. Optional closing zone and capture point. Voice connects on join (`mpHear` per comms setting; fist bump = both fists within 17 cm). **Positional sound (2.12):** other players' gunshots come from where they fired (`mpShotSound`, 4 reused HRTF voices; loudness 22/(22+d), duller (low-pass) and later (d/343 s) with distance, heard to `PSND.RANGE`: sniper 780 m, AK 600 (half an XL map), SMG 520, pistol 440); their footsteps from their feet (`mpStepTick`, one HRTF voice per player, to 35 m: sprint loud, walk soft, crouch ×.25, landing thump, teammates ×.55 in team games; `footstep(kind, q, dest)`).
 - **Hunting together:** host runs the animals and dinosaurs; guests' shots go to the host; raptor goes for the loneliest player; the T. rex for whoever shot it.
 - Relay: `mpRelay()` asks the Worker's `/turn` first, falls back to the free Open Relay. Not yet tried by friends on strict home networks.
 
@@ -143,6 +143,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ## 8. Changelog (short; details in `git log`)
 
+- **2.12** other players' gunshots and footsteps are 3D positional; shots carry far (AK ~600 m). Test `dev/test_psound.py`.
 - **2.11** gun compressor removed (too soft); full volume again.
 - **2.10** sniper deeper and thicker; gun sounds compressed and a bit quieter in the mix.
 - **2.09** real recorded gun sounds (Snake's Authentic Gun Sounds 1 + 2) for every VR gun, shots and reloads. Test `dev/test_gunsounds.py`.
