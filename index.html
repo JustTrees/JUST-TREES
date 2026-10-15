@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.25";              // Just Trees 2.25
+const VERSION = "2.26";              // Just Trees 2.26
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2822,6 +2822,16 @@ function drawMap(canvas) {
   }
   ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.max(10, W / 18)}px system-ui`; ctx.textAlign = "center"; ctx.fillText("N", W / 2, Math.max(12, W / 16));
   if (canvas.id === "vrMap" && FPSM.fps) { ctx.textAlign = "left"; ctx.font = `600 ${Math.max(10, W / 30)}px system-ui`; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4, W * .36, W / 22); ctx.fillStyle = FPSM.low > 30 ? "#ff8a6a" : "#cfe8c0"; ctx.fillText(FPSM.fps + " fps · worst " + FPSM.low + " ms", 10, 4 + W / 30); }   // how smooth it's running
+  if (gameMode !== "hunt" && canvas.id === "vrMap") {   // 2.26: what the wrist used to show, along the bottom
+    const f = Math.max(12, W / 16), pad = W * .03, bh = gameMode === "pvp" ? f * 2.6 : f * 1.4;
+    ctx.fillStyle = "rgba(8,12,10,.72)"; ctx.fillRect(pad * .5, Hh - bh - pad, W - pad, bh + pad * .5); ctx.textAlign = "left";
+    if (gameMode === "pvp") {
+      const bw = W - pad * 3, y0 = Hh - bh - pad * .4; ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fillRect(pad * 1.5, y0, bw, f * .32); ctx.fillRect(pad * 1.5, y0 + f * .45, bw, f * .32);
+      ctx.fillStyle = "#3f9bff"; ctx.fillRect(pad * 1.5, y0, bw * Math.min(1, (MP.sh || 0) / 100), f * .32); ctx.fillStyle = MP.hp > 35 ? "#5fd068" : "#ff6a5a"; ctx.fillRect(pad * 1.5, y0 + f * .45, bw * Math.min(1, MP.hp / 100), f * .32);
+      ctx.fillStyle = "#e8f0dc"; ctx.font = `700 ${f * .8}px system-ui`; ctx.fillText("Health " + Math.round(MP.hp) + " · Shield " + Math.round(MP.sh || 0), pad * 1.5, Hh - f * .95 - pad * .6);
+      ctx.font = `600 ${f * .7}px system-ui`; ctx.fillStyle = "#cfd8c4"; ctx.fillText(MP.kills + " kills · " + MP.deaths + " deaths · " + clockText(MP.roundLeft || 0) + (MP.on ? " · " + mpCount() + " players" : ""), pad * 1.5, Hh - pad * .8);
+    } else { ctx.fillStyle = "#e8f0dc"; ctx.font = `700 ${f * .8}px system-ui`; ctx.fillText(($("info").textContent || "") + (ENDLESS && ENDLESS.clock ? " · " + hourText(hourNow) : ""), pad * 1.5, Hh - pad * .9); }
+  }
   if (gameMode === "hunt" && canvas.id === "vrMap") {   // the score, big enough to read in a headset
     const f = Math.max(12, W / 13), pad = W * .03, line1 = "Score " + hunt.score.toFixed(1), line2 = hunt.kills + (hunt.kills === 1 ? " kill" : " kills") + " · longest " + Math.round(hunt.longest) + " m";
     ctx.font = `800 ${f}px system-ui`; const w1 = ctx.measureText(line1).width; ctx.font = `700 ${f * .62}px system-ui`; const w2 = ctx.measureText(line2).width, bw = Math.max(w1, w2) + pad * 2;
@@ -7472,6 +7482,73 @@ function vrBinos() {
   g.add(new THREE.Mesh(new THREE.BoxGeometry(.03, .02, .05), body));
   scene.add(g); binos = g; return g;
 }
+/* ---- 2.26: the watch (endless land, Ron): on your left wrist, an hour and a minute hand on the shared clock. A day takes 24 minutes, so the
+   minute hand ticks once a second (one game minute) — a faint tick when it's by your ear. ---- */
+let watchM = null;
+function watchMesh() {
+  if (watchM) return watchM;
+  const cv = document.createElement("canvas"); cv.width = cv.height = 256;
+  watchM = new THREE.Mesh(new THREE.CircleGeometry(.028, 40), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, fog: false, toneMapped: false }));
+  watchM.userData.cv = cv; watchM.userData.m = -1; watchM.visible = false; watchM.renderOrder = 5; scene.add(watchM); return watchM;
+}
+function drawWatch(mins) {
+  const W = watchMesh(), g = W.userData.cv.getContext("2d"), night = NIGHT_K > .5; g.clearRect(0, 0, 256, 256);
+  g.fillStyle = "#c9b48a"; g.beginPath(); g.arc(128, 128, 126, 0, 6.2832); g.fill();                    // the brass case
+  g.fillStyle = night ? "#10202a" : "#f3efe4"; g.beginPath(); g.arc(128, 128, 112, 0, 6.2832); g.fill();  // the face (dark with glowing marks at night)
+  const ink = night ? "#9af0c0" : "#1c1c1c";
+  for (let i = 0; i < 60; i++) { const a = i / 60 * 6.2832, big = i % 5 === 0, r0 = big ? 88 : 98; g.strokeStyle = ink; g.lineWidth = big ? 7 : 2;
+    g.beginPath(); g.moveTo(128 + Math.sin(a) * r0, 128 - Math.cos(a) * r0); g.lineTo(128 + Math.sin(a) * 106, 128 - Math.cos(a) * 106); g.stroke(); }
+  g.fillStyle = ink; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("12", 128, 62); g.fillText("6", 128, 196); g.fillText("3", 194, 129); g.fillText("9", 62, 129);
+  const hand = (a, len, w, col) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = "round"; g.beginPath(); g.moveTo(128 - Math.sin(a) * 14, 128 + Math.cos(a) * 14); g.lineTo(128 + Math.sin(a) * len, 128 - Math.cos(a) * len); g.stroke(); };
+  hand(((mins / 60) % 12) / 12 * 6.2832, 58, 11, night ? "#c8ffe0" : "#111");                         // hour
+  hand((mins % 60) / 60 * 6.2832, 92, 6, night ? "#c8ffe0" : "#222");                                   // minute
+  g.fillStyle = "#b8322a"; g.beginPath(); g.arc(128, 128, 8, 0, 6.2832); g.fill();
+  W.material.map.needsUpdate = true;
+}
+function watchTick(I) {
+  const W = watchMesh(), h = I && I.hands.left, show = !!(ENDLESS && ENDLESS.clock && h && state === "play" && !VRUI.on);
+  W.visible = show; if (!show) return;
+  W.position.copy(h.pos).add(_v1.set(0, .035, .06).applyQuaternion(h.q)); W.quaternion.copy(h.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1)); W.translateZ(.002);
+  const mins = Math.floor(hourNow * 60) % 1440;
+  if (mins !== W.userData.m) {
+    const first = W.userData.m < 0; W.userData.m = mins; drawWatch(mins);
+    if (!first && SND.ctx && SND.on && W.position.distanceTo(I.head) < .45) { const c = SND.ctx, t = c.currentTime, o = c.createOscillator(), gn = c.createGain(); o.type = "square"; o.frequency.value = 3400;
+      gn.gain.setValueAtTime(.035, t); gn.gain.exponentialRampToValueAtTime(.0005, t + .018); o.connect(gn).connect(SND.master); o.start(t); o.stop(t + .02); }   // tick
+  }
+}
+/* ---- 2.26: the player list beside the map (online): each player's colour, name and team, and a button to mute their voice (just for you).
+   Point at it with your gun hand and pull the trigger. ---- */
+let plM = null;
+function plPanel() {
+  if (plM) return plM;
+  const cv = document.createElement("canvas"); cv.width = 384; cv.height = 512;
+  plM = new THREE.Mesh(new THREE.PlaneGeometry(.195, .26), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, fog: false, toneMapped: false }));
+  plM.userData.cv = cv; plM.visible = false; plM.renderOrder = 6; scene.add(plM); return plM;
+}
+function plRows() { const r = [{ L: null, me: true, tag: MP.tag || "You", c: mpColOf(null), team: teamsOn() ? mpMyTeam() : -1 }]; for (const L of mpOpen()) r.push({ L, tag: L.tag || "Player", c: mpColOf(L), team: teamsOn() ? mpTeamOf(L.id) : -1 }); return r.slice(0, 8); }
+function plDraw(rows, hov) {
+  const Pn = plPanel(), g = Pn.userData.cv.getContext("2d"); g.clearRect(0, 0, 384, 512);
+  g.fillStyle = "rgba(10,16,12,.82)"; uiRound(g, 4, 4, 376, 504, 22); g.fill();
+  g.fillStyle = "#e8f0dc"; g.font = "bold 30px sans-serif"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText("Players", 22, 36);
+  rows.forEach((r, i) => { const y = 92 + i * 54;
+    g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(34, y, 13, 0, 6.2832); g.fill();
+    g.fillStyle = "#f2f6ec"; g.font = (r.me ? "bold " : "") + "26px sans-serif"; g.fillText((r.tag + (r.me ? " (you)" : "")).slice(0, 13), 58, y - (r.team >= 0 ? 8 : 0));
+    if (r.team >= 0) { g.font = "18px sans-serif"; g.fillStyle = TEAM_COL[r.team]; g.fillText(TEAM_NAME[r.team] + " team", 58, y + 14); }
+    if (!r.me) { const m = r.L.muted, on = hov === i; g.fillStyle = m ? (on ? "#ff8a7a" : "#c8473c") : (on ? "#7fc48e" : "#467a56"); uiRound(g, 262, y - 20, 108, 40, 12); g.fill();
+      g.fillStyle = "#fff"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText(m ? "Unmute" : "Mute", 316, y + 1); g.textAlign = "left"; }
+  });
+  Pn.material.map.needsUpdate = true;
+}
+function plTick(main) {
+  const Pn = plPanel(), show = !!(main && MP.code && mpOpen().length && vrMap && vrMap.visible); Pn.visible = show; vr.plHover = false; if (!show) return;
+  Pn.quaternion.copy(vrMap.quaternion); Pn.position.copy(vrMap.position).add(_v1.set(.235, 0, 0).applyQuaternion(vrMap.quaternion)); Pn.updateMatrixWorld(true);
+  const rows = plRows(), o = main.rayPos, d = _v2.set(0, 0, -1).applyQuaternion(main.rayQ), n = new THREE.Vector3(0, 0, 1).applyQuaternion(Pn.quaternion), den = d.dot(n); let hov = -1;
+  if (Math.abs(den) > 1e-3) { const t = Pn.position.clone().sub(o).dot(n) / den;
+    if (t > 0 && t < 2) { const lp = Pn.worldToLocal(o.clone().addScaledVector(d, t)), px = (lp.x / .195 + .5) * 384, py = (.5 - lp.y / .26) * 512;
+      if (px >= 0 && px <= 384 && py >= 0 && py <= 512) { vr.plHover = true; const i = Math.round((py - 92) / 54); if (i >= 1 && i < rows.length && px > 255 && Math.abs(py - (92 + i * 54)) < 24) hov = i; } } }
+  if (hov >= 0 && edge("plm", main.trig)) { const L = rows[hov].L; L.muted = !L.muted; buzz(set.hand === "right" ? "R" : "L", .3, 25); }
+  const key = rows.map(r => r.tag + r.c + r.team + (r.L && r.L.muted ? 1 : 0)).join("|") + hov; if (key !== Pn.userData.key) { Pn.userData.key = key; plDraw(rows, hov); }
+}
 // wrist display and the map you raise with the off-hand trigger
 let wrist = null, wristCv = null, vrMap = null, vrMapTex = null, vrMapCv = null, vignette = null;
 function vrHudParts() {
@@ -7666,17 +7743,15 @@ function vrAfterMove(dt) {                                // carry the play spac
   // wrist, map, mark, comfort vignette
   vrHudParts();
   const off = vr.off, main = vr.main;
+  watchTick(I);                                              // 2.26: the watch (endless land), always on the left wrist
   if (off) {
-    if (gameMode === "hunt") {                              // Hunting: the score lives on the map, messages float in front of you
-      wrist.visible = false;
-      if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), 1); }
-      if (vr.lootT <= 0) vr.banWas = null;
-    } else wrist.visible = true;
-    wrist.position.copy(off.pos).add(_v1.set(0, .035, .06).applyQuaternion(off.q)); wrist.quaternion.copy(off.q).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1));
-    if ((vr.wristT -= dt) <= 0) { vr.wristT = .25; drawWrist(); }
+    wrist.visible = false;                                   // 2.26: the wrist's info lives on the map now; messages float in front of you
+    if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), 1); }
+    if (vr.lootT <= 0) vr.banWas = null;
     const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
     if (vrMap.visible) { vrMap.position.copy(off.rayPos).add(_v1.set(0, .16, 0)); vrMap.lookAt(I.head); if ((vr.fpsT = (vr.fpsT || 0) - dt) <= 0 || !mapWas) { vr.fpsT = 1; drawMap(vrMapCv); mapDirty = true; } if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
-  } else { wrist.visible = false; vrMap.visible = false; }
+    plTick(vrMap.visible ? main : null);                     // 2.26: the player list beside the map
+  } else { wrist.visible = false; vrMap.visible = false; plTick(null); }
   if (vr.mark && vr.mark.visible && (vr.markT -= dt) <= 0) { vr.mark.visible = false; drawMap($("miniMap")); }
   vignette.position.copy(I.head); vignette.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ); vignette.material.uniforms.uAmt.value = vr.moveAmt * .6;
   vrAvatar(dt);
@@ -7755,7 +7830,7 @@ function uwTick(dt, I) {                                     // runs after you'v
 }
 
 function vrFire() {
-  let late = 0;
+  let late = 0; if (vr.plHover) return;                      // (2.26: pointing at the player list, not shooting)
   if (state !== "play" || gameMode === "hike" || !vr.gun || !vr.gun.visible || MP.dead > 0) return;   // (2.24: flying too)
   const huntM = ARMED(), S = GUNSPOT[vr.gunKind], W = huntM ? WEAP[vr.gunKind] : null;
   if (huntM) {
@@ -8236,11 +8311,10 @@ function vruiParts() {
   uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
-  [["hike", "Solo hiking", "Explore a brand new wilderness. Just you, the trees and your binoculars."],
-   ["hunt", "Solo hunting", "A single-shot scoped rifle. Native animals roam every map; the further the shot, the bigger the score."],
-   ["online", "Online · with friends", "Up to 8 of you in one lobby: hike, hunt or PvP together. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
-    uiBtn(M, 90, 150 + i * 235, 1220, 205, name, () => { if (m === "online") { vruiOpen("mp"); return; } setMode(m); renderSetup(); vruiOpen("setup"); }, { sub, fs: 54 }));
-  uiBtn(M, 90, 870, 1220, 90, "Set my height (standing or sitting)", () => vrHeightCheck("mode"), { fs: 36, personal: true });
+  [["solo", "Solo", "Just you: hike, hunt, or practise PvP. Pick which on the next screen."],
+   ["online", "Multiplayer", "Up to 8 of you in one lobby: hike, hunt or PvP together. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
+    uiBtn(M, 90, 160 + i * 300, 1220, 260, name, () => { if (m === "online") { vruiOpen("mp"); return; } renderSetup(); vruiOpen("setup"); }, { sub, fs: 64 }));   // 2.26 (Ron): Solo or Multiplayer first
+  uiBtn(M, 90, 800, 1220, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 50, personal: true });
   // ---- online PvP: host a game (you get a code) or join one (type the code) ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -8266,7 +8340,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode], lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode] + (gameMode === "pvp" && !MP.code ? " · practice" : ""), lx + 360, 92);
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
     uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
@@ -8280,13 +8354,14 @@ function vruiParts() {
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
-    if (gameMode === "pvp" || MP.code) uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
+    if (MP.code) uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
     if (gameMode === "hunt") { uiLabel(g, lx, 1048, "Prehistoric"); note(g, 680, 1048, "Dinosaurs to hunt · now and then a raptor hunts you"); }
     if (spawnPick()) { uiLabel(g, lx, 1128, "Start apart", set.spawnD ? (set.spawnD >= 1000 ? "1 km" : set.spawnD + " m") : "Together"); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1128, "Capture point"); note(g, 680, 1128, "A hidden spot on the map: +1 point every " + CAPTURE.every + " s you hold it alone. A flag shows where it is."); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
+  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1400 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -8305,8 +8380,8 @@ function vruiParts() {
   uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true });
   uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left", personal: true });
   uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
-  uiBtn(S2, rx, 760, 280, 100, "Mode", () => vruiOpen(MP.code ? "lobby" : "mode"), { personal: true });
-  uiSlider(S2, rx + 300, 884, 270, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; }, 5).hide = () => gameMode !== "pvp" && !MP.code;   // round length (2.00: every online mode, 5 to 60 minutes)
+  uiBtn(S2, rx, 760, 280, 100, "Back", () => vruiOpen(MP.code ? "lobby" : "mode"), { personal: true });   // (2.26: back to Solo / Multiplayer)
+  uiSlider(S2, rx + 300, 884, 270, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; }, 5).hide = () => !MP.code;   // round length (2.00: every online mode, 5 to 60 minutes)
   [[0, "Together"], [50, "50"], [150, "150"], [300, "300"], [500, "500"], [750, "750"], [1000, "1 km"]].forEach(([v, l], i) => uiBtn(S2, 560 + i * 128 + (i ? 70 : 0), 1086, i ? 120 : 190, 62, l, () => { set.spawnD = v; }, { active: () => (set.spawnD || 0) === v, hide: () => !spawnPick(), fs: 28 }));   // 2.24
   uiBtn(S2, 360, 1086, 130, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" });   // PvP capture point
   uiBtn(S2, 500, 1086, 130, 62, "On", () => { set.capture = "on"; }, { active: () => set.capture === "on", hide: () => gameMode !== "pvp" });
@@ -9891,7 +9966,9 @@ function boomSound(d) {
    Bring it to the string and it nocks itself; keep the trigger held, pull back, let go to shoot. The further you draw, the faster it
    flies; it drops in a real arc. Quiet: the shot doesn't empty the woods like a gunshot. Unlimited arrows; they don't stay stuck in things. */
 const BOW = { len: 1.6, rest: [0, .07, -.008], drawLen: .7, vMax: 62, vMin: 10, g: 9.81, life: 7, quiverR: .27, nockR: .14 };
-const BOW_DMG = { dino: 70, raptor: 80 };                  // a full-draw arrow against a dinosaur / the raptor or T. rex (weaker draws do less)
+const BOW_DMG = { dino: 70, raptor: 80 };
+const BOW_V = [0, 62, 70, 80, 90, 100], BOW_TD = [0, 1, 1.25, 1.5, 1.8, 2.2];   // 2.26: arrow speed (m/s) and damage by the bow's stars
+const BOW_BIG = { bear: 1, polar: 1, moose: 1, elk: 1, elephant: 1, rhino: 1, giraffe: 1, muskox: 1, camel: 1 };                  // a full-draw arrow against a dinosaur / the raptor or T. rex (weaker draws do less)
 let bowObj = null; const ARROWS = [];
 const _bw1 = new THREE.Vector3(), _bw2 = new THREE.Vector3(), _bw3 = new THREE.Vector3(), _bw4 = new THREE.Vector3(), _bwM = new THREE.Matrix4(), _bwQ = new THREE.Quaternion();
 const SFX_BOW = { pull: [[0, 1700, .14, .05], [.06, 2600, .08, .04]], nock: [[0, 3200, .02, .12], [.015, 1900, .03, .08]], drop: [[0, 900, .06, .06]],
@@ -10039,7 +10116,7 @@ function bowTick(dt, I, main, off, mainSide, offSide) {
   }
 }
 function bowShoot(rest, nockPt, f, mainSide, offSide) {
-  const dir = new THREE.Vector3().subVectors(rest, nockPt).normalize(), spd = BOW.vMin + (BOW.vMax - BOW.vMin) * Math.pow(f, .8);
+  const dir = new THREE.Vector3().subVectors(rest, nockPt).normalize(), spd = BOW.vMin + ((BOW_V[bowTier()] || BOW.vMax) - BOW.vMin) * Math.pow(f, .8);
   const m = arrowModel(); scene.add(m); m.traverse(c => { c.frustumCulled = false; });
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));   // a light-blue streak, like the bullets' yellow one
   head.material.color.set("#bfeaff"); trail.material.color.set("#5cc8ff"); trail.material.opacity = .5; head.material.opacity = .85;
@@ -10073,13 +10150,14 @@ function arrowsTick(dt) {
 }
 function arrowHit(A, R, p, head, spd) {
   if (!A || A.dead) return;
-  const dist = R.from.distanceTo(p), k = spd / BOW.vMax;
+  const dist = R.from.distanceTo(p), k = Math.min(1, spd / (BOW_V[bowTier()] || BOW.vMax)), tier = Math.max(1, bowTier());
   for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
   if (!A.hpMax) {
     if (spd < 26 && !head) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // a weak arrow: it just runs
+    if (!head && BOW_BIG[A.kind] && Math.random() > BOW_TD[tier] * k / 2.2) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // 2.26: a big animal shrugs off a weak bow's body shot (a red bow nearly always drops it)
     hitAnimal(A, dist, 0, head, null); return;
   }
-  hitAnimal(A, dist, Math.max(5, (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * k * TIER.dmg[bowTier()]), head, null);
+  hitAnimal(A, dist, Math.max(5, (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * k * BOW_TD[tier]), head, null);   // (2.26: the bow's own damage by stars)
 }
 function arrowsClear() { for (const R of ARROWS) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); } ARROWS.length = 0; bowHide(); }
 function vrClearNades() {
@@ -10810,7 +10888,7 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function pvpRoundStart() {                                   // a fresh round: full health, no scores yet, the round clock set
-  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (set.roundMin || 10) * 60;
+  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = MP.code ? (set.roundMin || 10) * 60 : 0;   // (2.26: practice alone: the clock stays at 00:00)
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
   if (ENDLESS && !MP.host && MP.reveal && MP.reveal[0] && MP.reveal[0].x != null) { const s2 = enSpawnNear(MP.reveal[0].x, MP.reveal[0].z, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.24: endless: as far from the host as chosen
@@ -11046,7 +11124,7 @@ function mpTick(dt) {                                       // (also runs offlin
     if (l.positionX) { l.positionX.value = h.x; l.positionY.value = h.y; l.positionZ.value = h.z; l.forwardX.value = f.x; l.forwardY.value = f.y; l.forwardZ.value = f.z; l.upX.value = u.x; l.upY.value = u.y; l.upZ.value = u.z; }
     for (const L of MP.links.values()) if (L.panner && L.panner.positionX) {
       const lob = !playing && L.LR && L.LR.S.group.visible ? L.LR.head : null, at = lob || (playing && L.R && L.R.alive ? L.R.head : h); L.panner.positionX.value = at.x; L.panner.positionY.value = at.y + (at === h ? .01 : 0); L.panner.positionZ.value = at.z;
-      const hk = playing ? mpHear(L) : [1, false]; if (L.vg) L.vg.gain.value = 1.6 * hk[0]; L.panner.rolloffFactor = hk[1] ? 0 : 1.1;   // 2.00: comms (open, open proximity, team, team fist bump)
+      const hk = playing ? mpHear(L) : [1, false]; if (L.vg) L.vg.gain.value = L.muted ? 0 : 1.6 * hk[0];   // (2.26: muted by you) L.panner.rolloffFactor = hk[1] ? 0 : 1.1;   // 2.00: comms (open, open proximity, team, team fist bump)
     }
   }
 }
