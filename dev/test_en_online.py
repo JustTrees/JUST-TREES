@@ -62,9 +62,31 @@ async def main():
         gpos = await B.evaluate("() => [D.P.x, D.P.z]")
         out["hostAnimalsNearGuest"] = await A.evaluate(f"() => D.beasts.filter(A => A.ecellB === undefined && Math.hypot(A.x - {gpos[0]}, A.z - {gpos[1]}) < 1000).length")
         out["guestBuiltThere"] = await B.evaluate("() => { const E = D.ENDLESS, ch = E.chunks.get((Math.floor(D.P.x / 200) + 60000) * 120000 + (Math.floor(D.P.z / 200) + 60000)); return !!(ch && ch.tile); }")
+        # 2.23: Prehistoric hunting on endless land together: the friend gets the host's dinosaurs, the same guns lying about, and a gun one takes is gone for the other
+        await A.evaluate("""() => { D.setMode('hunt'); Object.assign(D.set, { huntMap: 'endless', dino: true }); D.setSeed(6262); D.generate(); D.state = 'play'; placeAt(D.P.x, D.P.z); frames(5); D.mpSendStart(); return 1; }""")
+        for _ in range(80):
+            await B.wait_for_timeout(250)
+            if await B.evaluate("() => D.state === 'play' && D.seed === 6262 && D.gameMode === 'hunt' && D.DINO.on"): break   # (DINO.on: the friend's map is really made — the start message sets the seed before the build)
+        await B.evaluate("() => { placeAt(D.P.x, D.P.z); frames(3); window.__an = [0, 0, 0, '']; for (const L of D.MP.links.values()) if (L.conn) L.conn.on('data', o => { if (o && o.t === 'an') { window.__an[0]++; window.__an[1] += o.a.length / 11; window.__an[2] = D.MP.nb.size; window.__an[3] = o.a.slice(0, 11).join(','); } }); return 1; }")
+        await asyncio.gather(run_frames(A, 180), run_frames(B, 180))
+        out["guestAn"] = await B.evaluate("() => window.__an")
+        hd = await A.evaluate("() => [...D.DROPS.keys()]"); gd = await B.evaluate("() => [...D.DROPS.keys()]")
+        out["huntGuest"] = await B.evaluate("() => ({ map: D.HIKEMAP, dino: D.DINO.on, net: [...new Set(D.beasts.filter(A => A.net).map(A => A.kind))], n: D.beasts.filter(A => A.net).length })")
+        gp2 = await B.evaluate("() => [D.P.x, D.P.z, !!D.animalGroup, D.MP.nb.size, D.MP.code, D.MP.host, [...D.MP.links.values()].map(L => [L.open, !!L.bad, L.id === 'justtrees-v1-' + D.MP.code])]")
+        out["hostKinds"] = await A.evaluate("() => { const m = {}; for (const A of D.beasts) m[A.kind] = (m[A.kind] || 0) + 1; return [m, D.ENDLESS.acG.size, D.ENDLESS.aMade, D.seed, D.set.dino, D.HIKEMAP]; }")
+        out["guestKinds"] = await B.evaluate("() => { const m = {}; for (const A of D.beasts) m[A.kind] = (m[A.kind] || 0) + 1; return [m, D.seed, D.set.dino, D.HIKEMAP, D.state]; }")
+        out["hostSend"] = await A.evaluate("() => [D.MP.anN || 0, D.MP.on, D.state, D.gameMode, D.DINO.on, [...D.MP.links.values()].map(L => [L.open, !!(L.R && L.R.cur)])]")
+        out["hostDinosNearGuest"] = await A.evaluate(f"() => [D.beasts.filter(A => !A.ptero && Math.hypot(A.x - {gp2[0]}, A.z - {gp2[1]}) < 480).length, D.beasts.length, Math.round(Math.hypot(D.P.x - {gp2[0]}, D.P.z - {gp2[1]}))]"); out["guestGroup"] = gp2[2:]
+        out["sameGuns"] = len(set(hd) & set(gd)); out["guns"] = [len(hd), len(gd)]
+        took = await B.evaluate("() => { let best = null, bd = 1e9; for (const d of D.DROPS.values()) { const k = Math.hypot(d.x - D.P.x, d.z - D.P.z); if (k < bd) { bd = k; best = d; } } D.dropTake(best.id); D.mpSend({ t: 'take', id: best.id }); return best.id; }")
+        await asyncio.gather(run_frames(A, 30), run_frames(B, 30))
+        out["hostLostTaken"] = not await A.evaluate(f"() => D.DROPS.has('{took}')")
         print(json.dumps(out)); print("errors:", errs or "none")
+        if os.environ.get("JT_OUT"): open(os.environ["JT_OUT"], "w").write(json.dumps(out))
         ok = all(out["connected"]) and out["guestFromHostM"] < 80 and out["sameLand"] and abs(out["hourAtJoin"][0] - out["hourAtJoin"][1]) < .02 \
              and out["hourGap"] < .03 and out["hourRan"] > .05 and out["hostSeesGuestWithinM"] is not None and out["hostSeesGuestWithinM"] < 3 and out["guestBuiltThere"] and not errs \
-             and out["guestAnimals"] >= 3 and out["guestAnimalsMatch"] >= out["guestAnimals"] * .8 and out["hostAnimalsNearGuest"] >= 3
+             and out["guestAnimals"] >= 3 and out["guestAnimalsMatch"] >= out["guestAnimals"] * .8 and out["hostAnimalsNearGuest"] >= 3 \
+             and out["huntGuest"]["map"] == "endless" and out["huntGuest"]["dino"] and out["huntGuest"]["n"] >= 2 and set(out["huntGuest"]["net"]) <= {"triceratops", "parasaur", "stego", "bronto", "trex", "ptero", "raptor"} \
+             and out["sameGuns"] > 50 and out["hostLostTaken"]
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

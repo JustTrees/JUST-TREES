@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.22";              // Just Trees 2.22
+const VERSION = "2.23";              // Just Trees 2.23
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -384,7 +384,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
-const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", hikeMap: "island", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", hikeMap: "island", huntMap: "island", zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -2878,7 +2878,8 @@ function updateFly(dt) {
    from the map seed and where the square is, so a spot always comes out the same (for everyone online too). The world repeats every
    25 km (EN_P): walk that far in a straight line and you're back where you started. One environment per hike, from the latitude.
    Hiking in a headset has two maps: Island (always the 3 km map) or Endless (HIKEMAP). */
-let HIKEMAP = null, HIKE_FORCE = null;                       // "island" / "endless" while hiking in a headset (null otherwise); HIKE_FORCE: tests
+let HIKEMAP = null, HIKE_FORCE = null;
+const huntEndless = () => gameMode === "hunt" && set.huntMap === "endless";                       // "island" / "endless" while hiking in a headset (null otherwise); HIKE_FORCE: tests
 const HIKE_SIZE = () => HIKEMAP ? "xxxl" : set.size, EDGES_NOW = () => HIKEMAP === "island" ? "island" : HIKEMAP === "endless" ? "endless" : set.edges;
 const EN_P = 25000, EN_C = 200, EN_NP = EN_P / EN_C, EN_WIN = 3200, EN_STEP = 4, EN_N = EN_C / EN_STEP, EN_M = 8, EN_GW = EN_N + 1 + 2 * EN_M, EN_CELL = 100, EN_SW = 3200;
 const EN_LOAD = () => (VR_ON ? 1200 : 950) + 150, EN_DROP = () => EN_LOAD() + 280, EN_SYNC = 430, EN_SOLID = 430;
@@ -3304,7 +3305,11 @@ const EA_C = 500, EA_N = EN_P / EA_C, EA_ON = 850, EA_OFF = 1250, EA_SEEN = 790;
 function enAnimInit() {
   const E = ENDLESS; clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
   HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.hunter = null; STOCK.land = [];
-  E.acG = new Map(); E.acB = new Map(); E.aQ = []; E.aInit = true; E.aT = 0; E.aMade = 0; E.aDropped = 0;
+  E.acG = new Map(); E.acB = new Map(); E.acL = new Map(); E.aQ = []; E.aInit = true; E.aT = 0; E.aMade = 0; E.aDropped = 0; E.taken = new Set();
+  if (gameMode === "hunt") {                                   // 2.23: hunting (Prehistoric: dinosaurs), as spawnAnimals starts it on the island maps
+    DINO.on = !!set.dino && VR_ON; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);
+    hunt.score = 0; hunt.kills = 0; hunt.longest = 0; showHuntScore();
+  }
   sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
 }
 function enAnimPlayers(all) { const ps = [[P.x, P.z]]; if (all && MP.on && MP.host) for (const L of mpOpen()) if (L.R && L.R.cur) ps.push([L.R.head.x, L.R.head.z]); return ps; }
@@ -3319,12 +3324,12 @@ function enAnimSpot(kind, x, z) {                             // somewhere this 
   return true;
 }
 function enAnimPick(b, R, birds) {                            // one kind from this environment's list, the commoner ones more often
-  const list = (NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
+  const list = (DINO.on && gameMode === "hunt" ? DINO_NATIVE : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
   let tot = 0; for (const [k, n] of list) tot += k === "rabbit" ? Math.min(n, 6) : n; let u = R() * tot;
   for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
 }
 function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
-  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = 3 + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = DINO.on && gameMode === "hunt" ? 2 + Math.floor(R() * 2) : (gameMode === "hunt" ? 4 : 3) + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
   for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
     const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false); if (!e) break;
     const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
@@ -3333,7 +3338,31 @@ function enAnimFill(i, j, ps, init) {                         // a square's grou
     for (let q = 0; q < m; q++) E.aQ.push({ k, x: x + (R() - .5) * sp, z: z + (R() - .5) * sp, hx: x, hz: z, gid, key });
     break;
   }
+  if (gameMode !== "hunt") return;
+  const far = (x, z) => enAnimNear(ps, x, z) >= (init ? 150 : EA_SEEN);
+  if (DINO.on) {
+    if (R() < .04) for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: "trex", x, z, hx: x, hz: z, gid: ++HAB.gid, key }); break; } }   // a T. rex in about 1 square in 25
+    if (R() < .3) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (far(x, z)) E.aQ.unshift({ k: "ptero", x, z, hx: x, hz: z, gid: -1, key }); }
+  } else if (R() < .05) {                                     // Bigfoot (the Yeti in the cold) in about 1 square in 20
+    for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C, L = (NATIVE[enDom(x, z).b] || []).find(e => LEGEND[e[0]]);
+      if (L && enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: L[0], x, z, hx: x, hz: z, gid: ++HAB.gid, key }); break; } }
+  }
 }
+// 2.23: guns and bows lying about each square (hunting in a headset), seeded per square so everyone online has the same ones; one you've taken stays taken
+const EL_G = 7;
+function enLootFill(i, j) {
+  const E = ENDLESS, wi = ((i % EA_N) + EA_N) % EA_N, wj = ((j % EA_N) + EA_N) % EA_N, R = mulberry32(enHash(seed * 91 + 13, wi, wj)), cell = EA_C / EL_G, kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"], ids = [];
+  for (let a = 0; a < EL_G; a++) for (let b = 0; b < EL_G; b++) {
+    let sp = null; for (let k = 0; k < 10 && !sp; k++) { const x = i * EA_C + (a + .5 + (R() - .5) * .85) * cell, z = j * EA_C + (b + .5 + (R() - .5) * .85) * cell; if (enAnimOk(x, z)) sp = [x, z]; }
+    const r = R(), kind = kinds[Math.floor(R() * kinds.length)], bow = R() < .16, red = R() < .0015, id = "e" + wi + "_" + wj + "_" + a + "_" + b;
+    if (!sp || E.taken.has(id)) continue;
+    const tier0 = Math.min(kind === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);
+    dropAdd(red ? { id, type: "gun", kind: "hunt", tier: 5, x: sp[0], z: sp[1] } : bow ? { id, type: "gun", kind: "bow", tier: Math.max(2, tier0), x: sp[0], z: sp[1] } : { id, type: "gun", kind, tier: tier0, x: sp[0], z: sp[1] });   // (the red sniper: a few in all the land)
+    ids.push(id);
+  }
+  E.acL.set(enKey(i, j), { i, j, ids });
+}
+function enLootDrop(rec) { for (const id of rec.ids) { const d = DROPS.get(id); if (!d) continue; scene.remove(d.obj); const U = d.obj.userData; if (U.glow && U.glow.material) U.glow.material.dispose(); DROPS.delete(id); } }
 function enBirdFill(i, j) {                                   // a flock or a lone bird circling over the square (each headset its own)
   const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 43 + 5, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), x = (i + .2 + R() * .6) * EA_C, z = (j + .2 + R() * .6) * EA_C;
   if (R() > .75) return; const e = enAnimPick(enDom(x, z).b, R, true); if (!e) return;
@@ -3360,21 +3389,27 @@ function enAnimTick(dt) {
     const ps = enAnimPlayers(true), me = [[P.x, P.z]], n = Math.ceil(EA_ON / EA_C) + 1;
     if (host) for (const p of ps) { const ci = Math.floor(p[0] / EA_C), cj = Math.floor(p[1] / EA_C);   // squares coming near someone
       for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acG.has(k) || Math.hypot((i + .5) * EA_C - p[0], (j + .5) * EA_C - p[1]) > EA_ON) continue; E.acG.set(k, [i, j]); enAnimFill(i, j, ps, init); } }
-    { const ci = Math.floor(P.x / EA_C), cj = Math.floor(P.z / EA_C);                                   // birds: over the squares round you
-      for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acB.has(k) || Math.hypot((i + .5) * EA_C - P.x, (j + .5) * EA_C - P.z) > EA_ON) continue; E.acB.set(k, [i, j]); enBirdFill(i, j); } }
+    { const ci = Math.floor(P.x / EA_C), cj = Math.floor(P.z / EA_C);                                   // birds: over the squares round you (not among the dinosaurs)
+      for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acB.has(k) || Math.hypot((i + .5) * EA_C - P.x, (j + .5) * EA_C - P.z) > EA_ON) continue; E.acB.set(k, [i, j]); if (!DINO.on) enBirdFill(i, j); } }
+    if (lootMode() && gameMode === "hunt") {                                                            // guns round you: a square or two each time (everything near at once behind the fade)
+      const ci = Math.floor(P.x / EA_C), cj = Math.floor(P.z / EA_C); let made = 0;
+      for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acL.has(k) || Math.hypot((i + .5) * EA_C - P.x, (j + .5) * EA_C - P.z) > EA_ON) continue; if (!init && made >= 2) continue; enLootFill(i, j); made++; }
+      for (const [k, rec] of E.acL) if (Math.hypot((rec.i + .5) * EA_C - P.x, (rec.j + .5) * EA_C - P.z) > EA_OFF + 350) { enLootDrop(rec); E.acL.delete(k); }
+    }
     for (const [k, c] of E.acG) if (enAnimNear(ps, (c[0] + .5) * EA_C, (c[1] + .5) * EA_C) > EA_OFF + 350) E.acG.delete(k);   // everyone's gone on: it can fill again later
     for (const [k, c] of E.acB) if (enAnimNear(me, (c[0] + .5) * EA_C, (c[1] + .5) * EA_C) > EA_OFF + 350) E.acB.delete(k);
     for (let q = beasts.length - 1; q >= 0; q--) { const A = beasts[q];                                   // far behind everyone: taken away
       if (A.ecellB !== undefined) { if (enAnimNear(me, A.cx, A.cz) > EA_OFF) enAnimDrop(A); }
-      else if (A.ecell !== undefined && !A.net && enAnimNear(ps, A.x, A.z) > EA_OFF) enAnimDrop(A); }
+      else if (A.ecell !== undefined && !A.net && !A.rexOn && enAnimNear(ps, A.x, A.z) > EA_OFF) enAnimDrop(A); }
     E.aQ = E.aQ.filter(o => E.acG.has(o.key));
   }
   if (!host) { E.aQ.length = 0; return; }
   const t0 = performance.now(), ps = E.aQ.length ? enAnimPlayers(true) : null;
   while (E.aQ.length && beasts.length < BEAST_CAP && (init || performance.now() - t0 < 1)) {   // a few a frame (all at once behind the fade)
-    const o = E.aQ.shift(), ok = enAnimSpot(o.k, o.x, o.z), x = ok ? o.x : o.hx, z = ok ? o.z : o.hz;
+    const o = E.aQ.shift(), ok = o.k === "ptero" || enAnimSpot(o.k, o.x, o.z), x = ok ? o.x : o.hx, z = ok ? o.z : o.hz;
     if (enAnimNear(ps, x, z) < (init ? 30 : 700)) continue;
-    const A = addGround(o.k, x, z, [o.hx, o.hz]); A.grp = o.gid; A.ecell = o.key; E.aMade++;
+    if (LEGEND[o.k] && beasts.some(B => B.kind === o.k && !B.dead && !B.gone)) continue;               // one T. rex (one Bigfoot / Yeti) about at a time
+    const A = o.k === "ptero" ? pteroAdd(x, z) : addGround(o.k, x, z, [o.hx, o.hz]); A.grp = o.gid; A.ecell = o.key; E.aMade++;
   }
 }
 /* ---------------- 2.20: endless regions (Ron: "as you walk on endless you enter new biomes and new weather", "different terrain roughness",
@@ -3966,7 +4001,7 @@ function* envGen(o) {
 }
 function generate() {
   clearSquad();
-  HIKEMAP = HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : null);   // 2.19
+  HIKEMAP = HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && set.huntMap === "endless" ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
@@ -4130,7 +4165,9 @@ function generate() {
     E.water = new THREE.Mesh(new THREE.PlaneGeometry(EN_FAR + 3000, EN_FAR + 3000), wMat); E.water.rotation.x = -Math.PI / 2; E.water.position.y = water; world.add(E.water);
     E.shoreC = [0, 0];
     { E.ts = performance.now(); E.slice = 1e9; const it = enFarJob(0, 0); while (!it.next().done); E.farC0 = [0, 0]; enFarSink(); }
-    spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); if (gameMode === "hike") enAnimInit(); clearLoot(); startZone(); startCapture();
+    spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); if (gameMode === "hike" || gameMode === "hunt") enAnimInit(); clearLoot(); if (ARMED() && VR_ON) { resetArms(); gunSndLoad(); } startZone(); startCapture();
+    if (gameMode !== "hike") { const W = weather, R2 = mulberry32(seed * 29 + 3), P0 = W.type === "fog" ? [6 + R2() * 6, 9, .05, 14, .55] : W.precip ? [10, 30, W.storm ? .012 : .008, 10, .3] : [0, 10, 0, 0, 0];   // 2.23: hunting's ground fog
+      HFOG.uHFog.value.set(P0[0], P0[1], P0[2], P0[3]); HFOG.uHFogB.value.set(R2() * 400, R2() * 400, P0[4]); }
     enAmbient(true);
     explored = new Uint8Array(64 * 64);
     { const it = enMapJob(Math.round(P.x / 25) * 25, Math.round(P.z / 25) * 25); while (!it.next().done); }
@@ -8214,8 +8251,9 @@ function vruiParts() {
     uiLabel(g, lx, 618, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees"); note(g, lx, 654, "From today's forest up to very thick woods.");
     uiLabel(g, lx, 768, "Month", MONTH_FULL[set.month]); note(g, lx + 420, 768, sea === "tropical" ? "Always warm" : sea[0].toUpperCase() + sea.slice(1));
     if (gameMode === "hike") { uiLabel(g, rx, 168, "Map"); note(g, rx, 304, set.hikeMap === "endless" ? "New land grows as you walk" : "The big 3 km island"); }
-    else uiLabel(g, rx, 168, "Map size", $("sizeVal").textContent);
-    if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
+    else uiLabel(g, rx, 168, "Map size", huntEndless() ? "Endless" : $("sizeVal").textContent);
+    if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
+    else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
@@ -8232,11 +8270,12 @@ function vruiParts() {
   uiSlider(S2, lx, 516, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + (i % 6) * 152, 790 + Math.floor(i / 6) * 74, 140, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 30 }));
-  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 130, 196, 122, 62, l, () => { set.size = k; }, { active: () => set.size === k, hide: () => gameMode === "hike" }));
+  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode === "hike", fs: 30 }));
+  uiBtn(S2, rx + 7 * 112, 196, 106, 62, "Endless", () => { set.huntMap = "endless"; }, { active: () => huntEndless(), hide: () => gameMode !== "hunt", fs: 24 });   // 2.23
   uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { set.hikeMap = "island"; }, { active: () => set.hikeMap !== "endless", hide: () => gameMode !== "hike" });   // 2.19
   uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { set.hikeMap = "endless"; }, { active: () => set.hikeMap === "endless", hide: () => gameMode !== "hike" });
-  uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => gameMode === "hike" });
-  uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless", hide: () => gameMode === "hike" });
+  uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => gameMode === "hike" || huntEndless() });
+  uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless", hide: () => gameMode === "hike" || huntEndless() });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
   uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true });
@@ -10084,6 +10123,7 @@ function dropObj(d) {
 }
 function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; if (d.y === undefined) d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
 function dropTake(id) {
+  if (ENDLESS && ENDLESS.taken) ENDLESS.taken.add(id);
   const d = DROPS.get(id); if (!d || d.got) return;
   if (d.type === "hp" || d.type === "sh") { d.got = true; d.back = PICK.back; d.obj.visible = false; return; }   // crosses come back after a while
   scene.remove(d.obj); DROPS.delete(id);
@@ -10213,7 +10253,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino"];
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino"];
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (2.00: online in every mode)
