@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.31";              // Just Trees 2.31
+const VERSION = "2.32";              // Just Trees 2.32
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -9557,7 +9557,7 @@ function boltSounds() {                        // lift, pull back, push forward,
   });
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading (ammo is unlimited since 1.85) ---------------- */
-const flareOk = () => gameMode === "pvp" && VR_ON && ["large", "xl", "xxl", "xxxl"].includes(set.size);   // 2.25: the flare gun (VR PvP, L and up)
+const flareOk = () => gameMode === "pvp" && VR_ON && ["large", "xl", "xxl", "xxxl"].includes(set.size) && (set.comms | 0) === 3;   // 2.25: the flare gun (VR PvP, L and up); 2.32 (Ron): only with Team · fist bump comms (silent teammates: flares find each other)
 const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"] : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow (1.85)
 const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};

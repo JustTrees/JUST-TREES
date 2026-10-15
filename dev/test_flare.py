@@ -10,7 +10,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto("file://" + sys.argv[1]); await pg.wait_for_timeout(500)
         r = await pg.evaluate("""() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setSeed(808); D.setVR(true); D.setMode('pvp'); D.vr.on = true;
-          Object.assign(D.set, { size: 'large', lat: 45, hemi: 1, month: 6, hour: 20.3, weather: 'clear', density: .5, rough: .5 }); D.generate(); D.state = 'play'; D.pvpLoadout2();
+          Object.assign(D.set, { size: 'large', comms: 3, lat: 45, hemi: 1, month: 6, hour: 20.3, weather: 'clear', density: .5, rough: .5 }); D.generate(); D.state = 'play'; D.pvpLoadout2();
           const out = { wheel: D.wheelKeys2().includes('flare'), n: D.vr.flares };
           const G = D.FLARE; D.vr.flareMode = true;
           // aim the flare gun straight up-ish and fire
@@ -31,9 +31,10 @@ async def main():
           D.scene.traverse(o => { if (o.isMesh && o.material.uniforms && o.material.uniforms.sunDir) o.position.copy(c.position); }); D.cullTiles(); D.renderer.setSize(900, 560); D.renderer.render(D.scene, c); out.pic = D.renderer.domElement.toDataURL('image/jpeg', .85);
           for (let f = 0; f < 72 * 12; f++) D.flareTick(1 / 72); out.after = G.list.length;
           D.set.size = 'medium'; out.mediumWheel = D.wheelKeys2().includes('flare') && D.vr.flares > 0;
+          D.set.size = 'large'; D.set.comms = 1; D.pvpLoadout2(); out.openComms = D.wheelKeys2().includes('flare') || D.vr.flares > 0;   /* 2.32: only with fist-bump comms */
           return out; }""")
         if len(sys.argv) > 2: open(sys.argv[2].replace(".png", ".jpg"), "wb").write(base64.b64decode(r2["pic"].split(",")[1]))
         del r2["pic"]; print(json.dumps(r), json.dumps(r2))
-        ok = r["wheel"] and r["n"] == 3 and r2["flying"] == 3 and r2["left"] == 0 and not r2["wheel"] and not r2["mode"] and r2["highM"] > 100 and r2["burst"] and r2["after"] == 0 and not r2["mediumWheel"] and not errs
+        ok = r["wheel"] and r["n"] == 3 and r2["flying"] == 3 and r2["left"] == 0 and not r2["wheel"] and not r2["mode"] and r2["highM"] > 100 and r2["burst"] and r2["after"] == 0 and not r2["mediumWheel"] and not r2["openComms"] and not errs
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)
