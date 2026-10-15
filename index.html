@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.29";              // Just Trees 2.29
+const VERSION = "2.30";              // Just Trees 2.30
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8328,10 +8328,10 @@ function vruiParts() {
       return;
     }
     const L = [["Ages 21 and up.", "Just Trees is for adults: players born in " + (thisYear() - 22) + " or earlier."],
-      ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice goes straight between players, or through our relay when a home network needs it. It is never recorded or saved."],
+      ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice is never recorded or saved."],
       ["Be decent.", "No harassment, hate, threats, sexual talk, or sharing anyone's personal details (yours included). Don't cheat or wreck games on purpose."],
       ["You're in control.", "Mute anyone from the player list beside your map. Hosts can remove players. Keep your rooms Private to play only with friends."],
-      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open. Like most voice-chat games, players in your game can see your connection's rough internet address."],
+      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open."],
       ["Play safe.", "Clear the space around you, take breaks, and stop if you feel dizzy or unwell."],
       ["As-is.", "Just Trees is a free game provided as-is, without warranty. You play at your own risk."]];
     let y = 150; for (const [h, t] of L) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(h, 80, y); g.font = "28px sans-serif"; g.fillStyle = UIC.text; g.textAlign = "left";
