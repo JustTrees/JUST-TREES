@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.20";              // Just Trees 2.20
+const VERSION = "2.21";              // Just Trees 2.21
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1574,6 +1574,7 @@ function fadeify(mat, role) {                              // role 0 = full deta
 function cardMaterial(tex, role) {
   const m = new THREE.MeshBasicMaterial({ map: tex, alphaTest: VR_ON ? .3 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, fog: true });
   m.onBeforeCompile = sh => {
+    sh.uniforms.uCardTint = CARD_TINT; sh.fragmentShader = "uniform vec3 uCardTint;\n" + sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n  diffuseColor.rgb *= uCardTint;");
     sh.vertexShader = "attribute vec4 aCell;\n" + sh.vertexShader
       .replace("#include <uv_vertex>", "#include <uv_vertex>\n  vUv = aCell.xy + vUv * aCell.zw;")
       .replace("#include <project_vertex>", `
@@ -1584,7 +1585,7 @@ function cardMaterial(tex, role) {
         vec4 mvPosition = viewMatrix * vec4(cW.xyz + rgt * (position.x * sX) + vec3(0.0, position.y * sY, 0.0), 1.0);
         gl_Position = projectionMatrix * mvPosition;`);
   };
-  m.customProgramCacheKey = () => "treecard188";
+  m.customProgramCacheKey = () => "treecard221";
   return fadeify(m, role === undefined ? 2 : role);
 }
 function bakeCards(kinds, used) {                           // paint each tree shape once, side-on, in this map's light, into one picture sheet
@@ -2540,7 +2541,7 @@ function spawnStrike(now) {
   const pulses = []; let t = 0, amp = 1; const n = 2 + Math.floor(r() * (kind === "far" ? 2 : 4));   // a strike stutters a few times
   for (let i = 0; i < n; i++) { const dur = .035 + r() * .07; pulses.push([t, dur, amp]); t += dur + .03 + r() * .14; amp *= .45 + r() * .5; }
   const S = { t0: now / 1000, pulses, end: t + .15, I, kind, d, dir: new THREE.Vector3(dx, .55 + r() * .3, dz).normalize(), objs: [] };
-  const gx = cam.x + dx * d, gz = cam.z + dz * d, gy = Math.abs(gx) < HALF && Math.abs(gz) < HALF ? Math.max(H(gx, gz), water) : water;
+  const gx = cam.x + dx * d, gz = cam.z + dz * d, gy = !outMap(gx, gz) ? Math.max(H(gx, gz), water) : water;
   if (kind === "ground") {
     const top = new THREE.Vector3(gx + (r() - .5) * 200, gy + 520 + r() * 280, gz + (r() - .5) * 200), w = Math.max(3.5, d * .0045);
     const [core, halo] = boltMesh(top, new THREE.Vector3(gx, gy, gz), w, r); scene.add(core, halo); S.objs.push([core, 1], [halo, .3]);
@@ -2933,7 +2934,7 @@ function* enHeightsGen(ch) {                                 // this square's gr
   ch.hg = g; ch.hmin = mn; ch.hmax = mx;
 }
 // near sets that grow and shrink: one batch per shape, filled from whichever 100 m cells are close to you
-function enSlot(NS, geo, mat) { const it = { E: true, geo, mat, cap: 0, mesh: null, blocks: new Map() }; NS.items.push(it); return it; }
+function enSlot(NS, geo, mat) { const it = { E: true, NS, geo, mat, cap: 0, mesh: null, blocks: new Map() }; NS.items.push(it); return it; }
 function enSlotEnsure(it, n) {
   if (it.mesh && it.cap >= n) return;
   const cap = Math.max(64, 1 << Math.ceil(Math.log2(n * 1.25 + 1)));
@@ -2994,26 +2995,28 @@ function enUnload(ch) {                                      // let a far square
   E.chunks.delete(ch.key); ch.hg = null; ch.raw = null; ch.rg = null; ch.trees = null;
 }
 // tree shadows: one 3.2 km picture that wraps round; each square paints its own part (with its neighbours' shade spilling in)
+let EN_SPARE = null;
 function enShadowInit(dir) {
   const E = ENDLESS, el = Math.asin(Math.max(-1, Math.min(1, dir.y))), data = new Uint8Array(EN_SW * EN_SW);
   const tex = new THREE.DataTexture(data, EN_SW, EN_SW, THREE.RedFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.unpackAlignment = 1; tex.needsUpdate = true;
   const hx = -dir.x, hz = -dir.z, hl = Math.hypot(hx, hz) || 1;
-  E.sh = { on: el > .03, tex, ux: hx / hl, uz: hz / hl, tanE: Math.max(Math.tan(el), .2), sinE: Math.max(.25, Math.sin(el)), tmp: new THREE.DataTexture(new Uint8Array(EN_C * EN_C), EN_C, EN_C, THREE.RedFormat), zero: new THREE.DataTexture(new Uint8Array(EN_C * EN_C), EN_C, EN_C, THREE.RedFormat), ready: false };
+  if (EN_SPARE) EN_SPARE.dispose(); EN_SPARE = E.clock ? enShadowTexNew() : null;
+  E.sh = { on: el > .03 || !!E.clock, tex, ...enShadowParams(dir), spare: EN_SPARE, nx: null, tmp: new THREE.DataTexture(new Uint8Array(EN_C * EN_C), EN_C, EN_C, THREE.RedFormat), zero: new THREE.DataTexture(new Uint8Array(EN_C * EN_C), EN_C, EN_C, THREE.RedFormat), ready: false };
   if (shadowTex) shadowTex.dispose(); if (GRADE.uShadowTex2.value && GRADE.uShadowTex2.value !== shadowTex) GRADE.uShadowTex2.value.dispose();
   shadowTex = tex; shadowJob = null; shadowFade = 0; shadowSrc = null;
   GRADE.uShadowTex.value = tex; GRADE.uShadowTex2.value = tex; GRADE.uShadowMix.value = 0;
   GRADE.uMapHalf.value = EN_SW * 100; GRADE.uMapS.value = EN_SW; GRADE.uShadowOn.value = E.sh.on ? 1 : 0;
 }
 function enShadowClear(ch) {                                 // a new square starts unshaded (not with whatever the picture held from 3.2 km away)
-  const Sh = ENDLESS.sh; if (!Sh || !Sh.on) return; if (!Sh.ready) { renderer.initTexture(Sh.tex); Sh.ready = true; }
-  renderer.copyTextureToTexture(new THREE.Vector2(((ch.x0 % EN_SW) + EN_SW) % EN_SW, ((ch.z0 % EN_SW) + EN_SW) % EN_SW), Sh.zero, Sh.tex);
+  const Sh = ENDLESS.sh; if (!Sh || !Sh.on) return; if (!Sh.ready) { renderer.initTexture(Sh.tex); if (Sh.spare) renderer.initTexture(Sh.spare); Sh.ready = true; }
+  const p = enShPos(ch); renderer.copyTextureToTexture(p, Sh.zero, Sh.tex); if (Sh.nx) renderer.copyTextureToTexture(p, Sh.zero, Sh.nx.tex);
 }
 function enShadowStamp(ch) { const it = enShadowGen(ch); while (!it.next().done); }
-function* enShadowGen(ch) {
-  const E = ENDLESS, Sh = E.sh; if (!Sh || !Sh.on || !ch.trees) return;
-  if (!Sh.ready) { renderer.initTexture(Sh.tex); Sh.ready = true; }
-  const C = EN_C, Wd = C + 2, g = new Float32Array(Wd * Wd), x0 = ch.x0 - 1, z0 = ch.z0 - 1, { ux, uz, tanE, sinE } = Sh, kinds = E.kinds;
+function* enShadowGen(ch, T) {                              // T: which picture and sun (default: the one showing)
+  const E = ENDLESS, Sh = E.sh; if (!Sh || !Sh.on || !ch.trees) return; T = T || Sh;
+  if (!Sh.ready) { renderer.initTexture(Sh.tex); if (Sh.spare) renderer.initTexture(Sh.spare); Sh.ready = true; }
+  const C = EN_C, Wd = C + 2, g = new Float32Array(Wd * Wd), x0 = ch.x0 - 1, z0 = ch.z0 - 1, { ux, uz, tanE, sinE } = T, kinds = E.kinds;
   const ellipse = (cx, cz, along, cross, dens) => {
     const R = Math.ceil(Math.max(along, cross)) + 1, ci = Math.round(cx - x0), cj = Math.round(cz - z0);
     if (ci + R < 0 || cj + R < 0 || ci - R >= Wd || cj - R >= Wd) return;
@@ -3042,7 +3045,7 @@ function* enShadowGen(ch) {
     let s = 0; for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) s += g[(j + b) * Wd + i + a];
     out[(j - 1) * C + i - 1] = Math.min(255, s / 9 * 255);
   }
-  renderer.copyTextureToTexture(new THREE.Vector2(((ch.x0 % EN_SW) + EN_SW) % EN_SW, ((ch.z0 % EN_SW) + EN_SW) % EN_SW), Sh.tmp, Sh.tex); ch.shDone = true;
+  renderer.copyTextureToTexture(enShPos(ch), Sh.tmp, T.tex); if (T === Sh) { ch.shDone = true; if (Sh.nx) Sh.nx.q.add(ch); }
 }
 function enSolid(ch) { const it = enSolidGen(ch); while (!it.next().done); }
 function* enSolidGen(ch) {                                   // the rocks and logs of this square (and any reaching in from next door) traced onto a 1 m grid
@@ -3157,7 +3160,10 @@ function endlessTick(dt) {                                   // every frame: bui
       const ch = E.chunks.get(enKey(i, j)); if (!ch || !ch.tile) want.push([d, i, j]);
     }
     want.sort((a, b) => a[0] - b[0]); E.want = want;
-    for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283, rr = k < 12 ? L + 400 : L + 1400, g = enDom(px + Math.cos(a) * rr, pz + Math.sin(a) * rr); if (!E.envH[g.b]) E.prepQ.add(g.b); }   // environments coming up: get their trees ready ahead
+    const ring = new Set();
+    for (let k = 0; k < 24; k++) { const a = k / 24 * 6.283, rr = k < 12 ? L + 400 : L + 1400, n = enRegions(px + Math.cos(a) * rr, pz + Math.sin(a) * rr);   // environments coming up (any share of them): get their trees ready ahead
+      for (let q = 0; q < n; q++) { const b = EN_RL[q].reg.b; ring.add(b); if (!E.envH[b]) E.prepQ.add(b); } }
+    enEnvGC(.4, ring);
     for (const ch of E.chunks.values()) {
       if (E.job && E.job.ch === ch) continue;
       const d = Math.hypot(ch.x0 + 100 - px, ch.z0 + 100 - pz);
@@ -3179,11 +3185,11 @@ function endlessTick(dt) {                                   // every frame: bui
         if (!E.job) {
           for (const ch of E.shQ) { E.shQ.delete(ch); if (E.chunks.get(ch.key) === ch && ch.tile) { pick = ch; break; } }
           let pb = null; for (const b of E.prepQ) { E.prepQ.delete(b); if (!E.envH[b]) { pb = b; break; } }
-          if (pick) E.job = { ch: null, it: enShadowGen(pick) };
+          if (pick) E.job = { ch: null, sh: true, it: enShadowGen(pick) };
           else if (pb) E.job = { ch: null, it: enPrepGen(pb) };
+          else if (E.sh && E.sh.nx && E.sh.nx.q.size) E.job = { ch: null, sh: true, it: enShadowRebake() };
           else if (Math.hypot(px - E.shoreC[0], pz - E.shoreC[1]) > 600) { E.shoreC = [Math.round(px / 200) * 200, Math.round(pz / 200) * 200]; E.job = { ch: null, it: enShoreJob(E.shoreC[0], E.shoreC[1]) }; }
           else if (Math.hypot(px - E.farC0[0], pz - E.farC0[1]) > 900) { E.farC0 = [Math.round(px / 400) * 400, Math.round(pz / 400) * 400]; E.job = { ch: null, far: true, it: enFarJob(E.farC0[0], E.farC0[1]) }; }
-          else if (Math.hypot(px - MAPV.cx, pz - MAPV.cz) > 320) { E.job = { ch: null, map: true, it: enMapJob(Math.round(px / 25) * 25, Math.round(pz / 25) * 25) }; }
           else break;
         }
       }
@@ -3196,13 +3202,105 @@ function endlessTick(dt) {                                   // every frame: bui
       if (J.ch) { enFarSink(J.ch); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const nb = E.chunks.get(enKey(J.ch.ix + a, J.ch.iz + b)); if (nb && nb.tile) { if (!nb.shDone && enNbBuilt(nb)) E.shQ.add(nb); if ((a || b) && nb.rg) E.solidQ.add(nb); } } }
     }
   }
+  // 2.21: the hand map keeps up with you — its own small share of every frame, so building new land can't hold it back
+  if (!E.mapJob && Math.hypot(px - MAPV.cx, pz - MAPV.cz) > 240) E.mapJob = enMapJob(Math.round(px / 25) * 25, Math.round(pz / 25) * 25);
+  if (E.mapJob) { const sl = E.slice; E.slice = play ? .7 : 4; E.ts = performance.now(); const r = E.mapJob.next(); E.slice = sl;
+    if (E.prof) { const tl = performance.now() - E.ts; E.prof["map-lane"] = Math.max(E.prof["map-lane"] || 0, tl); }
+    if (r.done) E.mapJob = null; }
+  // 2.21: a whole day in 24 minutes (Ron), the same clock for everyone online; the light follows it, the tree shadows turn with the sun
+  if (E.clock && play) {
+    hourNow = (hourNow + dt / 60) % 24;
+    if (MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow }); }
+  }
+  if (E.clock && (E.lightT = (E.lightT || 0) - dt) <= 0) { E.lightT = .5; enLight(); }
+  enShadowSun(dt);
+}
+function enLight() {                                          // the light for this hour (between region changes, which also relight)
+  const E = ENDLESS; setLighting(set.lat * set.hemi, (E.here || enDom(P.x, P.z)).b, E.topMix);
+  if (soundEnv) soundEnv.day = smooth(-2, 15, sunPos(set.lat * set.hemi, set.month, hourNow).el);
+  enCardTint();
+}
+function enClockSet(h) {                                      // a guest: the host's clock (small drift eased out, a big gap jumped)
+  const d = ((h - hourNow + 36) % 24) - 12;
+  hourNow = Math.abs(d) > .1 ? h : (hourNow + d * .5 + 24) % 24;
+}
+// far-off tree cards are painted in a fixed light and tinted by the light of the hour (so they darken at dusk like the trees near you)
+const CARD_TINT = { value: new THREE.Color(1, 1, 1) };
+const CARD_STD = { hc: new THREE.Color("#dfe6ec"), hi: .95, sc: new THREE.Color("#fff3df"), si: 1.05 };
+function enCardTint() {
+  const a = CARD_STD, k = .55, t = CARD_TINT.value, f = c => Math.max(.03, Math.min(1.6, c));
+  t.setRGB(f((hemi.color.r * hemi.intensity + sunL.color.r * sunL.intensity * k) / (a.hc.r * a.hi + a.sc.r * a.si * k)),
+           f((hemi.color.g * hemi.intensity + sunL.color.g * sunL.intensity * k) / (a.hc.g * a.hi + a.sc.g * a.si * k)),
+           f((hemi.color.b * hemi.intensity + sunL.color.b * sunL.intensity * k) / (a.hc.b * a.hi + a.sc.b * a.si * k)));
+}
+// moving tree shadows: when the sun has turned ~5°, the squares near you are painted again into the second picture, which then fades in
+const EN_SHR = 800;
+function enShadowParams(dir) {
+  const el = Math.asin(Math.max(-1, Math.min(1, dir.y))), hx = -dir.x, hz = -dir.z, hl = Math.hypot(hx, hz) || 1;
+  return { ux: hx / hl, uz: hz / hl, tanE: Math.max(Math.tan(el), .2), sinE: Math.max(.25, Math.sin(el)), dir: dir.clone() };
+}
+function enShadowTexNew() {
+  const tex = new THREE.DataTexture(new Uint8Array(EN_SW * EN_SW), EN_SW, EN_SW, THREE.RedFormat); tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false; tex.unpackAlignment = 1; tex.needsUpdate = true; return tex;
+}
+const enShPos = ch => new THREE.Vector2(((ch.x0 % EN_SW) + EN_SW) % EN_SW, ((ch.z0 % EN_SW) + EN_SW) % EN_SW);
+function* enShadowRebake() {
+  const E = ENDLESS, Sh = E.sh, N = Sh.nx;
+  while (N.q.size) {
+    let best = null, bd = 1e9; for (const ch of N.q) { const d = Math.hypot(ch.x0 + 100 - P.x, ch.z0 + 100 - P.z); if (d < bd) { bd = d; best = ch; } }
+    N.q.delete(best); if (E.chunks.get(best.key) !== best || !best.shDone) continue;
+    if (bd < EN_SHR) yield* enShadowGen(best, N);
+    else { renderer.copyTextureToTexture(enShPos(best), Sh.zero, N.tex); if (enOver()) yield "shclr"; }   // far off: no shadow until the next turn comes closer
+  }
+}
+function enShadowSun(dt) {
+  const E = ENDLESS, Sh = E.sh; if (!E.clock || !Sh || !Sh.on || !Sh.ready) return;
+  if (!Sh.nx && (E.shSunT = (E.shSunT || 0) - dt) <= 0) {
+    E.shSunT = 1; const sp = sunPos(set.lat * set.hemi, set.month, hourNow);
+    if (sp.el > 1 && sp.dir.dot(Sh.dir) < Math.cos(5 * Math.PI / 180)) {
+      const N = Object.assign(enShadowParams(sp.dir), { tex: Sh.spare, q: new Set(), f: 0 });
+      for (const ch of E.chunks.values()) if (ch.shDone) N.q.add(ch);
+      Sh.nx = N;
+    }
+  }
+  const N = Sh.nx; if (!N || N.q.size || (E.job && E.job.sh)) return;
+  N.f = Math.min(1, N.f + dt / 2.5); GRADE.uShadowTex2.value = N.tex; GRADE.uShadowMix.value = N.f;
+  if (N.f >= 1) {
+    Sh.spare = Sh.tex; Object.assign(Sh, { tex: N.tex, ux: N.ux, uz: N.uz, tanE: N.tanE, sinE: N.sinE, dir: N.dir }); Sh.nx = null;
+    GRADE.uShadowTex.value = Sh.tex; GRADE.uShadowTex2.value = Sh.tex; GRADE.uShadowMix.value = 0;
+  }
+}
+// 2.21: environments you've left well behind let go of their trees (shapes, textures, batches, cards), so a long hike doesn't pile them up
+function enEnvGC(dt, ring) {
+  const E = ENDLESS; E.idle = E.idle || {};
+  if (E.prepping) for (const b in E.prepping) if (E.prepping[b] && !E.envH[b]) return;   // (not while one is being made: it may be sharing tree kinds)
+  const used = new Set(ring); for (const b of E.prepQ) used.add(b);
+  for (const ch of E.chunks.values()) if (ch.share) for (const b of ch.share.keys()) used.add(b);
+  for (const b in E.envH) { if (used.has(b)) { E.idle[b] = 0; continue; } if ((E.idle[b] = (E.idle[b] || 0) + dt) > 60) enEnvFree(b); }
+}
+function enEnvFree(b) {
+  const E = ENDLESS, env = E.envH[b]; if (!env) return;
+  delete E.envH[b]; if (E.prepping) delete E.prepping[b]; E.idle[b] = 0;
+  const live = new Set(); for (const o of Object.values(E.envH)) for (const k in o.kinds) live.add(o.kinds[k]);
+  const sl = it => { if (!it) return; const a = it.NS.items, i = a.indexOf(it); if (i >= 0) a.splice(i, 1); if (it.mesh) { world.remove(it.mesh); it.mesh.dispose(); it.mesh = null; } };
+  for (const k in env.kinds) {
+    const K = env.kinds[k]; if (live.has(K) || !K.ready) continue;          // (still used by a place we're in)
+    for (const s2 of K.sl || []) { sl(s2.tree); sl(s2.lo); } for (const s2 of K.slb || []) sl(s2); for (const s2 of K.sll || []) sl(s2); sl(K.sLog);
+    for (const v of K.vars) { v.geo.dispose(); if (v.geoLow && v.geoLow !== v.geo) v.geoLow.dispose(); }
+    for (const g of K.bush) g.dispose(); for (const lv of K.limbs || []) lv.geo.dispose();
+    const maps = new Set(); for (const m of [...K.mats, ...K.loMats, K.limbMat, K.logMat]) if (m) { if (m.map) maps.add(m.map); m.dispose(); } for (const t of maps) t.dispose();
+    for (const c of K.cells || []) if (c && c.idx !== undefined) E.sheet.free.push(c.idx);
+    E.kindCache.delete(K.kid); K.ready = false; K.cells = null; K.sl = K.slb = K.sll = null; K.sLog = null;
+  }
+  for (const k in env.slr) sl(env.slr[k]); if (env.rMat) env.rMat.dispose();
+  E.nearDirty = true; E.freed = (E.freed || 0) + 1;
 }
 /* ---------------- 2.20: endless regions (Ron: "as you walk on endless you enter new biomes and new weather", "different terrain roughness",
    "every few blocks add a dramatic feature" at the 3 km map's size) ----------------
    The land is split into regions about 2.5 km across (EN_RC, warped so the borders wander), each with any environment, its own roughness,
    weather and sky. Near a border up to three regions blend over a few hundred metres (EN_BL): the ground, its colours, which trees grow,
    the sky and the weather. Dramatic landforms like the 3 km map's sit one per 3.1 km square (EN_FC) now and then (more with Dramatic on). */
-const EN_RC = 2500, EN_FC = 3125, EN_BL = 380;
+const EN_RC = 2500, EN_FC = 3125, EN_BL = 900;   /* 2.21: wider borders (was 380) */
 const EN_BIOMES = ["rainforest", "tropical", "desert", "badlands", "swamp", "temperate", "birchmaple", "redwood", "boreal", "tundra", "polar"];
 const EN_LAT = { rainforest: 4, tropical: 14, desert: 26, badlands: 35, swamp: 31, temperate: 44, birchmaple: 47, redwood: 41, boreal: 58, tundra: 67, polar: 78 };   // each one's own climate (seasons, snow)
 const EN_WQ = { swamp: .46, badlands: .03, rainforest: .16, desert: .05, tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 };   // how much of it lies under water
@@ -3348,8 +3446,8 @@ function* enPrepGen(b) {
   (E.prepping = E.prepping || {})[b] = true;
   const keep = rndF;
   const it = envGen(Object.assign({}, E.envBase, { biome: b, season: L.season, lat: L.lat, span: L.span, rand: mulberry32(enHash(seed * 97 + 5, EN_BIOMES.indexOf(b), 1)), cache: E.kindCache, rseed: seed * 131 + 7, slice: true }));
-  let r; while (!(r = it.next()).done) { rndF = keep; yield "env"; }
-  rndF = keep; const env = r.value;
+  let r, mine = null; while (true) { if (mine) rndF = mine; r = it.next(); mine = rndF; rndF = keep; if (r.done) break; yield "env-" + r.value; }   // (its own random stream across steps: the same shapes for everyone)
+  const env = r.value;
   for (const k in env.kinds) { const K = env.kinds[k]; if (!K.ready) yield* enKindReady(K, k); }
   const tb = L.tb, season = L.season;
   env.tb = tb; env.mapInfo = L.mapInfo; env.litCol = L.litCol;
@@ -3379,7 +3477,7 @@ function* enKindReady(K, k) {                                // a tree kind's ba
   K.slb = K.bush.map((geo, vi) => enSlot(NEAR.small, geo, K.mats[vi % 2]));
   if (k === "fir" || k === "broad" || k === "bare") {
     const keep = rndF; rndF = mulberry32(enHash(seed * 29 + 3, strHash(K.kid), 2));
-    K.limbs = Array.from({ length: 4 }, () => branchVariant(k)); rndF = keep;
+    const kr = rndF; rndF = keep; K.limbs = []; for (let q = 0; q < 4; q++) { const kk = rndF; rndF = kr; K.limbs.push(branchVariant(k)); rndF = kk; if (enOver()) yield "limb"; }
     K.limbMat = fadeify(grade(new THREE.MeshLambertMaterial({ map: K.mats[0].map })), 0);
     K.sll = K.limbs.map(lv => enSlot(NEAR.trees, lv.geo, K.limbMat));
   }
@@ -3389,11 +3487,11 @@ function* enKindReady(K, k) {                                // a tree kind's ba
   K.ready = true;
 }
 function enCardBake(K, vi) {                                 // paint one tree shape into the shared picture sheet for far-off cards
-  const E = ENDLESS, S0 = E.sheet, COLS = 32, CW = 64, CHT = 128, W = 2048, Hh = 2048, i = S0.n++ % 512;
+  const E = ENDLESS, S0 = E.sheet, COLS = 32, CW = 64, CHT = 128, W = 2048, Hh = 2048, i = S0.free && S0.free.length ? S0.free.pop() : S0.n++ % 512;
   if (!E.cardRig) { const bs = new THREE.Scene(), hl = new THREE.HemisphereLight(0xffffff, 0x444444, 1), sl = new THREE.DirectionalLight(0xffffff, 1); bs.add(hl, sl, sl.target); E.cardRig = { bs, hl, sl, cam: new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 600) }; E.cardRig.cam.position.set(0, 0, 300); }
   const { bs, hl, sl, cam } = E.cardRig;
-  hl.color.copy(hemi.color); hl.groundColor.copy(hemi.groundColor); hl.intensity = hemi.intensity; sl.color.copy(sunL.color); sl.intensity = sunL.intensity;
-  const sd = _v1.copy(sunL.position).normalize(), el = Math.asin(Math.max(-1, Math.min(1, sd.y)));
+  hl.color.copy(CARD_STD.hc); hl.groundColor.set("#3a3428"); hl.intensity = CARD_STD.hi; sl.color.copy(CARD_STD.sc); sl.intensity = CARD_STD.si;   // 2.21: a fixed light (tinted live: CARD_TINT)
+  const el = .66;
   sl.position.set(Math.sin(.9) * Math.cos(el), Math.max(.15, Math.sin(el)), Math.cos(.9) * Math.cos(el)).multiplyScalar(100);
   const v = K.vars[vi], geo = v.geo; if (!geo.boundingBox) geo.computeBoundingBox(); const bb = geo.boundingBox;
   const w = Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z, .5), hgt = Math.max(.5, bb.max.y - bb.min.y), fh = Math.max(hgt, w * 2) * 1.04, fw = fh / 2, y0 = bb.min.y - fh * .01, cx0 = (bb.max.x + bb.min.x) / 2;
@@ -3406,7 +3504,7 @@ function enCardBake(K, vi) {                                 // paint one tree s
   renderer.setClearColor(0x34401f, 0); renderer.autoClear = false; renderer.clear(); renderer.render(bs, cam); bs.remove(m);
   rt.scissorTest = false; rt.viewport.set(0, 0, W, Hh); rt.scissor.set(0, 0, W, Hh);
   renderer.setRenderTarget(prevRT); renderer.setClearColor(prevC, prevA); renderer.autoClear = prevAuto; renderer.xr.enabled = xrOn; FADE.uHead.value.copy(headWas);
-  return { u0: cx / W, v0: cy / Hh, du: CW / W, dv: CHT / Hh, fw, fh, y0 };
+  return { u0: cx / W, v0: cy / Hh, du: CW / W, dv: CHT / Hh, fw, fh, y0, idx: i };
 }
 // the weather, sky, water colour and footsteps where you are (a blend of the regions round you)
 function enAmbient(force) {
@@ -3428,7 +3526,7 @@ function enAmbient(force) {
   weather = Object.assign({}, B, { fogMul, dim, overcast: oc, wet, k: weather.k || 1, pk: pBest ? pW : 1, storm: !!(pBest && pBest.storm && stormW > .5), mist: false });
   if (force || weather.precip !== prevP || weather.snowStyle !== prevS) { if (precipFx) { world.remove(precipFx); precipFx.geometry.dispose(); precipFx.material.dispose(); precipFx = null; } buildPrecip(); }
   skyP = Object.assign({}, E.skyBase, { st, haze, pale });
-  setLighting(set.lat * set.hemi, D.b, top);
+  E.topMix = top; setLighting(set.lat * set.hemi, D.b, top); enCardTint();
   if (E.water && E.water.material.uniforms) { const U = E.water.material.uniforms; U.uDeep.value.copy(deep); U.uShallow.value.copy(shallow); U.uMurky.value = murky > .5 ? 1 : 0; }
   footEnv = { snow: LD.winterSnow, sandy: LD.sandy, leaves: LD.litter > .5, snowLine: LD.snowLine };
   soundEnv = { day: smooth(-2, 15, sunPos(set.lat * set.hemi, set.month, hourNow).el), cold: LD.winterSnow, season: LD.season, biome: D.b };
@@ -3721,19 +3819,19 @@ function* envGen(o) {
     const ck = k + "|" + JSON.stringify(kinds[k].cols) + "|" + kinds[k].bark + "|" + winterSnow + "|" + season + "|" + (biome === "rainforest" || biome === "swamp" ? biome : "") + "|" + ((FLUFFY[biome] || {})[k] || 0);
     if (o.cache && o.cache.has(ck)) { kinds[k] = o.cache.get(ck); recs[k] = kinds[k].vars.map(() => []); bushRecs[k] = kinds[k].bush.map(() => []); continue; }
     if (o.rseed !== undefined) rndF = mulberry32(enHash(o.rseed, strHash(ck), 7));          // (the same look whichever place needs it first)
-    kinds[k].mats = kinds[k].cols.map(cols => fadeify(windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })), 0));
+    kinds[k].mats = []; for (const cols of kinds[k].cols) { kinds[k].mats.push(fadeify(windify(new THREE.MeshLambertMaterial({ map: makeAtlas(k, cols, winterSnow, kinds[k].bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true })), 0)); if (o.slice) yield "atlas"; }
     kinds[k].loMats = kinds[k].mats.map(m => { const l = new THREE.MeshLambertMaterial(); l.copy(m); return fadeify(windify(l), 1); });   // 1.88: the simpler middle-distance trees   // in a headset: soft, smooth leaf edges
     const v = [], pool = { full: [], fullOdd: [], pruned: [], prunedOdd: [] };
     const add = (pr, od, key) => { pool[key].push(v.length); v.push(treeVariant(k, pr, od, k === "aspen" || k === "maple" || k === "birch" ? { leafless: season === "winter" } : biome === "rainforest" && k === "broad" ? { tall: 1.55, vines: true, buttress: true } : biome === "swamp" && k === "broad" ? { tall: 1.25, moss: true, buttress: true } : undefined)); };
     const nv = k === "pine" || k === "aspen" ? 2 : k === "maple" || k === "birch" || k === "redwood" || k === "sequoia" || k === "euc" ? 3 : (FLUFFY[biome] || {})[k] ? Math.max(2, NV - 2) : NV;                        // the pine shares the fir's look when young: fewer shapes, fewer draw calls
     for (let i = 0; i < nv; i++) { add(false, false, "full"); if (o.slice) yield "var"; }
-    add(false, true, "fullOdd");
-    if (k !== "palm") { for (let i = 0; i < nv; i++) { add(true, false, "pruned"); if (o.slice) yield "var"; } add(true, true, "prunedOdd"); }
+    add(false, true, "fullOdd"); if (o.slice) yield "var";
+    if (k !== "palm") { for (let i = 0; i < nv; i++) { add(true, false, "pruned"); if (o.slice) yield "var"; } add(true, true, "prunedOdd"); if (o.slice) yield "var"; }
     else { pool.pruned = pool.full; pool.prunedOdd = pool.fullOdd; }
     pool.fluffy = []; pool.fluffyP = (FLUFFY[biome] || {})[k] || 0;
-    if (pool.fluffyP > 0) for (let i = 0, nf = isTouch ? 2 : k === "pine" || k === "euc" ? 2 : 3; i < nf; i++) { pool.fluffy.push(v.length); v.push(treeVariant(k, false, false, Object.assign({ fluffy: true }, biome === "rainforest" && k === "broad" ? { tall: 1.55 } : k === "euc" ? { tall: 1.35 } : {}, (k === "maple" || k === "birch") && season === "winter" ? { leafless: true } : {}))); }
+    if (pool.fluffyP > 0) for (let i = 0, nf = isTouch ? 2 : k === "pine" || k === "euc" ? 2 : 3; i < nf; i++) { pool.fluffy.push(v.length); v.push(treeVariant(k, false, false, Object.assign({ fluffy: true }, biome === "rainforest" && k === "broad" ? { tall: 1.55 } : k === "euc" ? { tall: 1.35 } : {}, (k === "maple" || k === "birch") && season === "winter" ? { leafless: true } : {}))); if (o.slice) yield "var"; }
     kinds[k].vars = v; kinds[k].pool = pool;
-    kinds[k].bush = Array.from({ length: BUSHV }, () => bushVariant());
+    kinds[k].bush = []; for (let q = 0; q < BUSHV; q++) { kinds[k].bush.push(bushVariant()); if (o.slice) yield "bush"; }
     recs[k] = v.map(() => []);
     bushRecs[k] = kinds[k].bush.map(() => []);
     kinds[k].kid = ck; if (o.cache) o.cache.set(ck, kinds[k]);
@@ -3799,7 +3897,7 @@ function generate() {
   if (rockTex) { rockTex.dispose(); rockTex = null; }
   obstacles = new Map(); limbGrid = null; limbHold = new Map(); animals = []; birds = null; runner = null; precipFx = null;
   const lat = set.lat * set.hemi, biome = rollEnv(), season = seasonOf(lat, set.month);
-  hourNow = set.hour;
+  hourNow = set.hour; CARD_TINT.value.setRGB(1, 1, 1);
   const rand = mulberry32(seed);
   edgeShape = makeEdgeShape(mulberry32(seed * 11 + 5));
   let rawH = null, baked = null;
@@ -3921,14 +4019,14 @@ function generate() {
     const E = ENDLESS;
     water = 0; riverW = null; tiles = []; FEAT = null; LAVA = null; ARCHI = null; iced = false;
     limbGrid = new Map(); limbHold = new Map(); rockGrid = null; rockLow = null; soundSpots = { birds: [], crickets: [] }; terrainMesh = null;
-    E.envBase = { densN, spN, aspN, fluN, varN, nearRiver: () => false };
+    E.clock = true; E.mapJob = null; E.envBase = { densN, spN, aspN, fluN, varN, nearRiver: () => false };
     E.kindCache = new Map(); E.envL = {}; E.envH = {}; E.regs = new Map(); E.feats = new Map(); E.lavas = []; E.prepQ = new Set();
     enWorldSetup(seed);
     E.wl = water; E.span = E.envL.temperate.span; E.make = enMake; E.gcol = enGcol;
     E.RGr = rockGeos(); E.RG = { ...E.RGr, ...sectionGeos() }; E.LG = logGeo();
     E.gMat = groundMaterial(1, "#b5642a", 0, true);
     E.iceMat = phong("#cfe6f0", { shininess: 60, specular: 0x666666 });
-    E.sheet = { rt: new THREE.WebGLRenderTarget(2048, 2048, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }), n: 0 };
+    E.sheet = { rt: new THREE.WebGLRenderTarget(2048, 2048, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter }), n: 0, free: [] };
     { const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha(); renderer.setRenderTarget(E.sheet.rt); renderer.setClearColor(0x34401f, 0); renderer.clear(); renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa); }
     CARD = { rt: E.sheet.rt, base: new THREE.PlaneGeometry(1, 1).translate(0, .5, 0), mat: cardMaterial(E.sheet.rt.texture, 2), cells: {}, pend: [] };
     // the weather, sky and light where you start (they change as you walk: enAmbient)
@@ -4607,7 +4705,7 @@ function setLighting(lat, biome, topMix) {
   // light through leaves when the sun is low; soft shadows tinted by the sky, faint by moonlight
   GRADE.uSunW.value.copy(el > -4 ? sp.dir : moonDir); GRADE.uSunC.value.copy(el > -4 ? sunCol : C("#9ab0e0")).multiplyScalar(el > -4 ? 1 : .25);
   GRADE.uTrans.value = (.3 + .9 * glow) * (el > -4 ? smooth(-2, 4, el) : U.moonVis.value * .5) * (1 - oc * .8);
-  const shK = (el > -4 ? smooth(1, 8, el) * lerp(.45, 1, smooth(4, 15, el)) : U.moonVis.value * .35) * (1 - oc * .9) * weather.dim;   // very long low-sun shadows are softer
+  const shK = (el > -4 ? smooth(1, 8, el) * lerp(.45, 1, smooth(4, 15, el)) : (ENDLESS && ENDLESS.clock ? 0 : U.moonVis.value * .35)) * (1 - oc * .9) * weather.dim;   // very long low-sun shadows are softer
   const tint = top.clone(), mx = Math.max(tint.r, tint.g, tint.b, .001); tint.multiplyScalar(1 / mx);
   const sc = new THREE.Color(1, 1, 1).lerp(tint, .45), lum = sc.r * .3 + sc.g * .59 + sc.b * .11; sc.multiplyScalar(.66 / lum);   // about a third darker at most, never black
   GRADE.uShadowCol.value.setRGB(1, 1, 1).lerp(sc, shK);
@@ -9444,7 +9542,7 @@ function nadeArcObj() {                                     // the dotted arc an
   dots.renderOrder = 997; return nadeArc = { dots, land, held, label };
 }
 function nadeStop(p) {                                      // what a flying grenade hits here: "ground", "tree" or null
-  if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) return "out";
+  if (outMap(p.x, p.z)) return "out";
   const g = H(p.x, p.z);
   if (p.y <= g + .04 || p.y <= rockTopAt(p.x, p.z, p.y, -.4) + .04 || (!iced && p.y <= water && g < water)) return "ground";
   const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
@@ -9699,7 +9797,7 @@ function arrowsTick(dt) {
   for (let i = ARROWS.length - 1; i >= 0; i--) {
     const R = ARROWS[i], st = Math.min(.05, dt); R.t += st;
     const a = R.p, b = _bw1.copy(a).addScaledVector(R.v, st); b.y -= .5 * BOW.g * st * st; R.v.y -= BOW.g * st;
-    const seg = a.distanceTo(b); let done = R.t > BOW.life || Math.abs(b.x) > HALF || Math.abs(b.z) > HALF || b.y < -500;
+    const seg = a.distanceTo(b); let done = R.t > BOW.life || outMap(b.x, b.z) || b.y < -500;
     if (seg > 1e-6 && !done) {
       const d = _bw2.subVectors(b, a).divideScalar(seg), h = castShot(a, d, seg, R.cs);
       if (h.kind) {
@@ -10459,17 +10557,19 @@ function mpRevealEnd() {                                    // into the real map
 function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
 function mpSendStartTo(L) {                                 // straight into a game that's already going
   const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
-  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft });
+  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft, hr: hourNow });
 }
 function mpGuestStart(o) {
   mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
-    generate(); reveal(); drawMap($("miniMap"));
+    generate(); if (ENDLESS && typeof o.hr === "number") { hourNow = o.hr; enLight(); } reveal(); drawMap($("miniMap"));
     const far = o.others || [[o.hx, o.hz]];                   // start somewhere away from everyone
     let best = null; const want = Math.min(160, HALF * .55);
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
+    if (ENDLESS) for (let k = 0; k < 300; k++) { const a = Math.random() * 6.283, r = 10 + k * .4, x = o.hx + Math.cos(a) * r, z = o.hz + Math.sin(a) * r;   // 2.21: joining an endless hike: a few steps from the host
+      if (!inLava(x, z, 4) && H(x, z) > water + .4 && slopeNy(x, z) > .75) { P.x = x; P.z = z; P.y = H(x, z); break; } }
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
     if (vr.on && VRUI.root) VRUI.fadeGo = () => { enEnsureHere(); vruiClose(); vr.placeAt = true; state = "play"; showHud(true); }; else { enEnsureHere(); vr.placeAt = true; state = "play"; }   // joining late keeps the clock the host sent
@@ -10500,6 +10600,7 @@ function mpRecv(o, L) {
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
   if (o.t === "take") { dropTake(o.id, true); return; }
+  if (o.t === "hr") { if (!MP.host && ENDLESS) enClockSet(o.h); return; }
   if (o.t === "s" && ENDLESS && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: performance.now() })); if (L.rx.length > 40) L.rx.shift(); return; }
@@ -10756,8 +10857,8 @@ function updateNades(dt) {
       if (inWater) { n.v.multiplyScalar(1 - Math.min(1, h * 5)); n.v.y += (-1.2 - n.v.y) * Math.min(1, h * 6); }
       else n.v.y -= NADE_G * h;
       n.p.addScaledVector(n.v, h);
-      if (Math.abs(n.p.x) > HALF - 1) { n.p.x = Math.sign(n.p.x) * (HALF - 1); n.v.x *= -.3; }
-      if (Math.abs(n.p.z) > HALF - 1) { n.p.z = Math.sign(n.p.z) * (HALF - 1); n.v.z *= -.3; }
+      if (!ENDLESS && Math.abs(n.p.x) > HALF - 1) { n.p.x = Math.sign(n.p.x) * (HALF - 1); n.v.x *= -.3; }
+      if (!ENDLESS && Math.abs(n.p.z) > HALF - 1) { n.p.z = Math.sign(n.p.z) * (HALF - 1); n.v.z *= -.3; }
       const f = nadeFloor(n.p.x, n.p.z) + .07;
       if (n.p.y < f) {                                          // bounce, then roll to a stop
         n.p.y = f;
@@ -10888,7 +10989,7 @@ function bulletStep(t, dt) {                                // move one frame al
     const rh = mpHitTest(a, d, end ? a.distanceTo(end) : seg);
     if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
   }
-  const pos = end || b, out = !end && (Math.abs(b.x) > HALF || Math.abs(b.z) > HALF);
+  const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
   const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
   const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
@@ -10903,6 +11004,7 @@ function bulletStep(t, dt) {                                // move one frame al
   }
   return out || t.gone > t.reach || pos.y < -500;
 }
+const outMap = (x, z) => !ENDLESS && (Math.abs(x) > HALF || Math.abs(z) > HALF);   // 2.21: endless land has no edge
 function castShot(o, dir, maxD, cs) {                      // cs: a flying bullet's state between frames (water so far, step size)
   const p = o.clone(), max = maxD || 120 + (72 / camera.fov) * 140;      // the scope reaches further
   const [aT, aWho, aHead] = beasts.length ? animalRay(o, dir, cs ? 0 : .5, max) : [1e9, null, false];
@@ -10912,7 +11014,7 @@ function castShot(o, dir, maxD, cs) {                      // cs: a flying bulle
     const st = cs ? Math.min(cs.st, max - dist + .001) : dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
     if (dist >= bT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
     if (dist >= aT) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho, head: aHead };
-    if (Math.abs(p.x) > HALF || Math.abs(p.z) > HALF) break;
+    if (outMap(p.x, p.z)) break;
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
     if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; if (cs) cs.wet = wet; }   // in a headset a bullet goes about 1.5 m into water before stopping
