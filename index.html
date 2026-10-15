@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.27";              // Just Trees 2.27
+const VERSION = "2.28";              // Just Trees 2.28
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -7534,8 +7534,10 @@ function plDraw(rows, hov) {
     g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(34, y, 13, 0, 6.2832); g.fill();
     g.fillStyle = "#f2f6ec"; g.font = (r.me ? "bold " : "") + "26px sans-serif"; g.fillText((r.tag + (r.me ? " (you)" : "")).slice(0, 13), 58, y - (r.team >= 0 ? 8 : 0));
     if (r.team >= 0) { g.font = "18px sans-serif"; g.fillStyle = TEAM_COL[r.team]; g.fillText(TEAM_NAME[r.team] + " team", 58, y + 14); }
-    if (!r.me) { const m = r.L.muted, on = hov === i; g.fillStyle = m ? (on ? "#ff8a7a" : "#c8473c") : (on ? "#7fc48e" : "#467a56"); uiRound(g, 262, y - 20, 108, 40, 12); g.fill();
-      g.fillStyle = "#fff"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText(m ? "Unmute" : "Mute", 316, y + 1); g.textAlign = "left"; }
+    if (!r.me) { const m = r.L.muted, on = hov === i, kx = MP.host ? 196 : 262, kw = MP.host ? 82 : 108; g.fillStyle = m ? (on ? "#ff8a7a" : "#c8473c") : (on ? "#7fc48e" : "#467a56"); uiRound(g, kx, y - 20, kw, 40, 12); g.fill();
+      g.fillStyle = "#fff"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText(m ? "Unmute" : "Mute", kx + kw / 2, y + 1);
+      if (MP.host) { g.fillStyle = hov === 100 + i ? "#c0584c" : "#8a3a32"; uiRound(g, 286, y - 20, 84, 40, 12); g.fill(); g.fillStyle = "#fff"; g.fillText("Kick", 328, y + 1); }   // 2.28
+      g.textAlign = "left"; }
   });
   Pn.material.map.needsUpdate = true;
 }
@@ -7545,8 +7547,8 @@ function plTick(main) {
   const rows = plRows(), o = main.rayPos, d = _v2.set(0, 0, -1).applyQuaternion(main.rayQ), n = new THREE.Vector3(0, 0, 1).applyQuaternion(Pn.quaternion), den = d.dot(n); let hov = -1;
   if (Math.abs(den) > 1e-3) { const t = Pn.position.clone().sub(o).dot(n) / den;
     if (t > 0 && t < 2) { const lp = Pn.worldToLocal(o.clone().addScaledVector(d, t)), px = (lp.x / .195 + .5) * 384, py = (.5 - lp.y / .26) * 512;
-      if (px >= 0 && px <= 384 && py >= 0 && py <= 512) { vr.plHover = true; const i = Math.round((py - 92) / 54); if (i >= 1 && i < rows.length && px > 255 && Math.abs(py - (92 + i * 54)) < 24) hov = i; } } }
-  if (hov >= 0 && edge("plm", main.trig)) { const L = rows[hov].L; L.muted = !L.muted; buzz(set.hand === "right" ? "R" : "L", .3, 25); }
+      if (px >= 0 && px <= 384 && py >= 0 && py <= 512) { vr.plHover = true; const i = Math.round((py - 92) / 54); if (i >= 1 && i < rows.length && Math.abs(py - (92 + i * 54)) < 24) { if (MP.host ? px > 190 && px < 280 : px > 255) hov = i; else if (MP.host && px >= 284) hov = 100 + i; } } } }
+  if (hov >= 0 && edge("plm", main.trig)) { if (hov >= 100) { const L = rows[hov - 100].L; if (L) mpKick(L.id); } else { const L = rows[hov].L; L.muted = !L.muted; } buzz(set.hand === "right" ? "R" : "L", .3, 25); }
   const key = rows.map(r => r.tag + r.c + r.team + (r.L && r.L.muted ? 1 : 0)).join("|") + hov; if (key !== Pn.userData.key) { Pn.userData.key = key; plDraw(rows, hov); }
 }
 // wrist display and the map you raise with the off-hand trigger
@@ -8242,6 +8244,7 @@ function uiDraw(P) {
       g.fillStyle = dis ? "rgba(255,255,255,.45)" : w.textCol || (w.primary ? "#13241B" : UIC.text); g.textAlign = "center"; g.textBaseline = "middle";
       if (w.sub) { g.font = "bold " + (w.fs || 46) + "px sans-serif"; g.fillText(w.labelFn ? w.labelFn() : w.label, w.x + w.w / 2, w.y + w.h * .36); g.font = "30px sans-serif"; g.fillStyle = dis ? "rgba(157,179,165,.5)" : UIC.dim; uiWrap(g, w.sub, w.x + w.w / 2, w.y + w.h * .68, w.w - 60, 36); }
       else { g.font = "bold " + (w.fs || 34) + "px sans-serif"; g.fillText(w.labelFn ? w.labelFn() : w.label, w.x + w.w / 2, w.y + w.h / 2 + 1); }
+      if (w.after) w.after(g, w, hov);                       // (2.28: extra drawing on the button, e.g. a room's details)
     }
   }
   P.tex.needsUpdate = true;
@@ -8309,31 +8312,70 @@ function vruiParts() {
     g.fillText("Sitting is fine: you'll stand tall in the game, and only ducking down crouches", 650, 400);
   };
   uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
+  // ---- 2.28: before you play: 13 and up, how to behave, voice chat, play safely, as-is
+  const Ru = uiPanel("rules", 1500, 1060, 2.0, 74, 1.45);
+  Ru.paint = (g, P) => {
+    uiBg(g, P, VRUI.under ? "SORRY" : "BEFORE YOU PLAY"); g.textAlign = "left"; g.textBaseline = "alphabetic";
+    if (VRUI.under) { g.font = "38px sans-serif"; g.fillStyle = UIC.text; uiWrap(g, "Just Trees is for ages 13 and up. Come back when you're older!", 750, 320, 1250, 52); return; }
+    const L = [["Ages 13 and up.", "Just Trees is for players 13 and older."],
+      ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice goes straight between players and is never recorded or saved."],
+      ["Be decent.", "No harassment, hate, threats, sexual talk, or sharing anyone's personal details (yours included). Don't cheat or wreck games on purpose."],
+      ["You're in control.", "Mute anyone from the player list beside your map. Hosts can remove players. Keep your rooms Private to play only with friends."],
+      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open."],
+      ["Play safe.", "Clear the space around you, take breaks, and stop if you feel dizzy or unwell."],
+      ["As-is.", "Just Trees is a free game provided as-is, without warranty. You play at your own risk."]];
+    let y = 160; for (const [h, t] of L) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(h, 80, y); g.font = "28px sans-serif"; g.fillStyle = UIC.text; g.textAlign = "left";
+      const words = t.split(" "); let line = "", yy = y + 38; for (const w of words) { const tl = line ? line + " " + w : w; if (g.measureText(tl).width > 1340) { g.fillText(line, 80, yy); line = w; yy += 34; } else line = tl; } g.fillText(line, 80, yy); y = yy + 50; }
+  };
+  uiBtn(Ru, 80, 930, 760, 100, "I'm 13 or older · I agree", () => { VRUI.rulesOk = true; try { localStorage.setItem("jt-rules", RULES_V); } catch (_) {} vruiOpen("mode"); }, { primary: true, fs: 40, hide: () => !!VRUI.under, personal: true });
+  uiBtn(Ru, 880, 930, 540, 100, "I'm under 13", () => { VRUI.under = true; uiDraw(Ru); }, { fs: 36, hide: () => !!VRUI.under, personal: true });
+  uiBtn(Ru, 80, 930, 540, 100, "Exit VR", () => { VRUI.under = false; const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 36, hide: () => !VRUI.under, personal: true });
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
   [["solo", "Solo", "Just you: hike or hunt. Pick which on the next screen."],
    ["online", "Multiplayer", "Up to 8 of you in one lobby: hike, hunt or PvP together. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
     uiBtn(M, 90, 160 + i * 300, 1220, 260, name, () => { if (m === "online") { vruiOpen("mp"); return; } if (gameMode === "pvp") setMode("hike"); renderSetup(); vruiOpen("setup"); }, { sub, fs: 64 }));   // 2.26 (Ron): Solo or Multiplayer first
-  uiBtn(M, 90, 800, 1220, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 50, personal: true });
+  uiBtn(M, 90, 800, 920, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 50, personal: true });
+  uiBtn(M, 1030, 800, 280, 150, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 40, personal: true });   // 2.28: read them again
   // ---- online PvP: host a game (you get a code) or join one (type the code) ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
-    uiBg(g, P, "ONLINE · WITH FRIENDS"); g.textAlign = "center";
+    uiBg(g, P, "MULTIPLAYER"); g.textAlign = "center";
     let y = 200;
     if (MP.joining) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Type the 4-digit code", 700, 150); g.font = "bold 96px sans-serif"; g.fillStyle = UIC.sun; g.fillText((MP.entry + "____").slice(0, 4).split("").join(" "), 700, 262); y = 320; }
     else if (MP.code && MP.host) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Your game code", 700, 150); g.font = "bold 120px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MP.code.split("").join(" "), 700, 280); y = 345; }
     else if (MP.code) { g.font = "bold 40px sans-serif"; g.fillStyle = UIC.text; g.fillText("Game " + MP.code, 700, 150); y = 210; }
     g.font = "34px sans-serif"; g.fillStyle = UIC.dim;
-    uiWrap(g, MP.joining ? "" : MP.status || "One of you hosts and gets a code, the others join with it. Everyone meets in the lobby, the host picks the map settings.", 700, y, 1200, 42);
+    uiWrap(g, MP.joining ? "" : MP.status || "Find a public game, host your own, or join a friend's with their code.", 700, y, 1200, 42);
     if (MP.mic === false && MP.code) { g.font = "28px sans-serif"; g.fillStyle = "rgba(255,255,255,.55)"; g.fillText("Voice chat is off (no microphone allowed)", 700, y + 95); }
   };
-  uiBtn(MPP, 90, 420, 590, 150, "Host a game", () => { VRUI.tagNext = "host"; vruiOpen("tag"); }, { sub: "You get a code to share", fs: 50, hide: () => MP.joining || !!MP.code });
-  uiBtn(MPP, 720, 420, 590, 150, "Join a game", () => { MP.joining = true; MP.entry = ""; }, { sub: "Type your friend's code", fs: 50, hide: () => MP.joining || !!MP.code });
+  uiBtn(MPP, 90, 330, 1220, 150, "Find a game", () => { MP.rooms = null; MP.roomPg = 0; MP.roomsT = 0; vruiOpen("rooms"); }, { sub: "Public games you can join right now", fs: 52, hide: () => MP.joining || !!MP.code });   // 2.28
+  uiBtn(MPP, 90, 510, 590, 150, "Host a game", () => { VRUI.tagNext = "host"; vruiOpen("tag"); }, { sub: "You get a code to share", fs: 50, hide: () => MP.joining || !!MP.code });
+  uiBtn(MPP, 720, 510, 590, 150, "Join with code", () => { MP.joining = true; MP.entry = ""; }, { sub: "Type your friend's code", fs: 50, hide: () => MP.joining || !!MP.code });
   [1, 2, 3, 4, 5, 6, 7, 8, 9, "Del", 0, "Join"].forEach((k, i) => uiBtn(MPP, 520 + (i % 3) * 190, 340 + Math.floor(i / 3) * 110, 180, 100, String(k), () => {
-      if (k === "Del") MP.entry = MP.entry.slice(0, -1); else if (k === "Join") { if (MP.entry.length === 4) { MP.joining = false; VRUI.tagNext = "join:" + MP.entry; vruiOpen("tag"); } } else if (MP.entry.length < 4) MP.entry += k;
+      if (k === "Del") MP.entry = MP.entry.slice(0, -1); else if (k === "Join") { if (MP.entry.length === 4) { MP.joining = false; roomJoin(MP.entry); } } else if (MP.entry.length < 4) MP.entry += k;
     }, { fs: 46, primary: k === "Join", hide: () => !MP.joining, disabled: () => k === "Join" && MP.entry.length < 4 }));
   uiBtn(MPP, 720, 420, 590, 150, "Back to the lobby", () => vruiOpen("lobby"), { primary: true, fs: 44, hide: () => !MP.code });
   uiBtn(MPP, 90, 780, 380, 90, "Back", () => { if (MP.joining) { MP.joining = false; return; } mpLeave(); vruiOpen("mode"); }, { fs: 38 });
+  // ---- 2.28: Find a game: the public rooms, 6 to a page; point at one and pull the trigger to join (mid-game too: you spawn straight in)
+  const RP = uiPanel("rooms", 1400, 1000, 2.0, 74, 1.45);
+  RP.paint = (g, P) => {
+    uiBg(g, P, "OPEN GAMES"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim;
+    const L = MP.rooms, np = L ? Math.max(1, Math.ceil(L.length / 6)) : 1;
+    g.fillText(!L ? "Looking for games…" : MP.roomsErr ? "Can't reach the games list right now — try again in a moment" : !L.length ? "No open games right now — host one and it'll show up here" : L.length + (L.length === 1 ? " game" : " games") + " open" + (np > 1 ? " · page " + (MP.roomPg + 1) + " of " + np : ""), 700, 132);
+  };
+  for (let i = 0; i < 6; i++) uiBtn(RP, 90, 160 + i * 115, 1110, 103, "", () => { const r = roomAt(i); if (r) roomJoin(r.code); }, { hide: () => !roomAt(i), after: (g, w) => {
+    const r = roomAt(i); if (!r) return; const mode = r.mode === "pvp" ? "PvP" + (r.teams ? " · 2 teams" : "") : r.mode === "hunt" ? "Hunt" + (r.dino ? " · Prehistoric" : "") : "Hike";
+    g.fillStyle = MP_COL[r.col] || "#fff"; g.beginPath(); g.arc(w.x + 44, w.y + w.h / 2, 18, 0, 6.283); g.fill();
+    g.textAlign = "left"; g.textBaseline = "alphabetic"; g.fillStyle = UIC.text; g.font = "bold 40px sans-serif"; g.fillText(r.host, w.x + 82, w.y + 46);
+    g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText(mode + " · " + r.map, w.x + 82, w.y + 86);
+    g.textAlign = "right"; g.fillStyle = UIC.sun; g.font = "bold 40px sans-serif"; g.fillText(r.n + " / " + MP_MAX, w.x + w.w - 28, w.y + 46);
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(r.st === "play" ? "Playing" + (r.left > 0 ? " · " + clockText(r.left) + " left" : "") : "In the lobby", w.x + w.w - 28, w.y + 86);
+    g.textAlign = "center"; g.textBaseline = "middle"; } });
+  uiBtn(RP, 1220, 160, 90, 330, "\u25B2", () => { MP.roomPg = Math.max(0, MP.roomPg - 1); }, { fs: 40, hide: () => !MP.rooms || MP.rooms.length <= 6, disabled: () => MP.roomPg <= 0 });
+  uiBtn(RP, 1220, 505, 90, 330, "\u25BC", () => { MP.roomPg = Math.min(Math.ceil(MP.rooms.length / 6) - 1, MP.roomPg + 1); }, { fs: 40, hide: () => !MP.rooms || MP.rooms.length <= 6, disabled: () => MP.roomPg >= Math.ceil(MP.rooms.length / 6) - 1 });
+  uiBtn(RP, 90, 870, 380, 90, "Back", () => vruiOpen("mp"), { fs: 38 });
+  uiBtn(RP, 510, 870, 380, 90, "Join with code", () => { vruiOpen("mp"); MP.joining = true; MP.entry = ""; }, { fs: 34 });
   // ---- settings: every choice with the same little explanation the flat menu gives ----
   const S2 = uiPanel("setup", 2048, 1170, 2.1, 104, 1.4);
   const lx = 70, rx = 1078, cw = 900;
@@ -8432,8 +8474,11 @@ function vruiParts() {
    ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42, personal: i === 0 || i >= 3 }));
 }
 // open a menu stage: the menus are placed in front of wherever you are looking
+const RULES_V = "1";
+const rulesOk = () => { if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
 function vruiOpen(stage) {
   vruiParts();
+  if (stage === "mode" && !rulesOk()) stage = "rules";       // 2.28: the rules come first, once
   if (stage === "mode" && MP.code) mpLeave();                    // back to the main menu leaves an online game
   const I = vr.readInputs ? vr.readInputs() : null;
   const inWorld = stage === "pause";
@@ -8449,7 +8494,7 @@ function vruiOpen(stage) {
   VRUI.root.position.copy(hp); if (!inWorld) VRUI.root.position.y -= vr.hOff; VRUI.root.rotation.set(0, fy, 0);
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
   for (const k in VRUI.panels) VRUI.panels[k].mesh.visible = false;
-  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"], height: ["height"], lobby: ["lobby"], tag: ["tag"] }[stage] || [];
+  const show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"], height: ["height"], lobby: ["lobby"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"] }[stage] || [];   // (2.28: the rules, the open games)
   for (const k of show) { const Pn = VRUI.panels[k]; Pn.mesh.visible = true; Pn.hov = []; uiDraw(Pn); }
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
   for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m, CAPT && CAPT.ring, CAPT && CAPT.flag]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
@@ -8500,6 +8545,7 @@ function vruiTick(dt) {
   if (!VRUI.on) return;
   vr.I = I; vr.main = I.hands[set.hand] || null; vr.off = I.hands[set.hand === "right" ? "left" : "right"] || null;
   vrHands();
+  if (VRUI.stage === "rooms") roomsTick(dt);                  // 2.28
   const st = VRUI.stage;
   if (st === "intro") {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
@@ -10487,6 +10533,7 @@ function mpDropLink(L) {
   if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
 }
 function mpLeave() {
+  if (MP.host && MP.pub && MP.code) roomsPost({ op: "gone", code: MP.code }); MP.pub = false; MP.pubKey = "";   // 2.28: off the list
   mpSend({ t: "bye" });
   for (const L of [...MP.links.values()]) mpDropLink(L);
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
@@ -10531,6 +10578,7 @@ async function mpHost() {
   mpMic();
 }
 async function mpJoin(code) {
+  if (MP.kicked && MP.kicked.has(code)) { MP.status = "The host removed you from that game"; return; }   // 2.28
   mpLeave(); MP.host = false; MP.code = code; mpStatus("Connecting to game " + code + "…"); await mpRelay();
   const peer = mpNewPeer(undefined); if (!peer) return; MP.peer = peer;
   setTimeout(() => { if (MP.peer === peer && !MP.on) mpFail("Couldn't connect to game " + code + ". Check the code with your friend and try again."); }, 25000);
@@ -10741,6 +10789,7 @@ function mpRecv2(o, L) {                                     // 2.00's messages
     case "got": if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner(o.text || "Got you", 3.5, 1); } else uwRespawn(); return true;
     case "cue": dinoCue(); return true;
     case "mk": mpMarkGot(L, o); return true;
+    case "kick": if (!MP.host) mpKicked(); return true;                                   // 2.28
     case "fl": if (Array.isArray(o.o) && Array.isArray(o.v)) flareSpawn(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), o.c | 0); return true;   // 2.25: a friend's (or enemy's) flare
   }
   return false;
@@ -10754,11 +10803,45 @@ function mpOnlineTick(dt, playing) {
   for (const L of MP.links.values()) if (L.mark && L.mark.visible && ((L.markT -= dt) <= 0 || !playing || !L.open)) { L.mark.visible = false; drawMap($("miniMap")); }
   if (playing && (set.comms | 0) === 3 && vr.I && MP.on) mpBumpTick();
   if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing) mpBeastSend(dt);
+  roomsBeat(dt);                                             // 2.28: a Public room stays on the list
   if (mpNetGuest() && (MP.pruneT = (MP.pruneT || 0) - dt) <= 0) {   // animals the host stopped sending (too far now, or gone)
     MP.pruneT = 1;
     for (const [nid, A] of MP.nb) if (now - (A.netT || 0) > (A.dead ? 20000 : 2600)) { if (ENDLESS) enAnimDrop(A); A.gone = true; if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); MP.nb.delete(nid); }
   }
   if (VRUI.on && VRUI.stage === "lobby" && (MP.ldT = (MP.ldT || 0) - dt) <= 0) { MP.ldT = 1; mpLobbyDraw(); }
+}
+/* ---- 2.28: open games. A Public room checks in with our Cloudflare Worker every 30 s (and when it changes); "Find a game" reads the list every 5 s. ---- */
+const ROOMS_URL = "https://just-trees-online.ron-bb2.workers.dev/rooms";
+const roomAt = i => MP.rooms && MP.rooms[(MP.roomPg || 0) * 6 + i] || null;
+function roomMapName() { const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Endless"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
+function roomsPost(o) { try { fetch(MP.roomsUrl || ROOMS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), keepalive: true }).catch(() => {}); } catch (e) {} }
+function roomsSetPublic(on) { if (!MP.host) return; MP.pub = !!on; MP.pubKey = ""; MP.pubT = 0; if (!on && MP.code) roomsPost({ op: "gone", code: MP.code }); mpLobSync(true); mpLobbyDraw(); }
+function roomsBeat(dt) {                                      // host: keep a Public room on the list
+  if (!(MP.host && MP.code && MP.pub)) return;
+  const playing = state === "play", key = [gameMode, set.dino, set.teams, roomMapName(), mpCount(), playing, MP.tag, MP.idx].join("|");
+  MP.pubT = (MP.pubT || 0) - dt; if (MP.pubT > 0 && (key === MP.pubKey || MP.pubT > 27)) return;   // every 30 s, or soon after something changes
+  MP.pubT = 30; MP.pubKey = key;
+  roomsPost({ op: "beat", code: MP.code, host: MP.tag || "PLAYER", col: MP.idx | 0, mode: gameMode, dino: !!set.dino && gameMode === "hunt", teams: gameMode === "pvp" && set.teams === "teams", map: roomMapName(), n: mpCount(), st: playing ? "play" : "lobby", left: Math.ceil(MP.roundLeft || 0), v: VERSION });
+}
+function roomsTick(dt) {                                      // Find a game: the list, fresh every 5 s while it's open
+  if ((MP.roomsT = (MP.roomsT || 0) - dt) > 0 || MP.roomsBusy) return; MP.roomsT = 5; MP.roomsBusy = true;
+  fetch((MP.roomsUrl || ROOMS_URL) + "?v=" + encodeURIComponent(VERSION), { cache: "no-store" }).then(r => r.json()).then(o => {
+    MP.rooms = (o && Array.isArray(o.rooms) ? o.rooms : []).filter(r => r.v === VERSION && !(MP.kicked && MP.kicked.has(r.code))); MP.roomsErr = false;
+    MP.roomPg = Math.min(MP.roomPg || 0, Math.max(0, Math.ceil(MP.rooms.length / 6) - 1));
+  }).catch(() => { MP.roomsErr = true; MP.rooms = MP.rooms || []; }).finally(() => { MP.roomsBusy = false; if (VRUI.panels && VRUI.panels.rooms && VRUI.panels.rooms.mesh.visible) uiDraw(VRUI.panels.rooms); });
+}
+function roomJoin(code) {                                     // a room from the list, or a typed code: in you go (your saved gamer tag, or pick one first)
+  if (MP.kicked && MP.kicked.has(code)) { MP.status = "The host removed you from that game"; vruiOpen("mp"); return; }
+  if (MP.tag) { mpJoin(code); vruiOpen("lobby"); } else { VRUI.tagNext = "join:" + code; vruiOpen("tag"); }
+}
+function mpKick(id) {                                         // host: send a player away (they can't come back to this room this session)
+  const L = MP.links.get(id); if (!L || !MP.host) return;
+  mpSendTo(L, { t: "kick" }); vrBanner((L.tag || "A player") + " was removed", 2, 1);
+  setTimeout(() => { mpDropLink(L); mpLobSync(true); mpLobbyDraw(); }, 400);
+}
+function mpKicked() {                                         // a guest: the host removed you
+  const c = MP.code; (MP.kicked = MP.kicked || new Set()).add(c); mpLeave(); MP.status = "The host removed you from the game";
+  if (state === "play" || state === "pause" || state === "over") state = "vrmenu"; if (vr.on) vruiOpen("mp");
 }
 function mpLobbyDraw() { if (!VRUI.panels) return; for (const k of ["lobby", "board"]) { const Pn = VRUI.panels[k]; if (Pn && Pn.mesh.visible) uiDraw(Pn); } }
 function mpTagDone() {                                       // the keyboard's OK
@@ -10787,7 +10870,7 @@ function mpLobbyPanels() {
       if (r.host || r.me) { g.font = "22px sans-serif"; g.fillStyle = UIC.dim; g.fillText((r.me ? "you" : "") + (r.me && r.host ? " · " : "") + (r.host ? "host" : ""), lx + 50 + Math.min(300, g.measureText(r.tag).width * 1.55) + 12, y); }
       if (!teamsOn()) { g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("—", lx + 400, y); }
       g.fillStyle = UNI_COL[r.u]; g.fillRect(lx + 590, y - 30, 36, 36); g.font = "30px sans-serif"; g.fillStyle = UIC.text; g.fillText(UNI_NAME[r.u], lx + 636, y);
-      g.textAlign = "right"; g.fillStyle = UIC.sun; g.font = "bold 30px sans-serif"; g.fillText(!b || hk ? "" : hu ? (+b.p).toFixed(1) + " pts" : (CAPT ? b.p + " pts · " : "") + b.k + " K · " + b.d + " D", lx + 880, y); });
+      g.textAlign = "right"; g.fillStyle = UIC.sun; g.font = "bold 30px sans-serif"; g.fillText(!b || hk ? "" : hu ? (+b.p).toFixed(1) + " pts" : (CAPT ? b.p + " pts · " : "") + b.k + " K · " + b.d + " D", lx + (MP.host && !r.me ? 790 : 880), y); });
     uiLabel(g, lx, 790, "Your uniform"); uiLabel(g, lx, 940, "Gamer tag", MP.tag);
     uiLabel(g, rx, 158, "Game"); uiLabel(g, rx, 320, gameMode === "pvp" ? "Teams" : gameMode === "hunt" ? "Prehistoric" : "", gameMode === "pvp" ? (set.teams === "teams" ? "2 teams" : "Every player for themselves") : "");
     uiLabel(g, rx, 470, "Comms", COMMS_NAME[set.comms | 0]); uiLabel(g, rx, 610, "Round", (set.roundMin || 10) + " min");
@@ -10799,6 +10882,9 @@ function mpLobbyPanels() {
   for (let i = 0; i < 8; i++) uiBtn(Lb, lx + 392, 220 + i * 64, 180, 50, "", () => { const r = mpRoster()[i]; if (r && MP.host) { MP.teams[r.id] = 1 - mpTeamOf(r.id); mpLobSync(true); mpLobbyDraw(); } },
     { fs: 28, hide: () => !teamsOn() || !mpRoster()[i], labelFn: () => { const r = mpRoster()[i]; return r ? TEAM_NAME[mpTeamOf(r.id)] : ""; }, paintColFn: () => { const r = mpRoster()[i]; return r ? TEAM_COL[mpTeamOf(r.id)] : null; }, active: () => { const r = mpRoster()[i]; return !!r && mpTeamOf(r.id) === 1; } });
   UNIFORMS.forEach((u, i) => uiBtn(Lb, lx + i * 176, 812, 164, 72, UNI_NAME[i], () => { MP.col = i; mpSendMe(); }, { personal: true, active: () => mpUni(null) === i, paintCol: UNI_COL[i], textCol: i === 3 ? "#13241B" : "#ffffff", fs: 30 }));
+  uiBtn(Lb, 1010, 36, 170, 60, "Private", () => { roomsSetPublic(false); }, { active: () => !MP.pub, hide: hostOnly, fs: 28 });   // 2.28: listed for everyone, or code only
+  uiBtn(Lb, 1190, 36, 170, 60, "Public", () => { roomsSetPublic(true); }, { active: () => !!MP.pub, hide: hostOnly, fs: 28 });
+  for (let i = 1; i < 8; i++) uiBtn(Lb, lx + 800, 222 + i * 64, 76, 46, "Kick", () => { const r = mpRoster()[i]; if (r && MP.host && !r.me) mpKick(r.id); }, { fs: 22, hide: () => !MP.host || !mpRoster()[i] || mpRoster()[i].me, paintCol: "#8a3a32" });
   uiBtn(Lb, lx, 962, 360, 78, "Change tag", () => { VRUI.tagNext = null; vruiOpen("tag"); }, { personal: true, fs: 34 });
   uiBtn(Lb, lx + 380, 962, 300, 78, "Leave", () => vruiOpen("mode"), { personal: true, fs: 34 });
   [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(Lb, rx + i * 270, 182, 255, 80, l, () => { setMode(m); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m, fs: 38 }));
