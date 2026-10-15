@@ -116,6 +116,8 @@ async def main():
         out["rexGotGuest"] = got
         # ---- the round ends: everyone in the lobby with the board
         await B.evaluate("() => { D.MP.roundLeft = .05; D.mpTick(.1); return 1; }")
+        out["roundOverBanner"] = await B.evaluate("() => [D.state, D.VBAN.t > 3, D.MP.overT > 0]")   # 2.24: "Round over" for 4 s first
+        await B.evaluate("() => { for (let i = 0; i < 50; i++) D.mpTick(.1); return 1; }")
         out["roundEnd"] = await B.evaluate("() => [D.state, D.VRUI.stage, (D.MP.board || []).length]")
         print(json.dumps(out)); print("errors:", errs or "none")
         k = out.get("kill", {})
@@ -123,6 +125,6 @@ async def main():
               and out["teams"] == "0,1" and out["guestUniformOnHost"] == [3, True] and out["guestSeesMark"] and out["enemyHittable"] and out["teammateNotHittable"]
               and out["fistBumpSilent"] == 0 and all(out["bumped"]) and out["hearAfterBump"] == 1 and out["guestGround"][0] and out["guestGround"][1] > 0 and out["guestGround"][2] == 0
               and out.get("posDiffM") is not None and out["posDiffM"] < 4 and k.get("hostDead") and k.get("guestDead") and k.get("guestPoints", 0) > 0 and not k.get("hostPoints")
-              and out["raptorGotGuest"] and out["hostNotGot"] and out["roundEnd"] == ["vrmenu", "lobby", 2] and out["guestSeesRex"] and out["rexAfterGuest"] == [True, True] and out["rexGotGuest"] and not errs)
+              and out["raptorGotGuest"] and out["hostNotGot"] and out["roundOverBanner"] == ["play", True, True] and out["roundEnd"] == ["vrmenu", "lobby", 2] and out["guestSeesRex"] and out["rexAfterGuest"] == [True, True] and out["rexGotGuest"] and not errs)
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)
