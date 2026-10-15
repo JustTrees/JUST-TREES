@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.21";              // Just Trees 2.21
+const VERSION = "2.22";              // Just Trees 2.22
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3142,7 +3142,7 @@ function enNew(i, j) {
   E.chunks.set(ch.key, ch); return ch;
 }
 function enIcedAt(x, z) { const ch = ENDLESS.chunks.get(enKey(Math.floor(x / EN_C), Math.floor(z / EN_C))); return !!(ch && ch.iced); }
-function enEnsureHere() { if (ENDLESS) enEnsure(P.x, P.z, 260); }
+function enEnsureHere() { if (ENDLESS) { enEnsure(P.x, P.z, 260); if (ENDLESS.acG) { ENDLESS.aInit = true; enAnimTick(0); } } }
 function endlessTick(dt) {                                   // every frame: build what's missing near you, let go of what's far, keep the water, map and far ground with you
   const E = ENDLESS; if (!E) return;
   const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), px = P.x, pz = P.z;
@@ -3294,6 +3294,88 @@ function enEnvFree(b) {
   }
   for (const k in env.slr) sl(env.slr[k]); if (env.rMat) env.rMat.dispose();
   E.nearDirty = true; E.freed = (E.freed || 0) + 1;
+}
+/* ---------------- 2.22: animals on endless hikes (Ron: "animals in endless hiking") ----------------
+   The land is cut into 500 m squares (EA_C, 50 to the 25 km loop). A square's animals come from the environment where each group stands (NATIVE),
+   chosen the same way every time; they're put out when the square comes within ~850 m of a player, never closer than animals are drawn (they
+   walk in from out of sight), and taken away once everyone is ~1.25 km off. Online, the host runs the ground animals round every player and
+   sends each friend the ones near them (as in hunting); each headset makes its own birds. No legends or monkeys on endless land yet. */
+const EA_C = 500, EA_N = EN_P / EA_C, EA_ON = 850, EA_OFF = 1250, EA_SEEN = 790;
+function enAnimInit() {
+  const E = ENDLESS; clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
+  HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.hunter = null; STOCK.land = [];
+  E.acG = new Map(); E.acB = new Map(); E.aQ = []; E.aInit = true; E.aT = 0; E.aMade = 0; E.aDropped = 0;
+  sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
+}
+function enAnimPlayers(all) { const ps = [[P.x, P.z]]; if (all && MP.on && MP.host) for (const L of mpOpen()) if (L.R && L.R.cur) ps.push([L.R.head.x, L.R.head.z]); return ps; }
+const enAnimNear = (ps, x, z) => { let d = 1e9; for (const p of ps) d = Math.min(d, Math.hypot(x - p[0], z - p[1])); return d; };
+function enAnimOk(x, z) { return H(x, z) > water + .4 && !inLava(x, z, 4) && slopeNy(x, z) > .72; }
+function enAnimSpot(kind, x, z) {                             // somewhere this kind would be
+  if (kind === "seal") return sealOk(x, z);
+  if (!enAnimOk(x, z)) return false;
+  if (kind === "polar" || kind === "heron") return nearWater(x, z);
+  if (kind === "crocodile" || kind === "gator") return nearWater(x, z) && H(x, z) < water + 4;
+  if (kind === "goat" || kind === "bighorn") return H(x, z) > water + ENDLESS.envL[enDom(x, z).b].span * .45;
+  return true;
+}
+function enAnimPick(b, R, birds) {                            // one kind from this environment's list, the commoner ones more often
+  const list = (NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
+  let tot = 0; for (const [k, n] of list) tot += k === "rabbit" ? Math.min(n, 6) : n; let u = R() * tot;
+  for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
+}
+function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = 3 + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
+  for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
+    const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false); if (!e) break;
+    const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
+    if (enAnimNear(ps, x, z) < (init ? 45 : EA_SEEN)) break;                         // it would pop up in view: not this time
+    const m = grp ? grp[0] + Math.floor(R() * (grp[1] - grp[0] + 1)) : 1, gid = ++HAB.gid, sp = k === "elephant" || k === "giraffe" ? 16 : 8;
+    for (let q = 0; q < m; q++) E.aQ.push({ k, x: x + (R() - .5) * sp, z: z + (R() - .5) * sp, hx: x, hz: z, gid, key });
+    break;
+  }
+}
+function enBirdFill(i, j) {                                   // a flock or a lone bird circling over the square (each headset its own)
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 43 + 5, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), x = (i + .2 + R() * .6) * EA_C, z = (j + .2 + R() * .6) * EA_C;
+  if (R() > .75) return; const e = enAnimPick(enDom(x, z).b, R, true); if (!e) return;
+  const [kind, , grp] = e, parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : kind === "vulture" ? 1.8 : 1.6;
+  const rad = (parrot ? 25 : 35) + R() * 55, ang = R() * 6.28, w = (R() < .5 ? 1 : -1) * (parrot ? .1 + R() * .05 : .03 + R() * .03), m = grp ? grp[0] + Math.floor(R() * (grp[1] - grp[0] + 1)) : 1;
+  for (let j2 = 0; j2 < m && beasts.length < BEAST_CAP; j2++) {
+    const bd = buildBird(Math.random, parrot ? PARROT_COL[Math.floor(R() * PARROT_COL.length)] : BIRD_COL[kind]); bd.root.scale.setScalar(sc);
+    const A = Object.assign(bd, { kind, scale: sc, cx: x, cz: z, rad, ang: ang + (j2 ? (R() - .5) * .3 : 0), rOff: j2 ? (R() - .5) * 6 : 0, altOff: parrot ? -12 + (R() - .5) * 4 : 0, flappy: parrot,
+      w, alt: 0, altUp: 0, flapT: R() * 8, x: 0, y: 0, z: 0, vy: 0, dead: false, deadT: 0, landed: false, qf: "bird", ecellB: key }); qdinoLoad("bird");
+    A.alt = birdAlt(A); animalGroup.add(A.root); beasts.push(A);
+  }
+}
+function enAnimDrop(A) {                                      // taken away: its own meshes freed (the shared model shapes stay)
+  A.gone = true; if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); if (A.nid) MP.byNid.delete(A.nid);
+  if (A.qd && A.qd.mixer) { A.qd.mixer.stopAllAction(); A.qd.mixer.uncacheRoot(A.qd.top); }
+  A.root.traverse(o => { if (o.isSkinnedMesh) { if (o.skeleton) o.skeleton.dispose(); } else if (o.isMesh) { o.geometry.dispose(); if (o.material) o.material.dispose(); } });
+  ENDLESS.aDropped++;
+}
+function enAnimTick(dt) {
+  const E = ENDLESS; if (!E.acG) return;
+  const host = !mpNetGuest(), init = E.aInit;
+  if (init || (E.aT -= dt) <= 0) {
+    E.aT = .5; E.aInit = false;
+    const ps = enAnimPlayers(true), me = [[P.x, P.z]], n = Math.ceil(EA_ON / EA_C) + 1;
+    if (host) for (const p of ps) { const ci = Math.floor(p[0] / EA_C), cj = Math.floor(p[1] / EA_C);   // squares coming near someone
+      for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acG.has(k) || Math.hypot((i + .5) * EA_C - p[0], (j + .5) * EA_C - p[1]) > EA_ON) continue; E.acG.set(k, [i, j]); enAnimFill(i, j, ps, init); } }
+    { const ci = Math.floor(P.x / EA_C), cj = Math.floor(P.z / EA_C);                                   // birds: over the squares round you
+      for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) { const k = enKey(i, j); if (E.acB.has(k) || Math.hypot((i + .5) * EA_C - P.x, (j + .5) * EA_C - P.z) > EA_ON) continue; E.acB.set(k, [i, j]); enBirdFill(i, j); } }
+    for (const [k, c] of E.acG) if (enAnimNear(ps, (c[0] + .5) * EA_C, (c[1] + .5) * EA_C) > EA_OFF + 350) E.acG.delete(k);   // everyone's gone on: it can fill again later
+    for (const [k, c] of E.acB) if (enAnimNear(me, (c[0] + .5) * EA_C, (c[1] + .5) * EA_C) > EA_OFF + 350) E.acB.delete(k);
+    for (let q = beasts.length - 1; q >= 0; q--) { const A = beasts[q];                                   // far behind everyone: taken away
+      if (A.ecellB !== undefined) { if (enAnimNear(me, A.cx, A.cz) > EA_OFF) enAnimDrop(A); }
+      else if (A.ecell !== undefined && !A.net && enAnimNear(ps, A.x, A.z) > EA_OFF) enAnimDrop(A); }
+    E.aQ = E.aQ.filter(o => E.acG.has(o.key));
+  }
+  if (!host) { E.aQ.length = 0; return; }
+  const t0 = performance.now(), ps = E.aQ.length ? enAnimPlayers(true) : null;
+  while (E.aQ.length && beasts.length < BEAST_CAP && (init || performance.now() - t0 < 1)) {   // a few a frame (all at once behind the fade)
+    const o = E.aQ.shift(), ok = enAnimSpot(o.k, o.x, o.z), x = ok ? o.x : o.hx, z = ok ? o.z : o.hz;
+    if (enAnimNear(ps, x, z) < (init ? 30 : 700)) continue;
+    const A = addGround(o.k, x, z, [o.hx, o.hz]); A.grp = o.gid; A.ecell = o.key; E.aMade++;
+  }
 }
 /* ---------------- 2.20: endless regions (Ron: "as you walk on endless you enter new biomes and new weather", "different terrain roughness",
    "every few blocks add a dramatic feature" at the 3 km map's size) ----------------
@@ -4048,7 +4130,7 @@ function generate() {
     E.water = new THREE.Mesh(new THREE.PlaneGeometry(EN_FAR + 3000, EN_FAR + 3000), wMat); E.water.rotation.x = -Math.PI / 2; E.water.position.y = water; world.add(E.water);
     E.shoreC = [0, 0];
     { E.ts = performance.now(); E.slice = 1e9; const it = enFarJob(0, 0); while (!it.next().done); E.farC0 = [0, 0]; enFarSink(); }
-    spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); clearLoot(); startZone(); startCapture();
+    spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); if (gameMode === "hike") enAnimInit(); clearLoot(); startZone(); startCapture();
     enAmbient(true);
     explored = new Uint8Array(64 * 64);
     { const it = enMapJob(Math.round(P.x / 25) * 25, Math.round(P.z / 25) * 25); while (!it.next().done); }
@@ -6546,16 +6628,16 @@ function neckHits(b) {                                   // hit spheres along th
   }
 }
 function addGround(kind, x, z, home, size0) {
-  const r = Math.random, lat = set.lat * set.hemi, cold = biomeOf(lat) === "tundra" || biomeOf(lat) === "polar" || seasonOf(lat, set.month) === "winter";
+  const r = Math.random, lat = set.lat * set.hemi, eL = ENDLESS ? ENDLESS.envL[enDom(x, z).b] : null, bio = eL ? eL.biome : biomeOf(lat), cold = bio === "tundra" || bio === "polar" || (eL ? eL.season === "winter" : seasonOf(lat, set.month) === "winter");
   const b = DINO_BIPED[kind] ? DINO_BIPED[kind](r) : QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "heron" ? buildHeron(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
           : kind === "coyote" ? buildWolf(r, false, [0x7a6448, 0x9a8466, 0xd8ccb4, 0x8a7458]) : kind === "fox" ? buildWolf(r, false, [0xa84a1e, 0xc0602a, 0xeee6da, 0x2a1e16], 0xf4f0ea)
-          : kind === "arcticfox" ? buildWolf(r, false, cold || biomeOf(lat) === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
+          : kind === "arcticfox" ? buildWolf(r, false, cold || bio === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
-          : kind === "panther" ? buildPanther(r, TROPIC(biomeOf(lat))) : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
+          : kind === "panther" ? buildPanther(r, TROPIC(bio)) : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
   const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
-  const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : okSpot,
+  const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : ENDLESS ? enAnimOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
-  qaPick(A, cold, TROPIC(biomeOf(lat))); qdinoLoad(A.qf); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
+  qaPick(A, cold, TROPIC(bio)); qdinoLoad(A.qf); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
   animalGroup.add(A.root); beasts.push(A); return A;
 }
 // Every part of the map has animals: the map is cut into sections (about 200 m), new groups go to the emptiest sections,
@@ -6770,6 +6852,7 @@ function legendNotice(A, dt) {                              // he's seen you: st
 }
 function updateAnimals(dt) {
   if (!animalGroup) return;
+  if (ENDLESS) enAnimTick(dt);
   senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
   const far = scene.fog.far + 40, T = performance.now() / 1000;
   for (const A of beasts) {
@@ -6899,7 +6982,7 @@ function updateBird(A, dt, T) {
     A.root.position.set(A.x, A.y, A.z); return;
   }
   A.ang += A.w * dt * (A.scared > 0 ? 3 : 1); A.scared = Math.max(0, (A.scared || 0) - dt); A.cx += Math.sin(T * .02 + A.rad) * dt * .8; A.cz += Math.cos(T * .017 + A.rad) * dt * .8;   // the circle drifts slowly
-  const lim = Math.max(0, HALF * .92 - A.rad); A.cx = Math.max(-lim, Math.min(lim, A.cx)); A.cz = Math.max(-lim, Math.min(lim, A.cz));   // stays over the map
+  if (!ENDLESS) { const lim = Math.max(0, HALF * .92 - A.rad); A.cx = Math.max(-lim, Math.min(lim, A.cx)); A.cz = Math.max(-lim, Math.min(lim, A.cz)); }   // stays over the map
   if ((A.altT = (A.altT || 0) - dt) <= 0) { A.altT = 3; A.alt = birdAlt(A); }
   A.altUp = Math.max(0, A.altUp - dt * 2); A.y += ((A.alt + (A.altOff || 0) + A.altUp + Math.sin(T * .2 + A.rad) * 2) - (A.y || A.alt)) * Math.min(1, dt * .5);
   A.x = A.cx + Math.cos(A.ang) * (A.rad + (A.rOff || 0)); A.z = A.cz + Math.sin(A.ang) * (A.rad + (A.rOff || 0)); if (!A.y) A.y = A.alt;
@@ -10292,7 +10375,7 @@ const mpColOf = L => L ? Math.max(0, L.idx) : MP.idx;           // your player c
 const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : (L ? Math.max(0, L.idx) : MP.idx) % 5; };   // your uniform
 const mpTagOf = id => { if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
-const mpNetGuest = () => { if (!MP.code || MP.host || gameMode !== "hunt") return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
+const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
 function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
 function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the smaller one
   if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id)];
@@ -10336,7 +10419,7 @@ function mpLonely() {                                        // the player furth
 function mpFarAll(x, z, r) { if (!MP.on) return true; for (const L of mpOpen()) if (L.R && L.R.cur && Math.hypot(x - L.R.head.x, z - L.R.head.z) < r) return false; return true; }
 function beastThreat(A) {                                    // [x, z, distance, how far it notices] for whoever is scaring it most
   let x = P.x, z = P.z, d = Math.hypot(A.x - x, A.z - z), R = sense.R * (A.wary || 1);
-  if (MP.on && MP.host && gameMode === "hunt") for (const L of mpOpen()) {
+  if (MP.on && MP.host && (gameMode === "hunt" || ENDLESS)) for (const L of mpOpen()) {
     if (!L.R || !L.R.cur || !(L.sr > 0)) continue; const r2 = L.sr * (A.wary || 1), d2 = Math.hypot(A.x - L.R.head.x, A.z - L.R.head.z);
     if (d2 < r2 && (!(R > 0 && d < R) || d2 / r2 < d / R)) { x = L.R.head.x; z = L.R.head.z; d = d2; R = r2; }
   }
@@ -10413,10 +10496,10 @@ function mpOnlineTick(dt, playing) {
   if (MP.host && MP.on && !playing && (MP.lobT = (MP.lobT || 0) - dt) <= 0) { MP.lobT = .5; mpLobSync(false); }
   for (const L of MP.links.values()) if (L.mark && L.mark.visible && ((L.markT -= dt) <= 0 || !playing || !L.open)) { L.mark.visible = false; drawMap($("miniMap")); }
   if (playing && (set.comms | 0) === 3 && vr.I && MP.on) mpBumpTick();
-  if (MP.host && MP.on && gameMode === "hunt" && playing) mpBeastSend(dt);
+  if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing) mpBeastSend(dt);
   if (mpNetGuest() && (MP.pruneT = (MP.pruneT || 0) - dt) <= 0) {   // animals the host stopped sending (too far now, or gone)
     MP.pruneT = 1;
-    for (const [nid, A] of MP.nb) if (now - (A.netT || 0) > (A.dead ? 20000 : 2600)) { A.gone = true; if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); MP.nb.delete(nid); }
+    for (const [nid, A] of MP.nb) if (now - (A.netT || 0) > (A.dead ? 20000 : 2600)) { if (ENDLESS) enAnimDrop(A); A.gone = true; if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); MP.nb.delete(nid); }
   }
   if (VRUI.on && VRUI.stage === "lobby" && (MP.ldT = (MP.ldT || 0) - dt) <= 0) { MP.ldT = 1; mpLobbyDraw(); }
 }

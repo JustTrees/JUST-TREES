@@ -2,13 +2,14 @@
 - a friend joining mid-hike lands a few steps from the host (not back at the start), on the same land
 - both share one clock (a day in 24 minutes): the guest takes the host's hour when joining and stays with it
 - split up 3 km apart, each builds its own land and still sees the other where they really are
+- 2.22: the host's animals: the friend sees the same ones near them; split up, the host puts animals out round the friend too
 Usage: python3 dev/make_debug.py index.html /tmp/dbg.html && python3 dev/test_en_online.py /tmp/dbg.html"""
 import os, sys, asyncio, json, re
 from playwright.async_api import async_playwright
 T = 'file://' + os.path.abspath(sys.argv[1])
 src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_mp.py")).read()
 SETUP = re.search(r'SETUP = """(.*?)"""', src, re.S).group(1)          # the same pretend headset as the PvP test
-SETUP = SETUP.replace("D.setMode('pvp');", "D.setMode('hike'); D.hikeForce = 'endless';").replace("D.mpTick(1 / 60); D.updateGun(1 / 60);", "D.mpTick(1 / 60); D.endlessTick(1 / 60);")
+SETUP = SETUP.replace("D.setMode('pvp');", "D.setMode('hike'); D.hikeForce = 'endless';").replace("D.mpTick(1 / 60); D.updateGun(1 / 60);", "D.mpTick(1 / 60); D.endlessTick(1 / 60); D.updateAnimals(1 / 60);")
 assert "hikeForce" in SETUP and "endlessTick" in SETUP
 async def run_frames(pg, n, chunk=6):
     for _ in range(n // chunk): await pg.evaluate(f"() => frames({chunk})"); await pg.wait_for_timeout(chunk * 16)
@@ -46,15 +47,24 @@ async def main():
         await asyncio.gather(run_frames(A, 300), run_frames(B, 300))
         ha = await A.evaluate("() => D.hourNow"); hb = await B.evaluate("() => D.hourNow")
         out["hourGap"] = round(abs(ha - hb), 4); out["hourRan"] = round(ha - 15, 3)
+        # the animals: the guest has the host's (same kind, same place)
+        ha = await A.evaluate("() => { const m = {}; for (const A of D.beasts) if (A.nid && A.ecellB === undefined) m[A.nid] = [A.kind, A.x, A.z]; return m; }")
+        ga = await B.evaluate("() => { const out = []; for (const A of D.beasts) if (A.net) out.push([A.nid, A.kind, A.x, A.z]); return out; }")
+        match = [g for g in ga if str(g[0]) in ha and ha[str(g[0])][0] == g[1] and abs(ha[str(g[0])][1] - g[2]) < 8 and abs(ha[str(g[0])][2] - g[3]) < 8]
+        out["guestAnimals"] = len(ga); out["guestAnimalsMatch"] = len(match); out["hostAnimals"] = len(ha)
         # split up: the guest goes 3 km north and builds its own land there; the host still sees it where it is
         await B.evaluate("() => { const x = D.P.x, z = D.P.z - 3000; D.enEnsure(x, z, 300); placeAt(x, z); frames(3); return 1; }")
         await asyncio.gather(run_frames(A, 90), run_frames(B, 90))
         rem = await A.evaluate("() => { for (const L of D.MP.links.values()) if (L.R && L.R.cur !== undefined) return [L.R.head.x, L.R.head.y, L.R.head.z]; return null; }")
         real = await B.evaluate("() => { const h = D.vr.readInputs().head; return [h.x, h.y, h.z]; }")
         out["hostSeesGuestWithinM"] = round(sum((a - c) ** 2 for a, c in zip(rem, real)) ** .5, 2) if rem else None
+        await asyncio.gather(run_frames(A, 120), run_frames(B, 120))
+        gpos = await B.evaluate("() => [D.P.x, D.P.z]")
+        out["hostAnimalsNearGuest"] = await A.evaluate(f"() => D.beasts.filter(A => A.ecellB === undefined && Math.hypot(A.x - {gpos[0]}, A.z - {gpos[1]}) < 1000).length")
         out["guestBuiltThere"] = await B.evaluate("() => { const E = D.ENDLESS, ch = E.chunks.get((Math.floor(D.P.x / 200) + 60000) * 120000 + (Math.floor(D.P.z / 200) + 60000)); return !!(ch && ch.tile); }")
         print(json.dumps(out)); print("errors:", errs or "none")
         ok = all(out["connected"]) and out["guestFromHostM"] < 80 and out["sameLand"] and abs(out["hourAtJoin"][0] - out["hourAtJoin"][1]) < .02 \
-             and out["hourGap"] < .03 and out["hourRan"] > .05 and out["hostSeesGuestWithinM"] is not None and out["hostSeesGuestWithinM"] < 3 and out["guestBuiltThere"] and not errs
+             and out["hourGap"] < .03 and out["hourRan"] > .05 and out["hostSeesGuestWithinM"] is not None and out["hostSeesGuestWithinM"] < 3 and out["guestBuiltThere"] and not errs \
+             and out["guestAnimals"] >= 3 and out["guestAnimalsMatch"] >= out["guestAnimals"] * .8 and out["hostAnimalsNearGuest"] >= 3
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)
