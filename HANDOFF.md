@@ -44,7 +44,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.30)
+## 4. The game now (v2.31)
 
 ### Modes
 - **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -164,6 +164,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 - **2.28** Open games: Public/Private rooms, Find a game list (join with a click, mid-game too), host kick; rules screen (13+) before the first menu.
 - **2.29** Age check before the rules: birth year, 21+ (born this year − 22 or earlier), under-age remembered; rules text updated (relay, internet address).
 - **2.30** Rules text: no connection or internet-address wording; voice line is just "never recorded or saved".
+- **2.31** T. rex dies with a recording (`beast/defeated2` at .8, deep), never the made-up sound (`dinoCall` returns for trex `die` if the recording isn't loaded). (An erosion + pickup-restyle 2.31 draft was scrapped by Ron: crosses stay.)
 - **2.27** Solo is Hike or Hunt; PvP practice = hosting a multiplayer PvP game alone (clock starts when someone joins).
 - **2.26** Watch on the left wrist (endless), wrist info on the map, player list with mute, Solo/Multiplayer menu (Solo picks Hike/Hunt/PvP practice), stronger bows by stars.
 - **2.25** Flare gun in VR PvP (L and up, 3 a spawn), sniper with no red cross and wild one-handed shots, steady day-cycle light.
