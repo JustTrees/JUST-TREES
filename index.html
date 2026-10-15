@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.28";              // Just Trees 2.28
+const VERSION = "2.29";              // Just Trees 2.29
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8312,24 +8312,41 @@ function vruiParts() {
     g.fillText("Sitting is fine: you'll stand tall in the game, and only ducking down crouches", 650, 400);
   };
   uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
-  // ---- 2.28: before you play: 13 and up, how to behave, voice chat, play safely, as-is
+  // ---- 2.29: age check first (birth year; 21 and up, nothing but pass/fail saved), then how to behave, voice chat, play safely, as-is
   const Ru = uiPanel("rules", 1500, 1060, 2.0, 74, 1.45);
+  const ruStep = () => ageNo() ? "no" : !ageOk() ? "age" : "rules", thisYear = () => new Date().getFullYear();
   Ru.paint = (g, P) => {
-    uiBg(g, P, VRUI.under ? "SORRY" : "BEFORE YOU PLAY"); g.textAlign = "left"; g.textBaseline = "alphabetic";
-    if (VRUI.under) { g.font = "38px sans-serif"; g.fillStyle = UIC.text; uiWrap(g, "Just Trees is for ages 13 and up. Come back when you're older!", 750, 320, 1250, 52); return; }
-    const L = [["Ages 13 and up.", "Just Trees is for players 13 and older."],
-      ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice goes straight between players and is never recorded or saved."],
+    const st = ruStep();
+    uiBg(g, P, st === "no" ? "SORRY" : st === "age" ? "AGE CHECK" : "BEFORE YOU PLAY"); g.textAlign = "left"; g.textBaseline = "alphabetic";
+    if (st === "no") { g.textAlign = "center"; g.font = "38px sans-serif"; g.fillStyle = UIC.text; uiWrap(g, "Just Trees isn't available for your age.", 750, 380, 1250, 52); return; }
+    if (st === "age") {
+      g.textAlign = "center"; g.font = "bold 46px sans-serif"; g.fillStyle = UIC.text; g.fillText("This game is age restricted.", 750, 250);
+      g.font = "40px sans-serif"; g.fillText("What year were you born?", 750, 320);
+      g.fillStyle = "rgba(0,0,0,.3)"; uiRound(g, 560, 420, 380, 150, 18); g.fill();
+      g.font = "bold 110px sans-serif"; g.fillStyle = VRUI.year ? UIC.sun : UIC.dim; g.textBaseline = "middle"; g.fillText(VRUI.year ? String(VRUI.year) : "– – – –", 750, 500);
+      g.textBaseline = "alphabetic"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Use − and + to pick your year, then Continue", 750, 690);
+      return;
+    }
+    const L = [["Ages 21 and up.", "Just Trees is for adults: players born in " + (thisYear() - 22) + " or earlier."],
+      ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice goes straight between players, or through our relay when a home network needs it. It is never recorded or saved."],
       ["Be decent.", "No harassment, hate, threats, sexual talk, or sharing anyone's personal details (yours included). Don't cheat or wreck games on purpose."],
       ["You're in control.", "Mute anyone from the player list beside your map. Hosts can remove players. Keep your rooms Private to play only with friends."],
-      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open."],
+      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open. Like most voice-chat games, players in your game can see your connection's rough internet address."],
       ["Play safe.", "Clear the space around you, take breaks, and stop if you feel dizzy or unwell."],
       ["As-is.", "Just Trees is a free game provided as-is, without warranty. You play at your own risk."]];
-    let y = 160; for (const [h, t] of L) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(h, 80, y); g.font = "28px sans-serif"; g.fillStyle = UIC.text; g.textAlign = "left";
-      const words = t.split(" "); let line = "", yy = y + 38; for (const w of words) { const tl = line ? line + " " + w : w; if (g.measureText(tl).width > 1340) { g.fillText(line, 80, yy); line = w; yy += 34; } else line = tl; } g.fillText(line, 80, yy); y = yy + 50; }
+    let y = 150; for (const [h, t] of L) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(h, 80, y); g.font = "28px sans-serif"; g.fillStyle = UIC.text; g.textAlign = "left";
+      const words = t.split(" "); let line = "", yy = y + 38; for (const w of words) { const tl = line ? line + " " + w : w; if (g.measureText(tl).width > 1340) { g.fillText(line, 80, yy); line = w; yy += 34; } else line = tl; } g.fillText(line, 80, yy); y = yy + 46; }
   };
-  uiBtn(Ru, 80, 930, 760, 100, "I'm 13 or older · I agree", () => { VRUI.rulesOk = true; try { localStorage.setItem("jt-rules", RULES_V); } catch (_) {} vruiOpen("mode"); }, { primary: true, fs: 40, hide: () => !!VRUI.under, personal: true });
-  uiBtn(Ru, 880, 930, 540, 100, "I'm under 13", () => { VRUI.under = true; uiDraw(Ru); }, { fs: 36, hide: () => !!VRUI.under, personal: true });
-  uiBtn(Ru, 80, 930, 540, 100, "Exit VR", () => { VRUI.under = false; const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 36, hide: () => !VRUI.under, personal: true });
+  const ageStep = d => { const Y = thisYear(); VRUI.year = Math.max(1900, Math.min(Y, (VRUI.year || Y) + (VRUI.year ? d : (d < 0 ? d : 0)))); uiDraw(Ru); };   // blank to start; the first press starts from this year
+  [["−10", 120, -10], ["−1", 340, -1], ["+1", 980, 1], ["+10", 1200, 10]].forEach(([l, x, d]) => uiBtn(Ru, x, 435, 180, 120, l, () => ageStep(d), { fs: 44, hide: () => ruStep() !== "age", personal: true }));
+  uiBtn(Ru, 530, 900, 440, 110, "Continue", () => {
+    const ok = VRUI.year && VRUI.year <= thisYear() - 22; VRUI.year = 0;                            // born 22+ years ago: 21 or older for sure, no birthday question
+    if (ok) VRUI.ageOk = true; else VRUI.ageNo = true;
+    try { localStorage.setItem("jt-age", ok ? "ok" : "no"); } catch (_) {}                          // only pass/fail, never the year
+    uiDraw(Ru);
+  }, { primary: true, fs: 42, hide: () => ruStep() !== "age", disabled: () => !VRUI.year, personal: true });
+  uiBtn(Ru, 80, 930, 760, 100, "I agree", () => { VRUI.rulesOk = true; try { localStorage.setItem("jt-rules", RULES_V); } catch (_) {} vruiOpen("mode"); }, { primary: true, fs: 42, hide: () => ruStep() !== "rules", personal: true });
+  uiBtn(Ru, 530, 900, 440, 110, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 40, hide: () => ruStep() !== "no", personal: true });
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
   [["solo", "Solo", "Just you: hike or hunt. Pick which on the next screen."],
@@ -8474,8 +8491,10 @@ function vruiParts() {
    ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }]].forEach(([l, f, p], i) => uiBtn(Pa, 110, 200 + i * 150, 880, 120, l, f, { primary: !!p, fs: 42, personal: i === 0 || i >= 3 }));
 }
 // open a menu stage: the menus are placed in front of wherever you are looking
-const RULES_V = "1";
-const rulesOk = () => { if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
+const RULES_V = "2";                                               // 2.29: new rules text, so everyone reads them once more
+const ageGet = () => { try { return localStorage.getItem("jt-age"); } catch (_) { return null; } };
+const ageOk = () => !!VRUI.ageOk || ageGet() === "ok", ageNo = () => !!VRUI.ageNo || ageGet() === "no";   // under age is remembered on this headset
+const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
 function vruiOpen(stage) {
   vruiParts();
   if (stage === "mode" && !rulesOk()) stage = "rules";       // 2.28: the rules come first, once

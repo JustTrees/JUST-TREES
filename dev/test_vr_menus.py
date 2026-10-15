@@ -29,7 +29,7 @@ async def main():
         await pg.evaluate(SETUP)
         out = {}
         out["a"] = await pg.evaluate("""() => { D.vruiOpen('intro'); frames(5); const r = { stage: D.VRUI.stage, state: D.state };
-          D.intro.t0 -= 9000; frames(2); r.after9s = D.VRUI.stage; click(); r.rules = D.VRUI.stage; if (r.rules === 'rules') { aimAt('rules', "I'm 13 or older · I agree"); click(); } r.afterClick = D.VRUI.stage;   /* 2.28: rules screen first */
+          D.intro.t0 -= 9000; frames(2); r.after9s = D.VRUI.stage; click(); r.rules = D.VRUI.stage; if (r.rules === 'rules') { aimAt('rules', '−10'); click(); click(); click(); aimAt('rules', 'Continue'); click(); aimAt('rules', 'I agree'); click(); } r.afterClick = D.VRUI.stage;   /* 2.29: age check (30 years back), then the rules */
           r.aimHike = aimAt('mode', 'Solo'); frames(2); r.hover = D.VRUI.panels.mode.hov.map(w => w.label).join(','); click(); aimAt('setup', 'Hike'); click(); r.afterHike = D.VRUI.stage;   /* 2.26: Solo, then Hike on the settings screen */ r.gameModeIsHike = D.set && document.body.classList.contains('mode-hike'); r.mode = D.set ? 'ok' : '';
           aimAt('setup', 'XXL'); click(); r.size = D.set.size; aimAt('setup', 'L'); click(); r.size2 = D.set.size;
           return r; }""")
