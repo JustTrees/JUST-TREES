@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.26";              // Just Trees 2.26
+const VERSION = "2.27";              // Just Trees 2.27
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8311,9 +8311,9 @@ function vruiParts() {
   uiBtn(Hp, 950, 430, 300, 70, "Skip", () => vrHeightDone(false), { fs: 32, personal: true });
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => uiBg(g, P, "CHOOSE YOUR WAY");
-  [["solo", "Solo", "Just you: hike, hunt, or practise PvP. Pick which on the next screen."],
+  [["solo", "Solo", "Just you: hike or hunt. Pick which on the next screen."],
    ["online", "Multiplayer", "Up to 8 of you in one lobby: hike, hunt or PvP together. Host a game or join with a code."]].forEach(([m, name, sub], i) =>
-    uiBtn(M, 90, 160 + i * 300, 1220, 260, name, () => { if (m === "online") { vruiOpen("mp"); return; } renderSetup(); vruiOpen("setup"); }, { sub, fs: 64 }));   // 2.26 (Ron): Solo or Multiplayer first
+    uiBtn(M, 90, 160 + i * 300, 1220, 260, name, () => { if (m === "online") { vruiOpen("mp"); return; } if (gameMode === "pvp") setMode("hike"); renderSetup(); vruiOpen("setup"); }, { sub, fs: 64 }));   // 2.26 (Ron): Solo or Multiplayer first
   uiBtn(M, 90, 800, 1220, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 50, personal: true });
   // ---- online PvP: host a game (you get a code) or join one (type the code) ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
@@ -8340,7 +8340,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode] + (gameMode === "pvp" && !MP.code ? " · practice" : ""), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode] + (gameMode === "pvp" && MP.code && !mpOpen().length ? " · practice until someone joins" : ""), lx + 360, 92);
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
     uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
@@ -8361,7 +8361,7 @@ function vruiParts() {
     if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
-  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1400 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here
+  [["hike", "Hike"], ["hunt", "Hunt"]].forEach(([m, l], i) => uiBtn(S2, 1590 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -10843,7 +10843,8 @@ function mpHostSetSync() {                                  // a setting changed
 function mpHostStage(stage) { if (MP.host && MP.on && (stage === "setup" || stage === "lobby")) { MP.lastSet = JSON.stringify(mpSet()); mpTeamFix(); mpSend({ t: "ui", st: stage, set: mpSet(), teams: MP.teams }); } }
 function mpHostGen() { if (MP.host && MP.on) { for (const L of MP.links.values()) L.spawn = null; mpSend({ t: "gen", seed, set: mpSet() }); } }
 function mpSyncTo(L) {                                      // someone joins late: show them where the host is
-  if (state === "play") return mpSendStartTo(L);
+  if (state === "play") { if (gameMode === "pvp" && MP.host && !(MP.roundLeft > 0)) { MP.roundLeft = (set.roundMin || 10) * 60; MP.kills = MP.deaths = MP.pts = 0; }   // 2.27: someone joined your practice: the round starts now
+    return mpSendStartTo(L); }
   const st = VRUI.stage; mpTeamFix();
   if (st === "setup") mpSendTo(L, { t: "ui", st: "setup", set: mpSet(), teams: MP.teams });
   else if (st !== "preview" && st !== "loading") mpSendTo(L, { t: "ui", st: "lobby", set: mpSet(), teams: MP.teams });
@@ -10888,7 +10889,7 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function pvpRoundStart() {                                   // a fresh round: full health, no scores yet, the round clock set
-  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = MP.code ? (set.roundMin || 10) * 60 : 0;   // (2.26: practice alone: the clock stays at 00:00)
+  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = MP.code && mpOpen().length ? (set.roundMin || 10) * 60 : 0;   // (2.27: a multiplayer game with nobody else in it yet is practice: the clock stays at 00:00)
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
   if (ENDLESS && !MP.host && MP.reveal && MP.reveal[0] && MP.reveal[0].x != null) { const s2 = enSpawnNear(MP.reveal[0].x, MP.reveal[0].z, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.24: endless: as far from the host as chosen
