@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.24";              // Just Trees 2.24
+const VERSION = "2.25";              // Just Trees 2.25
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3224,7 +3224,7 @@ function endlessTick(dt) {                                   // every frame: bui
     hourNow = (hourNow + dt / 60) % 24;
     if (MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow }); }
   }
-  if (E.clock && (E.lightT = (E.lightT || 0) - dt) <= 0) { E.lightT = .5; enLight(); }
+  if (E.clock && (E.lightT = (E.lightT || 0) - dt) <= 0) { E.lightT = .1; enLight(); }   // (2.25: 10 small steps a second)
   enShadowSun(dt);
 }
 function enLight() {                                          // the light for this hour (between region changes, which also relight)
@@ -4864,7 +4864,7 @@ function setLighting(lat, biome, topMix) {
   if (el > -4) { WATER_U.uSunDir.value.copy(sp.dir); WATER_U.uSunCol.value.copy(sunCol); WATER_U.uSunVis.value = smooth(-3, 2, el) * (1 - oc * .9); }
   else { WATER_U.uSunDir.value.copy(moonDir); WATER_U.uSunCol.value.set("#c8d4f0"); WATER_U.uSunVis.value = U.moonVis.value * .7; }
   if (fogBanks) fogBanks.material.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
-  fogBase = scene.fog.far = (VR_ON ? 1200 : isTouch ? 550 : 950) * weather.fogMul;   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
+  fogBase = (VR_ON ? 1200 : isTouch ? 550 : 950) * weather.fogMul; if (!ENDLESS || !ENDLESS.clock) scene.fog.far = fogBase;   /* 2.25: on endless land the frame's own fog (with its headset adjustments) is left alone — resetting it flashed the view */   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
 }
 
 /* ---------------- The zone: green spore mist that creeps inward in stages ---------------- */
@@ -7581,7 +7581,7 @@ function vrTick(dt) {
     if (huntV) reloadTick(dt, G, off);
     { const X = vrCross(), mz = G.localToWorld(_v1.set(...S.muzzle)), dz = _v2.set(0, 0, -1).applyQuaternion(G.quaternion);   // the floating crosshair: 4 little red lines where the gun points
       const eyeG = S.fov && G.localToWorld(new THREE.Vector3(...S.eye)).distanceTo(I.head) < .45 && dz.dot(new THREE.Vector3(0, 0, -1).applyQuaternion(I.headQ)) > .6;   // 2.24: a scope up at your eye: only its own crosshairs
-      X.position.copy(mz).addScaledVector(dz, CROSS_D); X.scale.setScalar(CROSS_D * .06); X.lookAt(I.head); X.visible = !vr.scoped && !eyeG; }
+      X.position.copy(mz).addScaledVector(dz, CROSS_D); X.scale.setScalar(CROSS_D * .06); X.lookAt(I.head); X.visible = !vr.scoped && !eyeG && vr.gunKind !== "hunt"; }   // 2.25: the sniper never shows it
     const fore = G.localToWorld(_v2.set(...S.fore));
     vr.two = !!off && off.grip > .5 && !(huntV && (vr.rl.grab || hanging === offSide)) && (vr.two || (!(huntV && arms[vr.gunKind].phase) && (S.snap ? off.pos.distanceTo(fore) < S.snap : nearGunLine(off.pos, G.localToWorld(_v1.set(...S.grip)), fore) < .17)));   // squeeze anywhere along the gun, even right next to the trigger hand        // the off hand snaps to the front grip (once loaded: the steps go magazine, bolt, then front grip); you keep holding it until you let go
     const eye = G.localToWorld(new THREE.Vector3(...S.eye)), gf = _v1.set(0, 0, -1).applyQuaternion(G.quaternion), hf = _v2.set(0, 0, -1).applyQuaternion(I.headQ);
@@ -7605,6 +7605,7 @@ function vrTick(dt) {
   if (huntV && vr.nadeMode && main && state === "play" && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
     nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
   } else nadeHide();
+  if (vr.flareMode && main && state === "play" && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide) && vr.flares > 0) { flareHand(main); if (edge("trig", main.trig)) flareFire(); } else flareHand(null);   // 2.25: the flare gun
   if (huntV && gameMode === "hunt" && vr.bowMode && main && off && state === "play" && !P.gliding && !(vr.cl && vr.cl.hold)) bowTick(dt, I, main, off, mainSide, offSide); else bowHide();   // 1.85: the bow
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
@@ -7775,6 +7776,10 @@ function vrFire() {
   }
   // a real bullet: it flies at the gun's speed and drops, so far shots take time (lead a runner) and fall (aim a touch high). No spread (2.08: auto guns climb, see RECOIL).
   const from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
+  if (vr.gunKind === "hunt" && !vr.two) {                     // 2.25 (Ron): a sniper fired from one hand goes anywhere (4–16°, any way), with a hard jolt
+    const ax = new THREE.Vector3(Math.random() - .5, Math.random() - .5, Math.random() - .5).cross(dir).normalize(); dir.applyAxisAngle(ax, (4 + Math.random() * 12) * Math.PI / 180);
+    const ms = set.hand === "right" ? "R" : "L"; buzz(ms, 1, 120);
+  }
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
   const online = gameMode === "pvp" && MP.on && !!W;
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, gun: W ? vr.gunKind : null, online });
@@ -7899,7 +7904,7 @@ function climbTick(dt, I) {                               // returns true while 
     const offS = mainS === "R" ? "L" : "R", bowOn = ARMED() && vr.bowMode, nadeOn = ARMED() && vr.nadeMode && vr.nades > 0;
     const busy = (gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab)))       // the gun hand, and the front hand while it's on the gun or reloading
       || (bowOn && (side === offS || (side === mainS && vr.bowSt && vr.bowSt.arrow)))   // 2.15: the bow hand, and the hand holding an arrow
-      || (nadeOn && side === mainS);                                                    // 2.15: the hand holding a grenade
+      || (nadeOn && side === mainS) || (ARMED() && vr.flareMode && side === mainS);                                                    // 2.15: the hand holding a grenade
     if (busy && C.hold === side) C.hold = null;
     const hit = gunHands || busy || vr.binos ? null : climbableAt(h.pos), grip = h.grip > .5;
     const wasInside = C.was[side + "in"], wasGrip = C.was[side + "g"] || C.was[side + "busy"];   // (2.15: a hand that just let go of the gun needs a fresh squeeze to catch)
@@ -9411,10 +9416,11 @@ function boltSounds() {                        // lift, pull back, push forward,
   });
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading (ammo is unlimited since 1.85) ---------------- */
-const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"] : ["hunt", "ar", "smg", "pistol", "gren"];   // clockwise from the top; Hunting has a bow (1.85)
+const flareOk = () => gameMode === "pvp" && VR_ON && ["large", "xl", "xxl", "xxxl"].includes(set.size);   // 2.25: the flare gun (VR PvP, L and up)
+const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"] : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow (1.85)
 const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};
-function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
+function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.flares = flareOk() ? FLARE.N : 0; vr.flareMode = false; vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
   if (VR_ON && (gameMode === "pvp" || gameMode === "hunt")) pvpLoadout(); else vr.own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; }   // VR PvP and Hunting: start with a 1-star pistol, find the rest
 vr.weapon = "hunt"; vr.cool = 0; vr.rl = { grab: null, off: 0, start: 0, pull: 0, armed: false }; vr.lootT = 0; vr.lootMsg = "";
 resetArms();
@@ -9532,6 +9538,106 @@ function gunFoley(parts) {
 }
 const SFX = { dry: [[0, 3200, .03, .12]], magOut: [[0, 1800, .05, .12], [.05, 900, .12, .07]], magIn: [[0, 1300, .05, .14], [.04, 2600, .04, .16]],
   back: [[0, 2400, .05, .1], [.05, 1300, .1, .08]], fwd: [[0, 1500, .08, .1], [.07, 2900, .05, .14]], swap: [[0, 1100, .08, .08], [.1, 2200, .04, .1]], loot: [[0, 700, .1, .12], [.08, 1600, .05, .1]] };
+/* ---- 2.25: the flare gun (Ron): VR PvP on L–XXXL maps, 3 flares each spawn (off the wheel once they're gone). Fire it upward: it screams up
+   on a smoky glowing trail, then bursts into a huge firework in your colour, and a bright star hangs and drifts down. Everyone sees and hears it —
+   your team finds you, and so does everyone else. ---- */
+const FLARE = { N: 3, spd: 72, g: 9.5, rise: 2.7, list: [], gun: null };
+function flareGunModel() {
+  if (FLARE.gun) return FLARE.gun;
+  const g = new THREE.Group(), or = grade(new THREE.MeshLambertMaterial({ color: 0xff6a1a })), dk = grade(new THREE.MeshLambertMaterial({ color: 0x2a2622 }));
+  const add = (geo, m, x, y, z, rx) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); if (rx) o.rotation.x = rx; g.add(o); };
+  add(new THREE.CylinderGeometry(.028, .028, .2, 14).rotateX(Math.PI / 2), or, 0, .035, -.07);          // the fat barrel
+  add(new THREE.CylinderGeometry(.018, .018, .006, 12).rotateX(Math.PI / 2), dk, 0, .035, -.172);        // its dark mouth
+  add(new THREE.BoxGeometry(.04, .05, .07), or, 0, .03, .035);                                            // the frame
+  add(new THREE.BoxGeometry(.032, .11, .045), or, 0, -.03, .06, -.25);                                    // the grip
+  add(new THREE.BoxGeometry(.006, .03, .02), dk, 0, -.005, .015);                                         // trigger
+  g.visible = false; scene.add(g); return FLARE.gun = g;
+}
+function flareHand(main) {
+  const G = flareGunModel(); if (!main) { G.visible = false; return; }
+  G.visible = true; G.position.copy(main.pos); G.quaternion.copy(main.q).multiply(_q1.setFromAxisAngle(_v1.set(1, 0, 0), -.6));   // held like a pistol
+  G.updateMatrixWorld(true);
+}
+function flareFire() {
+  if (!(vr.flares > 0)) return;
+  const G = flareGunModel(), o = G.localToWorld(new THREE.Vector3(0, .035, -.18)), d = new THREE.Vector3(0, 0, -1).applyQuaternion(G.quaternion).normalize();
+  const v = d.multiplyScalar(FLARE.spd); vr.flares--; buzz(set.hand === "right" ? "R" : "L", .8, 80);
+  flareSpawn(o, v, mpColOf(null), true);
+  if (MP.on) mpSend({ t: "fl", o: [o.x, o.y, o.z], v: [v.x, v.y, v.z], c: mpColOf(null) });
+  if (vr.flares <= 0) { vr.flareMode = false; vr.gunOut = true; flareHand(null); }   // all gone: off the wheel, the gun back in your hand
+}
+function flareDot(size) {                                      // a soft round glow, for the sparks and the smoke
+  if (!FLARE.tex) { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const x = cv.getContext("2d"), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.3, "rgba(255,255,255,.8)"); gr.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); FLARE.tex = new THREE.CanvasTexture(cv); }
+  return new THREE.PointsMaterial({ size, map: FLARE.tex, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, sizeAttenuation: true });
+}
+function flareSpawn(o, v, ci, mine) {
+  const col = new THREE.Color(MP_COL[ci] || "#ff5a2a"), F = { p: o.clone(), v: v.clone(), t: 0, col, ci, state: "rise", trail: [], trailT: 0, mine };
+  const TN = 160, tg = new THREE.BufferGeometry(); tg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TN * 3), 3)); tg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(TN * 3), 3)); tg.setDrawRange(0, 0);
+  F.trailPts = new THREE.Points(tg, flareDot(4)); F.trailPts.frustumCulled = false; scene.add(F.trailPts); F.TN = TN;
+  const hg = new THREE.BufferGeometry(); hg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3), 3)); hg.setAttribute("color", new THREE.BufferAttribute(new Float32Array([1, .85, .6]), 3));
+  F.head = new THREE.Points(hg, flareDot(7)); F.head.frustumCulled = false; scene.add(F.head);
+  flareSound(F); FLARE.list.push(F);
+}
+function flarePanner(c, p) { const pn = c.createPanner(); pn.panningModel = "equalpower"; pn.distanceModel = "inverse"; pn.refDistance = 35; pn.maxDistance = 6000; pn.rolloffFactor = .55; if (pn.positionX) { pn.positionX.value = p.x; pn.positionY.value = p.y; pn.positionZ.value = p.z; } pn.connect(SND.master); return pn; }
+function flareSound(F) {                                       // a launch pop, then a rising scream that follows it up
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime;
+  const pn = flarePanner(c, F.p); F.pn = pn;
+  { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(180, t); o.frequency.exponentialRampToValueAtTime(60, t + .12); g.gain.setValueAtTime(.5, t); g.gain.exponentialRampToValueAtTime(.001, t + .18); o.connect(g).connect(pn); o.start(t); o.stop(t + .2); }
+  const o = c.createOscillator(), o2 = c.createOscillator(), g = c.createGain(); o.type = "sawtooth"; o2.type = "sine";
+  o.frequency.setValueAtTime(1300, t + .05); o.frequency.exponentialRampToValueAtTime(3600, t + FLARE.rise); o2.frequency.setValueAtTime(1960, t + .05); o2.frequency.exponentialRampToValueAtTime(5100, t + FLARE.rise);
+  const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2600; bp.Q.value = .8;
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.16, t + .15); g.gain.setValueAtTime(.16, t + FLARE.rise - .2); g.gain.linearRampToValueAtTime(0, t + FLARE.rise);
+  o.connect(bp); o2.connect(bp); bp.connect(g).connect(pn);
+  if (SND.noise) { const s = c.createBufferSource(), hp = c.createBiquadFilter(), gn = c.createGain(); s.buffer = SND.noise; s.loop = true; hp.type = "highpass"; hp.frequency.value = 2500; gn.gain.setValueAtTime(.08, t); gn.gain.linearRampToValueAtTime(0, t + FLARE.rise); s.connect(hp).connect(gn).connect(pn); s.start(t); s.stop(t + FLARE.rise + .05); }   // the fizz
+  o.start(t); o2.start(t); o.stop(t + FLARE.rise + .05); o2.stop(t + FLARE.rise + .05);
+}
+function flareBoom(F) {                                        // the burst: a deep boom and crackles, heard when the sound gets to you
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, d = F.p.distanceTo(camera.position), t = c.currentTime + d / 343, pn = flarePanner(c, F.p);
+  { const s = c.createBufferSource(), lp = c.createBiquadFilter(), g = c.createGain(); s.buffer = SND.noise; lp.type = "lowpass"; lp.frequency.value = 900; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.1, t + .01); g.gain.exponentialRampToValueAtTime(.001, t + 1.6); s.connect(lp).connect(g).connect(pn); s.start(t); s.stop(t + 1.7); }
+  { const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(30, t + .8); g.gain.setValueAtTime(.9, t); g.gain.exponentialRampToValueAtTime(.001, t + 1.2); o.connect(g).connect(pn); o.start(t); o.stop(t + 1.3); }
+  for (let i = 0; i < 26; i++) { const s0 = t + .45 + Math.random() * 1.6, s = c.createBufferSource(), hp = c.createBiquadFilter(), g = c.createGain(); s.buffer = SND.noise; hp.type = "highpass"; hp.frequency.value = 2000 + Math.random() * 3000;
+    g.gain.setValueAtTime(0, s0); g.gain.linearRampToValueAtTime(.12 + Math.random() * .1, s0 + .004); g.gain.exponentialRampToValueAtTime(.001, s0 + .05); s.connect(hp).connect(g).connect(pn); s.start(s0, Math.random()); s.stop(s0 + .06); }   // crackle
+}
+function flareBurst(F) {
+  const n = 520, P0 = new Float32Array(n * 3), C0 = new Float32Array(n * 3), V = new Float32Array(n * 3), w = new THREE.Color(1, .95, .85);
+  for (let i = 0; i < n; i++) { const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = Math.sqrt(1 - u * u), sp = 32 + Math.random() * 16;
+    V[i * 3] = r * Math.cos(a) * sp; V[i * 3 + 1] = u * sp + 4; V[i * 3 + 2] = r * Math.sin(a) * sp; P0.set([F.p.x, F.p.y, F.p.z], i * 3);
+    const c = i % 5 === 0 ? w : F.col, br = .75; C0.set([c.r * br, c.g * br, c.b * br], i * 3); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(P0, 3)); g.setAttribute("color", new THREE.BufferAttribute(C0, 3));
+  F.burst = new THREE.Points(g, flareDot(3.2)); F.burst.frustumCulled = false; F.burstV = V; F.burstT = 0; F.burstC0 = C0.slice(); scene.add(F.burst); flareBoom(F);
+  F.state = "star"; F.v.set(0, -2.2, 0); F.starT = 9;                                      // a bright star hangs in the sky and drifts down
+}
+function flareTick(dt) {
+  if (!FLARE.list.length) return;
+  for (let k = FLARE.list.length - 1; k >= 0; k--) {
+    const F = FLARE.list[k]; F.t += dt;
+    if (F.state === "rise") { F.v.y -= FLARE.g * dt; F.p.addScaledVector(F.v, dt); if (F.t >= FLARE.rise || F.v.y < 4 || F.p.y < H(F.p.x, F.p.z)) flareBurst(F); }
+    else if (F.state === "star") { F.p.addScaledVector(F.v, dt); F.v.x += (Math.random() - .5) * dt; F.starT -= dt; }
+    if (F.pn && F.pn.positionX && F.state === "rise") { F.pn.positionX.value = F.p.x; F.pn.positionY.value = F.p.y; F.pn.positionZ.value = F.p.z; }
+    // the head (bright while rising, a softer star after)
+    { const a = F.head.geometry.attributes.position; a.setXYZ(0, F.p.x, F.p.y, F.p.z); a.needsUpdate = true; const k2 = F.state === "rise" ? 1 : Math.max(0, Math.min(1, F.starT / 3));
+      F.head.material.size = F.state === "rise" ? 7 : 14; F.head.material.opacity = k2; F.head.material.color.copy(F.state === "rise" ? new THREE.Color(1, 1, 1) : F.col).lerp(new THREE.Color(1, 1, 1), .4); }
+    // the trail: puffs left behind while rising, glowing then fading to smoke
+    if (F.state === "rise" && (F.trailT -= dt) <= 0) { F.trailT = .02; F.trail.push({ x: F.p.x, y: F.p.y, z: F.p.z, t: 0 }); if (F.trail.length > F.TN) F.trail.shift(); }
+    { const pa = F.trailPts.geometry.attributes.position, ca = F.trailPts.geometry.attributes.color; let i = 0;
+      for (const q of F.trail) { q.t += dt; q.y += dt * .6; const f = Math.max(0, 1 - q.t / 7), hot = Math.max(0, 1 - q.t / .5);
+        pa.setXYZ(i, q.x, q.y, q.z); ca.setXYZ(i, (.35 + .65 * hot) * f, (.3 + .4 * hot) * f, (.28 + .1 * hot) * f); i++; }
+      F.trailPts.geometry.setDrawRange(0, i); pa.needsUpdate = true; ca.needsUpdate = true; F.trailPts.material.size = 4 + Math.min(6, F.t * .6); }
+    if (F.burst) {                                             // the firework: sparks fly out, slow, fall and fade
+      F.burstT += dt; const pa = F.burst.geometry.attributes.position, ca = F.burst.geometry.attributes.color, V = F.burstV, drag = Math.exp(-dt * 1.1), fade = Math.max(0, 1 - F.burstT / 4.2), tw = .7 + .3 * Math.sin(F.burstT * 30);
+      for (let i = 0; i < V.length / 3; i++) { V[i * 3] *= drag; V[i * 3 + 1] = V[i * 3 + 1] * drag - 6 * dt; V[i * 3 + 2] *= drag;
+        pa.setXYZ(i, pa.getX(i) + V[i * 3] * dt, pa.getY(i) + V[i * 3 + 1] * dt, pa.getZ(i) + V[i * 3 + 2] * dt);
+        const fl = fade * (i % 3 ? 1 : tw); ca.setXYZ(i, F.burstC0[i * 3] * fl, F.burstC0[i * 3 + 1] * fl, F.burstC0[i * 3 + 2] * fl); }
+      pa.needsUpdate = true; ca.needsUpdate = true; if (fade <= 0 && F.burst.visible) F.burst.visible = false;
+    }
+    if (F.state === "star" && F.starT <= 0 && F.trail.every(q => q.t > 7)) {      // all done
+      for (const o of [F.trailPts, F.head, F.burst]) if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); }
+      FLARE.list.splice(k, 1);
+    }
+  }
+}
+function flaresClear() { for (const F of FLARE.list) for (const o of [F.trailPts, F.head, F.burst]) if (o) { scene.remove(o); o.geometry.dispose(); o.material.dispose(); } FLARE.list.length = 0; if (FLARE.gun) FLARE.gun.visible = false; }
 // the gun wheel: hold B, point at a gun, let go
 function vrWheel() {
   if (vr.wheelM) return vr.wheelM;
@@ -9543,9 +9649,9 @@ function drawWheel(sel) {
   const m = vrWheel(), cv = m.userData.cv, g = cv.getContext("2d"); g.clearRect(0, 0, 512, 512);
   const WS = wstep();
   wheelKeys().forEach((k, i) => {
-    const a0 = -Math.PI / 2 + (i - .5) * WS, a1 = a0 + WS, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === "bow" ? !!vr.bowMode : k === vr.weapon && !vr.nadeMode && !vr.bowMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : k === "bow" ? { name: "Bow", col: "#e0a050" } : WEAP[k];
+    const a0 = -Math.PI / 2 + (i - .5) * WS, a1 = a0 + WS, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === "bow" ? !!vr.bowMode : k === "flare" ? !!vr.flareMode : k === vr.weapon && !vr.nadeMode && !vr.bowMode && !vr.flareMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : k === "bow" ? { name: "Bow", col: "#e0a050" } : k === "flare" ? { name: "Flare", col: "#ff7a3a" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
-    const lock = k !== "gren" && k !== "bow" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && lootMode();
+    const lock = k !== "gren" && k !== "bow" && k !== "flare" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && k !== "flare" && lootMode();
     g.fillStyle = on && !lock ? "rgba(255,214,90,.92)" : lock ? "rgba(14,20,15,.45)" : "rgba(14,20,15,.82)"; g.fill();
     g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
     const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165 - (pv ? 12 : 0), A = arms[k];
@@ -9553,7 +9659,7 @@ function drawWheel(sel) {
     if (pv && !lock) { const t = k === "bow" ? bowTier() : tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
       for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
     g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
-    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -9573,7 +9679,7 @@ function wheelTick(dt, main, I) {
   } else if (W.t > 0) {
     const picked = W.open && W.sel >= 0; if (picked) pickGun(wheelKeys()[W.sel]);
     if (W.open) { W.open = false; if (vr.wheelM) vr.wheelM.visible = false; }
-    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else if (vr.nadeMode || vr.bowMode) { vr.nadeMode = false; vr.bowMode = false; vr.gunOut = true; } else vr.gunOut = !vr.gunOut; }   // tap with a grenade in hand: back to the gun   // a quick tap with nothing picked: gun in or out
+    if (!picked && W.t < .35) { const ms = set.hand === "right" ? "R" : "L"; if (vr.cl && vr.cl.hold === ms) buzz(ms, .2, 30); else if (vr.nadeMode || vr.bowMode || vr.flareMode) { vr.nadeMode = false; vr.bowMode = false; vr.flareMode = false; vr.gunOut = true; } else vr.gunOut = !vr.gunOut; }   // tap with a grenade in hand: back to the gun   // a quick tap with nothing picked: gun in or out
     W.t = 0;
   }
   if (W.open) {                                            // where the hand points on the wheel picks a gun
@@ -9588,6 +9694,8 @@ function wheelTick(dt, main, I) {
   }
 }
 function pickGun(k) {
+  if (k === "flare") { if (vr.flares > 0) { vr.flareMode = true; vr.nadeMode = false; vr.bowMode = false; vr.gunOut = false; gunFoley(SFX.swap); } return; }   // 2.25
+  vr.flareMode = false;
   if (k === "gren") { vr.nadeMode = true; vr.bowMode = false; vr.gunOut = false; gunFoley(SFX.swap); return; }
   if (k === "bow") { vr.bowMode = true; vr.nadeMode = false; vr.gunOut = false; gunFoley(SFX.swap); return; }   // 1.85: the bow (VR Hunting)
   if (lootMode() && !(vr.own[k] > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }   // not found yet
@@ -10098,6 +10206,7 @@ function pvpLoadout() {                                     // every spawn: a 1-
   vr.own = { pistol: 1 }; if (gameMode === "hunt") vr.own.bow = 1;
   for (const k in WEAP) { const A = arms[k]; A.phase = 0; A.k = 0; A.popping = false; A.mag = k === "pistol" ? magOf("pistol") : 0; A.res = k === "pistol" ? WEAP.pistol.start : 0; }
   vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "pistol"; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; MP.sh = 0;
+  vr.flares = flareOk() ? FLARE.N : 0; vr.flareMode = false;   // 2.25: 3 flares each spawn
 }
 // ---- the things lying about
 let _crossGeo = null;
@@ -10267,7 +10376,7 @@ function mpBoard() {                                         // everyone's score
   for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0 });
   rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
 }
-function clearLoot() { vrClearNades(); dropsClear(); }
+function clearLoot() { vrClearNades(); dropsClear(); if (typeof flaresClear === "function") flaresClear(); }
 function spawnLoot() {                                       // the things lying about the map (seeded: everyone gets the same): grenades, and in VR PvP / Hunting the guns, bows and crosses
   clearLoot(); spawnNadeLoot(); if (lootMode()) spawnPvpLoot(); gunSndLoad();
 }
@@ -10554,6 +10663,7 @@ function mpRecv2(o, L) {                                     // 2.00's messages
     case "got": if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner(o.text || "Got you", 3.5, 1); } else uwRespawn(); return true;
     case "cue": dinoCue(); return true;
     case "mk": mpMarkGot(L, o); return true;
+    case "fl": if (Array.isArray(o.o) && Array.isArray(o.v)) flareSpawn(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), o.c | 0); return true;   // 2.25: a friend's (or enemy's) flare
   }
   return false;
 }
@@ -11569,7 +11679,7 @@ function loop(now) {
     if (vr.on) vrAfterMove(dt);
     updateZone(dt);
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
-    updateNades(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
+    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
       PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + "." + (gameMode === "hunt" && legendName() ? " There's " + legendName() + (DRY(biomeOf(set.lat * set.hemi)) ? " out here." : " in these woods.") : ""));
