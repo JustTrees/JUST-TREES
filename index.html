@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.33";              // Just Trees 2.33
+const VERSION = "2.34";              // Just Trees 2.34
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -10671,9 +10671,8 @@ function mpVoice(L, stream) {                               // each player's voi
     if (!L.audioEl) { L.audioEl = new Audio(); L.audioEl.muted = true; }                   // browsers only feed remote audio into Web Audio once it's attached to an element
     L.audioEl.srcObject = stream; L.audioEl.play().catch(() => {});
     if (L.vsrc) try { L.vsrc.disconnect(); } catch (e) {}
-    const src = SND.ctx.createMediaStreamSource(stream), p = SND.ctx.createPanner(), g = SND.ctx.createGain();
-    p.panningModel = "HRTF"; p.distanceModel = "inverse"; p.refDistance = 2; p.maxDistance = 120; p.rolloffFactor = 1.1; g.gain.value = 1.6;
-    src.connect(p); p.connect(g); g.connect(SND.master); L.vsrc = src; L.panner = p; L.vg = g;
+    const src = SND.ctx.createMediaStreamSource(stream), g = SND.ctx.createGain(); g.gain.value = 1.6;   // 2.34 (Ron): voices aren't directional, straight in your ears
+    src.connect(g); g.connect(SND.master); L.vsrc = src; L.vg = g;
   } catch (e) {}
 }
 function mpSendTo(L, o) { if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
@@ -11072,6 +11071,19 @@ function mpRemoteMake(L) {
   const u = L ? mpUni(L) : 0, S = makeSoldier(UNIFORMS[u], 7); S.rig.visible = false; scene.add(S.group, S.shadow);
   return { S, guns: {}, cur: null, head: new THREE.Vector3(), feet: 0, alive: true, uni: u, team: -2 };
 }
+function mpTrailTick(L, dt) {                                // 2.34: a soft streak in their colour behind a player who's flying fast (flung, gliding), so you can follow them
+  const R = L.R, on = !!(R && R.alive && R.head && !(R.S && R.S.group && R.S.group.visible === false));
+  if (!L.trail) { if (!on) return; const n = 28, g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setDrawRange(0, 0);
+    const pts = new THREE.Points(g, flareDot(1)); pts.frustumCulled = false; scene.add(pts); L.trail = { pts, n, list: [], last: null, t: 0 }; }
+  const T = L.trail, c = new THREE.Color(MP_COL[mpColOf(L)] || "#ffffff");
+  if (on) { const p = R.head; if (T.last) { const sp = T.last.distanceTo(p) / Math.max(dt, 1e-3); if (sp > 9 && (T.t -= dt) <= 0) { T.t = .022; T.list.push({ x: p.x, y: p.y - .55, z: p.z, a: 0 }); if (T.list.length > T.n) T.list.shift(); } } else T.last = new THREE.Vector3(); T.last.copy(p); }
+  else T.last = null;
+  const pa = T.pts.geometry.attributes.position, ca = T.pts.geometry.attributes.color; let i = 0;
+  for (let k = T.list.length - 1; k >= 0; k--) { const q = T.list[k]; q.a += dt; if (q.a > .7) { T.list.splice(k, 1); } }
+  for (const q of T.list) { const f = Math.max(0, 1 - q.a / .7) * .8; pa.setXYZ(i, q.x, q.y, q.z); ca.setXYZ(i, c.r * f, c.g * f, c.b * f); i++; }
+  T.pts.geometry.setDrawRange(0, i); pa.needsUpdate = true; ca.needsUpdate = true; T.pts.visible = i > 0;
+  if (!L.open && !T.list.length) { scene.remove(T.pts); T.pts.geometry.dispose(); T.pts.material.dispose(); L.trail = null; }
+}
 function mpRemoteDrop(L) {
   if (!L) { for (const q of MP.links.values()) mpRemoteDrop(q); return; }
   if (L.R) { scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); L.R = null; } L.rx = [];
@@ -11220,12 +11232,12 @@ function mpTick(dt) {                                       // (also runs offlin
   if (playing && MP.roundLeft > 0 && (MP.roundLeft -= dt) <= 0) { mpRoundOver(); return; }   // the round clock
   captScore(dt);
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
-    MP.sendT = P.gliding || sense.v > 6 || (vr.cl && vr.cl.air) ? 1 / 30 : .05; const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (2.24: 30 a second while moving fast)
+    MP.sendT = (vr.cl && vr.cl.air) || Math.hypot(sense.v || 0, P.vy || 0) > 14 ? 1 / 45 : P.gliding || sense.v > 6 ? 1 / 30 : .05; /* 2.34: 45 a second while flung */ const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (2.24: 30 a second while moving fast)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts,
       sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
-  for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); }
+  for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);
   if (MP.dead > 0 && state === "play") {                    // down: the view holds still where you fell and goes red, then you're back in somewhere else
     MP.dead -= dt; MP.hurt = Math.max(MP.hurt, .9);
@@ -11237,9 +11249,11 @@ function mpTick(dt) {                                       // (also runs offlin
   if (SND.ctx && vr.I) {                                    // voice: in the game you hear each player from where their head is; in the menus, plainly
     const l = SND.ctx.listener, h = vr.I.head, f = _mpA.set(0, 0, -1).applyQuaternion(vr.I.headQ), u = _mpB.set(0, 1, 0).applyQuaternion(vr.I.headQ);
     if (l.positionX) { l.positionX.value = h.x; l.positionY.value = h.y; l.positionZ.value = h.z; l.forwardX.value = f.x; l.forwardY.value = f.y; l.forwardZ.value = f.z; l.upX.value = u.x; l.upY.value = u.y; l.upZ.value = u.z; }
-    for (const L of MP.links.values()) if (L.panner && L.panner.positionX) {
-      const lob = !playing && L.LR && L.LR.S.group.visible ? L.LR.head : null, at = lob || (playing && L.R && L.R.alive ? L.R.head : h); L.panner.positionX.value = at.x; L.panner.positionY.value = at.y + (at === h ? .01 : 0); L.panner.positionZ.value = at.z;
-      const hk = playing ? mpHear(L) : [1, false]; if (L.vg) L.vg.gain.value = L.muted ? 0 : 1.6 * hk[0];   // (2.26: muted by you) L.panner.rolloffFactor = hk[1] ? 0 : 1.1;   // 2.00: comms (open, open proximity, team, team fist bump)
+    for (const L of MP.links.values()) if (L.vg) {           // 2.00: comms (open, open proximity, team, team fist bump); 2.26: muted by you
+      const lob = !playing && L.LR && L.LR.S.group.visible ? L.LR.head : null, at = lob || (playing && L.R && L.R.alive ? L.R.head : h);
+      const hk = playing ? mpHear(L) : [1, false], d = Math.min(120, Math.max(2, at.distanceTo(h)));
+      const near = hk[1] ? 1 : 2 / (2 + 1.1 * (d - 2));        // 2.34: distance only matters for Open proximity (and the lobby); this line had slipped into a comment, so Open faded too
+      L.vg.gain.value = L.muted ? 0 : 1.6 * hk[0] * near;
     }
   }
 }
