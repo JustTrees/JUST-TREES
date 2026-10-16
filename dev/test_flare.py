@@ -24,7 +24,7 @@ async def main():
         r2 = await pg.evaluate("""() => { const G = D.FLARE; const fake = window.__fake;
           D.vr.flares = 3; for (let i = 0; i < 3; i++) { fake.q = new D.THREE.Quaternion().setFromEuler(new D.THREE.Euler(1.1 + i * .1, i * .5, 0, 'YXZ')).multiply(new D.THREE.Quaternion().setFromAxisAngle(new D.THREE.Vector3(1, 0, 0), .6)); D.flareHand(fake); D.flareFire(); }
           const out = { flying: G.list.length, left: D.vr.flares, wheel: D.wheelKeys2().includes('flare'), mode: D.vr.flareMode };
-          let maxY = 0, burst = 0; const y0 = D.P.y; for (let f = 0; f < 72 * 4.4; f++) { D.flareTick(1 / 72); for (const F of G.list) { maxY = Math.max(maxY, F.p.y - y0); if (F.burst) burst++; } }
+          let maxY = 0, burst = 0; const y0 = D.P.y; for (let f = 0; f < 72 * 6.5; f++) { D.flareTick(1 / 72); for (const F of G.list) { maxY = Math.max(maxY, F.p.y - y0); if (F.burst) burst++; } }
           out.highM = Math.round(maxY); out.burst = burst > 0;
           // a picture: looking up at the bursts
           const c = D.camera; c.fov = 80; c.aspect = 900 / 560; c.updateProjectionMatrix(); c.position.set(D.P.x - 60, D.P.y + 3, D.P.z + 80); const F = G.list[1]; c.position.set(F.p.x - 140, D.H(F.p.x - 140, F.p.z + 120) + 3, F.p.z + 120); c.lookAt(F.p.x, F.p.y - 15, F.p.z); c.updateMatrixWorld();
@@ -35,6 +35,6 @@ async def main():
           return out; }""")
         if len(sys.argv) > 2: open(sys.argv[2].replace(".png", ".jpg"), "wb").write(base64.b64decode(r2["pic"].split(",")[1]))
         del r2["pic"]; print(json.dumps(r), json.dumps(r2))
-        ok = r["wheel"] and r["n"] == 3 and r2["flying"] == 3 and r2["left"] == 0 and not r2["wheel"] and not r2["mode"] and r2["highM"] > 100 and r2["burst"] and r2["after"] == 0 and not r2["mediumWheel"] and not r2["openComms"] and not errs
+        ok = r["wheel"] and r["n"] == 3 and r2["flying"] == 3 and r2["left"] == 0 and not r2["wheel"] and not r2["mode"] and r2["highM"] > 280 and r2["burst"] and r2["after"] == 0 and not r2["mediumWheel"] and not r2["openComms"] and not errs
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

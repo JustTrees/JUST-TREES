@@ -1,0 +1,17 @@
+SETUP = """() => { window.FREEZE = true; for (const el of document.body.children) if (el.tagName !== 'CANVAS') el.style.display = 'none';
+  const T = D.THREE, V = D.vr; V.on = true; D.setVR(true);
+  window.L = { head: new T.Vector3(0, 1.65, 0), R: new T.Vector3(.2, 1.3, -.25), Lh: new T.Vector3(-.2, 1.3, -.25) };
+  window.pad = { R: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 }, L: { trig: 0, grip: 0, a: 0, b: 0, sx: 0, sy: 0, stickBtn: 0 } };
+  window.qs = { R: new T.Quaternion(), L: new T.Quaternion() };
+  const toW = v => v.clone().applyAxisAngle(new T.Vector3(0, 1, 0), V.yaw).add(new T.Vector3(V.ox, V.oy, V.oz)); window.toW = toW;
+  V.readInputs = () => ({ head: toW(L.head), headQ: new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0), V.yaw), hands: { right: Object.assign({ pos: toW(L.R), q: qs.R.clone(), rayPos: toW(L.R), rayQ: new T.Quaternion().setFromAxisAngle(new T.Vector3(0,1,0), V.yaw).multiply(qs.R) }, pad.R), left: Object.assign({ pos: toW(L.Lh), q: qs.L.clone(), rayPos: toW(L.Lh), rayQ: qs.L.clone() }, pad.L) } });
+  window.tick = n => { for (let i = 0; i < n; i++) D.loop(performance.now()); };
+  window.frames = n => { for (let i = 0; i < n; i++) { if (D.VRUI.on || D.VRUI.fadeV > 0 || D.VRUI.fadeGo) D.vruiTick(1/60); if (D.state === 'play') { D.vrTick(1/60); if (!V.climbing) D.update(1/60); D.vrAfterMove(1/60); } } };
+  // aim the right controller at a widget of a panel (by label)
+  window.aimAt = (pname, label) => { const Pn = D.VRUI.panels[pname], w = Pn.widgets.find(q => q.label === label);
+    const geo = Pn.mesh.geometry.parameters, u = 1 - (w.x + w.w / 2) / Pn.W, vv = (w.y + w.h / 2) / Pn.H;
+    const th = geo.thetaStart + u * geo.thetaLength, y = Pn.mesh.position.y + (.5 - vv) * geo.height;
+    const tgt = D.VRUI.root.localToWorld(new T.Vector3(geo.radiusTop * Math.sin(th), y, geo.radiusTop * Math.cos(th)));
+    const from = toW(L.R), m = new T.Matrix4().lookAt(from, tgt, new T.Vector3(0, 1, 0)); qs.R.setFromRotationMatrix(m); return !!w; };
+  window.click = () => { pad.R.trig = 1; frames(2); pad.R.trig = 0; frames(2); };
+}"""
