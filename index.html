@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.35";              // Just Trees 2.35
+const VERSION = "2.36";              // Just Trees 2.36
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -384,6 +384,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const MONTH_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 /* ---------------- Settings ---------------- */
+const TURN_SMOOTH = 2.4;                                         // 2.36: smooth turning speed, radians a second at full stick (about 140°)
 const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", hikeMap: "island", huntMap: "island", spawnD: 0, zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
@@ -477,6 +478,7 @@ document.querySelectorAll("[data-land]").forEach(b => b.addEventListener("click"
 document.querySelectorAll("[data-zone]").forEach(b => b.addEventListener("click", () => { set.zone = b.dataset.zone; renderSetup(); }));
 document.querySelectorAll("[data-hand]").forEach(b => b.addEventListener("click", () => { set.hand = b.dataset.hand; renderSetup(); }));
 $("fling").addEventListener("input", () => { set.fling = +$("fling").value; renderSetup(); });
+try { const t = localStorage.getItem("jt-turn"); if (t === "smooth" || t === "snap") set.turn = t; } catch (_) {}   // 2.36
 document.querySelectorAll("[data-vrres]").forEach(b => b.addEventListener("click", () => { set.vrRes = b.dataset.vrres; try { localStorage.setItem("jt-vrres", set.vrRes); } catch (_) {} renderSetup(); }));
 
 const WEATHERS = [["random", "Random"], ["clear", "Clear"], ["rain", "Rain"], ["fog", "Fog"], ["snow", "Snow"], ["storm", "Storm"]];
@@ -7628,6 +7630,7 @@ function vrTick(dt) {
   let turn = 0;
   if (main) {
     if (vr.scoped || vr.binos) { if (edge("zin", -main.sy)) vr.zoom++; if (edge("zout", main.sy)) vr.zoom--; }
+    else if (set.turn === "smooth") { const a = Math.abs(main.sx); if (a > .2) turn = -Math.sign(main.sx) * TURN_SMOOTH * dt * Math.min(1, (a - .2) / .7); }   // 2.36: smooth turning, faster the further you push
     else { if (edge("tr", main.sx)) turn = -Math.PI / 6; if (edge("tl", -main.sx)) turn = Math.PI / 6; }
   }
   vr.pendTurn = turn;
@@ -8417,12 +8420,12 @@ function vruiParts() {
     if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
     else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
-    uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
+    uiLabel(g, rx + 300, 618, "Turn"); uiLabel(g, rx, 618, "Hand"); uiLabel(g, rx + 470, 618, "Fling", set.fling <= 2 ? "Gentle" : set.fling <= 6 ? "Medium" : set.fling <= 9 ? "Strong" : "Wild");
     note(g, rx + 470, 654, "How hard you throw yourself climbing.");
     if (MP.code) uiLabel(g, rx, 912, "Round", (set.roundMin || 10) + " min");
     if (gameMode === "hunt") { uiLabel(g, lx, 1048, "Prehistoric"); note(g, 680, 1048, "Dinosaurs to hunt · now and then a raptor hunts you"); }
     if (spawnPick()) { uiLabel(g, lx, 1128, "Start apart", set.spawnD ? (set.spawnD >= 1000 ? "1 km" : set.spawnD + " m") : "Together"); }
-    if (gameMode === "pvp") { uiLabel(g, lx, 1128, "Capture point"); note(g, 680, 1128, "A hidden spot on the map: +1 point every " + CAPTURE.every + " s you hold it alone. A flag shows where it is."); }
+    if (gameMode === "pvp") { uiLabel(g, lx, 1128, "Capture point"); note(g, 680, 1128, "A hidden spot on the map: +1 point every " + CAPTURE.every + " s you hold it alone. A small square shows where it is."); }
     if (gameMode === "pvp") { uiLabel(g, lx, 1048, "Zone"); uiLabel(g, 560, 1048, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, 1230, 1048, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s"); }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map · you can set Hand and Fling", P.W - 70, 92); }
   };
@@ -8442,9 +8445,10 @@ function vruiParts() {
   uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless", hide: () => gameMode === "hike" || huntEndless() });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
-  uiBtn(S2, rx, 646, 210, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true });
-  uiBtn(S2, rx + 220, 646, 210, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left", personal: true });
+  uiBtn(S2, rx, 646, 140, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true });   /* 2.36: narrower, Turn beside them */
+  uiBtn(S2, rx + 150, 646, 140, 62, "Left", () => { set.hand = "left"; }, { active: () => set.hand === "left", personal: true });
   uiSlider(S2, rx + 470, 670, 430, 1, 12, () => set.fling, v => { set.fling = v; }, .5).personal = true;
+  uiBtn(S2, rx + 300, 646, 150, 62, "Snap", () => { set.turn = set.turn === "smooth" ? "snap" : "smooth"; try { localStorage.setItem("jt-turn", set.turn); } catch (_) {} }, { labelFn: () => set.turn === "smooth" ? "Smooth" : "Snap", personal: true });   // 2.36: tap to switch
   uiBtn(S2, rx, 760, 280, 100, "Back", () => vruiOpen(MP.code ? "lobby" : "mode"), { personal: true });   // (2.26: back to Solo / Multiplayer)
   uiSlider(S2, rx + 300, 884, 270, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; }, 5).hide = () => !MP.code;   // round length (2.00: every online mode, 5 to 60 minutes)
   [[0, "Together"], [50, "50"], [150, "150"], [300, "300"], [500, "500"], [750, "750"], [1000, "1 km"]].forEach(([v, l], i) => uiBtn(S2, 560 + i * 128 + (i ? 70 : 0), 1086, i ? 120 : 190, 62, l, () => { set.spawnD = v; }, { active: () => (set.spawnD || 0) === v, hide: () => !spawnPick(), fs: 28 }));   // 2.24
