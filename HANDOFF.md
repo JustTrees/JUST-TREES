@@ -45,7 +45,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 
 ---
 
-## 4. The game now (v2.34)
+## 4. The game now (v2.35)
 
 ### Modes
 - **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR online; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -169,6 +169,7 @@ Read this first: who Ron is, how we work, what the game is now, how to build and
 - **2.32** Flare gun only when comms is Team · fist bump (`flareOk`), still VR PvP on L and up.
 - **2.33** Watch on the back of the left wrist (`watchMesh` group: black strap round the wrist, steel case, black face; `watchTick` places it with `handPose` at (-.055, .088, 0) in grip space, face out along -x, 12 toward the little finger), glowing green-cyan marks/hands at night, no tick. Hand map .235 m above and .07 m out in front of the off hand (was .16 straight up). Flares ~2.5x as high (`FLARE.spd` 110, `rise` 4.5 s → ~390 m up), colour fully saturated (`setHSL(h,1,.5)`), fewer white sparks, bigger burst (sparks 50–76 m/s, size 8). Flare pistol aimed by `rayQ` like the guns, grip at `FLARE.grip`, and the gun hand wraps it (`handPose` → `gloveQ("pistol","grip")`). PvP not on Endless (Ron: too big). Ron's in-game tag: DIGGITY.
 - **2.34** Comms fix: **Open** faded with distance like Open proximity — in 2.26 a `//` note was added before `L.panner.rolloffFactor = …` on the same line, commenting it out. **Lesson: never end a line with a `//` note and then more code; use `/* */` mid-line.** Voices are no longer directional (Ron): no panner, just a gain per player (`L.vg`) = comms × (Open proximity / lobby only: inverse fade, ref 2 m, rolloff 1.1, max 120 m) × mute. Footsteps and shots stay 3D. Flung/fast players: pose updates 45/s while in the air after a throw or >14 m/s (`MP.sendT`), and a soft trail of dots in their colour behind anyone moving >9 m/s (`mpTrailTick`, 0.7 s). Test: `dev/test_234.py`.
+- **2.35** Banners (Ron: annoying, in the way, dragging behind): `vrBanner` with prio 0 doesn't show at all — a teammate's mark, fist bump, a player removed, and pickups/points (`lootMsg` shows only when `lootT` ≥ 4: drowned/burned, the giant tree); the rest are smaller (.3 m wide), fixed in your view low down (0, −.2, −.85 from the head, no lag). Capture point: a small coloured square (was a flag) with smaller distance text (`captTick`, scale .14 × distance up to 24 m).
 - **2.27** Solo is Hike or Hunt; PvP practice = hosting a multiplayer PvP game alone (clock starts when someone joins).
 - **2.26** Watch on the left wrist (endless), wrist info on the map, player list with mute, Solo/Multiplayer menu (Solo picks Hike/Hunt/PvP practice), stronger bows by stars.
 - **2.25** Flare gun in VR PvP (L and up, 3 a spawn), sniper with no red cross and wild one-handed shots, steady day-cycle light.

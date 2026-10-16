@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.34";              // Just Trees 2.34
+const VERSION = "2.35";              // Just Trees 2.35
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6464,12 +6464,13 @@ const PARROT_COL = [[0xc8281e, 0x2a5ad0, 0xc8281e, 0xe8e0d0], [0x2a62d8, 0xe8c02
 const FLY = { bird: 1, parrot: 1, eagle: 1, owl: 1, vulture: 1 }, LEGEND = { bigfoot: 1, yeti: 1, trex: 1 };
 const legendName = () => { const A = beasts.find(a => LEGEND[a.kind]); return A ? (A.kind === "yeti" ? "a Yeti" : A.kind === "trex" ? "a T. rex" : "a Bigfoot") : null; };
 const VBAN = { m: null, t: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
-function vrBanner(text, secs, prio = 2) {                  // a big message floating in front of you (VR), fades after a few seconds
+function vrBanner(text, secs, prio = 2) {                  // a message in front of you (VR), fades after a few seconds
+  if (prio < 1) return;                                       // 2.35 (Ron): the small stuff (a mark, a fist bump) doesn't pop up at all
   if (VBAN.t > 0 && (VBAN.prio || 0) > prio) return;        // a pickup message never covers the Bigfoot one
   VBAN.prio = prio;
   if (!VBAN.m) {
     const cv = document.createElement("canvas"); cv.width = 768; cv.height = 120;
-    VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.48, .075), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.3, .047),   /* 2.35: smaller */ new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     VBAN.m.renderOrder = 997; VBAN.m.frustumCulled = false; VBAN.m.userData.cv = cv; VBAN.m.visible = false; scene.add(VBAN.m);
   }
   const g = VBAN.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 768, 120);
@@ -6480,10 +6481,8 @@ function vrBanner(text, secs, prio = 2) {                  // a big message floa
 function bannerTick(I, dt) {
   if (!VBAN.m) return;
   VBAN.t -= dt; const show = VBAN.t > 0 && vr.on && state === "play" && !VRUI.on; VBAN.m.visible = show; if (!show) return;
-  const want = _v1.set(0, .06, -.8).applyQuaternion(I.headQ).add(I.head);                  // just above the middle of your view
-  if (!VBAN.init) { VBAN.p.copy(want); VBAN.q.copy(I.headQ); VBAN.init = true; }
-  VBAN.p.lerp(want, 1 - Math.exp(-dt * 6)); VBAN.q.slerp(I.headQ, 1 - Math.exp(-dt * 6));
-  VBAN.m.position.copy(VBAN.p); VBAN.m.quaternion.copy(VBAN.q); VBAN.m.material.opacity = Math.min(1, VBAN.t / .8);
+  // 2.35 (Ron): fixed in your view, low and out of the way (it used to trail behind your head and catch up)
+  VBAN.m.position.copy(_v1.set(0, -.2, -.85).applyQuaternion(I.headQ).add(I.head)); VBAN.m.quaternion.copy(I.headQ); VBAN.m.material.opacity = Math.min(1, VBAN.t / .6);
 }
 const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
 const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
@@ -7751,7 +7750,7 @@ function vrAfterMove(dt) {                                // carry the play spac
   watchTick(I);                                              // 2.26: the watch (endless land), always on the left wrist
   if (off) {
     wrist.visible = false;                                   // 2.26: the wrist's info lives on the map now; messages float in front of you
-    if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), 1); }
+    if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), vr.lootT >= 4 ? 1 : 0); }   // 2.35: pickups and points just buzz and ding; only the big ones (drowned, the giant tree) show
     if (vr.lootT <= 0) vr.banWas = null;
     const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
     if (vrMap.visible) { _v2.copy(off.rayPos).sub(I.head); _v2.y = 0; if (_v2.lengthSq() > 1e-6) _v2.normalize(); vrMap.position.copy(off.rayPos).add(_v1.set(0, .235, 0)).addScaledVector(_v2, .07); vrMap.lookAt(I.head);   /* 2.33: higher and a bit out in front, clear of the hand */ if ((vr.fpsT = (vr.fpsT || 0) - dt) <= 0 || !mapWas) { vr.fpsT = 1; drawMap(vrMapCv); mapDirty = true; } if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
@@ -10329,16 +10328,14 @@ function captTick(I) {                                       // the ring's colou
   const flash = CAPT.state === "contested" && Math.floor(performance.now() / 300) % 2;
   CAPT.ring.material.color.set(flash ? "#ff5a4a" : CAPT.col);
   const tx = CAPT.x, ty = CAPT.y + 4, tz = CAPT.z, dx = tx - I.head.x, dy = ty - I.head.y, dz = tz - I.head.z, d = Math.hypot(dx, dy, dz), k = Math.min(d, 24) / Math.max(d, .01);
-  CAPT.flag.position.set(I.head.x + dx * k, I.head.y + dy * k, I.head.z + dz * k); CAPT.flag.scale.setScalar(Math.min(d, 24) * .26);   // same size on screen however far, seen through trees and hills
+  CAPT.flag.position.set(I.head.x + dx * k, I.head.y + dy * k, I.head.z + dz * k); CAPT.flag.scale.setScalar(Math.min(d, 24) * .14);   // same size on screen however far, seen through trees and hills (2.35: much smaller)
   const flat = Math.hypot(CAPT.x - P.x, CAPT.z - P.z), key = [Math.round(flat / 5), CAPT.state, flash, Math.floor(CAPT.prog)].join("|"); if (key === CAPT.key) return; CAPT.key = key;
   const g = CAPT.flag.userData.cv.getContext("2d"); g.clearRect(0, 0, 256, 256);
   const col = flash ? "#ff5a4a" : CAPT.col;
-  g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 12; g.beginPath(); g.moveTo(98, 34); g.lineTo(98, 176); g.stroke();
-  g.strokeStyle = "#f2f2f2"; g.lineWidth = 7; g.beginPath(); g.moveTo(98, 34); g.lineTo(98, 176); g.stroke();
-  g.fillStyle = col; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 5; g.beginPath(); g.moveTo(102, 36); g.lineTo(190, 66); g.lineTo(102, 96); g.closePath(); g.fill(); g.stroke();
-  g.textAlign = "center"; g.font = "bold 54px sans-serif"; g.lineWidth = 9; g.strokeStyle = "rgba(0,0,0,.75)";
+  g.fillStyle = col; g.strokeStyle = "rgba(0,0,0,.7)"; g.lineWidth = 8; uiRound(g, 93, 64, 70, 70, 12); g.fill(); g.stroke();   // 2.35 (Ron): a small square instead of a flag
+  g.textAlign = "center"; g.font = "bold 66px sans-serif"; g.lineWidth = 10; g.strokeStyle = "rgba(0,0,0,.75)";
   const txt = CAPT.state === "mine" ? "Holding " + Math.max(0, Math.ceil(CAPTURE.every - CAPT.prog)) + "s" : CAPT.state === "contested" ? "Contested" : flat < CAPT.r ? "Capture" : Math.round(flat) + " m";
-  g.strokeText(txt, 128, 232); g.fillStyle = "#ffffff"; g.fillText(txt, 128, 232);
+  g.strokeText(txt, 128, 200); g.fillStyle = "#ffffff"; g.fillText(txt, 128, 200);
   CAPT.flag.material.map.needsUpdate = true;
 }
 function drawCaptOnMap(ctx, W, Hh) {
@@ -10736,7 +10733,7 @@ function mpBumpTick() {                                      // a fist bump: you
   }
 }
 function mpBumpFx(L) {
-  buzz("L", .8, 80); buzz("R", .8, 80); vrBanner("Fist bump · you can hear " + (L.tag || "them") + " now", 2.5, 1);
+  buzz("L", .8, 80); buzz("R", .8, 80); vrBanner("Fist bump · you can hear " + (L.tag || "them") + " now", 2.5, 0);
   if (SND.ctx && SND.on) { const c = SND.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(55, t + .16);
     g.gain.setValueAtTime(.55, t); g.gain.exponentialRampToValueAtTime(.001, t + .28); o.connect(g).connect(SND.master); o.start(t); o.stop(t + .3); }
 }
@@ -10863,7 +10860,7 @@ function roomJoin(code) {                                     // a room from the
 }
 function mpKick(id) {                                         // host: send a player away (they can't come back to this room this session)
   const L = MP.links.get(id); if (!L || !MP.host) return;
-  mpSendTo(L, { t: "kick" }); vrBanner((L.tag || "A player") + " was removed", 2, 1);
+  mpSendTo(L, { t: "kick" }); vrBanner((L.tag || "A player") + " was removed", 2, 0);
   setTimeout(() => { mpDropLink(L); mpLobSync(true); mpLobbyDraw(); }, 400);
 }
 function mpKicked() {                                         // a guest: the host removed you
