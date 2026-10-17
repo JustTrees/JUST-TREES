@@ -107,7 +107,7 @@ function shape(m, sex) { const BELT = /Belt/.test(m.name), MB = sex === 'Female'
           MD[i * 3 + 1] = -(BW.drop || .018) * sw; MD[i * 3 + 2] = (BW.out || .08) * cw; mbAny = true; }   // bounce: the chest moves as one rounded piece (as in a bra), fading only at the edges, so it never goes pointy   // sq: drawn in toward the middle so they sit together
       }
       if (p.y > .95 && p.y < 1.1 && Math.abs(p.x) < .2) { const w = Math.max(0, 1 - Math.abs(p.y - 1.02) / .08); add.x -= p.x * .06 * w; add.z -= (p.z + .01) * .03 * w; }   // waist, below the rib cage only
-      const W0 = window.WB || { gx: .064, gy: .94, gz: -.03, gr: .135, gry: .145, grx: .105, gp: .058, gflat: .3, gox: 0, hip: .008, gpow: .6, sh: .08, shy: .012, th: .92, ca: .95, sl: 0, tr: .015, us: .3, ua: 1.45, la: .94 };
+      const W0 = window.WB || { gx: .064, gy: .94, gz: -.03, gr: .135, gry: .145, grx: .105, gp: .0464, gflat: .3, gox: 0, hip: .008, gpow: .6, sh: .08, shy: .012, th: .92, ca: .95, sl: 0, tr: .015, us: .3, ua: 1.45, la: .94 };
       const W = Object.assign({}, W0, WBC || {});
       for (const sx of [-1, 1]) {
         if (p.z < .02 && p.y > .7 && p.y < 1.08 && p.x * sx >= 0) {                               // rear: two round globes meeting in the middle
