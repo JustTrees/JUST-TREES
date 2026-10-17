@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.38";              // Just Trees 2.38
+const VERSION = "2.39";              // Just Trees 2.39
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -7878,6 +7878,8 @@ function vrFire() {
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
 function vrAvatar(dt) {
   const I = vr.I; if (!I) return;
+  if (charOn() && charSelf(dt, I)) { if (vr.avatar) vr.avatar.group.visible = false; return; }   // 2.39: you're your character (the old soldier only while it loads)
+  if (vr.meC) vr.meC.top.visible = false; if (vr.avatar) vr.avatar.group.visible = true;
   if (!vr.avatar) { const S = makeSoldier(MP.code ? UNIFORMS[mpUni(null)] : "green", 3); S.uniStyle = MP.code ? UNIFORMS[mpUni(null)] : "green"; S.rig.visible = false; S.B.head.children.forEach(c => { if (!c.isBone) c.visible = false; }); /* your own head, hood and mask stay hidden from you */ const cap = new THREE.Mesh(new THREE.CircleGeometry(.07, 20).rotateX(-Math.PI / 2), S.body.material); cap.position.y = .062; S.B.head.add(cap); /* closes the collar you look down past */ for (const sd of ["L", "R"]) S.B["hand" + sd].children.forEach(c => { if (!c.isBone) c.visible = false; }); /* your hands are drawn on their own, exactly on the controllers */ scene.add(S.group, S.shadow); vr.avatar = S; S.yaw = P.yaw; }
   const S = vr.avatar, f = _v1.set(-Math.sin(P.yaw), 0, -Math.cos(P.yaw));
   const sc = Math.max(.82, Math.min(1.15, vr.stand / 1.78));   // the avatar's eyes, not its neck, match your height S.group.scale.setScalar(sc);
@@ -8209,7 +8211,7 @@ function vrZoomRender() {
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
   { const f = _v1.set(0, 0, -1).applyQuaternion(q), vu = _v2.set(0, 1, 0).applyQuaternion(q), vrt = new THREE.Vector3(1, 0, 0).applyQuaternion(q);   // how far the view is tilted from level
     const lu = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y); U.uRoll.value = lu.lengthSq() > 1e-6 ? Math.atan2(lu.dot(vrt), lu.dot(vu)) : 0; }
-  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
+  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vr.meC && vr.meC.top, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
   xr.cameraAutoUpdate = false; xr.updateCamera(camera);
@@ -8579,6 +8581,43 @@ function charPanel(name, yaw, side) {                          // the Character 
   } else uiBtn(Pn, 50, 1076, 420, 76, "Done", () => vruiOpen("mode"), { primary: true, fs: 38, personal: true });
   return Pn;
 }
+// ---- 2.39: your own body is your character: the head (and hair, eyes) left out so you never see inside it, the hands are the gloves
+// on your controllers (the character's own hands fold away at the wrist), the forearms stretch a little if your reach is longer
+function charSelf(dt, I) {
+  const lk = MP.look, uni = UNIFORMS[mpUni(null)], key = lookStr(lk) + "|" + uni;
+  if (vr.meC && vr.meC.key !== key) { charDrop(vr.meC); vr.meC = null; }
+  if (!vr.meC) {
+    const C = charMake(lk, uni, true); if (!C) return false;
+    C.key = key; C.yaw = P.yaw; scene.add(C.top);
+    for (const m of C.meshes) if (m.userData.noHit || m.userData.tex === "eyes") m.visible = false;
+    for (const b of ["Head", "hand_l", "hand_r"]) C.by[b].scale.setScalar(.001);
+    C.fa = {}; for (const sd of ["l", "r"]) { const p = C.by["hand_" + sd].position, a = [Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)]; C.fa[sd] = a.indexOf(Math.max(...a)); }   // the forearm's long axis
+    vr.meC = C;
+  }
+  const C = vr.meC;
+  C.top.visible = state === "play" && !VRUI.on && !(MP.dead > 0);
+  if (!C.top.visible) return true;
+  const f = _chV.set(0, 0, -1).applyQuaternion(I.headQ), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  const sc = Math.max(.85, Math.min(1.2, vr.stand / (C.eyeUp + .07))); C.top.scale.setScalar(sc);   // the body's eyes at your eye height
+  const nx = I.head.x - fx * .13 * sc, nz = I.head.z - fz * .13 * sc, sp = Math.hypot(nx - C.x, nz - C.z) / Math.max(dt, 1e-3);   // your eyes sit just in front of its neck
+  C.speed += (Math.min(9, sp) - C.speed) * Math.min(1, dt * 6); C.x = nx; C.z = nz; C.y = P.y;
+  const dy = angDiff(yaw, C.yaw); if (Math.abs(dy) > .5 || C.speed > .5) C.yaw += dy * Math.min(1, dt * 4);   // the body turns once your head has turned far enough
+  C.top.position.set(C.x, C.y, C.z);
+  for (const sd of ["l", "r"]) { C.by["lowerarm_" + sd].scale.set(1, 1, 1); C.by["upperarm_" + sd].scale.set(1, 1, 1); }
+  charAnimate(C, { speed: C.speed, crouch: vr.crouchK, air: !P.gliding && !P.onGround && Math.abs(P.vy || 0) > 2.5, glide: !!P.gliding, dt });
+  if (P.gliding) { C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(I.head).sub(hp)); C.top.updateMatrixWorld(true); }   // flying: the body hangs from your head
+  for (const [sd, hand] of [["r", "right"], ["l", "left"]]) {
+    const h = I.hands[hand]; if (!h) continue;
+    const hp = handPose(hand, h), T = hp.pos.clone().add(_chV.set(sd === "r" ? .02 : -.02, .07, 0).applyQuaternion(hp.q));   // the wrist, just above the glove
+    const ua = C.by["upperarm_" + sd], la = C.by["lowerarm_" + sd], hd = C.by["hand_" + sd]; C.top.updateMatrixWorld(true);
+    const A = ua.getWorldPosition(new THREE.Vector3()), B = la.getWorldPosition(new THREE.Vector3()), l1 = A.distanceTo(B), l2 = B.distanceTo(hd.getWorldPosition(_chV2)), d = A.distanceTo(T);
+    if (d > (l1 + l2) * .985) {                               // a longer reach than the character's arm: the whole arm grows a little, then the forearm stretches, to meet the glove
+      const k1 = Math.min(1.15, d / .985 / (l1 + l2)); ua.scale.setScalar(k1); ua.updateMatrixWorld(true);
+      const k2 = Math.min(1.45, Math.max(1, (d / .985 - l1 * k1) / (l2 * k1))); la.scale.setComponent(C.fa[sd], k2); la.updateMatrixWorld(true); }
+    charArm(C, sd, T, null);
+  }
+  C.top.updateMatrixWorld(true); return true;
+}
 // ---- the pictures of people: the turning one on the Character screen, and the small ones on the lobby cards (each look drawn once and kept)
 const CHP = { scene: null, cam: null, pcam: null, rt: null, prt: null, C: null, key: "", yaw: .5, cache: new Map() };
 function chpScene() {
@@ -8654,7 +8693,7 @@ function vruiOpen(stage) {
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
   if (stage === "pause") { let k = 0; for (const w of VRUI.panels.pause.widgets) if (!(w.hide && w.hide())) w.y = 205 + k++ * 124; }   // only the buttons that apply, packed together
   vruiShow();
-  if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false;
+  if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false; if (vr.meC) vr.meC.top.visible = false;
   for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m, CAPT && CAPT.ring, CAPT && CAPT.flag]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
@@ -8844,7 +8883,7 @@ async function enterVR(menu) {
       if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
       vr.on = false; VR_ON = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; if (vrHandsObj) for (const k of ["L", "R"]) vrHandsObj[k].g.visible = false; vr.base = null; renderer.xr.setReferenceSpace(null);
       for (const o of [vr.gun, binos, wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
-      if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; }
+      if (vr.avatar) { disposeSoldier(vr.avatar); vr.avatar = null; } if (vr.meC) { charDrop(vr.meC); vr.meC = null; }
       if (state === "play") pause();
     });
     vrHeightCheck(menu === true ? "intro" : "start");          // first: set your height (standing or sitting)
@@ -11206,7 +11245,7 @@ function mpRecv(o, L) {
    player's real head and hands. Women have a slight bounce, timed to the steps. Kills: the body turns and falls back away from the shooter; a headshot
    kill snaps the head the way the bullet went first. Shots are checked against the body exactly as it is posed (hair and beards don't count; head or
    neck = headshot). Each headset starts with a random look and keeps it (jt-look); change it on the Character screen (2.38); it goes to the others with your tag.
-   PC and phone still show the old soldiers. */
+   PC and phone still show the old soldiers. 2.39: in VR your own body is your character too (charSelf). */
 const CHAR = { mdl: {}, tex: {}, loading: {}, failed: 0, clips: null };
 const CH_OUT = ["S", "R", "P"], CH_HAIR = [["Buzzed", "SimpleParted", "Long"], ["Long", "Buns", "BuzzedFemale"]];
 const CH_HAIRC = [0x1b1714, 0x5a3a22, 0xd9b26a, 0x9a3a1e, 0xb8b8b8], CH_SKIN = [[1, 1, 1], [.86, .74, .64], [.66, .5, .4], [.45, .32, .25], [.3, .21, .17]];
@@ -11292,7 +11331,7 @@ function charMake(lk, uni, pic) {                             // one person: the
   const by = {}; bones.forEach(b => by[b.name] = b);
   const C = { top, by, lk, uni, meshes: [], hit: [], morphs: [], mixer: new THREE.AnimationMixer(top), acts: {}, cur: null, curA: null, yaw: 0, x: 0, y: 0, z: 0, speed: 0, vy: 0, bm: null, bx: 0, bv: 0, deadT: -1 };
   const add = (MM, hair) => { const sk = new THREE.Skeleton(MM.js.bones.map(b => by[b.n]), MM.ibm);
-    for (const { M: mm, g } of MM.meshes) { const mesh = new THREE.SkinnedMesh(g, charMat(mm.kind, mm.tex, lk, uni)); mesh.frustumCulled = false; mesh.userData.noHit = hair || mm.kind === "hair";
+    for (const { M: mm, g } of MM.meshes) { const mesh = new THREE.SkinnedMesh(g, charMat(mm.kind, mm.tex, lk, uni)); mesh.frustumCulled = false; mesh.userData.noHit = hair || mm.kind === "hair"; mesh.userData.tex = mm.tex;
       top.add(mesh); mesh.bind(sk, new THREE.Matrix4()); C.meshes.push(mesh); if (g.morphAttributes.position) C.morphs.push(mesh); } };
   add(M, false); add(CHAR.mdl["hair_" + CH_HAIR[lk.s][lk.h]], true); if (lk.b && !lk.s) add(CHAR.mdl.hair_Beard, true);
   top.updateMatrixWorld(true);
