@@ -60,7 +60,7 @@ async def main():
             for k, u in imgs.items(): open(os.path.join(OUT, f"t239_{k}.jpg"), "wb").write(base64.b64decode(u.split(",")[1]))
         print(json.dumps(r))
         ok = (r["visible"] and r["soldierHidden"] and r["hairEyesHidden"] and .05 < r["neckBelowEyes"] < .35 and r["neckBehind"] < -.03 and r["wristToGlove"] < .14
-              and r["reach"]["wrist"] < .14 and r["crouch"].startswith("Crouch") and r["walk"] in ("Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop") and r["relook"]["changed"]
+              and r["reach"]["wrist"] < .14 and r["crouch"] in ("Idle_Loop", "Crouch_Idle_Loop") and r["walk"] in ("Walk_Loop", "Jog_Fwd_Loop", "Sprint_Loop") and r["relook"]["changed"]
               and not r["menu"]["inMenu"] and r["menu"]["after"] and not errs)
         print("errors", errs[:5] or "none"); print("PASS" if ok else "FAIL"); await b.close(); return ok
 try: res = asyncio.run(main())

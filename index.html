@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.41";              // Just Trees 2.41
+const VERSION = "2.42";              // Just Trees 2.42
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8598,23 +8598,17 @@ function charSelf(dt, I) {
   C.top.visible = state === "play" && !VRUI.on && !(MP.dead > 0);
   if (!C.top.visible) return true;
   const f = _chV.set(0, 0, -1).applyQuaternion(I.headQ), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
-  const sc = Math.max(.85, Math.min(1.2, vr.stand / (C.eyeUp + .07))); C.top.scale.setScalar(sc);   // the body's eyes at your eye height
-  const nx = I.head.x - fx * .13 * sc, nz = I.head.z - fz * .13 * sc, sp = Math.hypot(nx - C.x, nz - C.z) / Math.max(dt, 1e-3);   // your eyes sit just in front of its neck
-  C.speed += (Math.min(9, sp) - C.speed) * Math.min(1, dt * 6); C.x = nx; C.z = nz; C.y = P.y;
-  const dy = angDiff(yaw, C.yaw); if (Math.abs(dy) > .5 || C.speed > .5) C.yaw += dy * Math.min(1, dt * 4);   // the body turns once your head has turned far enough
-  C.top.position.set(C.x, C.y, C.z);
+  const sc = Math.max(.85, Math.min(1.2, vr.stand / C.rest.eye)); C.top.scale.setScalar(sc);   // the body's eyes at your eye height
   for (const sd of ["l", "r"]) { C.by["lowerarm_" + sd].scale.set(1, 1, 1); C.by["upperarm_" + sd].scale.set(1, 1, 1); }
-  charAnimate(C, { speed: C.speed, crouch: vr.crouchK, air: !P.gliding && !P.onGround && Math.abs(P.vy || 0) > 2.5, glide: !!P.gliding, dt });
-  if (P.gliding) { C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(I.head).sub(hp)); C.top.updateMatrixWorld(true); }   // flying: the body hangs from your head
+  if (P.gliding) {                                                // flying: laid out, the body hanging from your head
+    C.x = I.head.x - fx * .13 * sc; C.z = I.head.z - fz * .13 * sc; C.y = P.y; C.yaw += angDiff(yaw, C.yaw) * Math.min(1, dt * 4); C.top.position.set(C.x, C.y, C.z);
+    charAnimate(C, { speed: 0, crouch: 0, air: false, glide: true, dt });
+    C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(I.head).sub(hp)); C.top.updateMatrixWorld(true); C.px = undefined;
+  } else charVR(C, { head: I.head, headQ: I.headQ, feet: P.y, dt, air: !P.onGround && Math.abs(P.vy || 0) > 2.5, back: .13 });   // 2.42: your top half = your headset; legs step the way you move; ducking crouches the whole body
   for (const [sd, hand] of [["r", "right"], ["l", "left"]]) {
     const h = I.hands[hand]; if (!h) continue;
     const hp = handPose(hand, h), T = hp.pos.clone().add(_chV.set(sd === "r" ? .02 : -.02, .07, 0).applyQuaternion(hp.q));   // the wrist, just above the glove
-    const ua = C.by["upperarm_" + sd], la = C.by["lowerarm_" + sd], hd = C.by["hand_" + sd]; C.top.updateMatrixWorld(true);
-    const A = ua.getWorldPosition(new THREE.Vector3()), B = la.getWorldPosition(new THREE.Vector3()), l1 = A.distanceTo(B), l2 = B.distanceTo(hd.getWorldPosition(_chV2)), d = A.distanceTo(T);
-    if (d > (l1 + l2) * .985) {                               // a longer reach than the character's arm: the whole arm grows a little, then the forearm stretches, to meet the glove
-      const k1 = Math.min(1.15, d / .985 / (l1 + l2)); ua.scale.setScalar(k1); ua.updateMatrixWorld(true);
-      const k2 = Math.min(1.45, Math.max(1, (d / .985 - l1 * k1) / (l2 * k1))); la.scale.setComponent(C.fa[sd], k2); la.updateMatrixWorld(true); }
-    charArm(C, sd, T, null);
+    charArm(C, sd, T, null);                                  // (a longer reach than the arm: it grows a little to meet the glove)
   }
   C.top.updateMatrixWorld(true); return true;
 }
@@ -11343,7 +11337,7 @@ function charMake(lk, uni, pic) {                             // one person: the
   add(M, false); add(CHAR.mdl["hair_" + CH_HAIR[lk.s][lk.h]], true); if (lk.b && !lk.s) add(CHAR.mdl.hair_Beard, true);
   top.updateMatrixWorld(true);
   C.headRest = by.Head.getWorldQuaternion(new THREE.Quaternion()); C.handRest = { l: by.hand_l.getWorldQuaternion(new THREE.Quaternion()), r: by.hand_r.getWorldQuaternion(new THREE.Quaternion()) };
-  C.eyeUp = by.Head.getWorldPosition(new THREE.Vector3()).y;
+  C.eyeUp = by.Head.getWorldPosition(new THREE.Vector3()).y; charRest(C);
   if (!pic) { charHitPrep(C); scene.add(top); } return C;
 }
 function charDrop(C) { if (!C) return; scene.remove(C.top); C.mixer.stopAllAction(); for (const m of C.meshes) m.material.dispose(); }
@@ -11383,9 +11377,9 @@ function charAnimate(C, st) {
   else charPlay(C, "Sprint_Loop", Math.max(.8, Math.min(1.5, sp / CH_SPEED.Sprint_Loop)));
   C.mixer.update(dt); C.top.updateMatrixWorld(true); charBounce(C, dt, false);
 }
-function charBounce(C, dt, off) {                             // women: the chest lifts as the body rises between steps and drops on each landing (stays round)
+function charBounce(C, dt, off, yIn) {                             // women: the chest lifts as the body rises between steps and drops on each landing (stays round)
   if (!C.morphs.length) return;
-  const y = off ? 0 : C.by.spine_03.getWorldPosition(_chV).y; let v = 0;
+  const y = off ? 0 : yIn !== undefined ? yIn : C.by.spine_03.getWorldPosition(_chV).y; let v = 0;   // (2.42: VR bodies give the legs' own up-and-down)
   if (!off && dt > 0) {
     if (C.bm === null) C.bm = y; C.bm += (y - C.bm) * Math.min(1, dt / .45);
     const tgt = (y - C.bm) * .17, k = (2 * Math.PI * 5.5) ** 2, c = 2 * .55 * Math.sqrt(k);
@@ -11403,7 +11397,9 @@ const CH_R0 = (() => { const m = (a, b) => { const c = new THREE.Vector3().cross
   const ll = m(new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0)).multiply(m(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, -1, 0)).transpose());
   return { r: new THREE.Quaternion().setFromRotationMatrix(rr), l: new THREE.Quaternion().setFromRotationMatrix(ll) }; })();
 function charArm(C, sd, target, q) {
-  const ua = C.by["upperarm_" + sd], la = C.by["lowerarm_" + sd], hd = C.by["hand_" + sd]; C.top.updateMatrixWorld(true);
+  const ua = C.by["upperarm_" + sd], la = C.by["lowerarm_" + sd], hd = C.by["hand_" + sd]; ua.scale.set(1, 1, 1); la.scale.set(1, 1, 1); if (hd.scale.x > .01) hd.scale.set(1, 1, 1); C.top.updateMatrixWorld(true);
+  { const A0 = ua.getWorldPosition(new THREE.Vector3()), B0 = la.getWorldPosition(new THREE.Vector3()), m1 = A0.distanceTo(B0), m2 = B0.distanceTo(hd.getWorldPosition(new THREE.Vector3())), d0 = A0.distanceTo(target);
+    if (d0 > (m1 + m2) * .985) { const k1 = Math.min(1.15, d0 / .985 / (m1 + m2)); ua.scale.setScalar(k1); const k2 = Math.min(1.45, Math.max(1, (d0 / .985 - m1 * k1) / (m2 * k1))); if (hd.scale.x < .01) la.scale.setComponent(C.rest.fa[sd], k2); else hd.scale.setScalar(1 / k1); C.top.updateMatrixWorld(true); } }   // 2.42 (the forearm stretch only where the hand is the glove, so a seen hand never warps)
   const A = ua.getWorldPosition(new THREE.Vector3()), Bp = la.getWorldPosition(new THREE.Vector3()), Hp = hd.getWorldPosition(new THREE.Vector3());
   const l1 = A.distanceTo(Bp), l2 = Bp.distanceTo(Hp), d = target.clone().sub(A), dist = Math.max(Math.abs(l1 - l2) + .01, Math.min(l1 + l2 - .002, d.length())); d.normalize();
   const pole = new THREE.Vector3(sd === "r" ? -.7 : .7, -1, -.25).applyQuaternion(C.top.quaternion);
@@ -11472,21 +11468,98 @@ function charRemote(R, L, s, dt) {
   if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : null; charKill(C, killer, L.dieHead); }
     C.top.visible = C.deadT < PVP.bodyGone && state === "play"; if (C.top.visible) { charDeath(C, dt); } return true; }
   if (C.deadT >= 0) { C.deadT = -1; C.cur = null; C.curA = null; C.mixer.stopAllAction(); }
-  const nx = s.h.p.x - fx * .1, nz = s.h.p.z - fz * .1, sp = Math.hypot(nx - C.x, nz - C.z) / Math.max(dt, 1e-3);
-  C.speed += (Math.min(9, sp) - C.speed) * Math.min(1, dt * 6); C.vy = (s.feet - C.y) / Math.max(dt, 1e-3);
-  C.x = nx; C.z = nz; C.y = s.feet;
-  const dy = angDiff(yaw, C.yaw); if (Math.abs(dy) > .5 || C.speed > .5) C.yaw += dy * Math.min(1, dt * 4);
-  C.top.position.set(C.x, C.y, C.z);
-  const dc = Math.hypot(C.x - camera.position.x, C.z - camera.position.z);
+  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)));          // 2.42: their eyes at a standing player's eye height
+  const dc = Math.hypot(s.h.p.x - camera.position.x, s.h.p.z - camera.position.z);
   if (dc > scene.fog.far + 20) { C.top.visible = false; return true; }   // past the fog: not drawn (shots use the old shape)
   C.acc = (C.acc || 0) + dt; if (dc > 60 && C.acc < 1 / 20) return true;   // far off: posed 20 times a second
   const adt = C.acc; C.acc = 0;
-  const air = !s.gl && Math.abs(C.vy) > 2.5;
-  charAnimate(C, { speed: C.speed, crouch: Math.max(0, Math.min(1, (1.6 - (s.h.p.y - s.feet)) / .55)), air, glide: !!s.gl, dt: adt });
-  if (s.gl) { C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(s.h.p).sub(hp).multiplyScalar(1)); C.top.updateMatrixWorld(true); }   // flying: their body hangs from where their head really is
-  charHead(C, s.h.q);
+  C.vy = (s.feet - (C.fy === undefined ? s.feet : C.fy)) / Math.max(adt, 1e-3); C.fy = s.feet;
+  if (s.gl) {                                                     // flying: laid out, the body hanging from where their head really is
+    C.x = s.h.p.x - fx * .1; C.z = s.h.p.z - fz * .1; C.y = s.feet; C.yaw += angDiff(yaw, C.yaw) * Math.min(1, adt * 4); C.top.position.set(C.x, C.y, C.z);
+    charAnimate(C, { speed: 0, crouch: 0, air: false, glide: true, dt: adt });
+    C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(s.h.p).sub(hp)); C.top.updateMatrixWorld(true); charHead(C, s.h.q); C.px = undefined;
+  } else charVR(C, { head: s.h.p, headQ: s.h.q, feet: s.feet, dt: adt, air: Math.abs(C.vy) > 2.5 });   // 2.42: top half = their headset, legs step the way they move
   for (const [sd, h] of [["r", s.r], ["l", s.l]]) if (h) charArm(C, sd, h.p.clone().add(_chV.set(0, 0, .07).applyQuaternion(h.q)), h.q);
   C.top.updateMatrixWorld(true); return true;
+}
+// ---- 2.42 (Ron): VR bodies. The top half is the player: the chest stays under the headset, turning and bending as they really do (no
+// animation bob, lean or twist); only the legs are animated, stepping the way the player is actually moving (forward, sideways, backward:
+// the hips turn toward it, backward plays the steps in reverse); the torso always sits over the legs. Ducking crouches the whole body:
+// the hips drop and go back, the knees bend, the back leans, so the head never sinks into the body. Used for your own body and for the others.
+function charLimb(C, a, b, c, target, pole) {                  // two-bone reach (thigh-calf-foot or upperarm-lowerarm-hand)
+  const ua = C.by[a], la = C.by[b], hd = C.by[c];
+  const A = ua.getWorldPosition(new THREE.Vector3()), Bp = la.getWorldPosition(new THREE.Vector3()), Hp = hd.getWorldPosition(new THREE.Vector3());
+  const l1 = A.distanceTo(Bp), l2 = Bp.distanceTo(Hp), d = target.clone().sub(A), dist = Math.max(Math.abs(l1 - l2) + .01, Math.min(l1 + l2 - .002, d.length())); d.normalize();
+  const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  const pp = pole.clone().addScaledVector(d, -pole.dot(d)); if (pp.lengthSq() < 1e-8) pp.set(0, 0, 1); pp.normalize();
+  const E = A.clone().addScaledVector(d, cosA * l1).addScaledVector(pp, sinA * l1), T = A.clone().addScaledVector(d, dist);
+  _chQ.setFromUnitVectors(Bp.clone().sub(A).normalize(), E.clone().sub(A).normalize()); charSetWorldQ(ua, _chQ.multiply(ua.getWorldQuaternion(new THREE.Quaternion())));
+  const Hp2 = hd.getWorldPosition(new THREE.Vector3()), E2 = la.getWorldPosition(new THREE.Vector3());
+  _chQ.setFromUnitVectors(Hp2.sub(E2).normalize(), T.sub(E2).normalize()); charSetWorldQ(la, _chQ.multiply(la.getWorldQuaternion(new THREE.Quaternion())));
+}
+function charRest(C) {                                          // the standing heights this body was made with (measured as it's made, before any scale)
+  const y = n => C.by[n].getWorldPosition(new THREE.Vector3()).y;
+  C.rest = { pelv: y("pelvis"), sp1: y("spine_01"), neck: y("neck_01"), eye: y("Head") + .07, spine: C.by.spine_01.getWorldPosition(new THREE.Vector3()).distanceTo(C.by.neck_01.getWorldPosition(new THREE.Vector3())), fa: {} };
+  for (const sd of ["l", "r"]) { const p = C.by["hand_" + sd].position, a = [Math.abs(p.x), Math.abs(p.y), Math.abs(p.z)]; C.rest.fa[sd] = a.indexOf(Math.max(...a)); }   // each forearm's long axis
+}
+const _vrN = new THREE.Vector3(), _vrP = new THREE.Vector3(), _vrF = new THREE.Vector3(), _vrQ = new THREE.Quaternion();
+// st: { head (world), headQ, feet (ground y), dt, air (falling), crouchMax }
+function charVR(C, st) {
+  const dt = st.dt, R = C.rest, sc = C.top.scale.x, up = _chUp;
+  const f = _chV.set(0, 0, -1).applyQuaternion(st.headQ), hy = Math.atan2(-f.x, -f.z), hfx = -Math.sin(hy), hfz = -Math.cos(hy);
+  // where the neck is: just behind and below the eyes, turning with the head
+  _vrN.set(0, -(R.eye - R.neck) * sc, (st.back || .1) * sc).applyQuaternion(st.headQ).add(st.head);
+  // how they're moving (from where the neck goes), smoothed
+  if (C.px === undefined) { C.px = _vrN.x; C.pz = _vrN.z; C.vx = C.vz = 0; C.legYaw = hy; C.dirK = 1; }
+  const k = Math.min(1, dt * 6), ivx = (_vrN.x - C.px) / Math.max(dt, 1e-3), ivz = (_vrN.z - C.pz) / Math.max(dt, 1e-3); C.px = _vrN.x; C.pz = _vrN.z;
+  C.vx += (Math.max(-9, Math.min(9, ivx)) - C.vx) * k; C.vz += (Math.max(-9, Math.min(9, ivz)) - C.vz) * k;
+  const sp = Math.hypot(C.vx, C.vz); C.speed = sp;
+  // the legs face the way they move (up to 75° from where the head looks); moving backward, they face forward and step in reverse
+  let want = C.legYaw, dir = 1;
+  if (sp > .35 && !st.air) { const ty = Math.atan2(-C.vx, -C.vz), rel = angDiff(ty, hy);
+    if (Math.abs(rel) <= 1.92) want = hy + Math.max(-1.31, Math.min(1.31, rel));
+    else { dir = -1; want = hy + Math.max(-1.31, Math.min(1.31, angDiff(ty + Math.PI, hy))); } }
+  else if (Math.abs(angDiff(hy, C.legYaw)) > .5) C.turning = true;                  // standing still: the feet shuffle round once the head turns far enough
+  if (sp <= .35 && C.turning) { want = hy; if (Math.abs(angDiff(hy, C.legYaw)) < .08) C.turning = false; }
+  C.legYaw += angDiff(want, C.legYaw) * Math.min(1, dt * (sp > .35 ? 7 : 5)); C.dirK += (dir - C.dirK) * Math.min(1, dt * 8);
+  const back = C.dirK < 0, lfx = -Math.sin(C.legYaw), lfz = -Math.cos(C.legYaw);
+  // the legs' steps (no crouch moves: crouching is the body bending, below)
+  const ts = (n, v) => Math.max(.55, Math.min(1.5, sp / v)) * (back ? -1 : 1);
+  if (st.air) { const a = charPlay(C, "Jump_Loop", 0, .15); if (a) a.time = .35; }
+  else if (sp < .35) charPlay(C, "Idle_Loop");
+  else if (sp < 2.3) charPlay(C, "Walk_Loop", ts("w", CH_SPEED.Walk_Loop));
+  else if (sp < 5) charPlay(C, "Jog_Fwd_Loop", ts("j", CH_SPEED.Jog_Fwd_Loop));
+  else charPlay(C, "Sprint_Loop", ts("s", CH_SPEED.Sprint_Loop));
+  // the body stands where the neck is (feet slightly behind the head when bent over); first the steps as animated
+  C.top.rotation.order = "YXZ"; C.top.rotation.set(0, C.legYaw + Math.PI, 0); C.yaw = C.legYaw;
+  C.top.position.set(_vrN.x, st.feet, _vrN.z); C.mixer.update(dt); C.top.updateMatrixWorld(true);
+  const pel = C.by.pelvis, bob = pel.getWorldPosition(_vrP).y;                    // (the animation's own up-and-down, only for the bounce)
+  const feetW = st.air ? null : ["l", "r"].map(sd => ({ p: C.by["foot_" + sd].getWorldPosition(new THREE.Vector3()), q: C.by["foot_" + sd].getWorldQuaternion(new THREE.Quaternion()) }));
+  // the hips: as high as standing allows, lower when the head is lower (a crouch), and back behind the neck so the spine reaches it
+  const drop = Math.max(0, st.feet + R.neck * sc - _vrN.y);
+  let py = st.air ? _vrN.y - (R.neck - R.pelv) * sc : st.feet + R.pelv * sc - Math.min(drop * .62, (R.pelv - .38) * sc);
+  py = Math.min(py, _vrN.y - (R.sp1 - R.pelv) * sc - .05);
+  const vg = _vrN.y - (py + (R.sp1 - R.pelv) * sc), Ls = R.spine * sc, h = vg < Ls ? Math.sqrt(Ls * Ls - vg * vg) : 0;
+  const px = _vrN.x - hfx * h, pz = _vrN.z - hfz * h;                              // hips go back as the back bends forward
+  const fx0 = st.air ? _vrN.x : (px + _vrN.x) / 2, fz0 = st.air ? _vrN.z : (pz + _vrN.z) / 2;  // the feet under the middle of the body
+  C.top.position.set(fx0, st.feet, fz0); C.top.updateMatrixWorld(true);
+  if (feetW) for (const F of feetW) F.p.x += fx0 - _vrN.x, F.p.z += fz0 - _vrN.z;
+  pel.position.copy(pel.parent.worldToLocal(_chV2.set(px, py, pz))); pel.updateMatrixWorld(true);
+  // the legs reach the animated steps on the ground (knees forward)
+  if (feetW) { const kp = _chV3.set(lfx, .15, lfz);
+    ["l", "r"].forEach((sd, i) => { charLimb(C, "thigh_" + sd, "calf_" + sd, "foot_" + sd, feetW[i].p, kp); charSetWorldQ(C.by["foot_" + sd], feetW[i].q); }); }
+  // the spine: twist toward where the head looks (spread over three bones), then bend so the neck meets the real neck point
+  const tw = Math.max(-1.2, Math.min(1.2, angDiff(hy, C.legYaw)));
+  for (const b of ["spine_01", "spine_02", "spine_03"]) charRot(C, b, up, tw / 3);
+  [["spine_01", .4], ["spine_02", .5], ["spine_03", 1]].forEach(([b, w]) => {
+    const B = C.by[b], o = B.getWorldPosition(new THREE.Vector3()), nk = C.by.neck_01.getWorldPosition(new THREE.Vector3());
+    const a = nk.sub(o).normalize(), t = _vrN.clone().sub(o).normalize(); if (a.dot(t) > .99999) return;
+    _vrQ.setFromUnitVectors(a, t); const ang = 2 * Math.acos(Math.min(1, Math.abs(_vrQ.w))) * w, ax = new THREE.Vector3().crossVectors(a, t).normalize();
+    charRot(C, b, ax, ang);
+  });
+  charHead(C, st.headQ);
+  C.top.updateMatrixWorld(true); C.x = C.top.position.x; C.y = st.feet; C.z = C.top.position.z;
+  C.flyK = 0; charBounce(C, dt, false, bob);
 }
 // a PvP bot: the person stands where the old soldier stands (now hidden, apart from its rifle) and holds that rifle
 function charBot(S, dt) {
