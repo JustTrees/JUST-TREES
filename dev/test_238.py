@@ -13,7 +13,7 @@ PORT = 8784
 srv = subprocess.Popen([sys.executable, "-m", "http.server", str(PORT), "--bind", "127.0.0.1"], cwd=srvdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1.2)
 SETUP = """() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setVR(true); D.vr.on = true; D.setVRON(true);
   for (const el of document.body.children) if (el.tagName !== 'CANVAS') el.style.display = 'none';
-  try { localStorage.setItem('jt-age', 'ok'); localStorage.setItem('jt-rules', '2'); } catch (_) {}
+  try { localStorage.setItem('jt-age', 'ok'); } catch (_) {} D.VRUI.rulesOk = true;
   const T = D.THREE; window.T = T;
   // a camera standing where you stand in the menus, looking at yaw a (degrees, + is left), wide
   window.snap = (a, fov, asp) => { const c = D.camera, r = D.renderer; r.setSize(Math.round(560 * asp), 560); c.fov = fov; c.aspect = asp; c.updateProjectionMatrix();

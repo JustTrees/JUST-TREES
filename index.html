@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.39";              // Just Trees 2.39
+const VERSION = "2.40";              // Just Trees 2.40
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4023,7 +4023,7 @@ function* envGen(o) {
   return Object.assign(E0, { kinds, NV, BUSHV, recs, bushRecs, pickVar, setTreeSize, stretch, treeAt });
 }
 function generate() {
-  clearSquad();
+  clearSquad(); statPing();
   HIKEMAP = HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && set.huntMap === "endless" ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
@@ -8348,7 +8348,7 @@ function vruiParts() {
       ["Online, you talk live.", "In multiplayer you hear and speak to other players. Voice is never recorded or saved."],
       ["Be decent.", "No harassment, hate, threats, sexual talk, or sharing anyone's personal details (yours included). Don't cheat or wreck games on purpose."],
       ["You're in control.", "Mute anyone from the player list beside your map. Hosts can remove players. Keep your rooms Private to play only with friends."],
-      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open."],
+      ["Very little is kept.", "The game keeps only the gamer tag you choose. A Public room lists the host's tag, the mode and the code while it's open. Each new map adds one to a daily count (no names, nothing about you)."],
       ["Play safe.", "Clear the space around you, take breaks, and stop if you feel dizzy or unwell."],
       ["As-is.", "Just Trees is a free game provided as-is, without warranty. You play at your own risk."]];
     let y = 150; for (const [h, t] of L) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(h, 80, y); g.font = "28px sans-serif"; g.fillStyle = UIC.text; g.textAlign = "left";
@@ -8667,8 +8667,15 @@ function vruiShow() {                                           // which panels 
     height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"] }[st] || [];
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
+// ---- 2.40 (Ron): one anonymous count per map made (no name, no tag, nothing about you): how many maps a day, in VR / on a PC / on a phone, solo or online,
+// which mode. Only from the real game sites (never from tests or a saved copy). The Worker keeps a total per day; Ron asks Claude to read it.
+const STATS_URL = "https://just-trees-online.ron-bb2.workers.dev/count";
+function statPing() {
+  if (!/^(justtrees\.github\.io|just-trees-online\.ron-bb2\.workers\.dev)$/.test(location.hostname)) return;
+  try { fetch(STATS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dev: VR_ON ? "vr" : isTouch ? "phone" : "pc", on: MP.code ? 1 : 0, mode: gameMode }), keepalive: true }).catch(() => {}); } catch (e) {}
+}
 // open a menu stage: the menus are placed in front of wherever you are looking
-const RULES_V = "2";                                               // 2.29: new rules text, so everyone reads them once more
+const RULES_V = "3";                                               // 2.40: the daily map count is mentioned                                               // 2.29: new rules text, so everyone reads them once more
 const ageGet = () => { try { return localStorage.getItem("jt-age"); } catch (_) { return null; } };
 const ageOk = () => !!VRUI.ageOk || ageGet() === "ok", ageNo = () => !!VRUI.ageNo || ageGet() === "no";   // under age is remembered on this headset
 const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
