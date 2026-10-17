@@ -1,0 +1,21 @@
+<!doctype html><html><body style="margin:0"><script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from './node_modules/three/examples/jsm/loaders/GLTFLoader.js';
+window.THREE = THREE; const L = new GLTFLoader();
+window.load = async u => { const g = await L.loadAsync(u); return g; };
+window.shot = async (items, W, H, yaw) => {   // items: [{files:[..], x, setup(fn name)}]
+  const R = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); R.setSize(W, H); R.toneMapping = THREE.ACESFilmicToneMapping; R.outputEncoding = THREE.sRGBEncoding; document.body.appendChild(R.domElement);
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(0x9fb7c9);
+  sc.add(new THREE.HemisphereLight(0xdfeeff, 0x4a5a3a, 1.1)); const d = new THREE.DirectionalLight(0xfff2dd, 1.6); d.position.set(2, 4, 5); sc.add(d);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshLambertMaterial({ color: 0x5f7a45 })); ground.rotation.x = -Math.PI / 2; sc.add(ground);
+  let x = 0; const info = [];
+  for (const it of items) {
+    const grp = new THREE.Group(); grp.position.x = it.x; grp.rotation.y = yaw || 0; sc.add(grp);
+    for (const f of it.files) { const g = await L.loadAsync(f); let tris = 0; g.scene.traverse(o => { if (o.isMesh) { tris += (o.geometry.index ? o.geometry.index.count : o.geometry.attributes.position.count) / 3; if (it.fix) it.fix(o); } }); grp.add(g.scene); info.push([f, tris, g.animations.length]); if (window.after) window.after(g, it); }
+  }
+  const cam = new THREE.PerspectiveCamera(30, W / H, .05, 100); cam.position.set(window.CX || 0, 1.1, window.CZ || 9); cam.lookAt(window.CX || 0, .95, 0);
+  R.render(sc, cam); const u = R.domElement.toDataURL('image/jpeg', .9); R.dispose(); R.domElement.remove(); return { u, info };
+};
+window.ready = true;
+</script></body></html>

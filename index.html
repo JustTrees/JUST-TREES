@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.36";              // Just Trees 2.36
+const VERSION = "2.37";              // Just Trees 2.37
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -9300,7 +9300,7 @@ function disposeSoldier(S) {
 }
 /* ---- practice squad: one soldier in each camo, wandering near where you start ---- */
 const squad = [];
-function clearSquad() { for (const S of squad) disposeSoldier(S); squad.length = 0; }
+function clearSquad() { for (const S of squad) { disposeSoldier(S); charDrop(S.C); } squad.length = 0; }
 function okSpot(x, z) {
   return (!ENDLESS || Math.hypot(x, z) < 1100) && !inLava(x, z, 4) && Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && Math.hypot(x, z) < edgeR(x, z) - 8 && H(x, z) > water + .4 && slopeNy(x, z) > .8 && !nearObstacle(x, z, 1.2) && rockAround(x, z, .5) < H(x, z) + .3;
 }
@@ -9380,6 +9380,7 @@ function botRay(o, dir, minT = .5) {                                 // your sho
   for (const S of squad) {
     if (S.dead || !S.group.visible) continue;
     S.group.updateMatrixWorld(); const k = S.crouch > .5 ? .72 : 1;
+    if (S.C && charOn() && S.C.top.visible) { const h = charHit(S.C, o, dir); if (h && h.t > minT && h.t < best) { best = h.t; who = S; head = h.head; } continue; }   // 2.37: exactly the body you see
     for (const [y, r, h] of [[1.68, .16, true], [1.25, .32], [.8, .28], [.38, .22]]) {
       _aq.set(0, y * k, 0).applyMatrix4(S.group.matrixWorld); _ao.copy(o).sub(_aq);
       const b = _ao.dot(dir), c = _ao.lengthSq() - r * r, disc = b * b - c; if (disc < 0) continue;
@@ -9390,6 +9391,7 @@ function botRay(o, dir, minT = .5) {                                 // your sho
 }
 function damageBot(S, head) {
   if (!S || S.dead) return;
+  S.lastHead = !!head;
   const dmg = head ? BOT.headDmg : BOT.bodyDmg, s = Math.min(S.sh, dmg); S.sh -= s; S.hp -= dmg - s;
   if (S.state !== "combat") { S.state = "combat"; S.lastSeen = [P.x, P.z]; S.seenT = .5; }
   const el = $("scorePop");
@@ -9425,6 +9427,8 @@ function updateSquad(dt) {
   if (gameMode === "pvp" && !VR_ON) senseTick(dt);
   if (gameMode === "pvp" && !VR_ON && P.hp <= 0 && state === "play") pvpRespawn();
   for (const S of squad) {
+    if (S.C && !charOn()) { charDrop(S.C); S.C = null; S.group.traverse(o => { if (o.isMesh) o.visible = true; }); }   // (2.37: back to the soldier outside VR)
+    if (S.dead && S.C) { charBot(S, dt); S.shadow.visible = false; continue; }
     if (S.dead) {                                         // falls back and lies still
       S.deadT = Math.min(1, S.deadT + dt * 1.8); const e = S.deadT * S.deadT * (3 - 2 * S.deadT);
       S.group.position.set(S.x, S.y + e * .25, S.z); S.group.rotation.set(-e * 1.48, S.yaw + Math.PI, 0); S.shadow.material.opacity = .26 * (1 - e); continue;
@@ -9487,7 +9491,7 @@ function updateSquad(dt) {
     else { S.vy -= 22 * dt; S.y += S.vy * dt; S.onGround = false; if (S.y <= g) { S.y = g; S.vy = 0; S.onGround = true; } }
     const far = Math.hypot(S.x - camera.position.x, S.z - camera.position.z) > scene.fog.far + 20;
     S.group.visible = S.shadow.visible = !far;
-    if (!far) poseSoldier(S, dt);
+    if (!far) { poseSoldier(S, dt); if (charOn()) charBot(S, dt); } else if (S.C) S.C.top.visible = false;
   }
 }
 function damageZoneBot(S) { const dmg = 1 + Math.round(Math.min(1, zone.clock / ROUND_SEC) * 3), s = Math.min(S.sh, dmg); S.sh -= s; S.hp -= dmg - s; if (S.hp <= 0) { S.dead = true; updateBotHud(); if (!squad.some(o => !o.dead) && !pvp.won) { pvp.won = true; setTimeout(pvpWin, 1500); } } }
@@ -10647,7 +10651,7 @@ function mpWire(c, out) {
     pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && L.conn === c) { try { c.close(); } catch (e) {} } }); };
   watchIce();
   c.on("open", () => { clearTimeout(stuck); L.lastRx = performance.now(); L.open = true; mpOnUpdate(); if (!MP.host && id === mpHostId()) { MP.kills = MP.deaths = 0; }
-    try { c.send({ t: "hi", v: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col }); } catch (e) {} });
+    try { c.send({ t: "hi", v: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); } catch (e) {} });
   c.on("data", o => mpRecv(o, L));
   c.on("close", () => { if (L.conn === c) mpLinkGone(L, false); });
   c.on("error", () => {});
@@ -10708,7 +10712,7 @@ const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : 
 const mpTagOf = id => { if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
+function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
 function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the smaller one
   if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id)];
   for (const id of Object.keys(MP.teams)) if (!ids.includes(id)) delete MP.teams[id];
@@ -10804,7 +10808,7 @@ function mpNetBeast(A, dt) {                                 // guest: where the
 function mpNetLocal() { for (const A of beasts) if (A.net) { A.net = false; A.mode = "idle"; A.timer = 1 + Math.random() * 3; A.target = null; A.home = [A.x, A.z]; A.want = 0; A.hunter = false; A.rexOn = false; A.doomT = 0; A.rearT = 0; } MP.nb.clear(); }
 function mpRecv2(o, L) {                                     // 2.00's messages
   switch (o.t) {
-    case "me": if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; mpLobbyDraw(); return true;
+    case "me": if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look; mpLobbyDraw(); return true;
     case "lob": if (!MP.host) { MP.teams = o.teams || {}; mpApplySet(o.set); mpLobbyDraw(); } return true;
     case "ls": (L.lrx = L.lrx || []).push(Object.assign(o, { at: performance.now() })); if (L.lrx.length > 30) L.lrx.shift(); return true;
     case "bump": if (!L.bumped) { L.bumped = true; mpBumpFx(L); } return true;
@@ -11035,7 +11039,7 @@ function mpRecv(o, L) {
   L.lastRx = performance.now();
   if (o.t === "ping") return;
   if (o.t === "hi") {
-    L.v = o.v; if (typeof o.idx === "number") L.idx = o.idx; if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col;
+    L.v = o.v; if (typeof o.idx === "number") L.idx = o.idx; if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look;
     if (o.v !== VERSION) { L.bad = true; mpOnUpdate(); mpStatus("A friend has version " + o.v + " and you have " + VERSION + ". Both refresh the page, then try again."); return; }
     if (MP.host) {                                          // a new player: give them a colour, introduce the others, show them where we are
       if (L.idx < 1) { const used = new Set([...MP.links.values()].filter(q => q !== L).map(q => q.idx)); let k = 1; while (used.has(k) && k < MP_MAX - 1) k++; L.idx = k; }
@@ -11061,19 +11065,276 @@ function mpRecv(o, L) {
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { mpRemoteShot(o); return; }
   if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
-  if (o.t === "die") { if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
+  if (o.t === "die") { L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
   if (o.t === "bye") { try { L.conn.close(); } catch (e) {} return; }
 }
-// ---- the other players: soldiers in brown camo, posed from their head and hands, holding their gun
+/* ---------------- 2.37: people (VR only) — Quaternius Universal Base Characters, Modular Character Outfits (Fantasy) and Universal Animation Library (CC0) ----------------
+   Other players and the PvP bots are people: man or woman, Soldier · Ranger · Peasant, skin tone, hair and hair colour, beard (men); the Soldier wears
+   your uniform's camo. models/chars/*.bin are made by dev/chars (the body shapes Ron approved are baked in; see dev/chars/README.txt).
+   The legs and body move from the animations (idle, walk, jog, sprint, crouch, crouch walk, in the air, flying laid out); the head and the arms follow the
+   player's real head and hands. Women have a slight bounce, timed to the steps. Kills: the body turns and falls back away from the shooter; a headshot
+   kill snaps the head the way the bullet went first. Shots are checked against the body exactly as it is posed (hair and beards don't count; head or
+   neck = headshot). Until the Character screen is in, each headset picks a random look once and keeps it (jt-look); it goes to the others with your tag.
+   PC and phone still show the old soldiers. */
+const CHAR = { mdl: {}, tex: {}, loading: {}, failed: 0, clips: null };
+const CH_OUT = ["S", "R", "P"], CH_HAIR = [["Buzzed", "SimpleParted", "Long"], ["Long", "Buns", "BuzzedFemale"]];
+const CH_HAIRC = [0x1b1714, 0x5a3a22, 0xd9b26a, 0x9a3a1e, 0xb8b8b8], CH_SKIN = [[1, 1, 1], [.86, .74, .64], [.66, .5, .4], [.45, .32, .25], [.3, .21, .17]];
+const CH_CAMO = { brown: [0xb59a6c, 0x7a5a3a, 0x4a3726, 0x9c8a5a], green: [0x5d6b3a, 0x3c4a28, 0x7d7a4f, 0x2b3220], grey: [0x8d9196, 0x5f6368, 0xb4b7b9, 0x3e4246],
+  snow: [0xe9eef0, 0xc9d1d6, 0xa9b3ba, 0xf6f8f9], black: [0x2a2c2e, 0x17191a, 0x3e4245, 0x0c0d0e] };
+const CH_SPEED = { Walk_Loop: 1.45, Jog_Fwd_Loop: 3.6, Sprint_Loop: 6.2, Crouch_Fwd_Loop: 1.2 };   // how fast each move travels, so the feet don't slide
+const lookStr = k => [k.s, k.o, k.k, k.h, k.c, k.b].join(".");
+function lookParse(s) { const a = String(s || "").split(".").map(Number); if (a.length < 6 || a.some(v => !(v >= 0 && v < 9))) return null; return { s: a[0] & 1, o: a[1] % 3, k: a[2] % 5, h: a[3] % 3, c: a[4] % 5, b: a[5] & 1 }; }
+function lookRandom(r = Math.random) { const s = r() < .5 ? 0 : 1; return { s, o: Math.floor(r() * 3), k: Math.floor(r() * 5), h: Math.floor(r() * 3), c: Math.floor(r() * 5), b: s === 0 && r() < .4 ? 1 : 0 }; }
+MP.look = (() => { try { return lookParse(localStorage.getItem("jt-look")); } catch (_) { return null; } })() || lookRandom();
+try { localStorage.setItem("jt-look", lookStr(MP.look)); } catch (_) {}
+const charOn = () => VR_ON && CHAR.failed < 3 && location.protocol !== "file:";
+function charParse(buf) {
+  const dv = new DataView(buf), jl = dv.getUint32(4, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, jl))), B = 8 + jl;
+  if (js.clips) { const clips = {}; for (const c of js.clips) clips[c.n] = new THREE.AnimationClip(c.n, c.d, c.tr.map(e => { const t = new Float32Array(buf, B + e.t, e.nk);
+    if (e.p === "q") { const q = new Int16Array(buf, B + e.v, e.nk * 4), v = new Float32Array(e.nk * 4); for (let i = 0; i < v.length; i++) v[i] = q[i] / 32767; return new THREE.QuaternionKeyframeTrack(e.b + ".quaternion", t, v); }
+    return new THREE.VectorKeyframeTrack(e.b + ".position", t, new Float32Array(buf, B + e.v, e.nk * 3)); })); return { clips }; }
+  const meshes = js.meshes.map(M => {
+    const n = M.n, [mn, mx] = M.bb, pq = new Int16Array(buf, B + M.pos, n * 3), P = new Float32Array(n * 3), n4 = new Int8Array(buf, B + M.nrm, n * 4), N = new Int8Array(n * 3);
+    for (let i = 0; i < n * 3; i++) { const a = i % 3; P[i] = mn[a] + (pq[i] + 32768) / 65535 * (mx[a] - mn[a]); N[i] = n4[(i - a) / 3 * 4 + a]; }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(P, 3)); g.setAttribute("normal", new THREE.BufferAttribute(N, 3, true));
+    g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(buf, B + M.uv, n * 2), 2));
+    g.setAttribute("skinIndex", new THREE.BufferAttribute(new Uint8Array(buf, B + M.ji, n * 4), 4)); g.setAttribute("skinWeight", new THREE.BufferAttribute(new Uint8Array(buf, B + M.jw, n * 4), 4, true));
+    g.setIndex(new THREE.BufferAttribute(M.i32 ? new Uint32Array(buf, B + M.ix, M.ni) : new Uint16Array(buf, B + M.ix, M.ni), 1));
+    if (M.morph) { g.morphAttributes.position = M.morph.map(o => { const q = new Int16Array(buf, B + o, n * 3), f = new Float32Array(n * 3); for (let i = 0; i < f.length; i++) f[i] = q[i] / 1e4; return new THREE.BufferAttribute(f, 3); }); g.morphTargetsRelative = true; }
+    g.computeBoundingSphere(); return { M, g };
+  });
+  const ibm = []; for (let i = 0; i < js.ibm.length; i += 16) ibm.push(new THREE.Matrix4().fromArray(js.ibm, i));
+  return { js, meshes, ibm };
+}
+function charLoad(key) {                                      // fetch once; the shared moves come with the first one
+  if (CHAR.mdl[key] || CHAR.loading[key] || location.protocol === "file:") return;
+  CHAR.loading[key] = true;
+  fetch("models/chars/" + key + ".bin").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { const M = charParse(buf); if (key === "anims") CHAR.clips = M.clips; else CHAR.mdl[key] = M; })
+    .catch(() => { CHAR.failed++; CHAR.loading[key] = false; });
+}
+function charTex(k) {
+  if (CHAR.tex[k]) return CHAR.tex[k];
+  const t = new THREE.TextureLoader().load("models/chars/tex_" + k + ".jpg"); t.anisotropy = 2; return CHAR.tex[k] = t;
+}
+const charKey = lk => (lk.s ? "F_" : "M_") + CH_OUT[lk.o];
+function charReady(lk) {                                      // everything this look needs is loaded (and asks for whatever isn't)
+  const need = ["anims", charKey(lk), "hair_" + CH_HAIR[lk.s][lk.h]].concat(lk.b && !lk.s ? ["hair_Beard"] : []);
+  let ok = true; for (const k of need) { if (k === "anims" ? !CHAR.clips : !CHAR.mdl[k]) { ok = false; charLoad(k); } }
+  if (ok) for (const k of need) if (k !== "anims") for (const { M } of CHAR.mdl[k].meshes) if (!charTex(M.tex).image) ok = false;   // and its pictures
+  return ok;
+}
+const CH_CAMO_VS = "#include <common>\nvarying vec3 vOP;", CH_CAMO_FS = `#include <common>
+varying vec3 vOP; uniform vec3 uC[4]; uniform vec3 uLeather; uniform float uLeatherOn;
+float chH(vec3 p){ return fract(sin(dot(p, vec3(12.9898,78.233,37.719)))*43758.5453); }
+float chN(vec3 p){ vec3 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(mix(chH(i),chH(i+vec3(1,0,0)),f.x),mix(chH(i+vec3(0,1,0)),chH(i+vec3(1,1,0)),f.x),f.y),mix(mix(chH(i+vec3(0,0,1)),chH(i+vec3(1,0,1)),f.x),mix(chH(i+vec3(0,1,1)),chH(i+vec3(1,1,1)),f.x),f.y),f.z); }
+float chF(vec3 p){ return .55 * chN(p) + .3 * chN(p * 2.13 + 5.) + .15 * chN(p * 4.7 + 9.); }
+vec3 chHSV(vec3 c){ vec4 K=vec4(0.,-1./3.,2./3.,-1.); vec4 p=mix(vec4(c.bg,K.wz),vec4(c.gb,K.xy),step(c.b,c.g)); vec4 q=mix(vec4(p.xyw,c.r),vec4(c.r,p.yzx),step(p.x,c.r)); float d=q.x-min(q.w,q.y); return vec3(abs(q.z+(q.w-q.y)/(6.*d+1e-10)),d/(q.x+1e-10),q.x); }`;
+const CH_CAMO_MAP = `#include <map_fragment>
+{ vec3 h = chHSV(diffuseColor.rgb); float v = h.z, sat = h.y;
+  bool green = h.x > .16 && h.x < .5 && sat > .18, cream = v > .55 && sat < .32, dark = v < .3 && !(h.x > .15 && h.x < .5), metal = sat < .15 && v > .6 && !cream;
+  vec3 p = vOP * 13.0; vec3 wq = vec3(chF(p * .6 + 1.3), chF(p * .6 + 7.1), chF(p * .6 + 3.7)); p += (wq - .5) * 2.4;   /* woodland camo: small jagged layered patches */
+  float a = chF(p + 3.1), b = chF(p * 1.2 + 11.7), c2 = chF(p * .85 + 23.3);
+  vec3 cam = a > .6 ? uC[2] : b > .585 ? uC[1] : c2 > .6 ? uC[3] : uC[0];
+  if (green || cream || dark) { float ref = green ? .42 : cream ? .78 : .2; diffuseColor.rgb = cam * clamp(v / ref, .55, 1.25); }
+  else if (!metal && uLeatherOn > .5) diffuseColor.rgb = uLeather * clamp(v / .5, .5, 1.3);
+}`;
+function charMat(kind, tex, lk, uni) {
+  const m = new THREE.MeshLambertMaterial({ map: charTex(tex), side: THREE.DoubleSide });
+  if (kind === "skin") m.color.setRGB(...CH_SKIN[lk.k]);
+  else if (kind === "hair") m.color.set(CH_HAIRC[lk.c]).multiplyScalar(1.9);
+  else if (kind === "shoe") m.color.setRGB(.32, .29, .25);
+  else if (kind === "cloth" && lk.o === 0) {                   // the Soldier: your uniform's camo
+    const C = (CH_CAMO[uni] || CH_CAMO.green).map(c => new THREE.Color(c)), lea = new THREE.Color(0x2e2a22);
+    m.onBeforeCompile = sh => { sh.uniforms.uC = { value: C }; sh.uniforms.uLeather = { value: lea }; sh.uniforms.uLeatherOn = { value: 1 };
+      sh.vertexShader = sh.vertexShader.replace("#include <common>", CH_CAMO_VS).replace("#include <begin_vertex>", "#include <begin_vertex>\nvOP = position;");
+      sh.fragmentShader = sh.fragmentShader.replace("#include <common>", CH_CAMO_FS).replace("#include <map_fragment>", CH_CAMO_MAP); };
+    m.customProgramCacheKey = () => "chcamo";
+  }
+  return grade(m);
+}
+const _chQ = new THREE.Quaternion(), _chQ2 = new THREE.Quaternion(), _chV = new THREE.Vector3(), _chV2 = new THREE.Vector3(), _chV3 = new THREE.Vector3(), _chM = new THREE.Matrix4(), _chUp = new THREE.Vector3(0, 1, 0);
+function charMake(lk, uni) {                                  // one person: their own bones on the shared shapes
+  if (!charReady(lk)) return null;
+  const M = CHAR.mdl[charKey(lk)], top = new THREE.Group();
+  const bones = M.js.bones.map(b => { const o = new THREE.Bone(); o.name = b.n; o.position.fromArray(b.t); o.quaternion.fromArray(b.r); o.scale.fromArray(b.s); return o; });
+  M.js.bones.forEach((b, i) => (b.p < 0 ? top : bones[b.p]).add(bones[i]));
+  const by = {}; bones.forEach(b => by[b.name] = b);
+  const C = { top, by, lk, uni, meshes: [], hit: [], morphs: [], mixer: new THREE.AnimationMixer(top), acts: {}, cur: null, curA: null, yaw: 0, x: 0, y: 0, z: 0, speed: 0, vy: 0, bm: null, bx: 0, bv: 0, deadT: -1 };
+  const add = (MM, hair) => { const sk = new THREE.Skeleton(MM.js.bones.map(b => by[b.n]), MM.ibm);
+    for (const { M: mm, g } of MM.meshes) { const mesh = new THREE.SkinnedMesh(g, charMat(mm.kind, mm.tex, lk, uni)); mesh.frustumCulled = false; mesh.userData.noHit = hair || mm.kind === "hair";
+      top.add(mesh); mesh.bind(sk, new THREE.Matrix4()); C.meshes.push(mesh); if (g.morphAttributes.position) C.morphs.push(mesh); } };
+  add(M, false); add(CHAR.mdl["hair_" + CH_HAIR[lk.s][lk.h]], true); if (lk.b && !lk.s) add(CHAR.mdl.hair_Beard, true);
+  top.updateMatrixWorld(true);
+  C.headRest = by.Head.getWorldQuaternion(new THREE.Quaternion()); C.handRest = { l: by.hand_l.getWorldQuaternion(new THREE.Quaternion()), r: by.hand_r.getWorldQuaternion(new THREE.Quaternion()) };
+  C.eyeUp = by.Head.getWorldPosition(new THREE.Vector3()).y;
+  charHitPrep(C); scene.add(top); return C;
+}
+function charDrop(C) { if (!C) return; scene.remove(C.top); C.mixer.stopAllAction(); for (const m of C.meshes) m.material.dispose(); }
+function charPlay(C, name, ts = 1, fade = .22) {
+  const clip = CHAR.clips[name]; if (!clip) return;
+  const a = C.acts[name] || (C.acts[name] = C.mixer.clipAction(clip)); a.timeScale = ts;
+  if (C.cur === name) return a;
+  a.reset(); a.setLoop(THREE.LoopRepeat); a.play(); if (C.curA && fade > 0) C.curA.crossFadeTo(a, fade, false); else if (C.curA) C.curA.stop();
+  C.cur = name; C.curA = a; return a;
+}
+function charRot(C, name, axis, ang) {                        // turn a bone about a world axis
+  const b = C.by[name]; if (!b) return; b.parent.updateMatrixWorld(true); b.parent.getWorldQuaternion(_chQ);
+  _chQ2.setFromAxisAngle(axis, ang); b.quaternion.premultiply(_chQ.clone().invert().multiply(_chQ2).multiply(_chQ)); b.updateMatrixWorld(true);
+}
+function charSetWorldQ(b, q) { b.parent.updateMatrixWorld(true); const pq = b.parent.getWorldQuaternion(new THREE.Quaternion()); b.quaternion.copy(pq.invert().multiply(q)); b.updateMatrixWorld(true); }
+// st: { speed, crouch (0..1), air, glide, yaw, travel (glide direction), dt }
+function charAnimate(C, st) {
+  const dt = st.dt;
+  if (C.deadT >= 0) { charDeath(C, dt); return; }
+  C.top.rotation.order = "YXZ"; C.top.rotation.set(0, C.yaw + Math.PI, 0);
+  if (st.glide) {                                             // flying: laid out like Peter Pan, arms out, legs back, head up
+    charPlay(C, "A_TPose", 0, .15); C.mixer.update(dt);
+    C.flyK = Math.min(1, (C.flyK || 0) + dt * 3); const k = C.flyK, s = k * k * (3 - 2 * k);
+    C.top.rotation.x = 1.3 * s; C.top.updateMatrixWorld(true);
+    const R = _chV.set(1, 0, 0).applyQuaternion(C.top.quaternion).clone(), U = _chV2.set(0, 1, 0).applyQuaternion(C.top.quaternion).clone(), F = _chV3.set(0, 0, 1).applyQuaternion(C.top.quaternion).clone();
+    charRot(C, "neck_01", R, -.45 * s); charRot(C, "Head", R, -.55 * s);
+    for (const sd of ["l", "r"]) { const g = sd === "l" ? 1 : -1; charRot(C, "thigh_" + sd, R, -.08 * s); charRot(C, "calf_" + sd, R, .3 * s); charRot(C, "foot_" + sd, R, .6 * s); charRot(C, "upperarm_" + sd, U, g * .25 * s); charRot(C, "upperarm_" + sd, F, g * .1 * s); }
+    charBounce(C, dt, true); return;
+  }
+  C.flyK = 0;
+  const sp = st.speed, cr = st.crouch > .5;
+  if (st.air) { const a = charPlay(C, "Jump_Loop", 0, .15); if (a) a.time = .35; }   // in the air (dropping, not gliding)
+  else if (cr) { if (sp > .35) charPlay(C, "Crouch_Fwd_Loop", Math.max(.6, Math.min(1.6, sp / CH_SPEED.Crouch_Fwd_Loop))); else charPlay(C, "Crouch_Idle_Loop"); }
+  else if (sp < .35) charPlay(C, "Idle_Loop");
+  else if (sp < 2.3) charPlay(C, "Walk_Loop", Math.max(.55, Math.min(1.5, sp / CH_SPEED.Walk_Loop)));
+  else if (sp < 5) charPlay(C, "Jog_Fwd_Loop", Math.max(.7, Math.min(1.4, sp / CH_SPEED.Jog_Fwd_Loop)));
+  else charPlay(C, "Sprint_Loop", Math.max(.8, Math.min(1.5, sp / CH_SPEED.Sprint_Loop)));
+  C.mixer.update(dt); C.top.updateMatrixWorld(true); charBounce(C, dt, false);
+}
+function charBounce(C, dt, off) {                             // women: the chest lifts as the body rises between steps and drops on each landing (stays round)
+  if (!C.morphs.length) return;
+  const y = off ? 0 : C.by.spine_03.getWorldPosition(_chV).y; let v = 0;
+  if (!off && dt > 0) {
+    if (C.bm === null) C.bm = y; C.bm += (y - C.bm) * Math.min(1, dt / .45);
+    const tgt = (y - C.bm) * .17, k = (2 * Math.PI * 5.5) ** 2, c = 2 * .55 * Math.sqrt(k);
+    for (let i = 0; i < 6; i++) { const h = dt / 6; C.bv += (-k * (C.bx - tgt) - c * C.bv) * h; C.bx += C.bv * h; }
+    v = Math.max(-1.3, Math.min(1.5, C.bx / .01));
+  } else { C.bm = null; C.bx = C.bv = 0; }
+  for (const m of C.morphs) { m.morphTargetInfluences[0] = Math.max(0, v); m.morphTargetInfluences[1] = Math.max(0, -v); }
+}
+function charHead(C, q) {                                     // they look where they look
+  _chQ2.setFromAxisAngle(_chUp, Math.PI); charSetWorldQ(C.by.Head, _chQ.copy(q).multiply(_chQ2).multiply(C.headRest));
+}
+// the hands go where the real hands are (two-bone reach; the elbow points down and out)
+const CH_R0 = (() => { const m = (a, b) => { const c = new THREE.Vector3().crossVectors(a, b); return new THREE.Matrix4().makeBasis(a, b, c); };
+  const rr = m(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0)).multiply(m(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, -1, 0)).transpose());
+  const ll = m(new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0)).multiply(m(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, -1, 0)).transpose());
+  return { r: new THREE.Quaternion().setFromRotationMatrix(rr), l: new THREE.Quaternion().setFromRotationMatrix(ll) }; })();
+function charArm(C, sd, target, q) {
+  const ua = C.by["upperarm_" + sd], la = C.by["lowerarm_" + sd], hd = C.by["hand_" + sd]; C.top.updateMatrixWorld(true);
+  const A = ua.getWorldPosition(new THREE.Vector3()), Bp = la.getWorldPosition(new THREE.Vector3()), Hp = hd.getWorldPosition(new THREE.Vector3());
+  const l1 = A.distanceTo(Bp), l2 = Bp.distanceTo(Hp), d = target.clone().sub(A), dist = Math.max(Math.abs(l1 - l2) + .01, Math.min(l1 + l2 - .002, d.length())); d.normalize();
+  const pole = new THREE.Vector3(sd === "r" ? -.7 : .7, -1, -.25).applyQuaternion(C.top.quaternion);
+  const cosA = (l1 * l1 + dist * dist - l2 * l2) / (2 * l1 * dist), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+  const pp = pole.addScaledVector(d, -pole.dot(d)); if (pp.lengthSq() < 1e-8) pp.set(0, -1, 0); pp.normalize();
+  const E = A.clone().addScaledVector(d, cosA * l1).addScaledVector(pp, sinA * l1), T = A.clone().addScaledVector(d, dist);
+  _chQ.setFromUnitVectors(Bp.clone().sub(A).normalize(), E.clone().sub(A).normalize()); charSetWorldQ(ua, _chQ.multiply(ua.getWorldQuaternion(new THREE.Quaternion())));
+  const Hp2 = hd.getWorldPosition(new THREE.Vector3()), E2 = la.getWorldPosition(new THREE.Vector3());
+  _chQ.setFromUnitVectors(Hp2.sub(E2).normalize(), T.sub(E2).normalize()); charSetWorldQ(la, _chQ.multiply(la.getWorldQuaternion(new THREE.Quaternion())));
+  if (q) charSetWorldQ(hd, _chQ.copy(q).multiply(CH_R0[sd]).multiply(C.handRest[sd]));
+}
+// a kill: the body turns as it drops and falls back, away from the shooter; a headshot snaps the head the way the bullet went first
+function charKill(C, from, head) {
+  if (C.deadT >= 0) return; C.deadT = 0; C.dHead = !!head; C.dYaw0 = C.yaw;
+  let to = C.yaw; if (from) { const dx = from.x - C.x, dz = from.z - C.z; if (dx * dx + dz * dz > .01) to = Math.atan2(-dx, -dz); }   // ends up facing the shooter, so the fall goes away from them
+  C.dYaw1 = C.dYaw0 + angDiff(to, C.dYaw0); C.dTravel = from ? _chV.set(C.x - from.x, 0, C.z - from.z).normalize().clone() : null;
+  charPlay(C, C.dHead ? "Hit_Head" : "Death01", 1, .12); if (!C.dHead) C.acts.Death01.setLoop(THREE.LoopOnce); else C.acts.Hit_Head.setLoop(THREE.LoopOnce);
+  for (const a of Object.values(C.acts)) a.clampWhenFinished = true;
+}
+function charDeath(C, dt) {
+  C.deadT += dt; const t = C.deadT;
+  if (C.dHead && t > .22 && C.cur !== "Death01") { const a = charPlay(C, "Death01", 1.25, .25); a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; a.time = .25; }
+  const tw = Math.max(0, Math.min(1, (t - .05) / .4)), s = tw * tw * (3 - 2 * tw);
+  C.top.rotation.set(0, C.dYaw0 + (C.dYaw1 - C.dYaw0) * s + Math.PI, 0); C.mixer.update(dt); C.top.updateMatrixWorld(true);
+  if (C.dHead) { const sn = Math.min(1, t / .07) * Math.max(0, 1 - Math.max(0, t - .12) / .5);
+    if (sn > 0 && C.dTravel) { const ax = new THREE.Vector3().crossVectors(_chUp, C.dTravel).normalize(); charRot(C, "neck_01", ax, .35 * sn); charRot(C, "Head", ax, .45 * sn); charRot(C, "spine_03", ax, .12 * sn); } }
+  charBounce(C, dt, true);
+}
+// exact hits: a quick check per body part (a box that moves with its bone), then the triangles of the parts the shot passes near
+function charHitPrep(C) {
+  for (const m of C.meshes) {
+    if (m.userData.noHit) continue;
+    const G = m.geometry, P = G.attributes.position, J = G.attributes.skinIndex, W = G.attributes.skinWeight, ix = G.index.array, groups = new Map();
+    const dom = v => { let best = -1, bj = 0; for (let k = 0; k < 4; k++) { const w = W.array[v * 4 + k]; if (w > best) { best = w; bj = J.array[v * 4 + k]; } } return bj; };
+    for (let t = 0; t < ix.length; t += 3) { const a = dom(ix[t]), b = dom(ix[t + 1]), c = dom(ix[t + 2]), bj = a === b || a === c ? a : b === c ? b : a; let L = groups.get(bj); if (!L) groups.set(bj, L = []); L.push(ix[t], ix[t + 1], ix[t + 2]); }
+    for (const [bj, tris] of groups) { const Mx = new THREE.Matrix4().multiplyMatrices(m.skeleton.boneInverses[bj], m.bindMatrix), box = new THREE.Box3();
+      for (const i of tris) box.expandByPoint(_chV.fromBufferAttribute(P, i).applyMatrix4(Mx)); box.expandByScalar(.04);
+      const bone = m.skeleton.bones[bj]; C.hit.push({ m, bone, head: bone.name === "Head" || bone.name === "neck_01", tris: Uint32Array.from(tris), box }); }
+  }
+}
+const _chRay = new THREE.Ray(), _chA = new THREE.Vector3(), _chB = new THREE.Vector3(), _chC = new THREE.Vector3(), _chP = new THREE.Vector3();
+function charHit(C, from, dir, maxT = 1e9) {                  // the nearest point the shot touches, or null: { t, head }
+  if (!C || !C.top.visible || C.deadT >= 0) return null;
+  _chRay.set(from, dir); if (_chRay.distanceSqToPoint(_chV.set(C.x, C.y + 1, C.z)) > 2.6 * 2.6) return null;   // nowhere near
+  C.top.updateMatrixWorld(true); let best = null; const cache = new Map();
+  const at = (m, i, out) => { const key = m.id * 1e6 + i; let p = cache.get(key);
+    if (!p) { p = _chV2.fromBufferAttribute(m.geometry.attributes.position, i).clone(); const MA = m.geometry.morphAttributes.position, MI = m.morphTargetInfluences;
+      if (MA && MI) for (let k = 0; k < MA.length; k++) if (MI[k]) { p.x += MA[k].getX(i) * MI[k]; p.y += MA[k].getY(i) * MI[k]; p.z += MA[k].getZ(i) * MI[k]; }
+      m.boneTransform(i, p); p.applyMatrix4(m.matrixWorld); cache.set(key, p); } return out.copy(p); };
+  for (const h of C.hit) {
+    _chM.copy(h.m.matrixWorld).multiply(h.m.bindMatrixInverse).multiply(h.bone.matrixWorld).invert();
+    _chRay.set(from, dir).applyMatrix4(_chM); if (!_chRay.intersectsBox(h.box)) continue;
+    _chRay.set(from, dir);
+    for (let k = 0; k < h.tris.length; k += 3) { at(h.m, h.tris[k], _chA); at(h.m, h.tris[k + 1], _chB); at(h.m, h.tris[k + 2], _chC);
+      if (!_chRay.intersectTriangle(_chA, _chB, _chC, false, _chP)) continue; const t = _chP.distanceTo(from); if (t < maxT && (!best || t < best.t)) best = { t, head: h.head }; }
+  }
+  return best;
+}
+// another player: body under their head, legs from how they move, head and arms from their real head and hands
+function charRemote(R, L, s, dt) {
+  const lk = L.look || (L.look = lookRandom(mulberry32(String(L.id).split("").reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7))));
+  if (R.C && (R.C.lk !== lk || R.C.uni !== UNIFORMS[mpUni(L)])) { charDrop(R.C); R.C = null; }   // they changed their look
+  if (!R.C) { R.C = charMake(lk, UNIFORMS[mpUni(L)]); if (!R.C) return false; }
+  const C = R.C, f = _chV.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+  C.top.visible = state === "play";
+  if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : null; charKill(C, killer, L.dieHead); }
+    C.top.visible = C.deadT < PVP.bodyGone && state === "play"; if (C.top.visible) { charDeath(C, dt); } return true; }
+  if (C.deadT >= 0) { C.deadT = -1; C.cur = null; C.curA = null; C.mixer.stopAllAction(); }
+  const nx = s.h.p.x - fx * .1, nz = s.h.p.z - fz * .1, sp = Math.hypot(nx - C.x, nz - C.z) / Math.max(dt, 1e-3);
+  C.speed += (Math.min(9, sp) - C.speed) * Math.min(1, dt * 6); C.vy = (s.feet - C.y) / Math.max(dt, 1e-3);
+  C.x = nx; C.z = nz; C.y = s.feet;
+  const dy = angDiff(yaw, C.yaw); if (Math.abs(dy) > .5 || C.speed > .5) C.yaw += dy * Math.min(1, dt * 4);
+  C.top.position.set(C.x, C.y, C.z);
+  const dc = Math.hypot(C.x - camera.position.x, C.z - camera.position.z);
+  if (dc > scene.fog.far + 20) { C.top.visible = false; return true; }   // past the fog: not drawn (shots use the old shape)
+  C.acc = (C.acc || 0) + dt; if (dc > 60 && C.acc < 1 / 20) return true;   // far off: posed 20 times a second
+  const adt = C.acc; C.acc = 0;
+  const air = !s.gl && Math.abs(C.vy) > 2.5;
+  charAnimate(C, { speed: C.speed, crouch: Math.max(0, Math.min(1, (1.6 - (s.h.p.y - s.feet)) / .55)), air, glide: !!s.gl, dt: adt });
+  if (s.gl) { C.top.updateMatrixWorld(true); const hp = C.by.Head.getWorldPosition(_chV); C.top.position.add(_chV2.copy(s.h.p).sub(hp).multiplyScalar(1)); C.top.updateMatrixWorld(true); }   // flying: their body hangs from where their head really is
+  charHead(C, s.h.q);
+  for (const [sd, h] of [["r", s.r], ["l", s.l]]) if (h) charArm(C, sd, h.p.clone().add(_chV.set(0, 0, .07).applyQuaternion(h.q)), h.q);
+  C.top.updateMatrixWorld(true); return true;
+}
+// a PvP bot: the person stands where the old soldier stands (now hidden, apart from its rifle) and holds that rifle
+function charBot(S, dt) {
+  if (!S.chLook) S.chLook = lookRandom(mulberry32(S.seedK || (S.seedK = 1 + Math.floor(Math.random() * 1e6))));
+  if (!S.C) { S.C = charMake(S.chLook, S.style || "green"); if (!S.C) return false;
+    S.group.traverse(o => { if (o.isMesh && !charUnder(o, S.rig)) o.visible = false; }); }
+  const C = S.C; C.top.visible = S.group.visible;
+  if (S.dead) { if (C.deadT < 0) charKill(C, camera.position, S.lastHead); C.top.visible = true; S.group.visible = false; charDeath(C, dt); return true; }
+  C.x = S.x; C.z = S.z; C.y = S.y; C.yaw = S.yaw; C.top.position.set(S.x, S.y, S.z);
+  charAnimate(C, { speed: S.speed, crouch: S.crouch, air: !S.onGround, glide: false, dt });
+  S.group.updateMatrixWorld(true);
+  for (const sd of ["r", "l"]) charArm(C, sd, S.B["hand" + sd.toUpperCase()].getWorldPosition(new THREE.Vector3()), null);
+  C.top.updateMatrixWorld(true); return true;
+}
+function charUnder(o, p) { while (o) { if (o === p) return true; o = o.parent; } return false; }
+// ---- the other players: soldiers in brown camo, posed from their head and hands, holding their gun (PC and phone; in VR they're people, above)
 function mpRemoteMake(L) {
   const u = L ? mpUni(L) : 0, S = makeSoldier(UNIFORMS[u], 7); S.rig.visible = false; scene.add(S.group, S.shadow);
   return { S, guns: {}, cur: null, head: new THREE.Vector3(), feet: 0, alive: true, uni: u, team: -2 };
 }
 function mpTrailTick(L, dt) {                                // 2.34: a soft streak in their colour behind a player who's flying fast (flung, gliding), so you can follow them
-  const R = L.R, on = !!(R && R.alive && R.head && !(R.S && R.S.group && R.S.group.visible === false));
+  const R = L.R, on = !!(R && R.alive && R.head && (R.C ? R.C.top.visible : !(R.S && R.S.group && R.S.group.visible === false)));
   if (!L.trail) { if (!on) return; const n = 28, g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setDrawRange(0, 0);
     const pts = new THREE.Points(g, flareDot(1)); pts.frustumCulled = false; scene.add(pts); L.trail = { pts, n, list: [], last: null, t: 0 }; }
   const T = L.trail, c = new THREE.Color(MP_COL[mpColOf(L)] || "#ffffff");
@@ -11087,7 +11348,7 @@ function mpTrailTick(L, dt) {                                // 2.34: a soft str
 }
 function mpRemoteDrop(L) {
   if (!L) { for (const q of MP.links.values()) mpRemoteDrop(q); return; }
-  if (L.R) { scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); L.R = null; } L.rx = [];
+  if (L.R) { scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); charDrop(L.R.C); L.R = null; } L.rx = [];
   if (L.LR && !L.open) { disposeSoldier(L.LR.S); L.LR = null; L.lrx = []; }
 }
 const _mpA = new THREE.Vector3(), _mpB = new THREE.Vector3(), _mpQ = new THREE.Quaternion(), _mpQ2 = new THREE.Quaternion();
@@ -11117,10 +11378,17 @@ function mpRemoteGun(R, k) {
 }
 function mpRemoteTick(L, dt) {
   const s = mpSample(L); if (!s) return;
-  if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); L.R = null; }   // they changed uniform
+  if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); charDrop(R0.C); L.R = null; }   // they changed uniform
   if (!L.R) L.R = mpRemoteMake(L);
   const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
   for (const k in R.guns) R.guns[k].visible = false;
+  if (charOn() && charRemote(R, L, s, dt)) {                // 2.37: in VR they're a person (the soldier stays hidden underneath for their footsteps)
+    const C = R.C; S.group.visible = false; S.shadow.visible = s.alive && C.top.visible && !s.gl; S.shadow.position.set(C.x, C.y + .03, C.z);
+    if (s.alive && C.top.visible) { S.x = C.x; S.z = C.z; S.y = C.y; S.speed = C.speed; S.gliding = !!s.gl; S.crouchWant = Math.max(0, Math.min(1, (1.6 - (s.h.p.y - s.feet)) / .55)); mpStepTick(L, R, S, dt);
+      if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); } }
+    return;
+  }
+  if (R.C) { charDrop(R.C); R.C = null; }
   if (!s.alive) {                                           // shot down: they fall back, then vanish within 3 seconds
     R.deadT = (R.deadT || 0) + dt; const e0 = Math.min(1, R.deadT * 1.8), e = e0 * e0 * (3 - 2 * e0);
     S.group.visible = S.shadow.visible = R.deadT < PVP.bodyGone && state === "play";
@@ -11183,6 +11451,7 @@ function mpRemoteShot(o) {                                  // their bullet and 
   if (!mpShotSound(o.k, from)) { const dd = camera.position.distanceTo(from); if (dd < 700) gunshot(o.k, 0, dd); }   // (2.12: from where they are)
 }
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
+  if (R && R.C && charOn() && R.C.top.visible) return R.alive ? charHit(R.C, from, dir, maxT) : null;   // 2.37: exactly the body you see (not hair)
   if (!R || !R.cur || !R.alive) return null;
   const hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04, 0)), oc = new THREE.Vector3().subVectors(from, hc);
   const bq = oc.dot(dir), cq = oc.lengthSq() - .15 * .15, disc = bq * bq - cq;
@@ -11206,10 +11475,11 @@ function mpHitTest(from, dir, maxT) {                       // the nearest playe
 }
 function mpTakeHit(d, head, noShield) {
   if (MP.dead > 0 || state !== "play") return;
+  MP.lastHitHead = !!head;
   const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
   if (MP.hp <= 0) {
-    MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy });
+    MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0 });
     if (MP.lastHitBy && MP.on) vrBanner(mpTagOf(MP.lastHitBy) + " got you", 2.5, 1);   // 2.00: deathmatch: you respawn with your guns (nothing spills)
   }
 }
