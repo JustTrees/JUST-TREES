@@ -35,7 +35,7 @@ async def main():
         await A.evaluate("() => { D.set.lat = 12; D.renderSetup(); return 1; }"); await B.wait_for_timeout(800)
         out["guestsSeeLat12"] = [await pg.evaluate("() => D.set.lat") for pg in (B, C)]
         out["guestStartLocked"] = await B.evaluate("() => { const P = D.VRUI.panels.setup; return D.mpLocked(P, P.widgets.find(w => w.label === 'Start')); }")
-        out["guestHandFree"] = await B.evaluate("() => { const P = D.VRUI.panels.setup; return !D.mpLocked(P, P.widgets.find(w => w.label === 'Left')); }")
+        out["guestHandFree"] = await B.evaluate("() => { const P = D.VRUI.panels.lobby; return !D.mpLocked(P, P.widgets.find(w => w.label === 'Left')); }")
         out["hostStartFree"] = await A.evaluate("() => { const P = D.VRUI.panels.setup; return !D.mpLocked(P, P.widgets.find(w => w.label === 'Start')); }")
         # host presses Start: everyone gets the same preview
         await A.evaluate("() => { D.startNew(); return 1; }")
@@ -74,11 +74,11 @@ async def main():
         out["lateJoinerColour"] = await Dp.evaluate("() => D.MP.idx")
         # host pauses mid-round and picks "End round · change settings": everyone goes back to the settings, the round stops
         await A.evaluate("() => { D.state = 'pause'; D.vruiOpen('pause'); return 1; }")
-        out["pauseButtonSays"] = await A.evaluate("() => D.VRUI.panels.pause.widgets[2].label")
-        await A.evaluate("() => { D.VRUI.panels.pause.widgets[2].on(); return 1; }")
-        for pg in (B, C, Dp): await wait(pg, "() => D.VRUIstage === 'setup'", 10)
+        out["pauseButtonSays"] = await A.evaluate("() => (w => w.labelFn())(D.VRUI.panels.pause.widgets.find(w => w.label === 'Change settings'))")
+        await A.evaluate("() => { D.VRUI.panels.pause.widgets.find(w => w.label === 'Change settings').on(); return 1; }")
+        for pg in (B, C, Dp): await wait(pg, "() => D.VRUIstage === 'lobby'", 10)   # 2.38: the settings live in the lobby
         out["endRoundAllOnSettings"] = [await pg.evaluate("() => D.VRUIstage + '/' + D.state + '/' + Math.round(D.MP.roundLeft)") for pg in (A, B, C, Dp)]
-        out["guestCantEndRound"] = await B.evaluate("() => { D.vruiOpen('pause'); const P = D.VRUI.panels.pause; return D.mpLocked(P, P.widgets[2]); }")
+        out["guestCantEndRound"] = await B.evaluate("() => { D.vruiOpen('pause'); const P = D.VRUI.panels.pause; return D.mpLocked(P, P.widgets.find(w => w.label === 'Change settings')); }")
         # back into a round so the clock-runs-out check below still works
         await A.evaluate("() => { D.startNew(); return 1; }")
         for pg in (A, B, C, Dp): await wait(pg, "() => D.VRUIstage === 'preview'", 20)

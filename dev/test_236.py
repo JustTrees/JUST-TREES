@@ -31,7 +31,7 @@ async def main():
         r = await pg.evaluate("""() => { const out = {}, V = D.vr, run = (sx, n) => { const y0 = V.yaw; pad.R.sx = sx; frames(n); pad.R.sx = 0; frames(2); return +(V.yaw - y0).toFixed(3); };
           D.set.turn = 'snap'; out.snap = run(1, 30);
           D.set.turn = 'smooth'; out.smooth = run(1, 30); out.smoothLeft = run(-1, 30); out.light = run(.15, 30);
-          D.vruiOpen('setup'); const w = D.VRUI.panels.setup.widgets.find(q => q.label === 'Snap'); w.on(); out.saved = localStorage.getItem('jt-turn'); w.on(); out.saved2 = localStorage.getItem('jt-turn');
+          D.vruiOpen('setup'); const w = D.VRUI.panels.me.widgets.find(q => q.label === 'Snap'); w.on(); out.saved = localStorage.getItem('jt-turn'); w.on(); out.saved2 = localStorage.getItem('jt-turn');
           return out; }""")
         print(json.dumps(r))
         ok = abs(r["snap"] + .524) < .01 and -1.3 < r["smooth"] < -1.0 and 1.0 < r["smoothLeft"] < 1.3 and r["light"] == 0 and r["saved"] == "snap" and r["saved2"] == "smooth" and not errs
