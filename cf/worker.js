@@ -9,6 +9,7 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === "/rooms") return rooms(req, env);
     if (url.pathname === "/count") return count(req, env);
+    if (url.pathname === "/dev") return dev(req, env);
     if (url.pathname !== "/turn") return env.ASSETS.fetch(req);
 
     const origin = req.headers.get("Origin");
@@ -96,5 +97,47 @@ export class Counts {
     }
     const all = await this.ctx.storage.list({ prefix: "d:", reverse: true, limit: 60 });
     return out({ days: [...all].map(([k, c]) => Object.assign({ day: k.slice(2) }, c)) });
+  }
+}
+
+// ---- 2.45: Dev Mode saves (the Creature Workshop and later dev tools). Saving needs the DEV_KEY secret (set in the Cloudflare dashboard,
+// never in the repo); reading is open (it's only creature shapes and settings). POST {op:"check"|"save", key, kind, name, data}; GET ?list=<kind> or ?get=<kind>&name=<name>.
+async function dev(req, env) {
+  const origin = req.headers.get("Origin");
+  const okOrigin = !origin || OK_ORIGINS.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const head = { "Content-Type": "application/json", "Cache-Control": "no-store", "Vary": "Origin" };
+  if (origin && okOrigin) { head["Access-Control-Allow-Origin"] = origin; head["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"; head["Access-Control-Allow-Headers"] = "Content-Type"; }
+  if (!okOrigin) return new Response(JSON.stringify({ error: "not allowed" }), { status: 403, headers: head });
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: head });
+  if (!env.DEVSTORE) return new Response(JSON.stringify({ error: "not set up" }), { status: 503, headers: head });
+  let body = null;
+  if (req.method === "POST") {
+    if (!env.DEV_KEY) return new Response(JSON.stringify({ error: "no key set" }), { status: 503, headers: head });
+    try { body = await req.json(); } catch (e) { return new Response(JSON.stringify({ error: "bad" }), { status: 400, headers: head }); }
+    const a = String(body && body.key || "").toUpperCase(), b = String(env.DEV_KEY).toUpperCase(); let diff = a.length ^ b.length;
+    for (let i = 0; i < Math.max(a.length, b.length); i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+    if (diff) return new Response(JSON.stringify({ error: "wrong key" }), { status: 403, headers: head });
+    if (body.op === "check") return new Response(JSON.stringify({ ok: true }), { headers: head });
+  }
+  const r = await env.DEVSTORE.get(env.DEVSTORE.idFromName("all")).fetch(new Request(req.url, { method: req.method, body: body ? JSON.stringify(body) : undefined }));
+  return new Response(await r.text(), { status: r.status, headers: head });
+}
+export class DevStore {
+  constructor(ctx, env) { this.ctx = ctx; }
+  async fetch(req) {
+    const out = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "Content-Type": "application/json" } });
+    const clip = (v, n) => String(v == null ? "" : v).replace(/[^\x20-\x7e]/g, "").slice(0, n);
+    if (req.method === "POST") {
+      const b = await req.json(), kind = clip(b.kind, 16).replace(/[^a-z]/g, ""), name = clip(b.name, 24).trim();
+      if (b.op !== "save" || !kind || !name) return out({ error: "bad" }, 400);
+      const data = JSON.stringify(b.data || null); if (data.length > 60000) return out({ error: "too big" }, 413);
+      await this.ctx.storage.put(kind + ":" + name.toUpperCase(), { name, t: Date.now(), data });
+      return out({ ok: true });
+    }
+    const q = new URL(req.url).searchParams, kind = clip(q.get("list") || q.get("get"), 16).replace(/[^a-z]/g, "");
+    if (!kind) return out({ error: "bad" }, 400);
+    if (q.get("get")) { const v = await this.ctx.storage.get(kind + ":" + clip(q.get("name"), 24).trim().toUpperCase()); return v ? out({ name: v.name, t: v.t, data: JSON.parse(v.data) }) : out({ error: "not found" }, 404); }
+    const all = await this.ctx.storage.list({ prefix: kind + ":", limit: 300 });
+    return out({ items: [...all.values()].map(v => ({ name: v.name, t: v.t })).sort((a, c) => c.t - a.t) });
   }
 }

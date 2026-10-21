@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.20</title>
+<title>JUST TREES 2.45</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.44";              // Just Trees 2.44
+const VERSION = "2.45";              // Just Trees 2.45
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6693,13 +6693,16 @@ function neckHits(b) {                                   // hit spheres along th
     b.hit.push([c.x, c.y, c.z, r * 1.15, 1]);
   }
 }
-function addGround(kind, x, z, home, size0) {
-  const r = Math.random, lat = set.lat * set.hemi, eL = ENDLESS ? ENDLESS.envL[enDom(x, z).b] : null, bio = eL ? eL.biome : biomeOf(lat), cold = bio === "tundra" || bio === "polar" || (eL ? eL.season === "winter" : seasonOf(lat, set.month) === "winter");
-  const b = DINO_BIPED[kind] ? DINO_BIPED[kind](r) : QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "heron" ? buildHeron(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
+function beastBody(kind, r, bio, cold) {                       // the hand-built body (its parts drive the game's walking, hits and size)
+  return DINO_BIPED[kind] ? DINO_BIPED[kind](r) : QSPEC[kind] ? buildQuad(r, QSPEC[kind](r)) : kind === "turkey" ? buildTurkey(r) : kind === "roadrunner" ? buildRoadrunner(r) : kind === "heron" ? buildHeron(r) : kind === "bigfoot" ? buildApe(r) : kind === "yeti" ? buildApe(r, true)
           : kind === "coyote" ? buildWolf(r, false, [0x7a6448, 0x9a8466, 0xd8ccb4, 0x8a7458]) : kind === "fox" ? buildWolf(r, false, [0xa84a1e, 0xc0602a, 0xeee6da, 0x2a1e16], 0xf4f0ea)
           : kind === "arcticfox" ? buildWolf(r, false, cold || bio === "polar" ? [0xe8e6e0, 0xf0eee8, 0xf6f4f0, 0xe0ded6] : [0x6a625a, 0x7a726a, 0x9a928a, 0x5a524a], 0xf6f4f0)
           : kind === "buck" ? buildBuck(r) : kind === "bear" ? buildBear(r) : kind === "polar" ? buildBear(r, true) : kind === "baboon" ? buildBaboon(r)
           : kind === "panther" ? buildPanther(r, TROPIC(bio)) : kind === "wolf" ? buildWolf(r, cold) : kind === "seal" ? buildSeal(r) : buildRabbit(r, cold);
+}
+function addGround(kind, x, z, home, size0) {
+  const r = Math.random, lat = set.lat * set.hemi, eL = ENDLESS ? ENDLESS.envL[enDom(x, z).b] : null, bio = eL ? eL.biome : biomeOf(lat), cold = bio === "tundra" || bio === "polar" || (eL ? eL.season === "winter" : seasonOf(lat, set.month) === "winter");
+  const b = beastBody(kind, r, bio, cold);
   const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : ENDLESS ? enAnimOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
@@ -7358,17 +7361,17 @@ function qdinoMake(M, v) {                                   // one dinosaur: it
   return Q;
 }
 const _qdQ = new THREE.Quaternion(), _qdV = new THREE.Vector3();
+function qdFit(fk, M, Q, body, sc) {                           // fit the model to the old body's length (feet on the ground), once per kind
+  const bp = new THREE.Box3().setFromObject(body), bq = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld);
+  const s = (bp.max.z - bp.min.z) / (bq.max.z - bq.min.z) / sc;
+  return QDINO.fit[fk] = { s, dz: ((bp.max.z + bp.min.z) / 2 / sc - (bq.max.z + bq.min.z) / 2 * s), hm: null, len: (bp.max.z - bp.min.z) / sc, hgt: [(bp.max.y - bp.min.y) / sc, (bq.max.y - bq.min.y) * s] };
+}
 function qdAttach(A) {
   const fk = A.qf || A.kind, M = QDINO.models[fk]; if (!M) { qdinoLoad(fk); return false; }
   const Q = qdinoMake(M, A.qv), wrap = new THREE.Group(), r0 = A.root, sv = [r0.position.clone(), r0.quaternion.clone()];
   if (!M.sph) M.sph = qdSpheres(M, Q);
   r0.position.set(0, 0, 0); r0.quaternion.identity(); A.head.rotation.set(0, 0, 0); r0.updateMatrixWorld(true);
-  let F = QDINO.fit[fk];
-  if (!F) {                                                  // fit the model to the old one's length (feet on the ground), once per kind
-    const sc = r0.scale.x, bp = new THREE.Box3().setFromObject(A.body), bq = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld);
-    const s = (bp.max.z - bp.min.z) / (bq.max.z - bq.min.z) / sc;
-    F = QDINO.fit[fk] = { s, dz: ((bp.max.z + bp.min.z) / 2 / sc - (bq.max.z + bq.min.z) / 2 * s), hm: null, len: (bp.max.z - bp.min.z) / sc, hgt: [(bp.max.y - bp.min.y) / sc, (bq.max.y - bq.min.y) * s] };
-  }
+  const F = QDINO.fit[fk] || qdFit(fk, M, Q, A.body, r0.scale.x);
   wrap.scale.setScalar(F.s); wrap.position.z = F.dz; wrap.add(Q.top); r0.add(wrap); r0.updateMatrixWorld(true);
   A.qhit = M.sph.map(([b, x, y, z, r, hd]) => [Q.mesh.skeleton.bones[b], x, y, z, r * F.s, hd]);   // hit spheres that move with the bones
   r0.position.copy(sv[0]); r0.quaternion.copy(sv[1]); r0.updateMatrixWorld(true);
@@ -8227,7 +8230,7 @@ function uiDraw(P) {
   if (!P.paint) return;
   const g = P.g; g.clearRect(0, 0, P.W, P.H); P.paint(g, P);
   for (const w of P.widgets) {
-    if (w.hide && w.hide()) continue;
+    if ((w.hide && w.hide()) || w.ghost) continue;
     const hov = !!(P.hov && P.hov.includes(w)), dis = (w.disabled && w.disabled()) || mpLocked(P, w);
     if (w.kind === "slider") {
       const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2;
@@ -8348,13 +8351,16 @@ function vruiParts() {
   uiBtn(Ru, 530, 900, 440, 110, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 40, hide: () => ruStep() !== "no", personal: true });
   // ---- 2.38: the main menu: Solo · Online, and your character, height and the rules ----
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
-  M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", 890, 885, 780, 36); } };
+  M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
   uiBtn(M, 90, 150, 1220, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });
   uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: hike, hunt or PvP together. Host a room or join one.", fs: 64 });
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
   uiBtn(M, 1070, 660, 240, 150, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 40, personal: true });   // 2.28: read them again
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
+  uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
+  uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
+  devPanels();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -8635,9 +8641,415 @@ function charPortrait(lk, uni) {                                // head and shou
   for (let y = 0; y < 256; y++) im.data.set(px.subarray((255 - y) * 1024, (256 - y) * 1024), y * 1024);   // (the picture comes out upside down)
   g.putImageData(im, 0, 0); CHP.cache.set(key, cv); return cv;
 }
+/* ---- 2.45: Dev Mode and the Creature Workshop (VR only). Dev Mode is unlocked once on a headset with the dev key, which the online server checks
+   (the key is a secret kept on the server, never in this file, so reading the code doesn't let anyone save). The Workshop puts a creature on a
+   turntable in front of you: start from any animal or dinosaur, stretch and thicken its parts (point at a part to pick it), add parts (horns, sails,
+   plates, spikes…), recolour it, watch it move, set how it behaves, and save it to the server by name. A saved creature is a small recipe: the
+   model it starts from plus every change; crBuild rebuilds it from that, so the game can make it the same way later. ---- */
+const DEV = { ok: (() => { try { return localStorage.getItem("jt-dev-ok") === "1"; } catch (_) { return false; } })(), key: (() => { try { return localStorage.getItem("jt-dev") || ""; } catch (_) { return ""; } })(), msg: "", msgT: 0, taps: [], url: null };
+const DEV_URL = "https://just-trees-online.ron-bb2.workers.dev/dev";
+function devPost(o) { return fetch(DEV.url || DEV_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Object.assign({ key: DEV.key }, o)) }).then(r => r.json().catch(() => ({})).then(j => ({ st: r.status, j }))); }
+function devSay(t) { DEV.msg = t; DEV.msgT = performance.now(); for (const k of ["tag", "dev", "work"]) if (VRUI.panels[k] && VRUI.panels[k].mesh.visible) uiDraw(VRUI.panels[k]); }
+function devTryKey(k) {                                        // the keyboard's OK, typing the dev key (empty: back to the menu)
+  if (!k) { vruiOpen("mode"); return; }
+  devSay("Checking the key…");
+  devPost({ op: "check", key: k }).then(({ st, j }) => {
+    if (st === 200 && j.ok) { DEV.ok = true; DEV.key = k; try { localStorage.setItem("jt-dev", k); localStorage.setItem("jt-dev-ok", "1"); } catch (_) {} devSay("Dev Mode is on"); vruiOpen("dev"); }
+    else devSay(st === 503 ? "The online server has no dev key yet" : "That key isn't right");
+  }).catch(() => devSay("Can't reach the online server"));
+}
+function devTitleTap() {                                       // five quick taps on the main menu's title: the dev key keyboard
+  const t = performance.now(); DEV.taps = DEV.taps.filter(x => t - x < 4000); DEV.taps.push(t);
+  if (DEV.taps.length >= 5) { DEV.taps = []; DEV.msg = ""; VRUI.keyFor = "dev"; vruiOpen("tag"); }
+}
+function devLock() { DEV.ok = false; DEV.key = ""; try { localStorage.removeItem("jt-dev"); localStorage.removeItem("jt-dev-ok"); } catch (_) {} vruiOpen("mode"); }
+
+// ---- a creature from a model and a recipe: each part stretched / thickened / resized in the model's own pose, every bone moved to match, the moves kept
+const CR_PARTS = [["whole", "Whole"], ["head", "Head"], ["neck", "Neck"], ["body", "Body"], ["tail", "Tail"], ["front", "Front legs"], ["back", "Back legs"]];
+function crPart(n) {                                           // which part a bone belongs to ("Back" is where the tail starts)
+  if (/^Head/.test(n)) return "head"; if (/^Neck/.test(n)) return "neck"; if (/^Tail/.test(n)) return "tail";
+  if (/^Front(Leg|UpLeg|LowLeg|Foot)/.test(n)) return "front"; if (/^Back(Leg|UpLeg|LowLeg|Foot)/.test(n)) return "back";
+  if (/^Back(_end)?$/.test(n)) return "tail"; if (/^(Body|Hips|Torso|Shoulders)(_end)?$/.test(n)) return "body"; return null;
+}
+const crRegion = (g, belly) => g === "front" || g === "back" ? "legs" : g === "head" ? "head" : g === "tail" ? "tail" : belly ? "belly" : "body";
+function crTree(list) {                                         // bare nodes in their rest pose, to work out where things are
+  const o = list.map(() => new THREE.Object3D()), top = new THREE.Group();
+  list.forEach((nd, i) => (nd.p < 0 ? top : o[nd.p]).add(o[i]));
+  const rest = () => { list.forEach((nd, i) => { o[i].position.fromArray(nd.t, 0); o[i].quaternion.fromArray(nd.t, 3); o[i].scale.fromArray(nd.t, 7); }); top.updateMatrixWorld(true); };
+  rest(); return { o, top, rest };
+}
+function crPose(T, byName, clip, t) {                           // a move at time t on those nodes
+  for (const tr of clip.tracks) { const m = /^(.*)\.(position|quaternion|scale)$/.exec(tr.name), i = m ? byName[m[1]] : undefined; if (i === undefined) continue;
+    T.o[i][m[2]].fromArray((tr._ip || (tr._ip = tr.createInterpolant())).evaluate(t)); }
+  T.top.updateMatrixWorld(true);
+}
+function crBuild(M, R) {
+  const js = M.js, nodes = js.nodes, N = nodes.length, skin = js.mesh.bones, V3 = THREE.Vector3;
+  const T0 = crTree(nodes), byName = {}; nodes.forEach((nd, i) => { byName[nd.n] = i; });
+  const skinOf = new Array(N).fill(-1); skin.forEach((ni, k) => { skinOf[ni] = k; });
+  const kids = nodes.map(() => []); nodes.forEach((nd, i) => { if (nd.p >= 0) kids[nd.p].push(i); });
+  const W = new Array(N), P = new Array(N);                     // every node in the model's own (bind) pose
+  const wOf = i => { if (W[i]) return W[i]; const p = nodes[i].p;
+    W[i] = skinOf[i] >= 0 ? M.inv[skinOf[i]].clone().invert() : p < 0 ? T0.o[i].matrixWorld.clone() : wOf(p).clone().multiply(T0.o[i].matrix);
+    P[i] = new V3().setFromMatrixPosition(W[i]); return W[i]; };
+  for (let i = 0; i < N; i++) wOf(i);
+  const iH = byName.Head, iB = byName.Hips !== undefined ? byName.Hips : byName.Body;
+  const fwd = iH !== undefined && iB !== undefined ? P[iH].clone().sub(P[iB]).setY(0) : new V3(0, 0, 1); if (fwd.lengthSq() < 1e-8) fwd.set(0, 0, 1); fwd.normalize();
+  const side = new V3().crossVectors(new V3(0, 1, 0), fwd).normalize();
+  const part = nodes.map(nd => crPart(nd.n)), set = R.parts || {}, A = new Array(N);
+  for (let i = 0; i < N; i++) {                                 // each node's stretch: along its bone by the length, across it by the thickness
+    const g = part[i], s = (g && set[g]) || {}, S = g === "head" ? s.size || 1 : 1, a = (s.thick || 1) * S, b = (s.len || 1) * S;
+    let d = fwd;
+    if (g && g !== "head" && g !== "body") { const k = [kids[i].find(c => part[c] === g), kids[i].find(c => /_end$/.test(nodes[c].n)), kids[i][0]].find(c => c !== undefined);
+      if (k !== undefined && P[k].distanceToSquared(P[i]) > 1e-10) d = P[k].clone().sub(P[i]).normalize(); }
+    const m = new THREE.Matrix3().set(a, 0, 0, 0, a, 0, 0, 0, a), e = m.elements;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) e[c * 3 + r] += (b - a) * d.getComponent(r) * d.getComponent(c);
+    A[i] = m;
+  }
+  // feet that are separate targets (hung on the root, not the leg) follow the end of their leg
+  const footOf = nodes.map((nd, i) => { const m = /^(Front|Back)Foot([LR])$/.exec(nd.n); if (!m || nd.p < 0 || part[nd.p]) return -1; const e = byName[m[1] + "LowLeg" + m[2] + "_end"]; return e === undefined ? -1 : e; });
+  const Pn = new Array(N);                                      // the new pose: each child's offset changed by its parent's stretch
+  const place = i => { if (Pn[i]) return Pn[i]; const p = nodes[i].p, e = footOf[i];
+    Pn[i] = e >= 0 ? place(e).clone().add(P[i].clone().sub(P[e])) : p < 0 ? P[i].clone() : place(p).clone().add(P[i].clone().sub(P[p]).applyMatrix3(A[p]));
+    return Pn[i]; };
+  for (let i = 0; i < N; i++) place(i);
+  // the skin: every point follows its bones' changes
+  const G = M.geo, PA = G.attributes.position, SI = G.attributes.skinIndex.array, SWt = G.attributes.skinWeight.array, n = PA.count, bind = M.bind, bindI = bind.clone().invert();
+  const Vn = new Float32Array(n * 3), Yo = new Float32Array(n), dom = new Int16Array(n), v = new V3(), t = new V3(), acc = new V3();
+  let y0 = 1e9, yT = -1e9;
+  for (let i = 0; i < n; i++) {
+    v.fromBufferAttribute(PA, i).applyMatrix4(bind); acc.set(0, 0, 0); let ws = 0, best = -1, bw = -1;
+    for (let j = 0; j < 4; j++) { const w = SWt[i * 4 + j] / 255; if (w <= 0) continue; const b = skin[SI[i * 4 + j]];
+      t.copy(v).sub(P[b]).applyMatrix3(A[b]).add(Pn[b]); acc.addScaledVector(t, w); ws += w; if (w > bw) { bw = w; best = b; } }
+    if (ws > 0) acc.divideScalar(ws); else acc.copy(v);
+    Vn[i * 3] = acc.x; Vn[i * 3 + 1] = acc.y; Vn[i * 3 + 2] = acc.z; Yo[i] = v.y; dom[i] = best;
+    y0 = Math.min(y0, v.y); yT = Math.max(yT, v.y);
+  }
+  // the ground stays put: legs standing on it lift the body by as much as they grew (between front and back legs the body tilts to match);
+  // legs that don't reach the ground (a T. rex's arms) just ride along
+  const fOf = (x, z) => x * fwd.x + z * fwd.z, low = { front: [1e9, 1e9], back: [1e9, 1e9] }, lift = {}, rootF = {};
+  for (let i = 0; i < n; i++) { const g = part[dom[i]]; if (g === "front" || g === "back") { low[g][0] = Math.min(low[g][0], Yo[i]); low[g][1] = Math.min(low[g][1], Vn[i * 3 + 1]); } }
+  for (const g of ["front", "back"]) { if (low[g][0] < 1e8 && low[g][0] - y0 < (yT - y0) * .08) lift[g] = low[g][0] - low[g][1];
+    const r = ["L", "R"].map(sd => byName[(g === "front" ? "Front" : "Back") + "Leg" + sd]).filter(i => i !== undefined); if (r.length) rootF[g] = r.reduce((a, i) => a + fOf(Pn[i].x, Pn[i].z), 0) / r.length; }
+  const lb = lift.back, lf = lift.front, span = rootF.front - rootF.back;
+  const shift = (g, f) => lift[g] !== undefined ? lift[g] : lb !== undefined && lf !== undefined && Math.abs(span) > 1e-6 ? lb + (lf - lb) * Math.max(0, Math.min(1, (f - rootF.back) / span)) : lb !== undefined ? lb : lf !== undefined ? lf : 0;
+  for (let i = 0; i < N; i++) Pn[i].y += shift(part[i], fOf(Pn[i].x, Pn[i].z));
+  let y1 = 1e9; for (let i = 0; i < n; i++) { Vn[i * 3 + 1] += shift(part[dom[i]], fOf(Vn[i * 3], Vn[i * 3 + 2])); y1 = Math.min(y1, Vn[i * 3 + 1]); }
+  const dy = y0 - y1;                                            // and nothing below the ground
+  for (let i = 0; i < N; i++) Pn[i].y += dy;
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { Vn[i * 3 + 1] += dy; v.fromArray(Vn, i * 3).applyMatrix4(bindI); pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z; }
+  const geo = new THREE.BufferGeometry();
+  for (const k of ["normal", "skinIndex", "skinWeight"]) geo.setAttribute(k, G.attributes[k]);
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  // colours: each region (body, belly, head, legs, tail) in its chosen colour, keeping the shading; dark details (eyes, nose, hooves) stay
+  const C0 = G.attributes.color.array, C = new Uint8Array(C0), cols = R.colors || {};
+  if (Object.keys(cols).some(k => cols[k] != null)) {
+    let by0 = 1e9, by1 = -1e9; for (let i = 0; i < n; i++) if (part[dom[i]] === "body") { by0 = Math.min(by0, Vn[i * 3 + 1]); by1 = Math.max(by1, Vn[i * 3 + 1]); }
+    const reg = new Array(n), sum = {}, cnt = {}, lum = i => (C0[i * 3] * .3 + C0[i * 3 + 1] * .59 + C0[i * 3 + 2] * .11) / 255;
+    for (let i = 0; i < n; i++) { const g = part[dom[i]] || "body"; reg[i] = crRegion(g, (g === "body" || g === "neck") && Vn[i * 3 + 1] < by0 + (by1 - by0) * .3); sum[reg[i]] = (sum[reg[i]] || 0) + lum(i); cnt[reg[i]] = (cnt[reg[i]] || 0) + 1; }
+    const tc = new THREE.Color();
+    for (let i = 0; i < n; i++) { const h = cols[reg[i]]; if (h == null) continue; const avg = Math.max(.02, sum[reg[i]] / cnt[reg[i]]), l = lum(i); if (l < avg * .35) continue;
+      const k = Math.max(.65, Math.min(1.35, l / avg)); tc.set(h);
+      C[i * 3] = Math.min(255, Math.round(qaLin(tc.r) * k)); C[i * 3 + 1] = Math.min(255, Math.round(qaLin(tc.g) * k)); C[i * 3 + 2] = Math.min(255, Math.round(qaLin(tc.b) * k)); }
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(C, 3, true));
+  geo.computeBoundingSphere(); geo.boundingSphere.radius *= 1.5; geo.computeBoundingBox();
+  // the bones' new places, and the moves shifted to match (each node by its own change)
+  const Wn = W.map((m, i) => m.clone().setPosition(Pn[i]));
+  const inv = skin.map(i => Wn[i].clone().invert());
+  const delta = nodes.map((nd, i) => { const p = nd.p; if (p < 0) return Pn[i].clone().sub(P[i]);
+    return Pn[i].clone().applyMatrix4(Wn[p].clone().invert()).sub(P[i].clone().applyMatrix4(W[p].clone().invert())); });
+  const nn = nodes.map((nd, i) => Object.assign({}, nd, { t: nd.t.slice(0, 3).map((x, k) => x + delta[i].getComponent(k)).concat(nd.t.slice(3)) }));
+  const clips = {};
+  for (const k in M.clips) { const c = M.clips[k];
+    clips[k] = new THREE.AnimationClip(c.name, c.duration, c.tracks.map(tr => { const m = /^(.*)\.position$/.exec(tr.name), i = m ? byName[m[1]] : undefined;
+      if (i === undefined || delta[i].lengthSq() < 1e-12) return tr; const d = delta[i], vals = tr.values.slice(); for (let j = 0; j < vals.length; j++) vals[j] += d.getComponent(j % 3);
+      return new THREE.VectorKeyframeTrack(tr.name, tr.times, vals); })); }
+  // those separate feet: through every move, kept where the end of their leg now is (longer legs reach further)
+  const feet = []; footOf.forEach((e, i) => { if (e >= 0) feet.push([i, e]); });
+  if (feet.length && delta.some(d => d.lengthSq() > 1e-12)) {
+    const Ta = crTree(nodes), Tb = crTree(nn), pa = new V3(), pb = new V3(), pf = new V3();
+    for (const k in clips) {
+      const c0 = M.clips[k], tracks = clips[k].tracks.slice(); let changed = false;
+      for (const [f, e] of feet) {
+        const ti = c0.tracks.findIndex(tr => tr.name === nodes[f].n + ".position"); if (ti < 0) continue;
+        const tr0 = c0.tracks[ti], vals = tr0.values.slice();
+        for (let q = 0; q < tr0.times.length; q++) {
+          const tt = tr0.times[q]; crPose(Ta, byName, c0, tt); crPose(Tb, byName, clips[k], tt);
+          const at = Ta.o[f].getWorldPosition(pf).add(Tb.o[e].getWorldPosition(pb)).sub(Ta.o[e].getWorldPosition(pa));   // where it was, moved as the leg's end moved
+          Tb.o[nodes[f].p].worldToLocal(at); vals[q * 3] = at.x; vals[q * 3 + 1] = at.y; vals[q * 3 + 2] = at.z;
+        }
+        tracks[tracks.findIndex(tr => tr.name === tr0.name)] = new THREE.VectorKeyframeTrack(tr0.name, tr0.times, vals); changed = true;
+        Ta.rest(); Tb.rest();
+      }
+      if (changed) clips[k] = new THREE.AnimationClip(clips[k].name, clips[k].duration, tracks);
+    }
+  }
+  // where the parts can go: each region's extent (forward / up / sideways), and each bone's
+  const ext = {}, add = (key, x, y, z) => { const f = x * fwd.x + z * fwd.z, s = x * side.x + z * side.z, e = ext[key] || (ext[key] = { f: [1e9, -1e9], u: [1e9, -1e9], s: [1e9, -1e9] });
+    e.f[0] = Math.min(e.f[0], f); e.f[1] = Math.max(e.f[1], f); e.u[0] = Math.min(e.u[0], y); e.u[1] = Math.max(e.u[1], y); e.s[0] = Math.min(e.s[0], s); e.s[1] = Math.max(e.s[1], s); };
+  for (let i = 0; i < n; i++) { const x = Vn[i * 3], y = Vn[i * 3 + 1], z = Vn[i * 3 + 2], g = part[dom[i]]; if (g) add(g, x, y, z); if (dom[i] >= 0) add("bone:" + nodes[dom[i]].n, x, y, z); add("all", x, y, z); }
+  const A0 = ext.all, PB = 48, top = new Float32Array(PB).fill(-1e9), topB = new Int16Array(PB).fill(-1), binOf = f => Math.max(0, Math.min(PB - 1, Math.floor((f - A0.f[0]) / (A0.f[1] - A0.f[0] + 1e-9) * PB)));
+  let cr = 0, cg = 0, cb = 0, cn = 0;
+  const ix = G.index ? G.index.array : null, nT = ix ? ix.length / 3 : n / 3, vi = (t, k) => ix ? ix[t * 3 + k] : t * 3 + k, okV = i => { const g = part[dom[i]]; return !!g && g !== "head"; };
+  for (let t = 0; t < nT; t++) for (let k = 0; k < 3; k++) {     // the outline along the top, from points along every edge (the model is low-poly)
+    const a = vi(t, k), b = vi(t, (k + 1) % 3); if (!okV(a) || !okV(b)) continue;
+    for (let q = 0; q <= 4; q++) { const w = q / 4, x = Vn[a * 3] + (Vn[b * 3] - Vn[a * 3]) * w, y = Vn[a * 3 + 1] + (Vn[b * 3 + 1] - Vn[a * 3 + 1]) * w, z = Vn[a * 3 + 2] + (Vn[b * 3 + 2] - Vn[a * 3 + 2]) * w, bn = binOf(x * fwd.x + z * fwd.z);
+      if (y > top[bn]) { top[bn] = y; topB[bn] = 1; } } }
+  for (let i = 0; i < n; i++) if (part[dom[i]] === "body" && C[i * 3] + C[i * 3 + 1] + C[i * 3 + 2] > 30) { cr += C[i * 3]; cg += C[i * 3 + 1]; cb += C[i * 3 + 2]; cn++; }
+  const spine = nodes.map((nd, i) => i).filter(i => (part[i] === "body" || part[i] === "tail" || part[i] === "neck") && skinOf[i] >= 0 && ext["bone:" + nodes[i].n]);
+  const near = f => spine.reduce((a, i) => Math.abs(Pn[i].x * fwd.x + Pn[i].z * fwd.z - f) < Math.abs(Pn[a].x * fwd.x + Pn[a].z * fwd.z - f) ? i : a, spine[0] !== undefined ? spine[0] : 0);
+  const topAt = f => { const b0 = binOf(f); for (let d = 0; d < PB; d++) for (const b of [b0 - d, b0 + d]) if (b >= 0 && b < PB && topB[b] >= 0) return [top[b], near(f)]; return [A0.u[1], near(f)]; };
+  if (ext.head) {                                               // the top of the skull along the middle (ears and antlers are off to the sides)
+    const h = ext.head, mid = (h.s[0] + h.s[1]) / 2, hw = (h.s[1] - h.s[0]) / 2; let sk = -1e9;
+    for (let i = 0; i < n; i++) if (part[dom[i]] === "head" && Math.abs(Vn[i * 3] * side.x + Vn[i * 3 + 2] * side.z - mid) < hw * .3) sk = Math.max(sk, Vn[i * 3 + 1]);
+    ext.skull = { f: h.f, s: h.s, u: [h.u[0], sk > -1e9 ? sk : h.u[1]] };
+  }
+  const coat = cn ? new THREE.Color(cr / cn / 255 / 2.3, cg / cn / 255 / 2.3, cb / cn / 255 / 2.3).convertLinearToSRGB().multiplyScalar(.85).getHex() : 0x8a6a4a;
+  return { js: Object.assign({}, js, { nodes: nn }), geo, clips, inv, bind: M.bind, mat: M.mat, fwd, side, ext, Wn, byName, topAt, coat, rootF };
+}
+// ---- the parts kit: low-poly pieces made in the creature's frame (x its left, y up, z forward), sized by what they sit on
+function crLoft(pts, r0, r1, sides = 6) {                      // a tapering tube through points (horns, tusks, spikes)
+  const pos = [], V3 = THREE.Vector3, rings = [];
+  for (let i = 0; i < pts.length; i++) { const p = pts[i], tg = pts[Math.min(i + 1, pts.length - 1)].clone().sub(pts[Math.max(i - 1, 0)]).normalize();
+    const a = Math.abs(tg.y) < .9 ? new V3(0, 1, 0) : new V3(1, 0, 0), u = new V3().crossVectors(tg, a).normalize(), w = new V3().crossVectors(tg, u), r = r0 + (r1 - r0) * i / (pts.length - 1), ring = [];
+    for (let k = 0; k < sides; k++) { const an = k / sides * 6.283; ring.push(p.clone().addScaledVector(u, Math.cos(an) * r).addScaledVector(w, Math.sin(an) * r)); } rings.push(ring); }
+  const tri = (a, b, c) => pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  for (let i = 0; i < rings.length - 1; i++) for (let k = 0; k < sides; k++) { const k2 = (k + 1) % sides, A = rings[i], B = rings[i + 1]; tri(A[k], B[k], B[k2]); tri(A[k], B[k2], A[k2]); }
+  const tip = pts[pts.length - 1].clone().add(pts[pts.length - 1].clone().sub(pts[pts.length - 2]).setLength(r1 * 2)), last = rings[rings.length - 1];
+  for (let k = 0; k < sides; k++) tri(last[k], tip, last[(k + 1) % sides]);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals(); return g;
+}
+function crFin(outline, th) {                                   // a flat plate standing in the side view ([forward, up] points), th thick
+  const g = new THREE.ExtrudeGeometry(new THREE.Shape(outline.map(([z, y]) => new THREE.Vector2(z, y))), { depth: th, bevelEnabled: false });
+  g.translate(0, 0, -th / 2); g.rotateY(-Math.PI / 2); return g;
+}
+const CR_KIT = {                                                // on: where it goes; at: [back→front, bottom→top, middle→side] of that place
+  horns:   { name: "Horns", on: "head", pair: true, col: 0xd8ccb0, at: [.32, .9, .22] },
+  antlers: { name: "Antlers", on: "head", pair: true, col: 0xd8ccb0, at: [.3, .9, .2] },
+  crest:   { name: "Crest", on: "head", at: [.5, .82, 0] },
+  frill:   { name: "Frill", on: "head", at: [.12, .7, 0] },
+  tusks:   { name: "Tusks", on: "head", pair: true, col: 0xf0e8d8, at: [.85, .15, .25] },
+  sail:    { name: "Sail", on: "body", at: [.5, 1, 0] },
+  plates:  { name: "Plates", on: "spine", at: [.5, 1, 0] },
+  spikes:  { name: "Spikes", on: "tailend", pair: true, col: 0xd8ccb0, at: [.15, .7, .2] },
+  club:    { name: "Club", on: "tailend", at: [.1, .5, 0] },
+  mane:    { name: "Mane", on: "neck", col: 0x3a2a1e, at: [.5, 1, 0] },
+};
+function crKitGeo(type, k, s) {                                 // one piece (s: +1 / -1 for the two sides of a pair); a list for several
+  const V3 = THREE.Vector3, L = k.len || 1, sp = k.spread || 1;
+  if (type === "horns") return crLoft([new V3(0, 0, 0), new V3(s * .12 * sp, .35 * L, -.05), new V3(s * .24 * sp, .62 * L, -.22 * L), new V3(s * .3 * sp, .8 * L, -.45 * L)], .09, .012);
+  if (type === "tusks") return crLoft([new V3(0, 0, 0), new V3(s * .04 * sp, -.14 * L, .16 * L), new V3(s * .08 * sp, -.12 * L, .36 * L), new V3(s * .1 * sp, .02 * L, .5 * L)], .075, .012);
+  if (type === "antlers") { const g = [crLoft([new V3(0, 0, 0), new V3(s * .25 * sp, .35 * L, -.1), new V3(s * .45 * sp, .75 * L, -.25 * L), new V3(s * .5 * sp, 1.05 * L, -.2 * L)], .05, .015, 5)];
+    for (const [a, b] of [[[.12, .2, -.05], [.2, .45, .25]], [[.3, .5, -.16], [.42, .78, .1]], [[.44, .82, -.22], [.62, 1.0, -.05]]]) g.push(crLoft([new V3(s * a[0] * sp, a[1] * L, a[2] * L), new V3(s * b[0] * sp, b[1] * L, b[2] * L)], .03, .008, 4));
+    return g; }
+  if (type === "spikes") return [crLoft([new V3(0, 0, 0), new V3(s * .5 * sp, .35 * L, -.15 * L)], .08, .01, 5), crLoft([new V3(0, 0, -.25), new V3(s * .45 * sp, .3 * L, -.5 * L)], .07, .01, 5)];
+  if (type === "club") { const g = new THREE.IcosahedronGeometry(.5, 0); g.scale(1.1 * sp, .75, 1.25 * L); return g; }
+  if (type === "crest") return crFin([[-.3 * L, 0], [-.15 * L, .5 * L], [.1 * L, .7 * L], [.3 * L, .3 * L], [.35 * L, 0]], .03 * sp);
+  if (type === "sail") return crFin([[-.5 * L, 0], [-.4 * L, .32], [-.2 * L, .56], [.05 * L, .66], [.28 * L, .56], [.44 * L, .3], [.5 * L, 0]], .035 * sp);
+  if (type === "mane") { const pts = [[-.5 * L, -.05]]; for (let i = 0; i <= 10; i++) pts.push([-.5 * L + i / 10 * L, (i % 2 ? .1 : .2) * sp]); pts.push([.5 * L, -.05]); return crFin(pts, .07); }
+  if (type === "frill") { const g = new THREE.CircleGeometry(.6 * L, 9, 0, Math.PI); g.scale(sp, 1, 1); g.rotateX(-.5); return g; }
+  if (type === "plates") return crFin([[-.42, -.1], [-.3, .45 * L], [0, .8 * L], [.3, .45 * L], [.42, -.1]], .06 * sp);
+  return new THREE.BoxGeometry(.2, .2, .2);
+}
+function crKitAttach(Q, Mx, R) {                                // every added part, each on its bone (so it moves with it)
+  const out = [], V3 = THREE.Vector3, E = Mx.ext, B = E.body || E.all, has = b => !!E["bone:" + b], nodes = Mx.js.nodes;
+  const fq = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(Mx.side, new V3(0, 1, 0), Mx.fwd));
+  const U = e => Math.max(e.u[1] - e.u[0], (e.f[1] - e.f[0]) * .5), trunk = Mx.rootF.front !== undefined && Mx.rootF.back !== undefined, bodyLen = Math.max(trunk ? Math.abs(Mx.rootF.front - Mx.rootF.back) * 1.3 : B.f[1] - B.f[0], (E.all.f[1] - E.all.f[0]) * .2),
+    bodyMid = trunk ? (Mx.rootF.front + Mx.rootF.back) / 2 : (B.f[0] + B.f[1]) / 2, bodyH = B.u[1] - B.u[0], tailLen = E.tail ? E.tail.f[1] - E.tail.f[0] : 0;
+  const at3 = (f, y, s) => Mx.fwd.clone().multiplyScalar(f).addScaledVector(Mx.side, s).setY(y), Pof = i => new V3().setFromMatrixPosition(Mx.Wn[i]);
+  (R.kit || []).forEach((k, ki) => {
+    const D = CR_KIT[k.type]; if (!D) return;
+    const kf = k.fwd || 0, ku = k.up || 0, put = [];             // [bone, where (in the model's pose), size, its slope]
+    const mat = grade(new THREE.MeshLambertMaterial({ color: k.col != null ? k.col : D.col != null ? D.col : Mx.coat, flatShading: true, side: THREE.DoubleSide }));
+    if (D.on === "head" || D.on === "tailend") {               // on the head, or the end of the tail: placed within that part
+      const bn = D.on === "head" ? "Head" : ["Tail5", "Tail4", "Tail3", "Tail2", "Tail1", "Back"].find(has), e = D.on === "head" ? E.skull : bn && E["bone:" + bn];
+      if (bn && e) put.push([bn, at3(e.f[0] + (e.f[1] - e.f[0]) * (D.at[0] + kf), e.u[0] + (e.u[1] - e.u[0]) * (D.at[1] + ku), (e.s[1] + e.s[0]) / 2), D.on === "head" ? U(e) : Math.max(U(e), bodyH * .3), 0, (e.s[1] - e.s[0]) / 2 * D.at[2]]);
+    } else if (D.on === "body") {                               // a sail: standing along the middle of the back
+      const f = bodyMid + bodyLen * kf, [y, bi] = Mx.topAt(f); put.push([nodes[bi].n, at3(f, y - bodyH * .08 + ku * bodyH, 0), bodyLen * .85, 0, 0]);
+    } else if (D.on === "spine") {                              // plates: a row along the top, from partway down the tail to the shoulders
+      const f0 = bodyMid - bodyLen / 2 - tailLen * .45, f1 = bodyMid + bodyLen * .42, nP = 7;
+      for (let j = 0; j < nP; j++) { const f = f0 + (f1 - f0) * ((j + .5) / nP + kf), [y, bi] = Mx.topAt(f); put.push([nodes[bi].n, at3(f, y - bodyH * .03 + ku * bodyH, 0), bodyLen * .24 * (.6 + .6 * Math.sin((j + .5) / nP * Math.PI)), 0, 0]); }
+    } else if (D.on === "neck") {                               // a mane: along the top of the neck, following its slope
+      const iN = Mx.byName.Neck, iH = Mx.byName.Head;
+      if (iN !== undefined && iH !== undefined) { const a = Pof(iN), b = Pof(iH), d = b.clone().sub(a), df = d.x * Mx.fwd.x + d.z * Mx.fwd.z, p = Math.atan2(d.y, df), th = E.neck ? (E.neck.s[1] - E.neck.s[0]) * .42 : bodyH * .2;
+        const m = a.clone().lerp(b, .5 + kf), f = m.x * Mx.fwd.x + m.z * Mx.fwd.z; put.push(["Neck", at3(f - Math.sin(p) * th, m.y + Math.cos(p) * th + ku * bodyH, 0), Math.max(d.length(), bodyH * .5) * 1.1, p, 0]); }
+    }
+    for (const [bn, w, u, pitch, sw] of put) {
+      const bi = Mx.byName[bn], bone = Q.top.getObjectByName(bn); if (bi === undefined || !bone) continue;
+      const p = new V3(), q = new THREE.Quaternion(), s3 = new V3(); Mx.Wn[bi].decompose(p, q, s3);
+      const toBone = Mx.Wn[bi].clone().invert();
+      for (const s of D.pair ? [1, -1] : [1]) {
+        const g0 = crKitGeo(k.type, k, s), grp = new THREE.Group();
+        for (const g of Array.isArray(g0) ? g0 : [g0]) { const m = new THREE.Mesh(g, mat); m.scale.setScalar(u * (k.size || 1)); m.rotation.x = -pitch - (k.tilt || 0); grp.add(m); }
+        grp.position.copy(w.clone().addScaledVector(Mx.side, s * sw).applyMatrix4(toBone));
+        grp.quaternion.copy(q.clone().invert().multiply(fq)); grp.scale.set(1 / s3.x, 1 / s3.y, 1 / s3.z);
+        grp.userData.kit = ki; bone.add(grp); out.push(grp);
+      }
+    }
+  });
+  return out;
+}
+// ---- the Workshop
+const WS_BASES = ["wolf", "coyote", "fox", "bear", "panther", "lion", "buck", "elk", "moose", "caribou", "pronghorn", "oryx", "horse", "zebra", "giraffe", "camel", "goat", "bighorn", "muskox", "boar", "tapir",
+  "capybara", "rhino", "elephant", "gator", "baboon", "rabbit", "raptor", "trex", "parasaur", "triceratops", "stego", "bronto"];
+const WS_COLS = [0x2b2420, 0x5a3a22, 0x8a5a32, 0xb08050, 0xd8c8a0, 0xf0ece4, 0x8a8a86, 0x4a4a48, 0x3c5a2a, 0x6a8a3a, 0x9aa050, 0xc89a3a, 0xb04a2a, 0x7a2a2a, 0x3a4a6a, 0x5a3a6a];
+const WS_TEMPER = [["calm", "Calm"], ["skittish", "Skittish"], ["fights", "Fights back"], ["hunts", "Hunts you"]];
+const WS_LIVES = [["forest", "Forest"], ["grass", "Grassland"], ["desert", "Desert"], ["snow", "Snow"], ["jungle", "Jungle"], ["swamp", "Swamp"], ["prehistoric", "Dinosaur maps"]];
+const WS_CLIPS = ["Idle", "Walk", "Run", "Eat", "Attack", "Jump", "Death"];
+const wsRecipe = base => ({ v: 1, base, name: "", size: 1, parts: {}, colors: {}, kit: [], speed: 1, temper: "skittish", lives: [] });
+const WS = { R: (() => { try { const r = JSON.parse(localStorage.getItem("jt-ws") || "null"); if (r && WS_BASES.includes(r.base)) return Object.assign(wsRecipe(r.base), r); } catch (_) {} return wsRecipe("wolf"); })(),
+  tab: "shape", part: "head", kit: -1, region: "body", page: 0, spage: 0, saved: null, status: "", clip: "Idle", turn: .6, dist: 0, dirty: true, built: 0, group: null, holder: null, Q: null, Mx: null, kitObjs: [], marks: [], env: null, sizeTxt: "" };
+const wsName = k => BEAST_NAME[k] || k[0].toUpperCase() + k.slice(1);
+const wsClips = () => WS.Mx ? WS_CLIPS.filter(c => WS.Mx.clips[c]) : [];
+function wsChange() { WS.dirty = true; try { localStorage.setItem("jt-ws", JSON.stringify(WS.R)); } catch (_) {} }
+function wsBase(k) { WS.R.base = k; WS.R.parts = {}; WS.R.kit = []; WS.kit = -1; WS.clip = "Idle"; WS.dist = 0; wsChange(); qdinoLoad(k); }
+function wsPart(g) { return WS.R.parts[g] || (WS.R.parts[g] = {}); }
+function wsNamed(t) { WS.R.name = t.slice(0, 24); wsChange(); WS.tab = "file"; vruiOpen("work"); }
+function wsFit(k, M) {                                          // the game's size for this kind: the model fitted to the old hand-built one, as the game does
+  if (QDINO.fit[k]) return QDINO.fit[k];
+  const b = beastBody(k, mulberry32(7), "temperate", false); b.root.scale.setScalar(BEAST_SCALE[k] || 1); if (b.head) b.head.rotation.set(0, 0, 0); b.root.updateMatrixWorld(true);
+  return qdFit(k, M, qdinoMake(M), b.body, b.root.scale.x);
+}
+function wsEnv(on) {                                            // the Workshop's own light and no fog (put back after)
+  if (on && !WS.env) { WS.env = { fog: scene.fog, h: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity], s: [sunL.color.clone(), sunL.intensity, sunL.position.clone(), sunL.target.position.clone()] }; scene.fog = null; }
+  else if (!on && WS.env) { const E = WS.env; WS.env = null; scene.fog = E.fog; hemi.color.copy(E.h[0]); hemi.groundColor.copy(E.h[1]); hemi.intensity = E.h[2];
+    sunL.color.copy(E.s[0]); sunL.intensity = E.s[1]; sunL.position.copy(E.s[2]); sunL.target.position.copy(E.s[3]); sunL.target.updateMatrixWorld(); }
+}
+function wsBuild() {                                            // (re)make the creature on the turntable from the recipe
+  const M = QDINO.models[WS.R.base]; if (!M) { qdinoLoad(WS.R.base); return false; }
+  if (!WS.group) { WS.group = new THREE.Group(); WS.holder = new THREE.Group(); WS.group.add(WS.holder); }
+  if (WS.group.parent !== VRUI.root) VRUI.root.add(WS.group);
+  const t = WS.Q && WS.Q.curA ? WS.Q.curA.time : 0;
+  if (WS.Q) { WS.holder.remove(WS.Q.wrap); WS.Q.mesh.skeleton.dispose(); WS.Mx.geo.dispose(); for (const o of WS.kitObjs) o.traverse(m => { if (m.isMesh) { m.geometry.dispose(); m.material.dispose(); } }); }
+  const Mx = WS.Mx = crBuild(M, WS.R), Q = qdinoMake(Mx), F = wsFit(WS.R.base, M), wrap = new THREE.Group();
+  wrap.scale.setScalar(F.s); wrap.position.z = F.dz; wrap.add(Q.top); Q.wrap = wrap; WS.holder.add(wrap);
+  WS.kitObjs = crKitAttach(Q, Mx, WS.R); WS.Q = Q; WS.F = F;
+  const sc = (BEAST_SCALE[WS.R.base] || 1) * (WS.R.size || 1), e = Mx.ext.all; WS.holder.scale.setScalar(sc);
+  if (e) WS.sizeTxt = "In the game: about " + ((e.f[1] - e.f[0]) * F.s * sc).toFixed(1) + " m long, " + ((e.u[1] - e.u[0]) * F.s * sc).toFixed(1) + " m tall";
+  if (!WS.dist) WS.dist = Math.max(2.4, Math.min(24, F.len * sc * 1.15 + 1.2));
+  const clip = Mx.clips[WS.clip] ? WS.clip : "Idle", a = Q.act(clip); a.setLoop(clip === "Death" ? THREE.LoopPingPong : THREE.LoopRepeat, Infinity); a.play(); a.time = t % Math.max(.01, a.getClip().duration); Q.cur = clip; Q.curA = a;
+  WS.dirty = false; WS.built = performance.now(); return true;
+}
+function wsTick(dt) {
+  if (WS.dirty && performance.now() - WS.built > 120) { const first = !WS.Q; if (wsBuild() && first) uiDraw(VRUI.panels.work); }
+  if (!WS.Q) return;
+  const I = vr.I, hs = I ? [I.hands.right, I.hands.left].filter(Boolean) : [], sx = hs.reduce((a, h) => Math.abs(h.sx || 0) > Math.abs(a) ? h.sx : a, 0), sy = hs.reduce((a, h) => Math.abs(h.sy || 0) > Math.abs(a) ? h.sy : a, 0);
+  if (Math.abs(sx) > .2) WS.turn += sx * dt * 1.8;              // a thumbstick: turn it round, bring it nearer or farther
+  if (Math.abs(sy) > .3) WS.dist = Math.max(1.5, Math.min(30, WS.dist * (1 + sy * dt * .9)));
+  WS.group.position.set(0, 0, -WS.dist); WS.holder.rotation.y = WS.turn - Math.atan2(WS.Mx.fwd.x, WS.Mx.fwd.z);
+  WS.Q.mixer.update(dt); WS.group.updateMatrixWorld(true);
+  if (WS.env) {                                                 // a steady daylight on it, from behind your right shoulder
+    hemi.color.set(0xeef2f8); hemi.groundColor.set(0x5a4a38); hemi.intensity = .62; sunL.color.set(0xfff1de); sunL.intensity = 1.1;
+    WS.group.getWorldPosition(sunL.target.position); sunL.position.copy(VRUI.root.localToWorld(new THREE.Vector3(3, 9, 6))); sunL.target.updateMatrixWorld();
+  }
+  const want = WS.tab === "shape" && WS.part !== "whole" ? WS.Q.mesh.skeleton.bones.filter(b => crPart(b.name) === WS.part) : [];   // the picked part: little gold beads on its joints
+  while (WS.marks.length < want.length) { const m = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffd45a, depthTest: false, transparent: true, opacity: .85, fog: false })); m.renderOrder = 60; WS.group.add(m); WS.marks.push(m); }
+  const p = new THREE.Vector3();
+  WS.marks.forEach((m, i) => { m.visible = i < want.length; if (!m.visible) return; want[i].getWorldPosition(p); m.position.copy(WS.group.worldToLocal(p)); m.scale.setScalar(Math.max(.025, WS.dist * .011)); });
+}
+function wsPick(from, dir) {                                    // pointing at the creature and pulling the trigger: the part nearest the laser
+  if (!WS.Q) return; let best = null, bd = 1e9; const a = new THREE.Vector3(), b = new THREE.Vector3(), ray = new THREE.Ray(from, dir.clone().normalize());
+  for (const bone of WS.Q.mesh.skeleton.bones) { const g = crPart(bone.name); if (!g) continue; bone.getWorldPosition(a);
+    const c = bone.children.find(o => o.isBone || /_end$/.test(o.name)); if (c) c.getWorldPosition(b); else b.copy(a);
+    const d = ray.distanceSqToSegment(a, b); if (d < bd) { bd = d; best = g; } }
+  if (best && Math.sqrt(bd) < Math.max(.4, WS.dist * .12)) { WS.tab = "shape"; WS.part = best; buzz("R", .3, 20); uiDraw(VRUI.panels.work); }
+}
+function wsSave() {
+  if (!WS.R.name) { WS.status = "Give it a name first"; return; }
+  if (!DEV.ok) { WS.status = "Dev Mode isn't on"; return; }
+  WS.status = "Saving…"; devPost({ op: "save", kind: "creature", name: WS.R.name, data: WS.R })
+    .then(({ st }) => { WS.status = st === 200 ? "Saved: " + WS.R.name : st === 403 ? "The dev key was refused" : "Couldn't save (" + st + ")"; if (st === 200) wsList(); else uiDraw(VRUI.panels.work); })
+    .catch(() => { WS.status = "Can't reach the online server"; uiDraw(VRUI.panels.work); });
+}
+function wsList() { WS.saved = WS.saved || []; fetch((DEV.url || DEV_URL) + "?list=creature", { cache: "no-store" }).then(r => r.json()).then(o => { WS.saved = o.items || []; WS.spage = 0; uiDraw(VRUI.panels.work); })
+  .catch(() => { WS.status = "Can't reach the online server"; uiDraw(VRUI.panels.work); }); }
+function wsLoad(name) { WS.status = "Loading " + name + "…"; fetch((DEV.url || DEV_URL) + "?get=creature&name=" + encodeURIComponent(name), { cache: "no-store" }).then(r => r.json()).then(o => {
+    if (o && o.data && WS_BASES.includes(o.data.base)) { WS.R = Object.assign(wsRecipe(o.data.base), o.data); WS.kit = -1; WS.dist = 0; qdinoLoad(WS.R.base); wsChange(); WS.status = "Loaded: " + o.name; } else WS.status = "Couldn't load it";
+    uiDraw(VRUI.panels.work); }).catch(() => { WS.status = "Can't reach the online server"; uiDraw(VRUI.panels.work); }); }
+function devPanels() {
+  // ---- the Dev menu
+  const Dv = uiPanel("dev", 1400, 900, 2.0, 74, 1.45);
+  Dv.paint = (g, P) => { uiBg(g, P, "DEV MODE"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Tools for making the game. Only this headset has them.", 700, 150);
+    if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 740); } };
+  uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
+  uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
+  uiBtn(Dv, 720, 450, 590, 170, "Test tools", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
+  uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
+  uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
+  // ---- the Workshop's panel, to the left of the creature
+  const Wk = uiPanel("work", 1300, 1170, 1.8, 56, 1.38, 50), x0 = 50, sx = 420, R = () => WS.R, T = k => () => WS.tab !== k;
+  const lab = (g, x, y, t, v) => uiLabel(g, x, y, t, v), small = (g, x, y, t, c) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "26px sans-serif"; g.fillStyle = c || UIC.dim; g.fillText(t, x, y); };
+  const SH = [["len", "Length"], ["thick", "Thickness"], ["size", "Size"]], KS = [["size", "Size", .3, 3, 1], ["len", "Length", .3, 3, 1], ["tilt", "Tilt", -1.5, 1.5, 0], ["fwd", "Forward", -.6, .6, 0], ["up", "Up", -.6, .6, 0], ["spread", "Width", .3, 3, 1]];
+  const kitNow = () => R().kit[WS.kit], hex = c => "#" + c.toString(16).padStart(6, "0");
+  Wk.paint = (g, P) => {
+    uiBg(g, P); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 46px sans-serif"; g.fillStyle = UIC.text; g.fillText("CREATURE WORKSHOP", x0, 76);
+    g.textAlign = "right"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (R().name || "Unnamed") + " · from " + wsName(R().base), 560), P.W - 50, 76);
+    const t = WS.tab;
+    if (t === "shape") {
+      small(g, x0, 236, "Point at the creature and pull the trigger to pick a part");
+      if (WS.part === "whole") lab(g, sx, 300, "Size of the whole creature", (R().size || 1).toFixed(2) + "×");
+      else { const s = R().parts[WS.part] || {}; SH.forEach(([k, l], i) => { if (k !== "size" || WS.part === "head") lab(g, sx, 300 + i * 150, l, (s[k] || 1).toFixed(2) + "×"); }); }
+    } else if (t === "parts") {
+      lab(g, x0, 240, "Add a part"); lab(g, x0, 490, "On the creature"); if (!R().kit.length) small(g, x0, 540, "Nothing added yet (up to 8)");
+      const k = kitNow(); if (k) { lab(g, x0, 720, (WS.kit + 1) + ". " + CR_KIT[k.type].name); KS.forEach(([q, l, , , d0], i) => small(g, x0 + (i % 2) * 620, 786 + Math.floor(i / 2) * 82, l + "  " + (k[q] === undefined ? d0 : k[q]).toFixed(2))); small(g, x0, 1036, "Colour"); }
+    } else if (t === "colour") {
+      lab(g, x0, 240, "Part of the body"); lab(g, x0, 420, "Colour", R().colors[WS.region] == null ? "the original" : ""); small(g, x0, 820, "The shading stays, and dark details (eyes, nose, hooves) keep their colour.");
+    } else if (t === "moves") {
+      lab(g, x0, 240, "Watch it move"); small(g, x0, 470, "Thumbstick: left / right turns it round, up / down brings it nearer or farther");
+      lab(g, x0, 540, "Speed in the game", (R().speed || 1).toFixed(2) + "×"); lab(g, x0, 690, "Temper"); lab(g, x0, 850, "Lives on");
+    } else if (t === "file") {
+      lab(g, x0, 240, "Name"); lab(g, x0, 410, "Start from"); small(g, x0 + 240, 410, "page " + (WS.page + 1) + " of " + Math.ceil(WS_BASES.length / 12) + "  (starting over clears the shape and parts)");
+      lab(g, x0, 770, "Saved creatures"); if (WS.saved && !WS.saved.length) small(g, x0 + 330, 770, "None yet");
+    }
+    if (!QDINO.models[R().base]) small(g, sx, 1060, "Loading " + wsName(R().base) + "…", UIC.sun);
+    else if (WS.sizeTxt) { g.textAlign = "right"; g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText(WS.sizeTxt, P.W - 50, 1076); }
+    if (WS.status) { g.textAlign = "right"; g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, WS.status, 820), P.W - 50, 1130); }
+  };
+  [["shape", "Shape"], ["parts", "Parts"], ["colour", "Colour"], ["moves", "Moves"], ["file", "File"]].forEach(([k, l], i) => uiBtn(Wk, x0 + i * 242, 106, 228, 72, l, () => { WS.tab = k; if (k === "file" && !WS.saved) wsList(); }, { active: () => WS.tab === k, fs: 32 }));
+  // shape
+  CR_PARTS.forEach(([k, l], i) => uiBtn(Wk, x0, 256 + i * 104, 320, 88, l, () => { WS.part = k; }, { active: () => WS.part === k, hide: T("shape"), fs: 32 }));
+  SH.forEach(([k], i) => uiSlider(Wk, sx, 318 + i * 150, 800, .4, 2.5, () => (R().parts[WS.part] || {})[k] || 1, v => { wsPart(WS.part)[k] = +v.toFixed(2); wsChange(); }, .05).hide = () => WS.tab !== "shape" || WS.part === "whole" || (k === "size" && WS.part !== "head"));
+  uiSlider(Wk, sx, 318, 800, .3, 5, () => R().size || 1, v => { R().size = +v.toFixed(2); wsChange(); }, .05).hide = () => WS.tab !== "shape" || WS.part !== "whole";
+  uiBtn(Wk, sx, 790, 380, 80, "Reset this part", () => { if (WS.part === "whole") R().size = 1; else delete R().parts[WS.part]; wsChange(); }, { hide: T("shape"), fs: 30 });
+  uiBtn(Wk, sx + 410, 790, 390, 80, "Reset the whole shape", () => { R().parts = {}; R().size = 1; wsChange(); }, { hide: T("shape"), fs: 30 });
+  // parts
+  Object.keys(CR_KIT).forEach((k, i) => uiBtn(Wk, x0 + (i % 5) * 242, 262 + Math.floor(i / 5) * 88, 228, 76, CR_KIT[k].name, () => { if (R().kit.length >= 8) { WS.status = "That's 8 parts already"; return; } R().kit.push({ type: k, size: 1, len: 1 }); WS.kit = R().kit.length - 1; wsChange(); }, { hide: T("parts"), fs: 30 }));
+  for (let i = 0; i < 8; i++) uiBtn(Wk, x0 + (i % 4) * 302, 512 + Math.floor(i / 4) * 82, 290, 70, "", () => { WS.kit = i; }, { labelFn: () => { const k = R().kit[i]; return k ? (i + 1) + ". " + CR_KIT[k.type].name : ""; }, active: () => WS.kit === i, hide: () => WS.tab !== "parts" || !R().kit[i], fs: 28 });
+  KS.forEach(([q, , a, b, d0], i) => uiSlider(Wk, x0 + (i % 2) * 620 + 210, 744 + Math.floor(i / 2) * 82, 360, a, b, () => { const k = kitNow(); return k && k[q] !== undefined ? k[q] : d0; }, v => { const k = kitNow(); if (k) { k[q] = +v.toFixed(2); wsChange(); } }, .02).hide = () => WS.tab !== "parts" || !kitNow());
+  WS_COLS.slice(0, 12).forEach((c, i) => uiBtn(Wk, x0 + 120 + i * 84, 1000, 74, 50, "", () => { const k = kitNow(); if (k) { k.col = c; wsChange(); } }, { paintCol: hex(c), active: () => !!kitNow() && kitNow().col === c, hide: () => WS.tab !== "parts" || !kitNow() }));
+  uiBtn(Wk, x0 + 1050, 680, 150, 60, "Remove", () => { if (kitNow()) { R().kit.splice(WS.kit, 1); WS.kit = Math.min(WS.kit, R().kit.length - 1); wsChange(); } }, { hide: () => WS.tab !== "parts" || !kitNow(), fs: 26, paintCol: "#8a3a32" });
+  // colour
+  [["body", "Body"], ["belly", "Belly"], ["head", "Head"], ["legs", "Legs"], ["tail", "Tail"]].forEach(([k, l], i) => uiBtn(Wk, x0 + i * 242, 262, 228, 76, l, () => { WS.region = k; }, { active: () => WS.region === k, hide: T("colour"), fs: 30 }));
+  WS_COLS.forEach((c, i) => uiBtn(Wk, x0 + (i % 8) * 150, 446 + Math.floor(i / 8) * 108, 136, 96, "", () => { R().colors[WS.region] = c; wsChange(); }, { paintCol: hex(c), active: () => R().colors[WS.region] === c, hide: T("colour") }));
+  uiBtn(Wk, x0, 680, 320, 80, "The original", () => { R().colors[WS.region] = null; wsChange(); }, { active: () => R().colors[WS.region] == null, hide: T("colour"), fs: 30 });
+  uiBtn(Wk, x0 + 350, 680, 380, 80, "All original", () => { R().colors = {}; wsChange(); }, { hide: T("colour"), fs: 30 });
+  // moves
+  WS_CLIPS.forEach((c, i) => uiBtn(Wk, x0 + (i % 4) * 302, 262 + Math.floor(i / 4) * 88, 290, 76, "", () => { const k = wsClips()[i]; if (k) { WS.clip = k; WS.dirty = true; } },
+    { labelFn: () => wsClips()[i] || "", active: () => WS.clip === wsClips()[i], hide: () => WS.tab !== "moves" || !wsClips()[i], fs: 30 }));
+  uiSlider(Wk, x0, 560, 1100, .4, 2.5, () => R().speed || 1, v => { R().speed = +v.toFixed(2); wsChange(); }, .05).hide = T("moves");
+  WS_TEMPER.forEach(([k, l], i) => uiBtn(Wk, x0 + i * 302, 710, 290, 76, l, () => { R().temper = k; wsChange(); }, { active: () => R().temper === k, hide: T("moves"), fs: 30 }));
+  WS_LIVES.forEach(([k, l], i) => uiBtn(Wk, x0 + (i % 4) * 302, 870 + Math.floor(i / 4) * 88, 290, 76, l, () => { const L = R().lives || (R().lives = []), j = L.indexOf(k); if (j >= 0) L.splice(j, 1); else L.push(k); wsChange(); }, { active: () => (R().lives || []).includes(k), hide: T("moves"), fs: 30 }));
+  // file
+  uiBtn(Wk, x0, 262, 600, 80, "", () => { VRUI.keyFor = "name"; vruiOpen("tag"); }, { labelFn: () => R().name || "Tap to name it", hide: T("file"), fs: 32 });
+  uiBtn(Wk, x0 + 640, 262, 300, 80, "Save", () => wsSave(), { primary: true, hide: T("file"), fs: 36 });
+  uiBtn(Wk, x0 + 960, 262, 240, 80, "New", () => { WS.R = wsRecipe(R().base); WS.kit = -1; WS.dist = 0; WS.status = ""; wsChange(); }, { hide: T("file"), fs: 32 });
+  for (let i = 0; i < 12; i++) uiBtn(Wk, x0 + (i % 4) * 302, 432 + Math.floor(i / 4) * 90, 290, 78, "", () => { const k = WS_BASES[WS.page * 12 + i]; if (k) wsBase(k); },
+    { labelFn: () => { const k = WS_BASES[WS.page * 12 + i]; return k ? wsName(k) : ""; }, active: () => R().base === WS_BASES[WS.page * 12 + i], hide: () => WS.tab !== "file" || !WS_BASES[WS.page * 12 + i], fs: 28 });
+  const np = Math.ceil(WS_BASES.length / 12);
+  uiBtn(Wk, x0 + 1000, 352, 95, 56, "◀", () => { WS.page = Math.max(0, WS.page - 1); }, { hide: T("file"), fs: 26, disabled: () => WS.page <= 0 });
+  uiBtn(Wk, x0 + 1105, 352, 95, 56, "▶", () => { WS.page = Math.min(np - 1, WS.page + 1); }, { hide: T("file"), fs: 26, disabled: () => WS.page >= np - 1 });
+  for (let i = 0; i < 8; i++) uiBtn(Wk, x0 + (i % 4) * 302, 792 + Math.floor(i / 4) * 84, 290, 72, "", () => { const s = WS.saved && WS.saved[WS.spage * 8 + i]; if (s) wsLoad(s.name); },
+    { labelFn: () => { const s = WS.saved && WS.saved[WS.spage * 8 + i]; return s ? s.name : ""; }, hide: () => WS.tab !== "file" || !(WS.saved && WS.saved[WS.spage * 8 + i]), fs: 28 });
+  uiBtn(Wk, x0 + 1000, 712, 95, 56, "◀", () => { WS.spage = Math.max(0, WS.spage - 1); }, { hide: () => WS.tab !== "file" || !WS.saved || WS.saved.length <= 8, fs: 26, disabled: () => WS.spage <= 0 });
+  uiBtn(Wk, x0 + 1105, 712, 95, 56, "▶", () => { WS.spage = Math.min(Math.ceil(WS.saved.length / 8) - 1, WS.spage + 1); }, { hide: () => WS.tab !== "file" || !WS.saved || WS.saved.length <= 8, fs: 26, disabled: () => WS.spage >= Math.ceil(WS.saved.length / 8) - 1 });
+  uiBtn(Wk, x0, 1078, 300, 70, "Dev menu", () => vruiOpen("dev"), { fs: 30 });
+}
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"] }[st] || [];
+  if (WS.group) WS.group.visible = st === "work"; wsEnv(st === "work");   // 2.45
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
 // ---- 2.40: one anonymous count per map made (no name, no tag, nothing about you): how many maps a day, in VR / on a PC / on a phone, solo or online,
@@ -8655,6 +9067,7 @@ const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk)
 function vruiOpen(stage) {
   vruiParts();
   if (stage === "mode" && !rulesOk()) stage = "rules";       // 2.28: the rules come first, once
+  if (stage !== "tag") VRUI.keyFor = null;                       // 2.45: the keyboard types a gamer tag unless it was opened for the dev key or a creature's name
   if (stage === "mode" && MP.code) mpLeave();                    // back to the main menu leaves an online game
   if (stage === "mode" || stage === "mp" || stage === "rooms") verCheck();                     // 2.43
   if (stage === "setup" && MP.code) stage = "lobby";             // 2.38: online, the map settings sit beside the lobby
@@ -8679,7 +9092,7 @@ function vruiOpen(stage) {
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
-  if (stage === "tag") { VRUI.tagEdit = MP.tag; uiDraw(VRUI.panels.tag); }
+  if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
   if (!inWorld) state = "vrmenu";                                // (2.38: leaving a game that kept going, too)
   mpHostStage(stage);
 }
@@ -8700,6 +9113,7 @@ function vrHeadLocal(I) {                                        // the head in 
 function vruiClose() {
   if (!VRUI.root) return;
   VRUI.on = false; VRUI.stage = ""; VRUI.root.visible = false; for (const L of VRUI.lasers) { L.line.visible = L.dot.visible = false; }
+  wsEnv(false);
   if (VRUI.dio) { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (world) world.visible = true; if (vr.avatar) vr.avatar.group.visible = true;
 }
@@ -8727,6 +9141,7 @@ function vruiTick(dt) {
   if (st === "lobby" && !MP.code) { vruiOpen(MP.host ? "mp" : "rooms"); return; }   // 2.38: the room is gone (or never opened): back, with the reason
   if (st === "pause" && vr.off && edge("ymenu", vr.off.b)) { vruiResume(); return; } // tap Y again: back to the game
   if (st === "setup" || st === "lobby" || st === "char") chpTick(dt);
+  if (st === "work") wsTick(dt);                                  // 2.45
   if (st === "intro") {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
     if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
@@ -8756,7 +9171,7 @@ function vruiTick(dt) {
       if (edge("ui" + hand, h.trig) && !clicked) { clicked = true; pickSpawn(VRUI.dio.userData.spin.worldToLocal(dHit.point.clone())); buzz(hand === "right" ? "R" : "L", .4, 25); }
       return;
     }
-    L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, hit ? hit.distance : 1.2);
+    L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, hit ? hit.distance : st === "work" && WS.Q ? WS.dist : 1.2);
     L.dot.visible = !!hit; if (hit) L.dot.position.copy(hit.point);
     let P = null, w = null, cx = 0, cy = 0;
     if (hit) { P = hit.object.userData.panel; cx = (1 - hit.uv.x) * P.W; cy = (1 - hit.uv.y) * P.H; w = P.widgets.find(q => !(q.hide && q.hide()) && cx >= q.x - 6 && cx <= q.x + q.w + 6 && cy >= q.y - 10 && cy <= q.y + q.h + 10) || null; }
@@ -8770,6 +9185,7 @@ function vruiTick(dt) {
       clicked = true;
       if (st === "intro") { introSounds(false); titlePaint(); vruiOpen("title"); return; }
       if (st === "title") { vruiOpen("mode"); return; }
+      if (st === "work" && !hit) { wsPick(h.rayPos, dir); return; }   // 2.45: pointing at the creature picks a part
       if (w && !(w.disabled && w.disabled()) && !mpLocked(P, w)) {
         buzz(hand === "right" ? "R" : "L", .3, 20);
         if (w.kind === "slider") { VRUI.drag = { hand, P, w }; w.set(Math.max(w.min, Math.min(w.max, w.min + (cx - w.x) / w.w * (w.max - w.min)))); }
@@ -11088,14 +11504,16 @@ function mpLobbyPanels() {
   uiBtn(Lb, lx + 720, 1048, 260, 80, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true, fs: 32 });
   // ---- your gamer tag: a big simple keyboard ----
   const Tg = uiPanel("tag", 1500, 940, 2.0, 74, 1.42);
-  Tg.paint = (g, P) => { uiBg(g, P, "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((VRUI.tagEdit || "") + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
-    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
-  const type = ch => { VRUI.tagEdit = ((VRUI.tagEdit || "") + ch).slice(0, 12); uiDraw(Tg); };
+  Tg.paint = (g, P) => { const kf = VRUI.keyFor, txt = VRUI.tagEdit || "";
+    uiBg(g, P, kf === "dev" ? "DEV KEY" : kf === "name" ? "NAME THIS CREATURE" : "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((kf === "dev" ? "•".repeat(txt.length) : txt) + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
+    g.font = "28px sans-serif"; g.fillStyle = kf === "dev" && DEV.msg ? UIC.sun : UIC.dim;
+    g.fillText(kf === "dev" ? DEV.msg || "Type the dev key and press OK (OK with nothing typed goes back)" : kf === "name" ? "Up to 24 letters and numbers" : "Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
+  const type = ch => { VRUI.tagEdit = ((VRUI.tagEdit || "") + ch).slice(0, VRUI.keyFor ? 24 : 12); uiDraw(Tg); };
   ["1234567890", "QWERTYUIOP", "ASDFGHJKL_", "ZXCVBNM-."].forEach((row, j) => row.split("").forEach((ch, i) => uiBtn(Tg, 70 + i * 136 + j * 30, 300 + j * 112, 124, 100, ch, () => type(ch), { fs: 44, personal: true })));
   uiBtn(Tg, 70, 760, 300, 110, "Space", () => type(" "), { fs: 38, personal: true });
   uiBtn(Tg, 390, 760, 300, 110, "Delete", () => { VRUI.tagEdit = (VRUI.tagEdit || "").slice(0, -1); uiDraw(Tg); }, { fs: 38, personal: true });
   uiBtn(Tg, 710, 760, 300, 110, "Clear", () => { VRUI.tagEdit = ""; uiDraw(Tg); }, { fs: 38, personal: true });
-  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => mpTagDone(), { primary: true, fs: 48, personal: true });
+  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => { const t = (VRUI.tagEdit || "").trim(); if (VRUI.keyFor === "dev") devTryKey(t); else if (VRUI.keyFor === "name") wsNamed(t); else mpTagDone(); }, { primary: true, fs: 48, personal: true });
 }
 // ---- the host's side of the lobby: whatever the host sees, everyone sees
 function mpHostSetSync() {                                  // a setting changed: send it (only when it really changed)

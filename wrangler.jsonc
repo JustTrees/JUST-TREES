@@ -6,6 +6,6 @@
   "compatibility_date": "2026-10-01",
   "assets": { "directory": ".", "binding": "ASSETS" },
   // 2.28: the open games list (one small Durable Object, SQLite-backed so it runs on the free plan; it keeps the list in memory)
-  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }, { "name": "COUNTS", "class_name": "Counts" }] },   // 2.40: maps made per day
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Rooms"] }, { "tag": "v2", "new_sqlite_classes": ["Counts"] }]
+  "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }, { "name": "COUNTS", "class_name": "Counts" }, { "name": "DEVSTORE", "class_name": "DevStore" }] },   // 2.40: maps made per day; 2.45: Dev Mode saves
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Rooms"] }, { "tag": "v2", "new_sqlite_classes": ["Counts"] }, { "tag": "v3", "new_sqlite_classes": ["DevStore"] }]
 }
