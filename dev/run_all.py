@@ -12,7 +12,7 @@ game = os.path.abspath(args[0] if args else os.path.join(here, "..", "index.html
 tmp = tempfile.mkdtemp(prefix="jt-tests-"); dbg = os.path.join(tmp, "dbg.html")
 ok = subprocess.run([sys.executable, os.path.join(here, "check_code.py"), game]).returncode == 0
 subprocess.run([sys.executable, os.path.join(here, "make_debug.py"), game, dbg], check=True, capture_output=True)
-ONLINE = {"test_mp", "test_mp_fail", "test_lobby", "test_online", "test_en_online", "test_rooms", "test_243"}
+ONLINE = {"test_mp", "test_mp_fail", "test_lobby", "test_online", "test_en_online", "test_rooms", "test_243", "test_246"}
 tests = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(here, "test_*.py")))
 if only: tests = [t for t in tests if t in only.split(",")]
 peer = None

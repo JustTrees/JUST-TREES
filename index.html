@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.45</title>
+<title>JUST TREES 2.46</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.45";              // Just Trees 2.45
+const VERSION = "2.46";              // Just Trees 2.46
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -363,6 +363,33 @@ function applySize() {                      // map size from the setup screen; d
 const EYE = 1.65;
 /* ---- map shape: an organic outline inside the square (a coastline on islands, a soft boundary on endless maps) ---- */
 let edgeShape = { island: false, R0: 1e9, f: () => 1e9 };
+/* 2.46: an arena = a map built in Map Lab: the usual settings and seed plus its own shape (length, width, roundness, coast wobble), a slide
+   through the landscape (phase X/Z), height and water level, the land raised and lowered by hand (a grid of changes), trees and rocks removed
+   (circles) or placed, and its own loot. While one is built every random choice is made on its own (one stream per tree try, per rock try…),
+   so changing one spot doesn't reshuffle the rest of the map. */
+let ARENA = null, ARENA_BASE = null, MAPROCKS = null;
+const arenaOff = (L, x, z) => { if (L) for (const c of L) { const dx = x - c[0], dz = z - c[1]; if (dx * dx + dz * dz < c[2] * c[2]) return true; } return false; };
+const arenaRand = (a, b) => mulberry32((Math.imul(a | 0, 0x9E3779B1) ^ Math.imul((b | 0) + 0x632BE5AB, 0x85EBCA77)) >>> 0);
+function arenaGrid(A) {                                        // the hand-made height changes: n x n points over the map square, in metres
+  if (A._D && A._D.n) return A._D;
+  const sc = A.sc, n = sc && sc.n || 161, D = new Float32Array(n * n);
+  if (sc && sc.d) { let k = 0; for (let i = 0; i + 1 < sc.d.length; i += 2) { const run = sc.d[i], v = sc.d[i + 1] / 10; for (let q = 0; q < run && k < D.length; q++) D[k++] = v; } }
+  const g = { n, D }; Object.defineProperty(A, "_D", { value: g, writable: true, configurable: true, enumerable: false }); return g;
+}
+function arenaGridPack(A) {                                    // back into the recipe: runs of equal values (tenths of a metre)
+  const g = arenaGrid(A), out = []; let run = 0, cur = null;
+  for (let k = 0; k < g.D.length; k++) { const v = Math.round(g.D[k] * 10); if (v === cur) run++; else { if (run) out.push(run, cur); cur = v; run = 1; } }
+  if (run) out.push(run, cur); A.sc = { n: g.n, d: out };
+}
+const arenaGridAt = (g, x, z) => {                             // the change at a spot (between the grid points)
+  const n = g.n, c = S / (n - 1), fx = Math.max(0, Math.min(n - 1.001, (x + HALF) / c)), fz = Math.max(0, Math.min(n - 1.001, (z + HALF) / c)), i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j, k = j * n + i, D = g.D;
+  return D[k] * (1 - tx) * (1 - tz) + D[k + 1] * tx * (1 - tz) + D[k + n] * (1 - tx) * tz + D[k + n + 1] * tx * tz;
+};
+function arenaApply(A) {                                       // an arena's settings become the map settings
+  seed = A.seed | 0 || 1; set.size = A.size || "medium"; set.lat = A.lat !== undefined ? A.lat : 45; set.hemi = A.hemi || 1; set.rough = A.rough !== undefined ? A.rough : .35;
+  set.density = A.dens !== undefined ? A.dens : .5; set.edges = A.edges || "island"; set.land = A.land || "natural";
+  if (A.time) { set.hour = A.time.hour; set.month = A.time.month; set.weather = A.time.weather || "clear"; }
+}
 let ARCHI = null;
 const archiRoll = sd => mulberry32(sd * 71 + 9)() < .4;   // Island at 0°: about 4 maps in 10 are an archipelago, the rest a normal island                                           // the equator archipelago: { isl: [{ x, z, r, h }] } when Island + 0°
 function makeEdgeShape(rand) {
@@ -371,6 +398,12 @@ function makeEdgeShape(rand) {
   const raw = a => { let v = 0; for (let i = 0; i < 6; i++) v += Math.sin(a * (i + 2) + k[i][0]) * k[i][1]; return v; };
   let lo = 1e9, hi = -1e9; for (let i = 0; i < 360; i++) { const v = raw(i / 360 * 6.283); lo = Math.min(lo, v); hi = Math.max(hi, v); }
   const f = island ? a => R0 * (.84 + .3 * (raw(a) - lo) / (hi - lo || 1)) : () => 1e9;   // islands: 84% to 114% of the base radius; endless: the square
+  if (island && ARENA) {                                       // 2.46: an arena's own outline: length (x) and width (z), round to boxy, more or less wobbly
+    const A = ARENA.shape || {}, M = HALF * .8, a = M * (A.len || 1), b = M * (A.wid || 1), p = 2 + 6 * (A.round || 0), w = A.wob === undefined ? 1 : A.wob;
+    const fa = ang => { const c = Math.abs(Math.cos(ang)) / a, sn = Math.abs(Math.sin(ang)) / b, r = Math.pow(Math.pow(c, p) + Math.pow(sn, p), -1 / p);
+      return Math.min(HALF * .88, r * (1 + w * .14 * (2 * (raw(ang) - lo) / (hi - lo || 1) - 1))); };
+    return { island, R0: Math.sqrt(a * b), f: fa };
+  }
   return { island, R0, f };
 }
 const edgeR = (x, z) => edgeShape.f(Math.atan2(z, x));
@@ -411,8 +444,8 @@ function envOptions(lat) {
 }
 let MAPENV = null;                                          // this map's environment: { lat, b }
 function rollEnv() {                                        // picked from the map number, so a map always comes back the same
-  const lat = set.lat * set.hemi, o = envOptions(lat); let b = o[o.length - 1][0];
-  if (set.env && set.env !== "auto") b = set.env === "climate" ? climateOf(lat) : set.env;
+  const lat = set.lat * set.hemi, o = envOptions(lat), env = ARENA && ARENA.env ? ARENA.env : set.env; let b = o[o.length - 1][0];
+  if (env && env !== "auto") b = env === "climate" ? climateOf(lat) : env;
   else { const r = mulberry32(seed * 131 + 7)(); let acc = 0; for (const [k, w] of o) { acc += w; if (r < acc) { b = k; break; } } }
   MAPENV = { lat, b }; return b;
 }
@@ -569,9 +602,9 @@ function makeNoise(rand) {
 function fbm(n, x, y, oct) { let s = 0, a = 1, f = 1, t = 0; for (let i = 0; i < oct; i++) { s += n(x * f, y * f) * a; t += a; a *= .5; f *= 2.03; } return s / t; }
 
 let H = () => 0;
-function buildHeight(seed, rough) {
+function buildHeight(seed, rough, A) {                         // (2.46 A: an arena: slid along by its phase, taller or flatter by its height)
   const r = mulberry32(seed * 7 + 1), n1 = makeNoise(r), n2 = makeNoise(r), n3 = makeNoise(r), n4 = makeNoise(r), n5 = makeNoise(r), n6 = makeNoise(r);
-  const ox = r() * 5000, oz = r() * 5000;
+  const ox = r() * 5000 + (A ? A.px || 0 : 0), oz = r() * 5000 + (A ? A.pz || 0 : 0), hk = A && A.hk !== undefined ? A.hk : 1;
   return (x, z) => {
     x += ox; z += oz;
     // warp the coordinates so nothing comes out as neat round hills
@@ -588,7 +621,7 @@ function buildHeight(seed, rough) {
     const hills = fbm(n1, x * .0055, z * .0055, 4) * (3 + rough * 22);
     const mask = smooth(-.15, .45, fbm(n2, x * .0028, z * .0028, 2));
     let ridge = 1 - Math.abs(fbm(n3, x * .009, z * .009, 4)); ridge *= ridge;
-    return cover + hills + ridge * mask * rough * rough * 95 + n4(x * .12, z * .12) * .3;
+    return (cover + hills + ridge * mask * rough * rough * 95 + n4(x * .12, z * .12) * .3) * hk;
   };
 }
 function slopeNy(x, z) {
@@ -4023,8 +4056,9 @@ function* envGen(o) {
   return Object.assign(E0, { kinds, NV, BUSHV, recs, bushRecs, pickVar, setTreeSize, stretch, treeAt });
 }
 function generate() {
-  clearSquad(); statPing();
-  HIKEMAP = HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && set.huntMap === "endless" ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
+  ARENA = set.arena || null; if (ARENA) arenaApply(ARENA);       // 2.46
+  clearSquad(); if (!LAB.on) statPing();
+  HIKEMAP = ARENA ? null : HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && set.huntMap === "endless" ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
@@ -4038,14 +4072,14 @@ function generate() {
   obstacles = new Map(); limbGrid = null; limbHold = new Map(); animals = []; birds = null; runner = null; precipFx = null;
   const lat = set.lat * set.hemi, biome = rollEnv(), season = seasonOf(lat, set.month);
   hourNow = set.hour; CARD_TINT.value.setRGB(1, 1, 1);
-  const rand = mulberry32(seed);
+  let rand = mulberry32(seed);                                  // (2.46: an arena re-seeds it for each try, see arenaRand)
   edgeShape = makeEdgeShape(mulberry32(seed * 11 + 5));
   let rawH = null, baked = null;
   ARCHI = null; FEAT = null; LAVA = null;
   if (!EN) {
-  rawH = buildHeight(seed, terrR());
+  rawH = buildHeight(seed, terrR(), ARENA);
   let shapedH = rawH;
-  ARCHI = edgeShape.island && Math.abs(set.lat) === 0 && archiRoll(seed) ? { isl: [] } : null;
+  ARCHI = edgeShape.island && Math.abs(set.lat) === 0 && !ARENA && archiRoll(seed) ? { isl: [] } : null;
   if (ARCHI) {                                         // a dozen steep jungle islands, big to tiny, over a deep sea; shallow turquoise shelves and a few beaches
     const ar = mulberry32(seed * 53 + 7), an = makeNoise(ar), R = edgeShape.R0, isl = ARCHI.isl;
     const k = S / 800, sizes = [...Array(2).fill(0).map(() => S * (.1 + ar() * .05)), ...Array(Math.round((5 + ar() * 3) * k)).fill(0).map(() => S * (.045 + ar() * .035)), ...Array(Math.round((6 + ar() * 5) * k)).fill(0).map(() => 9 + ar() * 14)];
@@ -4204,11 +4238,12 @@ function generate() {
   else for (let i = 0; i < 48; i++) for (let j = 0; j < 48; j++) { const x = -HALF + i * S / 47, z = -HALF + j * S / 47; if ((!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) - 30) && !(FEAT && FEAT.mask(x, z) > .2)) hs.push(H0(x, z)); }   // islands: only the land counts
   hs.sort((a, b) => a - b);
   water = ARCHI ? 0 : hs[Math.floor(hs.length * { swamp: .46, badlands: .03, rainforest: .16, desert: .05, tropical: .14, temperate: .12, boreal: .17, tundra: .2, polar: .14 }[TB(biome)])];
+  if (ARENA && !EN) water += ARENA.wl || 0;                       // 2.46: an arena's water level
   const span = Math.max(6, (EN ? hs[Math.floor(hs.length * .995)] : hs[hs.length - 1]) - water); if (EN) { ENDLESS.wl = water; ENDLESS.span = span; }
 
   // Playable ground in every eighth of the map: no section may be mostly lake or mostly too steep to move through.
   // Lakes that take over get shallower; ground that is too steep gets softened. A few open valleys are still fine.
-  if (!EN) {
+  if (!EN && !(ARENA && ARENA.fix === false)) {                 // (2.46: an arena can switch this off)
     const N = baked.N, G = baked.G, m = baked.map, CX = 4, CZ = 2, secW = S / CX, secD = S / CZ;
     let blur = null;
     const makeBlur = () => {
@@ -4253,6 +4288,12 @@ function generate() {
       }
     }
   }
+  ARENA_BASE = null;
+  if (ARENA && !EN) {                                            // 2.46: the land raised and lowered by hand (kept: the heights before, for Map Lab)
+    const g = arenaGrid(ARENA), n = g.n, c = S / (n - 1), m = baked.map, N = baked.N, G = baked.G; ARENA_BASE = new Float32Array(n * n);
+    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) ARENA_BASE[j * n + i] = baked.H(-HALF + i * c, -HALF + j * c);
+    if (g.D.some(v => v)) for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) m[j * N + i] += arenaGridAt(g, -HALF + i * G, -HALF + j * G);
+  }
   // Rivers carved into the eroded ground
   riverW = null; riverN = baked ? baked.N : 0; riverG = baked ? baked.G : 2;
   // rivers are switched off for now (lakes stay, eroded gullies stay as dry ground)
@@ -4269,12 +4310,16 @@ function generate() {
 
   findLava();                                          // volcano: lava in the crater (nothing grows or lies in it)
   const allTrees = [];
-  const ENV0 = runGen(envGen({ island: true, biome, season, lat, span, rand, densN, spN, aspN, fluN, varN, nearRiver }));   // 2.20: this map's environment
+  const ENV0 = runGen(envGen({ island: true, biome, season, lat, span, rand: ARENA ? () => rand() : rand, densN, spN, aspN, fluN, varN, nearRiver }));   // 2.20: this map's environment (2.46: an arena's re-seeded stream)
   const { winterSnow, snowLine, treeLine, sandy, g, BANDS, gA, gB, rockC, snow, sand, bed, mud, basalt, scorch, litter, groundCol, fluffPatch, dens, DM, maxTrees, attempts,
     kinds, NV, BUSHV, recs, bushRecs, pickVar, setTreeSize, stretch, treeAt } = ENV0;
-  for (let k = 0; k < attempts && dens > 0 && allTrees.length < maxTrees; k++) {
+  MAPKINDS = Object.keys(kinds);                                  // 2.46: (Map Lab plants these)
+  let treesCut = 0;
+  for (let k = 0; k < attempts && dens > 0 && allTrees.length + treesCut < maxTrees; k++) {
+    if (ARENA) rand = arenaRand(seed, k);                          // 2.46: each try on its own
     const x = (rand() - .5) * (S - 30), z = (rand() - .5) * (S - 30), h = H0(x, z);
     const t = treeAt(x, z, h, rand, x, z); if (!t) continue;
+    if (ARENA && arenaOff(ARENA.treesOff, x, z)) { treesCut++; continue; }
     allTrees.push(t);
     t.ob = addObstacle(x, z, 1, false, 1); setTreeSize(t);
   }
@@ -4287,6 +4332,7 @@ function generate() {
       const h = ph[j * nP + i]; if (h < treeLine - 4) continue;
       let top = true;
       for (let b = -W5; b <= W5 && top; b++) for (let a = -W5; a <= W5; a++) if ((a || b) && ph[(j + b) * nP + i + a] >= h) { top = false; break; }
+      if (ARENA && top) rand = arenaRand(seed + 1, j * nP + i);
       if (!top || rand() > .4) continue;
       const px = -HALF + (i + .5) * PS, pz = -HALF + (j + .5) * PS, want = rand() < .45 ? 1 : 2 + Math.floor(rand() * 3);
       for (let q = 0, placed = 0; q < 40 && placed < want; q++) {
@@ -4295,19 +4341,27 @@ function generate() {
         let kind = TROPIC(biome) ? "broad" : biome === "desert" ? "joshua" : "fir"; if (kind === "broad" && season === "winter") kind = "bare";
         const s = (.3 + rand() * .3) * (biome === "tundra" ? .8 : 1), vi = pickVar(kind, false), v = .78 + rand() * .4;
         const t = { x, y: 0, z, s, ry: rand() * Math.PI * 2, c: new THREE.Color(v, v, v), vi, kind, peak: true };
-        stretch(t); allTrees.push(t);
+        stretch(t); if (ARENA && arenaOff(ARENA.treesOff, x, z)) { placed++; continue; }
+        allTrees.push(t);
         t.ob = addObstacle(x, z, 1, false, 1); setTreeSize(t);
         placed++;
       }
     }
   }
 
+  if (ARENA && ARENA.treesAdd) ARENA.treesAdd.forEach(([x, z, kind, s], i) => {   // 2.46: trees planted by hand
+    let k = kinds[kind] ? kind : kinds.broad ? "broad" : "fir"; if (k === "broad" && season === "winter") k = "bare";
+    const r = arenaRand(seed + 3, i), vi = pickVar(k, false, undefined, undefined, undefined, r), v = .78 + r() * .4;
+    const t = { x, y: 0, z, s: s || 1, ry: r() * 6.2832, c: new THREE.Color(v, v, v), vi, kind: k, custom: true };
+    stretch(t, r); allTrees.push(t); t.ob = addObstacle(x, z, 1, false, 1); setTreeSize(t);
+  });
   // Self-pruning: in crowded stands the shaded lower branches die off, leaving tall bare trunks you can see between.
   // Trees on clearing edges, lake shores and loners keep their branches low.
   {
     const CS = 6, cells = new Map(), key = (i, j) => i + "," + j;
     for (const t of allTrees) { const k = key(Math.floor(t.x / CS), Math.floor(t.z / CS)); if (!cells.has(k)) cells.set(k, []); cells.get(k).push(t); }
     for (const t of allTrees) {
+      if (ARENA) rand = arenaRand(seed + 5, Math.round(t.x * 8) * 7919 + Math.round(t.z * 8));
       let n = 0; const ci = Math.floor(t.x / CS), cj = Math.floor(t.z / CS);
       for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
         const l = cells.get(key(ci + i, cj + j)); if (l) for (const o of l) if (o !== t && (o.x - t.x) ** 2 + (o.z - t.z) ** 2 < 36) n++;
@@ -4319,13 +4373,14 @@ function generate() {
 
   // The tallest tree in the level: one giant, 20% taller than any other, with a coin at its foot
   let giant = null;
-  if (allTrees.length) {
+  if (allTrees.length && !(ARENA && ARENA.giant === false)) {     // (2.46: an arena can leave out the giant tree)
     const hOf = t => kinds[t.kind].vars[t.vi].h * t.s * t.sy;
     const ok = t => !t.peak && slopeNy(t.x, t.z) > .85 && (H0(t.x, t.z) - water) / span < .55;
     let cand = allTrees.filter(t => ok(t) && Math.hypot(t.x, t.z) > HALF * .4 && Math.hypot(t.x, t.z) < edgeR(t.x, t.z) - 30);   // grenades must be reachable
     if (!cand.length) cand = allTrees.filter(ok);
     if (!cand.length) cand = allTrees.filter(t => !t.peak);
     if (cand.length) {
+      if (ARENA) rand = arenaRand(seed + 7, cand.length);
       giant = cand[Math.floor(rand() * cand.length)];
       if (giant.kind === "palm" || giant.kind === "cactus" || giant.kind === "joshua") giant.kind = "broad"; if (giant.kind === "pine") giant.kind = "fir"; if (giant.kind === "aspen" || giant.kind === "birch" || giant.kind === "maple") giant.kind = "broad"; if (biome === "redwood") giant.kind = "sequoia";   /* in the desert it's an old cottonwood */                          // palms lean and have no trunk for a porch
       const topOf = v => (v.geo.boundingBox || (v.geo.computeBoundingBox(), v.geo.boundingBox)).max.y;      // real treetops, leaves and all
@@ -4349,7 +4404,7 @@ function generate() {
 
   // Roots hold soil: many trees sit on their own small mound or ridge
   const mounds = new Map();
-  for (const t of allTrees) if (rand() < .45) {
+  for (const t of allTrees) if ((ARENA && (rand = arenaRand(seed + 9, Math.round(t.x * 8) * 7919 + Math.round(t.z * 8))), rand() < .45)) {
     const r = 2 + rand() * 3.4, a = rand() * Math.PI;
     const m = { x: t.x, z: t.z, r, h: .45 + rand() * 1.15, c: Math.cos(a), s: Math.sin(a), e: 1 + rand() * 1.4 };
     for (let i = Math.floor((t.x - r) / 8); i <= Math.floor((t.x + r) / 8); i++)
@@ -4407,6 +4462,7 @@ function generate() {
       }
   };
   for (const t of allTrees) {
+    if (ARENA) rand = arenaRand(seed + 11, Math.round(t.x * 8) * 7919 + Math.round(t.z * 8));
     if (t.kind === "palm" || !limbVars[t.kind] || kinds[t.kind].vars[t.vi].fluffy) continue;
     const th = kinds[t.kind].vars[t.vi].h * t.s * t.sy, top = Math.min(th * .72, 11);
     if (top < 3.3) continue;
@@ -4524,12 +4580,14 @@ function generate() {
   const RGr = rockGeos(), RG = { ...RGr, ...sectionGeos() }, rr = {}; for (const k in RG) rr[k] = [];
   const tone = { swamp: [.78, .84, .74], badlands: [1.3, .62, .44], rainforest: [.8, .86, .76], desert: [1.14, .8, .6], tropical: [.86, .84, .8], temperate: [1, .97, .93], boreal: [.95, .95, .95], tundra: [.98, .94, .9], polar: [.9, .94, 1] }[TB(biome)];
   const rc = () => { const v = .8 + rand() * .35; return new THREE.Color(v * tone[0], v * tone[1], v * tone[2]); };
-  const rockAt = (k, x, z, s, sink, extra = {}) => inLava(x, z, s * 1.6 + 2) || (biome === "badlands" && slopeNy(x, z) < .8) ? 0 : rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
+  const aRocks = ARENA && ARENA.rocks !== undefined ? ARENA.rocks : 1, rockCut = (x, z) => !!ARENA && arenaOff(ARENA.rocksOff, x, z);   // 2.46: an arena's amount of rocks, and the ones taken away
+  const rockAt = (k, x, z, s, sink, extra = {}) => rockCut(x, z) || inLava(x, z, s * 1.6 + 2) || (biome === "badlands" && slopeNy(x, z) < .8) ? 0 : rr[k].push({ x, y: seat(x, z, s * .7, s * sink), z, s, ry: rand() * 6.28, tx: (rand() - .5) * .4, tz: (rand() - .5) * .4, c: rc(), ...extra });
   const rpos = () => [(rand() - .5) * (S - 30), (rand() - .5) * (S - 30)];
   const grad = (x, z) => { const e = 2; return [(H(x + e, z) - H(x - e, z)) / (2 * e), (H(x, z + e) - H(x, z - e)) / (2 * e)]; };
   // big rugged sections: cliffs, ledges and broken ridges that follow the slope
-  const nSec = biome === "badlands" ? 0 : Math.round((18 + terrR() * 95) * (isTouch ? .75 : 1) * AREA), sections = [];
-  for (let k = 0; k < nSec * 10 && sections.length < nSec; k++) {
+  const nSec = biome === "badlands" ? 0 : Math.round((18 + terrR() * 95) * (isTouch ? .75 : 1) * AREA * aRocks), sections = []; let secCut = 0;
+  for (let k = 0; k < nSec * 10 && sections.length + secCut < nSec; k++) {
+    if (ARENA) rand = arenaRand(seed + 13, k);
     const [x, z] = rpos(), h = H(x, z); if (h < water + 1) continue;
     const ny = slopeNy(x, z), rel = (h - water) / span;
     if (!(ny < .8 || rel > .6)) continue;
@@ -4538,6 +4596,7 @@ function generate() {
     const [gx, gz] = grad(x, z), gl = Math.hypot(gx, gz) + 1e-6;
     const type = steep > .3 ? (rand() < .5 ? "crag" : "spine") : (rand() < .55 ? "shelf" : "crag");
     if (inLava(x, z, s * 1.5 + 2)) continue;
+    if (rockCut(x, z)) { secCut++; continue; }
     rr[type].push({ x, y: seat(x, z, s * 1.2, s * .42), z, s, ry: Math.atan2(-gx, -gz), tx: Math.atan(gl) * .7, tz: (rand() - .5) * .15, ord: "YXZ", c: rc() });
     sections.push([x, z]);
     addObstacleSoft(x, z, s * 1.5);
@@ -4545,20 +4604,23 @@ function generate() {
     if (rand() < .55) for (let m = 0, mn = 4 + Math.floor(rand() * 6); m < mn; m++) {     // rubble below
       const d = s * 1.5 + rand() * 10, sd = (rand() - .5) * s * 2;
       const rx = x - gx / gl * d - gz / gl * sd, rz = z - gz / gl * d + gx / gl * sd;
-      if (H(rx, rz) < water - .3) continue;
+      if (H(rx, rz) < water - .3 || rockCut(rx, rz)) continue;
       const rs = .4 + rand() * 1.4; rockAt(rand() < .7 ? "angular" : "boulder", rx, rz, rs, .3);
       if (rs > .8) addObstacleSoft(rx, rz, rs * .9);
     }
   }
-  for (let k = 0, n = Math.round((isTouch ? 160 : 260) * AREA); k < n; k++) { const [x, z] = rpos(); if (H(x, z) > water - .5) rockAt("pebble", x, z, .12 + rand() * .28, .25); }
-  for (let k = 0, n = 0, nMax = Math.round(80 * AREA); k < 400 * AREA && n < nMax; k++) {
+  for (let k = 0, n = Math.round((isTouch ? 160 : 260) * AREA * aRocks); k < n; k++) { if (ARENA) rand = arenaRand(seed + 14, k); const [x, z] = rpos(); if (H(x, z) > water - .5) rockAt("pebble", x, z, .12 + rand() * .28, .25); }
+  for (let k = 0, n = 0, nMax = Math.round(80 * AREA * aRocks); k < 400 * AREA && n < nMax; k++) {
+    if (ARENA) rand = arenaRand(seed + 16, k);
     const [x, z] = rpos(); if (H(x, z) < water - .8) continue;
+    if (rockCut(x, z)) { n++; continue; }
     const s = .5 + Math.pow(rand(), 2) * 3.4, r = rand(), kind = r < .25 ? "boulder" : r < .8 ? "angular" : "slab";
     rockAt(kind, x, z, s, .32); n++;
     if (s > .75) addObstacleSoft(x, z, s * .95);
   }
-  const outcrops = [...sections], nOut = Math.round((8 + terrR() * 14 + (biome === "tundra" || biome === "polar" ? 8 : 0) + (biome === "desert" ? 22 : biome === "badlands" ? 30 : 0)) * AREA);
+  const outcrops = [...sections], nOut = Math.round((8 + terrR() * 14 + (biome === "tundra" || biome === "polar" ? 8 : 0) + (biome === "desert" ? 22 : biome === "badlands" ? 30 : 0)) * AREA * aRocks);
   for (let o = 0; o < nOut; o++) {
+    if (ARENA) rand = arenaRand(seed + 18, o);
     let best = null, bestNy = 2;
     for (let t = 0; t < 30; t++) {
       const [x, z] = rpos(), h = H(x, z); if (h < water + .5) continue;
@@ -4570,14 +4632,18 @@ function generate() {
     for (let k = 0; k < m; k++) {
       const along = (rand() - .5) * 14, side = (rand() - .5) * 4;
       const x = best[0] + Math.cos(a0) * along - Math.sin(a0) * side, z = best[1] + Math.sin(a0) * along + Math.cos(a0) * side;
+      if (rockCut(x, z)) continue;
       const s = 2 + rand() * 4;
       rockAt(rand() < .55 ? "angular" : "slab", x, z, s, .4, { ry: a0 + (rand() - .5) * .4, tx: t0 + (rand() - .5) * .2, tz: 0 });
       addObstacleSoft(x, z, s);
     }
   }
-  const nExtreme = Math.floor(rand() * 2.4) + (terrR() > .5 ? 1 : 0);
+  if (ARENA) rand = arenaRand(seed + 20, 0);
+  const nExtreme = Math.round((Math.floor(rand() * 2.4) + (terrR() > .5 ? 1 : 0)) * aRocks);
   for (let e = 0; e < nExtreme; e++) for (let t = 0; t < 60; t++) {
+    if (ARENA) rand = arenaRand(seed + 22, e * 100 + t);
     const [x, z] = rpos(), h = H(x, z);
+    if (rockCut(x, z)) break;
     if (h < water + 1 || slopeNy(x, z) < .8) continue;
     const type = ["split", "split", "overhang"][Math.floor(rand() * 3)];        // no tall spike stones
     const s = type === "spire" ? 1.6 + rand() * 1.4 : type === "split" ? 3.5 + rand() * 2 : 3 + rand() * 1.5;
@@ -4585,6 +4651,13 @@ function generate() {
     addObstacleSoft(x, z, s * (type === "spire" ? .8 : type === "split" ? 1.3 : 1.6));
     break;
   }
+  if (ARENA && ARENA.rocksAdd) ARENA.rocksAdd.forEach(([x, z, kind, s, ry], i) => {   // 2.46: rocks placed by hand (cliffs, ledges and spines too)
+    const k = RG[kind] && kind !== "pebble" ? kind : "boulder", sec = !(k in RGr); rand = arenaRand(seed + 24, i);
+    rr[k].push({ x, y: seat(x, z, s * (sec ? 1.2 : .7), s * ({ split: .2, overhang: .2, spire: .05 }[k] || (sec ? .42 : .32))), z, s, ry: ry || 0, tx: 0, tz: 0, ord: "YXZ", c: rc(), custom: true });
+    addObstacleSoft(x, z, s * ({ split: 1.3, overhang: 1.6, spire: .8 }[k] || (sec ? 1.5 : .95)));
+    if (k === "spine") { const cx = Math.cos(ry || 0), cz = -Math.sin(ry || 0); addObstacleSoft(x + cx * s * 2.6, z + cz * s * 2.6, s); addObstacleSoft(x - cx * s * 2.6, z - cz * s * 2.6, s); }
+  });
+  MAPROCKS = []; for (const k in rr) if (k !== "pebble") for (const r of rr[k]) if (r.s > .9 || !(k in RGr)) MAPROCKS.push([r.x, r.z, r.s * (k in RGr ? 1 : 1.7), k, r.custom ? 1 : 0]);   // (for Map Lab's table)
   const rMat = rockMaterial(
     { swamp: 1, badlands: 0, rainforest: 1, desert: 0, tropical: .85, temperate: .6, boreal: .5, tundra: .2, polar: 0 }[TB(biome)],
     { swamp: .3, badlands: .1, rainforest: .15, desert: .08, tropical: .2, temperate: .35, boreal: .7, tundra: .9, polar: .3 }[TB(biome)],
@@ -4597,8 +4670,10 @@ function generate() {
   // Fallen logs in the forest
   const logs = [], nLogs = Math.round({ swamp: 110, badlands: 10, rainforest: 150, desert: 8, tropical: 50, temperate: 90, boreal: 110, tundra: 25, polar: 0 }[TB(biome)] * (isTouch ? .7 : 1) * AREA);
   for (let k = 0; k < nLogs * 6 && logs.length < nLogs && allTrees.length; k++) {
+    if (ARENA) rand = arenaRand(seed + 26, k);
     const t = allTrees[Math.floor(rand() * allTrees.length)], a = rand() * 6.28, d = 2 + rand() * 5;
     const x = t.x + Math.cos(a) * d, z = t.z + Math.sin(a) * d;
+    if (rockCut(x, z)) continue;
     if (H(x, z) < water + .4 || slopeNy(x, z) < .75 || nearRiver(x, z, 2) || inLava(x, z, 9)) continue;
     const L = 4 + rand() * 7, r = .22 + rand() * .3, ry = rand() * 6.28, cx = Math.cos(ry), cz = -Math.sin(ry);
     const h1 = H(x - cx * L / 2, z - cz * L / 2), h2 = H(x + cx * L / 2, z + cz * L / 2);
@@ -4625,12 +4700,14 @@ function generate() {
     return rand() < .5 ? "fir" : "broad";
   };
   for (let k = 0, n = 0; k < bushN * 4 && n < bushN; k++) {
+    if (ARENA) rand = arenaRand(seed + 28, k);
     let x, z; const r = rand();
     if (r < .6 && allTrees.length) { const t = allTrees[Math.floor(rand() * allTrees.length)], a = rand() * 6.28, d = 1.5 + rand() * 2.5; x = t.x + Math.cos(a) * d; z = t.z + Math.sin(a) * d; }
     else if (r < .85 && outcrops.length) { const o = outcrops[Math.floor(rand() * outcrops.length)], a = rand() * 6.28, d = 3 + rand() * 5; x = o[0] + Math.cos(a) * d; z = o[1] + Math.sin(a) * d; }
     else [x, z] = rpos();
     const h = H(x, z);
     if (h < water + .3 || slopeNy(x, z) < .7 || Math.abs(x) > HALF - 5 || Math.abs(z) > HALF - 5 || nearRiver(x, z, 1) || inLava(x, z, 3)) continue;
+    if (ARENA && arenaOff(ARENA.treesOff, x, z)) continue;
     const kind = bushKind(), vi = Math.floor(rand() * BUSHV), v = .78 + rand() * .4;
     const s = (biome === "tundra" || biome === "polar") ? .45 + rand() * .45 : biome === "rainforest" ? 1.3 + rand() * 1.4 : biome === "badlands" ? .9 + rand() * 1.6 : .7 + rand() * .6;   // rainforest: thick undergrowth
     bushRecs[kind][vi].push({ x, y: seat(x, z, s * .5, .06), z, s, ry: rand() * 6.28, c: new THREE.Color(v, v, v), tile: tileOf(x, z) });
@@ -4648,6 +4725,7 @@ function generate() {
     return Math.min(1, Math.max(0, smooth(-.25, .3, n) * .75 + low * .45 - .1));
   };
   fogLocal = 0;
+  if (ARENA) rand = arenaRand(seed + 30, 0);
   weather.mist = gameMode !== "hike" && weather.type === "clear" && hourNow >= 4.5 && hourNow <= 9.5 && biome !== "polar" && rand() < (biome === "redwood" ? .9 : .6);   // morning mist in the valleys (redwood country: nearly always)
 
   // Birds sing from particular trees; crickets live in particular meadows
@@ -4721,6 +4799,7 @@ function generate() {
   if (LIFE) { spawnAnimals(rand, biome); if (sandy) spawnRunner(rand); spawnBirds(rand, biome); }
 
   // each map gets its own sky: cloud style, haze, glow, colour cast and wind, all from its seed
+  if (ARENA) rand = arenaRand(seed + 32, 0);
   skyP = makeSkyStyle(rand, biome);
   skySeedX = rand() * 50; skySeedY = rand() * 50;
   setLighting(lat, biome);
@@ -8233,10 +8312,10 @@ function uiDraw(P) {
     if ((w.hide && w.hide()) || w.ghost) continue;
     const hov = !!(P.hov && P.hov.includes(w)), dis = (w.disabled && w.disabled()) || mpLocked(P, w);
     if (w.kind === "slider") {
-      const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2;
+      const v = (w.get() - w.min) / (w.max - w.min), y = w.y + w.h / 2; g.globalAlpha = dis ? .35 : 1;   // (2.46: a locked slider shows it)
       g.fillStyle = "rgba(0,0,0,.25)"; uiRound(g, w.x, y - 7, w.w, 14, 7); g.fill();
       g.fillStyle = UIC.sun; uiRound(g, w.x, y - 7, Math.max(14, w.w * v), 14, 7); g.fill();
-      g.beginPath(); g.arc(w.x + w.w * v, y, hov ? 24 : 20, 0, 6.283); g.fillStyle = "#fff"; g.fill();
+      g.beginPath(); g.arc(w.x + w.w * v, y, hov ? 24 : 20, 0, 6.283); g.fillStyle = "#fff"; g.fill(); g.globalAlpha = 1;
     } else {
       const act = w.active && w.active();
       g.fillStyle = w.paintColFn && w.paintColFn() ? w.paintColFn() : w.paintCol ? w.paintCol : dis ? "rgba(255,255,255,.07)" : w.primary ? (hov ? "#ffe08e" : UIC.sun) : act ? UIC.on : hov ? "#5f9a70" : UIC.btn;
@@ -8261,7 +8340,7 @@ const uiBtn = (P, x, y, w, h, label, on, extra = {}) => { const b = Object.assig
 const uiSlider = (P, x, y, w, min, max, get, setv, step = 0) => { const s = { kind: "slider", x, y, w, h: 56, min, max, get, set: v => setv(step ? Math.round(v / step) * step : v) }; P.widgets.push(s); return s; };
 function uiLabel(g, x, y, label, value) {
   g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 36px sans-serif"; g.fillStyle = UIC.text; g.fillText(label, x, y);
-  if (value) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(value, x + g.measureText(label).width + 0 + 24, y); }
+  if (value) { const w = g.measureText(label).width; g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(value, x + w + 18, y); }
 }
 function uiBg(g, P, title) {
   g.fillStyle = UIC.bg; uiRound(g, 4, 4, P.W - 8, P.H - 8, 34); g.fill();
@@ -8360,7 +8439,7 @@ function vruiParts() {
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
   uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
   uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
-  devPanels();
+  devPanels(); labPanel(); arenasPanel();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -8406,7 +8485,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(MODE_NAME[gameMode] + (gameMode === "pvp" && MP.code && !mpOpen().length ? " · practice until someone joins" : ""), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, MODE_NAME[gameMode] + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && MP.code && !mpOpen().length ? " · practice until someone joins" : ""), 1060), lx + 360, 92);   // (2.46: an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
     uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
@@ -8464,8 +8543,10 @@ function vruiParts() {
   uiBtn(S2, 300, 906, 110, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
   uiSlider(S2, 690, 908, 280, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
   uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp";
-  uiBtn(S2, rx, 1060, 280, 90, "Randomize", () => { $("randomBtn").click(); }, { hide: () => mpGuest() });
-  uiBtn(S2, rx + 300, 1060, 600, 90, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // 2.46: maps built in Map Lab
+  uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
+  uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  for (const w of S2.widgets) if (([212, 216, 366, 666].includes(w.y) && w.x < rx) || ([196, 346].includes(w.y) && w.x >= rx)) { const d0 = w.disabled; w.disabled = () => !!set.arena || !!(d0 && d0()); }   // an arena sets the land
   // ---- your character: beside the map settings (Solo, and online when you tap your own card), and on its own from the main menu ----
   charPanel("me", SIDE_YAW, true);
   charPanel("char", 0, false);
@@ -8505,9 +8586,10 @@ function vruiParts() {
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 140, 1000, 34);
     if (state === "play") { g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText("The game keeps going for everyone while this is open", 550, 184); } };   // 2.38: online, only you stop
   [["Resume", () => vruiResume(), { primary: true, personal: true }],
+   ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],   // 2.46: a test walk
    ["Set height", () => vrHeightCheck("pause"), { personal: true }],                                                                    // 2.38
-   ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() }],
-   ["Change settings", () => { pvpEndRound(); vruiSettings(); }, { hide: () => mpGuest(), labelFn: () => MP.code ? "Exit to lobby · change settings" : "Change settings" }],
+   ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() || LAB.testing }],
+   ["Change settings", () => { pvpEndRound(); vruiSettings(); }, { hide: () => mpGuest() || LAB.testing, labelFn: () => MP.code ? "Exit to lobby · change settings" : "Change settings" }],
    ["Main menu", () => vruiOpen("mode"), { personal: true, labelFn: () => MP.code ? "Leave room" : "Main menu" }],
    ["Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true }]].forEach(([l, f, o]) => uiBtn(Pa, 110, 205, 880, 106, l, f, Object.assign({ fs: 40 }, o)));
 }
@@ -8974,7 +9056,7 @@ function devPanels() {
   Dv.paint = (g, P) => { uiBg(g, P, "DEV MODE"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Tools for making the game. Only this headset has them.", 700, 150);
     if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 740); } };
   uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
-  uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
+  uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
   uiBtn(Dv, 720, 450, 590, 170, "Test tools", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
@@ -9046,10 +9128,462 @@ function devPanels() {
   uiBtn(Wk, x0 + 1105, 712, 95, 56, "▶", () => { WS.spage = Math.min(Math.ceil(WS.saved.length / 8) - 1, WS.spage + 1); }, { hide: () => WS.tab !== "file" || !WS.saved || WS.saved.length <= 8, fs: 26, disabled: () => WS.spage >= Math.ceil(WS.saved.length / 8) - 1 });
   uiBtn(Wk, x0, 1078, 300, 70, "Dev menu", () => vruiOpen("dev"), { fs: 30 });
 }
+/* ---- 2.46: Map Lab (Dev Mode, VR). The map lies on a table in front of you; the tools are on the panel to the left. Land and World build the map
+   from its settings (it rebuilds itself a moment after you change one); Sculpt, Trees, Rocks and Loot work straight on the table with the laser
+   (hold the trigger); a thumbstick turns the table and zooms, a grip drags the map, B or Y undoes. File: name, save, publish as an arena, and
+   Walk it (into the real map, at the yellow pin). Published arenas show up for everyone under Arenas in the map settings. ---- */
+const LAB_ENVS = [["auto", "From latitude"], ["temperate", "Forest"], ["birchmaple", "Birch & maple"], ["redwood", "Redwoods"], ["boreal", "Spruce"], ["tundra", "Tundra"],
+  ["polar", "Polar ice"], ["desert", "Desert"], ["badlands", "Badlands"], ["swamp", "Swamp"], ["tropical", "Palm jungle"], ["rainforest", "Rainforest"]];
+const LAB_ROCKS = [["boulder", "Boulder"], ["angular", "Angular"], ["slab", "Slab"], ["split", "Split rock"], ["overhang", "Overhang"], ["spire", "Spire"], ["crag", "Cliff"], ["shelf", "Ledge"], ["spine", "Ridge"]];
+const LAB_LOOT = [["gun:hunt", "Sniper"], ["gun:ar", "Rifle"], ["gun:smg", "SMG"], ["gun:pistol", "Pistol"], ["gun:bow", "Bow"], ["nade", "Grenade"], ["hp", "Health"], ["sh", "Shield"]];
+const LAB_SIZES = [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]];
+const LAB_KIND_NAME = { fir: "Fir", broad: "Broadleaf", bare: "Bare", palm: "Palm", maple: "Maple", birch: "Birch", aspen: "Aspen", pine: "Pine", cactus: "Cactus", joshua: "Joshua", juniper: "Juniper", scrub: "Scrub", redwood: "Redwood", sequoia: "Sequoia", euc: "Eucalyptus" };
+const LAB_TW = 2.0, LAB_C = new THREE.Vector3(.15, .8, -1.38), LAB_EX = 1.2;   // the table: 2 m across, its top at .8 m, in front of you; heights a little taller than life
+const labRecipe = () => ({ v: 1, name: "", seed: 1 + Math.floor(Math.random() * 999999), size: "medium", lat: 45, hemi: 1, env: "auto", rough: .35, dens: .5, edges: "island", land: "natural",
+  shape: { len: 1, wid: 1, round: 0, wob: 1 }, px: 0, pz: 0, hk: 1, wl: 0, fix: true, giant: true, rocks: 1, time: null, sc: null,
+  treesOff: [], treesAdd: [], rocksOff: [], rocksAdd: [], loot: { mode: "auto", amt: 1, pts: [] }, pub: false });
+const LAB = { on: false, A: null, tab: "land", tool: { sculpt: "raise", trees: "remove", rocks: "place", loot: "place" }, br: 15, str: .5, kind: "auto", tsize: 1, rkind: "boulder", rsize: 2.5, loot: "gun:ar", tier: 3,
+  mode: "hike", needBuild: true, building: 0, buildAt: 0, dirty: false, status: "", saved: null, spage: 0, undo: [], tbl: null, rot: 0, zoom: 1, c: [0, 0], start: null, grab: {}, stroke: {}, hold: null,
+  testing: false, setBak: null, saveT: 0, kinds: [], walkAfter: false, clip: null };
+let MAPKINDS = [];
+const labSizeM = A => SIZES[A.size] || 560;
+function labDims(A) { const Sz = labSizeM(A), M = Sz * .8; return A.edges === "island" ? [M * (A.shape.len || 1), M * (A.shape.wid || 1)] : [Sz, Sz]; }   // land across: length × width (m)
+const labM = m => m >= 1000 ? (m / 1000).toFixed(1) + " km" : Math.round(m) + " m";
+const labEnvName = A => (LAB_ENVS.find(e => e[0] === (A.env || "auto")) || LAB_ENVS[0])[1];
+const labInfo = A => { const [l, w] = labDims(A); return (LAB_SIZES.find(s => s[0] === A.size) || ["", "M"])[1] + " · " + labEnvName(A) + " · " + labM(l) + " × " + labM(w); };
+function labChange(rebuild) { if (rebuild) { LAB.needBuild = true; LAB.fit = true; LAB.buildAt = performance.now() + 700; } else LAB.dirty = true; LAB.saveT = performance.now() + 2000; }
+function labOpen() {
+  if (!LAB.A) { try { const r = JSON.parse(localStorage.getItem("jt-lab") || "null"); if (r && r.v) LAB.A = Object.assign(labRecipe(), r); } catch (_) {} if (!LAB.A) LAB.A = labRecipe(); }
+  if (!LAB.on) { LAB.setBak = { size: set.size, lat: set.lat, hemi: set.hemi, rough: set.rough, density: set.density, edges: set.edges, land: set.land, hour: set.hour, month: set.month, weather: set.weather, arena: set.arena, mode: gameMode };
+    LAB.on = true; LAB.needBuild = true; LAB.fit = true; LAB.buildAt = 0; }
+  LAB.testing = false; renderer.localClippingEnabled = true; vruiOpen("lab");
+}
+function labLeave() {                                           // out of Map Lab: the normal settings come back
+  if (!LAB.on) return; const b = LAB.setBak;
+  if (b) { Object.assign(set, { size: b.size, lat: b.lat, hemi: b.hemi, rough: b.rough, density: b.density, edges: b.edges, land: b.land, hour: b.hour, month: b.month, weather: b.weather, arena: b.arena }); if (gameMode !== b.mode) setMode(b.mode); }
+  LAB.on = false; LAB.testing = false; LAB.hold = null; labSaveLocal();
+}
+function labSaveLocal() { if (!LAB.A) return; try { arenaGridPack(LAB.A); localStorage.setItem("jt-lab", JSON.stringify(LAB.A)); } catch (_) {} LAB.saveT = 0; }
+function labBuild() {                                           // the real map from the recipe, then the table from the real map
+  const A = LAB.A, prev = set.arena, D = arenaGrid(A).D; LAB.status = "";
+  for (let i = 0; i < D.length; i++) D[i] = Math.round(D[i] * 10) / 10;   // as it will be saved (tenths of a metre), so a saved arena comes out exactly the same
+  if (gameMode !== LAB.mode) setMode(LAB.mode);
+  set.arena = A; wsEnv(false);                                   // (the map sets its own light and fog; the table's light goes back on after)
+  try { generate(); } catch (e) { LAB.status = "Couldn't build it: " + (e && e.message); console.error(e); } finally { set.arena = prev; }
+  if (world) world.visible = false; wsEnv(VRUI.stage === "lab");
+  LAB.needBuild = false; LAB.dirty = false; LAB.hold = null; LAB.kinds = MAPKINDS.slice();
+  if (LAB.fit) { const [l, w] = labDims(A); LAB.zoom = Math.max(1, Math.min(14, S * .9 / Math.max(l, w, 1))); LAB.c = [0, 0]; LAB.fit = false; }   // the land fills the table
+  labTable(); if (VRUI.panels.lab) uiDraw(VRUI.panels.lab);
+  if (LAB.walkAfter) { LAB.walkAfter = false; labWalk(); }
+}
+const labY = h => (Math.max(h, water - 10) - water) * LAB_EX;
+const LAB_KCOL = k => k === "fir" || k === "pine" || k === "redwood" || k === "sequoia" ? 0x2c5233 : k === "palm" ? 0x4a9a3a : k === "bare" ? 0x7a6a58 : k === "cactus" || k === "joshua" || k === "scrub" || k === "juniper" ? 0x6a7a44 : k === "birch" || k === "aspen" ? 0x8ab04a : k === "maple" ? 0xb0582a : k === "euc" ? 0x7a9480 : 0x4f8a35;
+const LAB_LCOL = (type, kind, tier) => type === "nade" ? 0xe0402a : type === "hp" ? 0x3fe060 : type === "sh" ? 0x3f9bff : kind === "bow" ? 0xb08040 : new THREE.Color(NEON_COL[Math.max(1, Math.min(5, tier || 1))]).getHex();
+function labTable() {                                           // the table: the land, water, trees, rocks, loot and the start pin
+  const T0 = LAB.tbl; if (T0) { VRUI.root.remove(T0.root); T0.root.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); }
+  const root = new THREE.Group(), outer = new THREE.Group(), spin = new THREE.Group(), inner = new THREE.Group(); root.add(outer); outer.add(spin); spin.add(inner); outer.position.copy(LAB_C);
+  const clip = LAB.clip || (LAB.clip = [0, 1, 2, 3].map(() => new THREE.Plane())), lam = o => new THREE.MeshLambertMaterial(Object.assign({ clippingPlanes: clip }, o));
+  const N = Math.min(192, SEG), n1 = N + 1, V1 = SEG + 1, step = S / SEG, g = arenaGrid(LAB.A);
+  const geo = new THREE.PlaneGeometry(S, S, N, N); geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position, col = new Float32Array(pos.count * 3), tc = terrainMesh && terrainMesh.geometry.attributes.color, hb = new Float32Array(pos.count), hv = new Float32Array(pos.count);
+  let maxY = 0;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), h = H(x, z); hv[i] = h; hb[i] = h - arenaGridAt(g, x, z); const y = labY(h); pos.setY(i, y); maxY = Math.max(maxY, y);
+    if (tc) { const k = Math.round((z + HALF) / step) * V1 + Math.round((x + HALF) / step); col[i * 3] = tc.getX(k); col[i * 3 + 1] = tc.getY(k); col[i * 3 + 2] = tc.getZ(k); }
+    else { col[i * 3] = .3; col[i * 3 + 1] = .5; col[i * 3 + 2] = .25; }
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const land = new THREE.Mesh(geo, lam({ vertexColors: true })); inner.add(land);
+  const lat = set.lat * set.hemi, b = biomeOf(lat), wm = new THREE.Mesh(new THREE.PlaneGeometry(S, S).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: iced ? 0xcfe6f0 : new THREE.Color(WATERC[TB(b)] || "#3a6a8a"), transparent: true, opacity: .78, clippingPlanes: clip }));
+  wm.position.y = .05; inner.add(wm);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(LAB_TW + .08, .05, LAB_TW + .08), new THREE.MeshLambertMaterial({ color: 0x4a3626 })); base.position.set(LAB_C.x, LAB_C.y - .075, LAB_C.z); root.add(base);
+  // trees (from the real map) and the ones planted by hand
+  const seen = new Set(), trees = []; for (const list of obstacles.values()) for (const o of list) if (o.t && !o.t.custom && o.h > 1 && !seen.has(o)) { seen.add(o); trees.push(o); }
+  const cnt = {}; for (const o of trees) cnt[o.t.kind] = (cnt[o.t.kind] || 0) + 1;
+  LAB.autoKind = Object.keys(cnt).sort((a, c) => cnt[c] - cnt[a])[0] || (LAB.kinds.includes("broad") ? "broad" : LAB.kinds[0] || "fir");
+  const nT = Math.min(trees.length, 14000), cone = new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0), tm = new THREE.InstancedMesh(cone, lam({}), Math.max(1, nT)), tl = [];
+  for (let i = 0; i < nT; i++) { const o = trees[Math.floor(i * trees.length / nT)]; tl.push({ x: o.x, z: o.z, h: o.h, kind: o.t.kind, s: o.t.s, i }); tm.setColorAt(i, new THREE.Color(LAB_KCOL(o.t.kind)).multiplyScalar(.85 + ((i * 7919) % 100) / 330)); }
+  tm.count = nT; inner.add(tm);
+  // rocks: the map's big ones and cliffs, and the ones placed by hand
+  const rk = new THREE.DodecahedronGeometry(1, 0), mr = (MAPROCKS || []).filter(r => !r[4]), rm = new THREE.InstancedMesh(rk, lam({ color: 0x8a8580 }), Math.max(1, mr.length)), rl = mr.map(([x, z, s, k], i) => ({ x, z, s, k, i }));
+  rm.count = mr.length; inner.add(rm);
+  const lm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), lam({}), 4000); lm.count = 0; inner.add(lm);
+  const ct = new THREE.InstancedMesh(cone, lam({}), 4000), cr = new THREE.InstancedMesh(rk, lam({ color: 0xa8a29a }), 2000); ct.count = cr.count = 0; inner.add(ct, cr);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: .9, depthTest: false, clippingPlanes: clip })); ring.renderOrder = 61; ring.visible = false; inner.add(ring);
+  const pin = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.6, 10).rotateX(Math.PI).translate(0, .8, 0), new THREE.MeshBasicMaterial({ color: 0xffd45a, clippingPlanes: clip })); inner.add(pin);
+  const held = new THREE.Mesh(cone.clone(), new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: .7, clippingPlanes: clip })); held.visible = false; inner.add(held);
+  LAB.tbl = { root, outer, spin, inner, land, geo, hb, hv, N, n1, tm, tl, rm, rl, lm, ct, cr, ring, pin, held, maxY, minY: -12 * LAB_EX, invM: new THREE.Matrix4(), plan: labLootPlan(), normT: 0, dirtyN: false };
+  VRUI.root.add(root); root.visible = VRUI.stage === "lab";
+  labTreesShow(); labRocksShow(); labCustom(); labLootShow(); labView();
+}
+function labLootPlan() {                                         // where the auto loot lands (as in PvP: guns, crosses and grenades)
+  const out = [], A = LAB.A, AL = A.loot, m0 = gameMode; if (!ARENA) return out;
+  ARENA.loot = Object.assign({}, AL, { pts: [] }); spawnNadeLoot.dry = out; dropAdd.dry = out; gameMode = "pvp";
+  try { spawnNadeLoot(); spawnPvpLoot(); } catch (e) { console.error(e); } finally { spawnNadeLoot.dry = null; dropAdd.dry = null; ARENA.loot = AL; gameMode = m0; }
+  return out;
+}
+const _lm4 = new THREE.Matrix4(), _lq = new THREE.Quaternion(), _lv = new THREE.Vector3(), _ls = new THREE.Vector3();
+function labH(x, z) {                                            // the table's height (metres) between its points
+  const T = LAB.tbl, N = T.N, st = S / N, fx = Math.max(0, Math.min(N - 1e-4, (x + HALF) / st)), fz = Math.max(0, Math.min(N - 1e-4, (z + HALF) / st)), i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j, k = j * T.n1 + i, h = T.hv;
+  return h[k] * (1 - tx) * (1 - tz) + h[k + 1] * tx * (1 - tz) + h[k + T.n1] * (1 - tx) * tz + h[k + T.n1 + 1] * tx * tz;
+}
+function labTreesShow(x0 = -1e9, x1 = 1e9, z0 = -1e9, z1 = 1e9) {   // the map's trees, minus the ones taken away (only those in a box, when given)
+  const T = LAB.tbl, A = LAB.A;
+  for (const t of T.tl) { if (t.x < x0 || t.x > x1 || t.z < z0 || t.z > z1) continue;
+    const off = arenaOff(A.treesOff, t.x, t.z), h = Math.max(2, t.h) * LAB_EX, r = Math.max(1, Math.min(6, t.h * .17));
+    _lm4.compose(_lv.set(t.x, labY(labH(t.x, t.z)), t.z), _lq.identity(), off ? _ls.set(0, 0, 0) : _ls.set(r, h, r)); T.tm.setMatrixAt(t.i, _lm4); }
+  T.tm.instanceMatrix.needsUpdate = true; if (T.tm.instanceColor) T.tm.instanceColor.needsUpdate = true;
+}
+function labRocksShow(x0 = -1e9, x1 = 1e9, z0 = -1e9, z1 = 1e9) {
+  const T = LAB.tbl, A = LAB.A;
+  for (const r of T.rl) { if (r.x < x0 || r.x > x1 || r.z < z0 || r.z > z1) continue; const off = arenaOff(A.rocksOff, r.x, r.z), s = Math.max(.6, r.s);
+    const flat = r.k === "crag" || r.k === "shelf" || r.k === "spine" ? .45 : .7;
+    _lm4.compose(_lv.set(r.x, labY(labH(r.x, r.z)), r.z), _lq.identity(), off ? _ls.set(0, 0, 0) : _ls.set(s, s * flat * LAB_EX, s)); T.rm.setMatrixAt(r.i, _lm4); }
+  T.rm.instanceMatrix.needsUpdate = true;
+}
+function labCustom() {                                           // the trees and rocks placed by hand
+  const T = LAB.tbl, A = LAB.A, c = new THREE.Color();
+  T.ct.count = Math.min(4000, A.treesAdd.length);
+  for (let i = 0; i < T.ct.count; i++) { const [x, z, kind, s] = A.treesAdd[i], k = kind === "auto" ? LAB.autoKind : kind, h = 14 * (s || 1) * LAB_EX, r = Math.max(1, 2.4 * (s || 1));
+    _lm4.compose(_lv.set(x, labY(labH(x, z)), z), _lq.identity(), _ls.set(r, h, r)); T.ct.setMatrixAt(i, _lm4); T.ct.setColorAt(i, c.set(LAB_KCOL(k)).lerp(_LAB_HI, .25)); }
+  T.ct.instanceMatrix.needsUpdate = true; if (T.ct.instanceColor) T.ct.instanceColor.needsUpdate = true;
+  T.cr.count = Math.min(2000, A.rocksAdd.length);
+  for (let i = 0; i < T.cr.count; i++) { const [x, z, k, s, ry] = A.rocksAdd[i], big = k === "crag" || k === "shelf" || k === "spine" ? 1.7 : 1;
+    _lm4.compose(_lv.set(x, labY(labH(x, z)), z), _lq.setFromAxisAngle(_LAB_UP, ry || 0), _ls.set(s * big * (k === "spine" ? 2.2 : 1), s * big * .8 * LAB_EX, s * big)); T.cr.setMatrixAt(i, _lm4); }
+  T.cr.instanceMatrix.needsUpdate = true;
+}
+const _LAB_HI = new THREE.Color(0xfff2a0), _LAB_UP = new THREE.Vector3(0, 1, 0);
+function labLootShow() {                                         // loot: the auto plan (unless Custom) and the pieces placed by hand (bigger, on a stalk)
+  const T = LAB.tbl, A = LAB.A, L = A.loot, sz = .011 / (LAB_TW / S * LAB.zoom), c = new THREE.Color(); let n = 0;
+  const put = (x, z, col, k) => { if (n >= 4000) return; _lm4.compose(_lv.set(x, labY(labH(x, z)) + sz * (k > 1 ? 3 : 1.3), z), _lq.identity(), _ls.set(sz * k * .7, sz * k, sz * k * .7)); T.lm.setMatrixAt(n, _lm4); T.lm.setColorAt(n, c.set(col)); n++; };
+  if (L.mode !== "custom") for (const d of T.plan) put(d.x, d.z, LAB_LCOL(d.type, d.kind, d.tier), 1);
+  if (L.mode !== "auto") for (const [x, z, type, kind, tier] of L.pts) put(x, z, LAB_LCOL(type, kind, tier), 1.9);
+  T.lm.count = n; T.lm.instanceMatrix.needsUpdate = true; if (T.lm.instanceColor) T.lm.instanceColor.needsUpdate = true;
+}
+function labView() {                                             // the table's turn, zoom and where it's centred
+  const T = LAB.tbl; if (!T) return; const sc = LAB_TW / S * LAB.zoom;
+  T.outer.scale.setScalar(sc); T.spin.rotation.y = LAB.rot; T.inner.position.set(-LAB.c[0], 0, -LAB.c[1]);
+  const p = LAB.start || LAB.c, ps = .045 / sc; T.pin.scale.setScalar(ps); T.pin.position.set(p[0], labY(labH(p[0], p[1])), p[1]);
+  T.root.updateMatrixWorld(true);
+}
+function labClip() {                                             // only the square over the table shows
+  if (!LAB.clip || !VRUI.root) return; VRUI.root.updateMatrixWorld(true);
+  const c = VRUI.root.localToWorld(LAB_C.clone()), ax = new THREE.Vector3(1, 0, 0).transformDirection(VRUI.root.matrixWorld), az = new THREE.Vector3(0, 0, 1).transformDirection(VRUI.root.matrixWorld), h = LAB_TW / 2;
+  LAB.clip[0].setFromNormalAndCoplanarPoint(ax.clone().negate(), c.clone().addScaledVector(ax, h)); LAB.clip[1].setFromNormalAndCoplanarPoint(ax, c.clone().addScaledVector(ax, -h));
+  LAB.clip[2].setFromNormalAndCoplanarPoint(az.clone().negate(), c.clone().addScaledVector(az, h)); LAB.clip[3].setFromNormalAndCoplanarPoint(az, c.clone().addScaledVector(az, -h));
+}
+function labRay(from, dir) {                                     // where a laser meets the land on the table (map metres), or null
+  const T = LAB.tbl; if (!T || !T.root.visible) return null;
+  T.inner.updateMatrixWorld(true); const inv = T.invM.copy(T.inner.matrixWorld).invert();
+  const o = from.clone().applyMatrix4(inv), d = from.clone().add(dir).applyMatrix4(inv).sub(o), L = Math.hypot(d.x, d.z), dt = (S / T.N) * .6 / Math.max(L, Math.abs(d.y) * .35, 1e-9);
+  let t = 0, hit = null;
+  for (let it = 0; it < 1600; it++, t += dt) {
+    const x = o.x + d.x * t, z = o.z + d.z * t, y = o.y + d.y * t;
+    if (y < T.minY - 1) break; if (Math.abs(x) > HALF || Math.abs(z) > HALF) continue;
+    if (y <= labY(labH(x, z))) { let a = t - dt, b = t; for (let q = 0; q < 10; q++) { const m = (a + b) / 2, xm = o.x + d.x * m, zm = o.z + d.z * m; if (o.y + d.y * m <= labY(labH(xm, zm))) b = m; else a = m; } hit = b; break; }
+  }
+  if (hit === null) return null;
+  const x = o.x + d.x * hit, z = o.z + d.z * hit, y = o.y + d.y * hit, p = T.inner.localToWorld(new THREE.Vector3(x, y, z)), q = VRUI.root.worldToLocal(p.clone());
+  if (Math.abs(q.x - LAB_C.x) > LAB_TW / 2 || Math.abs(q.z - LAB_C.z) > LAB_TW / 2) return null;
+  return { x, z, y, p, d: from.distanceTo(p) };
+}
+function labUndoPush() {
+  const A = LAB.A, g = arenaGrid(A); LAB.undo.push({ D: g.D.slice(), L: JSON.stringify({ treesOff: A.treesOff, treesAdd: A.treesAdd, rocksOff: A.rocksOff, rocksAdd: A.rocksAdd, pts: A.loot.pts }) });
+  if (LAB.undo.length > 25) LAB.undo.shift();
+}
+function labUndo() {
+  const u = LAB.undo.pop(); if (!u) return; const A = LAB.A, g = arenaGrid(A), o = JSON.parse(u.L);
+  g.D.set(u.D); Object.assign(A, { treesOff: o.treesOff, treesAdd: o.treesAdd, rocksOff: o.rocksOff, rocksAdd: o.rocksAdd }); A.loot.pts = o.pts; LAB.hold = null;
+  labRefresh(); labChange(false); buzz("L", .2, 15); uiDraw(VRUI.panels.lab);
+}
+function labRefresh() {                                          // everything on the table again from the recipe (after an undo or a load)
+  const T = LAB.tbl; if (!T) return; const g = arenaGrid(LAB.A), pos = T.geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); T.hv[i] = T.hb[i] + arenaGridAt(g, x, z); pos.setY(i, labY(T.hv[i])); }
+  pos.needsUpdate = true; T.geo.computeVertexNormals(); labTreesShow(); labRocksShow(); labCustom(); labLootShow(); labView();
+}
+function labLand(x0, x1, z0, z1) {                               // the table's land after sculpting (a box of it)
+  const T = LAB.tbl, g = arenaGrid(LAB.A), pos = T.geo.attributes.position, st = S / T.N;
+  const i0 = Math.max(0, Math.floor((x0 + HALF) / st)), i1 = Math.min(T.N, Math.ceil((x1 + HALF) / st)), j0 = Math.max(0, Math.floor((z0 + HALF) / st)), j1 = Math.min(T.N, Math.ceil((z1 + HALF) / st));
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const k = j * T.n1 + i, x = -HALF + i * st, z = -HALF + j * st; T.hv[k] = T.hb[k] + arenaGridAt(g, x, z); pos.setY(k, labY(T.hv[k])); }
+  pos.needsUpdate = true; T.dirtyN = true;
+}
+function labSculpt(hit, dt, stk) {
+  const A = LAB.A, g = arenaGrid(A), n = g.n, base = ARENA_BASE; if (!base || base.length !== n * n) return;
+  const c = S / (n - 1), R = LAB.br, k = LAB.str, tool = LAB.tool.sculpt, D = g.D;
+  const i0 = Math.max(0, Math.floor((hit.x - R + HALF) / c)), i1 = Math.min(n - 1, Math.ceil((hit.x + R + HALF) / c)), j0 = Math.max(0, Math.floor((hit.z - R + HALF) / c)), j1 = Math.min(n - 1, Math.ceil((hit.z + R + HALF) / c));
+  const cur = i => base[i] + D[i], old = tool === "smooth" ? D.slice() : null, oc = i => base[i] + old[i];
+  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+    const x = -HALF + i * c, z = -HALF + j * c, d = Math.hypot(x - hit.x, z - hit.z); if (d > R) continue;
+    const f = 1 - d / R, w = f * f * (3 - 2 * f), q = j * n + i;
+    if (tool === "raise") D[q] += k * dt * (5 + R * .3) * w;
+    else if (tool === "lower") D[q] -= k * dt * (5 + R * .3) * w;
+    else if (tool === "flatten") D[q] += (stk.target - cur(q)) * Math.min(1, k * dt * 6) * w;
+    else { let s = 0, m = 0; for (let b = -1; b <= 1; b++) for (let a = -1; a <= 1; a++) { const ii = i + a, jj = j + b; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue; s += oc(jj * n + ii); m++; }
+      D[q] += (s / m - oc(q)) * Math.min(1, k * dt * 8) * w; }
+    D[q] = Math.max(-300, Math.min(300, D[q]));
+  }
+  labLand(hit.x - R - c, hit.x + R + c, hit.z - R - c, hit.z + R + c);
+  stk.box = stk.box ? [Math.min(stk.box[0], hit.x - R - c), Math.max(stk.box[1], hit.x + R + c), Math.min(stk.box[2], hit.z - R - c), Math.max(stk.box[3], hit.z + R + c)] : [hit.x - R - c, hit.x + R + c, hit.z - R - c, hit.z + R + c];
+  labChange(false);
+}
+function labCut(list, x, z, r) {                                 // a circle taken away (a new one only once the brush has moved a bit)
+  const last = list[list.length - 1]; if (last && Math.hypot(last[0] - x, last[1] - z) < r * .35 && Math.abs(last[2] - r) < 1) return;
+  list.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10, Math.round(r * 10) / 10]);
+}
+const labNear = (L, x, z, R) => L.filter(p => (p[0] - x) * (p[0] - x) + (p[1] - z) * (p[1] - z) >= R * R);
+function labPick(x, z, R) {                                      // the tree nearest a spot (the map's or one planted by hand)
+  const T = LAB.tbl, A = LAB.A; let best = null, bd = R * R;
+  for (const t of T.tl) { if (arenaOff(A.treesOff, t.x, t.z)) continue; const d = (t.x - x) ** 2 + (t.z - z) ** 2; if (d < bd) { bd = d; best = { x: t.x, z: t.z, kind: t.kind, s: t.s, auto: t }; } }
+  A.treesAdd.forEach((t, i) => { const d = (t[0] - x) ** 2 + (t[1] - z) ** 2; if (d < bd) { bd = d; best = { x: t[0], z: t[1], kind: t[2], s: t[3], ci: i }; } });
+  return best;
+}
+const labR1 = v => Math.round(v * 10) / 10, labR2 = v => Math.round(v * 100) / 100;
+function labPress(hit) {                                          // the first moment of a trigger pull on the table
+  const A = LAB.A, tab = LAB.tab, tool = LAB.tool[tab];
+  if (tab === "trees" && tool === "plant") { A.treesAdd.push([labR1(hit.x), labR1(hit.z), LAB.kind, labR2(LAB.tsize * (.88 + Math.random() * .24))]); labCustom(); }
+  else if (tab === "trees" && tool === "move") {
+    if (!LAB.hold) { const t = labPick(hit.x, hit.z, Math.max(4, LAB.br)); if (t) { LAB.hold = t; buzz("R", .3, 20); } }
+    else { const t = LAB.hold; LAB.hold = null;
+      if (t.ci !== undefined && A.treesAdd[t.ci]) { A.treesAdd[t.ci][0] = labR1(hit.x); A.treesAdd[t.ci][1] = labR1(hit.z); }
+      else { A.treesOff.push([labR1(t.x), labR1(t.z), 1.2]); A.treesAdd.push([labR1(hit.x), labR1(hit.z), t.kind, labR2(t.s || 1)]); labTreesShow(t.x - 2, t.x + 2, t.z - 2, t.z + 2); }
+      labCustom(); }
+  }
+  else if (tab === "rocks" && tool === "place") { A.rocksAdd.push([labR1(hit.x), labR1(hit.z), LAB.rkind, labR2(LAB.rsize), labR2(Math.random() * 6.283)]); labCustom(); }
+  else if (tab === "loot" && tool === "place") { const [t, k] = LAB.loot.split(":"); A.loot.pts.push(t === "gun" ? [labR1(hit.x), labR1(hit.z), "gun", k, k === "bow" ? Math.max(2, LAB.tier) : LAB.tier] : [labR1(hit.x), labR1(hit.z), t]);
+    if (A.loot.mode === "auto") A.loot.mode = "both"; labLootShow(); }
+  else if (tab === "land" || tab === "world" || tab === "file") { LAB.start = [labR1(hit.x), labR1(hit.z)]; labView(); }
+  else return;
+  labChange(false); uiDraw(VRUI.panels.lab);
+}
+function labHold(hit, dt, stk) {                                  // while the trigger stays pulled on the table
+  const A = LAB.A, tab = LAB.tab, tool = LAB.tool[tab], R = LAB.br;
+  if (tab === "sculpt") labSculpt(hit, dt, stk);
+  else if (tab === "trees" && tool === "remove") { labCut(A.treesOff, hit.x, hit.z, R); A.treesAdd = labNear(A.treesAdd, hit.x, hit.z, R); labTreesShow(hit.x - R, hit.x + R, hit.z - R, hit.z + R); labCustom(); labChange(false); }
+  else if (tab === "trees" && tool === "plant") { const L = stk.last || [hit.x, hit.z]; if (Math.hypot(hit.x - L[0], hit.z - L[1]) > Math.max(2.5, R * .5)) { stk.last = [hit.x, hit.z]; labPress(hit); } }
+  else if (tab === "rocks" && tool === "remove") { labCut(A.rocksOff, hit.x, hit.z, R); A.rocksAdd = labNear(A.rocksAdd, hit.x, hit.z, R); labRocksShow(hit.x - R, hit.x + R, hit.z - R, hit.z + R); labCustom(); labChange(false); }
+  else if (tab === "loot" && tool === "remove") { const n0 = A.loot.pts.length; A.loot.pts = labNear(A.loot.pts, hit.x, hit.z, R); if (A.loot.pts.length !== n0) { labLootShow(); labChange(false); } }
+}
+function labStrokeEnd(stk) {
+  if (stk && stk.box) { const [x0, x1, z0, z1] = stk.box; labTreesShow(x0, x1, z0, z1); labRocksShow(x0, x1, z0, z1); labCustom(); labLootShow(); labView(); }
+  if (LAB.tbl && LAB.tbl.dirtyN) { LAB.tbl.geo.computeVertexNormals(); LAB.tbl.dirtyN = false; }
+  if (VRUI.panels.lab) uiDraw(VRUI.panels.lab);
+}
+const labToolTab = () => LAB.tab === "sculpt" || LAB.tab === "trees" || LAB.tab === "rocks" || LAB.tab === "loot";
+function labHand(hand, h, dir, hit, pressed, dt) {                // one controller pointing at the table (hit) or not (null)
+  const stk = LAB.stroke[hand], down = h.trig > .5;
+  if (!hit || !down) { if (stk) { LAB.stroke[hand] = null; labStrokeEnd(stk); } }
+  if (!hit) return;
+  if (pressed) { if (labToolTab()) labUndoPush(); LAB.stroke[hand] = { target: labH(hit.x, hit.z), last: [hit.x, hit.z] }; labPress(hit); }
+  const s = LAB.stroke[hand]; if (s && down) labHold(hit, dt, s);
+  const T = LAB.tbl, R = LAB.tab === "rocks" && LAB.tool.rocks === "place" ? LAB.rsize * 1.5 : LAB.tab === "loot" && LAB.tool.loot === "place" ? 3 : LAB.br;
+  if (labToolTab()) { T.ring.visible = true; T.ring.position.set(hit.x, hit.y + .3, hit.z); T.ring.scale.setScalar(R); LAB.ringT = 2; }
+  if (LAB.hold) { T.held.visible = true; const sz = 12 * (LAB.hold.s || 1); T.held.position.set(hit.x, hit.y, hit.z); T.held.scale.set(sz * .2, sz * LAB_EX, sz * .2); }
+}
+function labTick(dt) {
+  const T = LAB.tbl, now = performance.now();
+  if (LAB.needBuild && now >= LAB.buildAt && !Object.values(LAB.stroke).some(Boolean) && !(VRUI.drag && VRUI.drag.P === VRUI.panels.lab)) {
+    if (!LAB.building) { LAB.building = 1; LAB.status = "Building the map…"; uiDraw(VRUI.panels.lab); return; }
+    LAB.building = 0; labBuild(); return;
+  }
+  if (LAB.saveT && now > LAB.saveT) labSaveLocal();
+  labClip();
+  if (WS.env) { hemi.color.set(0xeef2f8); hemi.groundColor.set(0x5a4a38); hemi.intensity = .7; sunL.color.set(0xfff1de); sunL.intensity = 1.05;
+    sunL.target.position.copy(VRUI.root.localToWorld(LAB_C.clone())); sunL.position.copy(VRUI.root.localToWorld(new THREE.Vector3(-2, 9, 4))); sunL.target.updateMatrixWorld(); }
+  if (!T) return;
+  const I = vr.I; if (!I) return;
+  let zoomed = false;
+  for (const hand of ["left", "right"]) {
+    const h = I.hands[hand]; if (!h) continue;
+    if (Math.abs(h.sx || 0) > .25) { LAB.rot -= (h.sx || 0) * dt * 1.6; zoomed = true; }
+    if (Math.abs(h.sy || 0) > .3) { LAB.zoom = Math.max(1, Math.min(14, LAB.zoom * (1 - (h.sy || 0) * dt * 1.5))); zoomed = true; }
+    if (edge("labU" + hand, h.b)) labUndo();
+    const G = LAB.grab[hand];
+    if ((h.grip || 0) > .6) {                                     // grab the map and drag it about
+      T.inner.updateMatrixWorld(true); const p = T.inner.worldToLocal(h.pos.clone());
+      if (!G) LAB.grab[hand] = { x: p.x, z: p.z };
+      else { LAB.c[0] = Math.max(-HALF, Math.min(HALF, LAB.c[0] + G.x - p.x)); LAB.c[1] = Math.max(-HALF, Math.min(HALF, LAB.c[1] + G.z - p.z)); labView(); }
+    } else if (G) LAB.grab[hand] = null;
+  }
+  if (zoomed) { labView(); LAB.zoomT = .25; }
+  if (LAB.zoomT > 0 && (LAB.zoomT -= dt) <= 0) labLootShow();
+  if (T.dirtyN && (T.normT = (T.normT || 0) + dt) > .15) { T.geo.computeVertexNormals(); T.dirtyN = false; T.normT = 0; }
+  if ((LAB.ringT = (LAB.ringT || 0) - 1) < 0) T.ring.visible = false;
+  if (!LAB.hold) T.held.visible = false;
+}
+function labWalk() {                                             // into the real map, at the yellow pin
+  if (LAB.needBuild || LAB.dirty) { LAB.walkAfter = true; LAB.needBuild = true; LAB.buildAt = 0; LAB.status = "Building the map first…"; uiDraw(VRUI.panels.lab); return; }
+  const c = LAB.start || LAB.c; let best = null;
+  for (let r = 0; r <= 150 && !best; r += 3) for (let q = 0; q < (r ? 16 : 1) && !best; q++) { const a = q / 16 * 6.283, x = c[0] + Math.cos(a) * r, z = c[1] + Math.sin(a) * r; if (okSpot(x, z)) best = [x, z]; }
+  if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
+  labSaveLocal(); LAB.testing = true;
+  VRUI.fadeGo = () => { vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
+}
+function labSave(pub) {
+  const A = LAB.A; if (!A.name) { LAB.status = "Give it a name first"; return; }
+  if (!DEV.ok) { LAB.status = "Dev Mode isn't on"; return; }
+  if (pub !== undefined) A.pub = pub; arenaGridPack(A); labSaveLocal();
+  LAB.status = "Saving…"; devPost({ op: "save", kind: "arena", name: A.name, data: A, pub: !!A.pub, info: labInfo(A) })
+    .then(({ st }) => { LAB.status = st === 200 ? (A.pub ? "Published: " : "Saved: ") + A.name : st === 403 ? "The dev key was refused" : st === 413 ? "Too big to save" : "Couldn't save (" + st + ")"; if (st === 200) labList(); else uiDraw(VRUI.panels.lab); })
+    .catch(() => { LAB.status = "Can't reach the online server"; uiDraw(VRUI.panels.lab); });
+}
+function labList() { LAB.saved = LAB.saved || []; fetch((DEV.url || DEV_URL) + "?list=arena", { cache: "no-store" }).then(r => r.json()).then(o => { LAB.saved = o.items || []; LAB.spage = 0; uiDraw(VRUI.panels.lab); })
+  .catch(() => { LAB.status = "Can't reach the online server"; uiDraw(VRUI.panels.lab); }); }
+function labLoad(name) {
+  LAB.status = "Loading " + name + "…";
+  fetch((DEV.url || DEV_URL) + "?get=arena&name=" + encodeURIComponent(name), { cache: "no-store" }).then(r => r.json()).then(o => {
+    if (o && o.data && o.data.v) { LAB.A = Object.assign(labRecipe(), o.data); LAB.undo = []; LAB.start = null; LAB.c = [0, 0]; LAB.zoom = 1; labChange(true); LAB.buildAt = 0; LAB.status = "Loaded: " + o.name; }
+    else LAB.status = "Couldn't load it"; uiDraw(VRUI.panels.lab); }).catch(() => { LAB.status = "Can't reach the online server"; uiDraw(VRUI.panels.lab); });
+}
+function labPanel() {
+  const Lb = uiPanel("lab", 1300, 1170, 1.8, 50, 1.38, 57), x0 = 50, x1 = 680, A = () => LAB.A, T = k => () => LAB.tab !== k, sw = 560;
+  const lab = (g, x, y, t, v) => uiLabel(g, x, y, t, v), small = (g, x, y, t, c) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "26px sans-serif"; g.fillStyle = c || UIC.dim; g.fillText(t, x, y); };
+  const TABS = [["land", "Land"], ["world", "World"], ["sculpt", "Sculpt"], ["trees", "Trees"], ["rocks", "Rocks"], ["loot", "Loot"], ["file", "File"]];
+  const RB = () => labChange(true), sh = () => A().shape, isl = () => A().edges === "island";
+  Lb.paint = (g, P) => {
+    uiBg(g, P); const a = A(), [l, w] = labDims(a); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 44px sans-serif"; g.fillStyle = UIC.text; g.fillText("MAP LAB", x0, 70);
+    g.textAlign = "right"; g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (a.name || "Unnamed") + (a.pub ? " · published" : "") + " · " + labInfo(a), 900), P.W - 50, 70);
+    const t = LAB.tab;
+    if (t === "land") {
+      lab(g, x0, 228, "Map size", labM(labSizeM(a)));
+      lab(g, x0, 352, "Length", isl() ? labM(l) : "the square"); lab(g, x0, 462, "Width", isl() ? labM(w) : "the square"); lab(g, x0, 572, "Round ↔ boxy"); lab(g, x0, 682, "Coast wobble");
+      lab(g, x1, 352, "Slide east-west", Math.round(a.px) + " m"); lab(g, x1, 462, "Slide north-south", Math.round(a.pz) + " m"); lab(g, x1, 572, "Roughness", roughText(a.rough)); lab(g, x1, 682, "Height", a.hk.toFixed(2) + "×");
+      lab(g, x0, 792, "Water level", (a.wl > 0 ? "+" : "") + a.wl.toFixed(1) + " m"); lab(g, x1, 792, "Map number", "#" + a.seed);
+      lab(g, x0, 932, "Edges"); lab(g, x1, 932, "Landmark");
+    } else if (t === "world") {
+      lab(g, x0, 228, "Environment"); lab(g, x1, 228, "Latitude", a.lat + "° " + (a.hemi > 0 ? "N" : "S")); lab(g, x1, 338, "Tree density", (.5 + a.dens).toFixed(1) + "×"); lab(g, x1, 448, "Rocks", a.rocks.toFixed(1) + "×");
+      lab(g, x0, 708, "Giant tree"); lab(g, x0, 818, "Fix big lakes and cliffs");
+      lab(g, x1, 558, "Time and season", a.time ? "fixed" : "players choose");
+      if (a.time) { lab(g, x1, 678, "Time", hourText(a.time.hour)); lab(g, x1, 788, "Month", MONTH_FULL[a.time.month]); }
+    } else if (t === "sculpt") {
+      lab(g, x0, 228, "Tool"); lab(g, x0, 372, "Brush size", Math.round(LAB.br) + " m"); lab(g, x0, 482, "Strength", Math.round(LAB.str * 100) + "%");
+      small(g, x0, 600, "Hold the trigger on the table: raise or lower the ground, flatten it to where you started, or smooth it.");
+    } else if (t === "trees") {
+      lab(g, x0, 228, "Tool"); lab(g, x0, 372, "Brush size", Math.round(LAB.br) + " m"); lab(g, x0, 482, "Plant", LAB.kind === "auto" ? "what grows here (" + (LAB_KIND_NAME[LAB.autoKind] || LAB.autoKind || "") + ")" : LAB_KIND_NAME[LAB.kind] || LAB.kind);
+      lab(g, x0, 720, "Tree size", LAB.tsize.toFixed(2) + "×");
+      small(g, x0, 820, LAB.tool.trees === "move" ? (LAB.hold ? "Now point where it goes and pull the trigger" : "Pull the trigger on a tree to pick it up") : LAB.tool.trees === "plant" ? "Pull to plant one; hold and sweep to plant a row" : "Hold the trigger and sweep to clear trees");
+      small(g, x0, 860, a.treesAdd.length + " planted · " + a.treesOff.length + " cleared patches");
+    } else if (t === "rocks") {
+      lab(g, x0, 228, "Tool"); lab(g, x0, 372, "Kind"); lab(g, x0, 612, "Rock size", LAB.rsize.toFixed(1) + " m"); lab(g, x0, 722, "Brush size (remove)", Math.round(LAB.br) + " m");
+      small(g, x0, 860, a.rocksAdd.length + " placed · " + a.rocksOff.length + " cleared patches");
+    } else if (t === "loot") {
+      lab(g, x0, 228, "Loot"); lab(g, x1 + 40, 228, "Auto amount", a.loot.amt.toFixed(1) + "×"); lab(g, x0, 372, "Place"); lab(g, x0, 612, "Stars"); lab(g, x0, 722, "Brush size (remove)", Math.round(LAB.br) + " m");
+      small(g, x0, 860, a.loot.pts.length + " placed by hand" + (LAB.tbl ? " · " + LAB.tbl.plan.length + " from the auto loot" : "") + " · shown as in PvP");
+      small(g, x0, 900, "Auto: the usual loot · Custom: only yours · Both: the two together");
+    } else if (t === "file") {
+      lab(g, x0, 228, "Name"); lab(g, x0, 398, "Walk it as"); small(g, x0, 470, "Walk it drops you at the yellow pin (pull the trigger on the table to move it). Y menu: Back to Map Lab.");
+      lab(g, x0, 640, "Saved maps"); if (LAB.saved && !LAB.saved.length) small(g, x0 + 260, 640, "None yet");
+    }
+    small(g, x0, 1036, "Trigger: use the tool · Stick: turn and zoom the table · Grip: drag the map · B or Y: undo");
+    const st = LAB.building ? "Building the map…" : LAB.status || (LAB.needBuild ? "The map will rebuild in a moment" : LAB.dirty ? "Changes since the last build: Walk it rebuilds first" : "");
+    if (st) { g.textAlign = "right"; g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, st, 700), P.W - 50, 1130); }
+  };
+  TABS.forEach(([k, l], i) => uiBtn(Lb, x0 + i * 174, 96, 164, 68, l, () => { LAB.tab = k; LAB.hold = null; if (k === "file" && !LAB.saved) labList(); }, { active: () => LAB.tab === k, fs: 30 }));
+  // land
+  LAB_SIZES.forEach(([k, l], i) => uiBtn(Lb, x0 + 300 + i * 124, 188, 116, 58, l, () => { A().size = k; RB(); }, { active: () => A().size === k, hide: T("land"), fs: 28 }));
+  const sl = (x, y, a, b, get, setv, step, hide) => uiSlider(Lb, x, y, sw, a, b, get, v => { setv(v); RB(); }, step).hide = hide;
+  sl(x0, 372, .25, 1, () => sh().len, v => { sh().len = v; }, .01, () => LAB.tab !== "land" || !isl());
+  sl(x0, 482, .25, 1, () => sh().wid, v => { sh().wid = v; }, .01, () => LAB.tab !== "land" || !isl());
+  sl(x0, 592, 0, 1, () => sh().round, v => { sh().round = v; }, .02, () => LAB.tab !== "land" || !isl());
+  sl(x0, 702, 0, 2, () => sh().wob, v => { sh().wob = v; }, .05, () => LAB.tab !== "land" || !isl());
+  sl(x1, 372, -3000, 3000, () => A().px, v => { A().px = v; }, 10, T("land"));
+  sl(x1, 482, -3000, 3000, () => A().pz, v => { A().pz = v; }, 10, T("land"));
+  sl(x1, 592, 0, 1, () => A().rough, v => { A().rough = v; }, .01, T("land"));
+  sl(x1, 702, .3, 2.5, () => A().hk, v => { A().hk = v; }, .05, T("land"));
+  sl(x0, 812, -15, 15, () => A().wl, v => { A().wl = v; }, .5, T("land"));
+  uiBtn(Lb, x1, 812, 180, 60, "New", () => { A().seed = 1 + Math.floor(Math.random() * 999999); RB(); }, { hide: T("land"), fs: 28 });
+  uiBtn(Lb, x1 + 190, 812, 120, 60, "◀", () => { A().seed = Math.max(1, A().seed - 1); RB(); }, { hide: T("land"), fs: 28 });
+  uiBtn(Lb, x1 + 320, 812, 120, 60, "▶", () => { A().seed++; RB(); }, { hide: T("land"), fs: 28 });
+  uiBtn(Lb, x0 + 140, 890, 200, 62, "Island", () => { A().edges = "island"; RB(); }, { active: () => isl(), hide: T("land"), fs: 28 });
+  uiBtn(Lb, x0 + 350, 890, 240, 62, "Fill the square", () => { A().edges = "endless"; RB(); }, { active: () => !isl(), hide: T("land"), fs: 26 });
+  uiBtn(Lb, x1 + 200, 890, 170, 62, "Natural", () => { A().land = "natural"; RB(); }, { active: () => A().land !== "dramatic", hide: T("land"), fs: 26 });
+  uiBtn(Lb, x1 + 380, 890, 180, 62, "Dramatic", () => { A().land = "dramatic"; RB(); }, { active: () => A().land === "dramatic", hide: T("land"), fs: 26 });
+  // world
+  LAB_ENVS.forEach(([k, l], i) => uiBtn(Lb, x0 + (i % 2) * 290, 250 + Math.floor(i / 2) * 70, 280, 60, l, () => { A().env = k; RB(); }, { active: () => (A().env || "auto") === k, hide: T("world"), fs: 26 }));
+  sl(x1, 248, 0, 85, () => A().lat, v => { A().lat = v; }, 1, T("world"));
+  uiBtn(Lb, x1 + 400, 188, 76, 50, "N", () => { A().hemi = 1; RB(); }, { active: () => A().hemi > 0, hide: T("world"), fs: 24 });
+  uiBtn(Lb, x1 + 484, 188, 76, 50, "S", () => { A().hemi = -1; RB(); }, { active: () => A().hemi < 0, hide: T("world"), fs: 24 });
+  sl(x1, 358, 0, 1, () => A().dens, v => { A().dens = v; }, .01, T("world"));
+  sl(x1, 468, 0, 3, () => A().rocks, v => { A().rocks = v; }, .1, T("world"));
+  uiBtn(Lb, x0, 728, 140, 58, "On", () => { A().giant = true; RB(); }, { active: () => A().giant !== false, hide: T("world"), fs: 26 });
+  uiBtn(Lb, x0 + 150, 728, 140, 58, "Off", () => { A().giant = false; RB(); }, { active: () => A().giant === false, hide: T("world"), fs: 26 });
+  uiBtn(Lb, x0, 838, 140, 58, "On", () => { A().fix = true; RB(); }, { active: () => A().fix !== false, hide: T("world"), fs: 26 });
+  uiBtn(Lb, x0 + 150, 838, 140, 58, "Off", () => { A().fix = false; RB(); }, { active: () => A().fix === false, hide: T("world"), fs: 26 });
+  uiBtn(Lb, x1, 578, 270, 58, "Players choose", () => { A().time = null; RB(); }, { active: () => !A().time, hide: T("world"), fs: 24 });
+  uiBtn(Lb, x1 + 280, 578, 280, 58, "Fixed", () => { A().time = { hour: set.hour, month: set.month, weather: "clear" }; RB(); }, { active: () => !!A().time, hide: T("world"), fs: 24 });
+  const tw = () => LAB.tab !== "world" || !A().time;
+  sl(x1, 698, 0, 23.75, () => A().time ? A().time.hour : 12, v => { if (A().time) A().time.hour = v; }, .25, tw);
+  sl(x1, 808, 0, 11, () => A().time ? A().time.month : 6, v => { if (A().time) A().time.month = v; }, 1, tw);
+  [["clear", "Clear"], ["rain", "Rain"], ["fog", "Fog"], ["snow", "Snow"], ["storm", "Storm"]].forEach(([k, l], i) => uiBtn(Lb, x1 + i * 112, 880, 104, 56, l, () => { if (A().time) { A().time.weather = k; RB(); } }, { active: () => !!A().time && A().time.weather === k, hide: tw, fs: 22 }));
+  // tools: sculpt / trees / rocks / loot
+  [["raise", "Raise"], ["lower", "Lower"], ["flatten", "Flatten"], ["smooth", "Smooth"]].forEach(([k, l], i) => uiBtn(Lb, x0 + i * 300, 250, 285, 76, l, () => { LAB.tool.sculpt = k; }, { active: () => LAB.tool.sculpt === k, hide: T("sculpt"), fs: 32 }));
+  const brush = () => !["sculpt", "trees", "rocks", "loot"].includes(LAB.tab);
+  uiSlider(Lb, x0, 392, 1150, 2, 150, () => LAB.br, v => { LAB.br = v; }, 1).hide = () => brush() || LAB.tab === "rocks" || LAB.tab === "loot";
+  uiSlider(Lb, x0, 742, 1150, 2, 150, () => LAB.br, v => { LAB.br = v; }, 1).hide = () => LAB.tab !== "rocks" && LAB.tab !== "loot";
+  uiSlider(Lb, x0, 502, 1150, .05, 1, () => LAB.str, v => { LAB.str = v; }, .01).hide = T("sculpt");
+  uiBtn(Lb, x0, 650, 440, 70, "Undo the last stroke", () => labUndo(), { hide: () => LAB.tab !== "sculpt", disabled: () => !LAB.undo.length, fs: 28 });
+  uiBtn(Lb, x0 + 460, 650, 440, 70, "Clear all sculpting", () => { labUndoPush(); const g = arenaGrid(A()); g.D.fill(0); labRefresh(); labChange(false); }, { hide: T("sculpt"), fs: 28 });
+  [["remove", "Remove"], ["plant", "Plant"], ["move", "Move"]].forEach(([k, l], i) => uiBtn(Lb, x0 + i * 300, 250, 285, 76, l, () => { LAB.tool.trees = k; LAB.hold = null; }, { active: () => LAB.tool.trees === k, hide: T("trees"), fs: 32 }));
+  for (let i = 0; i < 10; i++) uiBtn(Lb, x0 + (i % 5) * 236, 500 + Math.floor(i / 5) * 70, 226, 60, "", () => { const k = ["auto", ...LAB.kinds][i]; if (k) LAB.kind = k; },
+    { labelFn: () => { const k = ["auto", ...LAB.kinds][i]; return k === "auto" ? "Auto" : k ? LAB_KIND_NAME[k] || k : ""; }, active: () => LAB.kind === ["auto", ...LAB.kinds][i], hide: () => LAB.tab !== "trees" || !["auto", ...LAB.kinds][i], fs: 26 });
+  uiSlider(Lb, x0, 740, 1150, .4, 2.5, () => LAB.tsize, v => { LAB.tsize = v; }, .05).hide = T("trees");
+  uiBtn(Lb, x0, 880, 440, 64, "Bring back all trees", () => { labUndoPush(); A().treesOff = []; labTreesShow(); labChange(false); }, { hide: T("trees"), fs: 26 });
+  uiBtn(Lb, x0 + 460, 880, 440, 64, "Remove planted trees", () => { labUndoPush(); A().treesAdd = []; labCustom(); labChange(false); }, { hide: T("trees"), fs: 26 });
+  [["place", "Place"], ["remove", "Remove"]].forEach(([k, l], i) => uiBtn(Lb, x0 + i * 300, 250, 285, 76, l, () => { LAB.tool.rocks = k; }, { active: () => LAB.tool.rocks === k, hide: T("rocks"), fs: 32 }));
+  LAB_ROCKS.forEach(([k, l], i) => uiBtn(Lb, x0 + (i % 5) * 236, 392 + Math.floor(i / 5) * 70, 226, 60, l, () => { LAB.rkind = k; LAB.tool.rocks = "place"; }, { active: () => LAB.rkind === k, hide: T("rocks"), fs: 26 }));
+  uiSlider(Lb, x0, 632, 1150, .5, 12, () => LAB.rsize, v => { LAB.rsize = v; }, .1).hide = T("rocks");
+  uiBtn(Lb, x0, 880, 440, 64, "Bring back all rocks", () => { labUndoPush(); A().rocksOff = []; labRocksShow(); labChange(false); }, { hide: T("rocks"), fs: 26 });
+  uiBtn(Lb, x0 + 460, 880, 440, 64, "Remove placed rocks", () => { labUndoPush(); A().rocksAdd = []; labCustom(); labChange(false); }, { hide: T("rocks"), fs: 26 });
+  [["auto", "Auto"], ["custom", "Custom"], ["both", "Both"]].forEach(([k, l], i) => uiBtn(Lb, x0 + 110 + i * 170, 190, 160, 60, l, () => { A().loot.mode = k; labLootShow(); labChange(false); }, { active: () => A().loot.mode === k, hide: T("loot"), fs: 28 }));
+  uiSlider(Lb, x1 + 40, 248, 520, 0, 3, () => A().loot.amt, v => { A().loot.amt = v; RB(); }, .1).hide = T("loot");
+  LAB_LOOT.forEach(([k, l], i) => uiBtn(Lb, x0 + (i % 5) * 236, 392 + Math.floor(i / 5) * 70, 226, 60, l, () => { LAB.loot = k; LAB.tool.loot = "place"; }, { active: () => LAB.tool.loot === "place" && LAB.loot === k, hide: T("loot"), fs: 26 }));
+  uiBtn(Lb, x0 + 3 * 236, 462, 226, 60, "Remove", () => { LAB.tool.loot = "remove"; }, { active: () => LAB.tool.loot === "remove", hide: T("loot"), fs: 26, paintCol: "#7a3a32" });
+  for (let i = 1; i <= 5; i++) uiBtn(Lb, x0 + 140 + (i - 1) * 130, 580, 120, 56, "★" + i, () => { LAB.tier = i; }, { active: () => LAB.tier === i, hide: T("loot"), fs: 26, textCol: ["", "#ffffff", "#9cc4ff", "#dcb8ff", "#ffd060", "#ff8a7a"][i] });
+  uiBtn(Lb, x0 + 820, 580, 330, 56, "Clear placed loot", () => { labUndoPush(); A().loot.pts = []; labLootShow(); labChange(false); }, { hide: T("loot"), fs: 24 });
+  // file
+  uiBtn(Lb, x0, 250, 560, 80, "", () => { VRUI.keyFor = "arena"; vruiOpen("tag"); }, { labelFn: () => A().name || "Tap to name it", hide: T("file"), fs: 32 });
+  uiBtn(Lb, x0 + 580, 250, 280, 80, "Save", () => labSave(), { hide: T("file"), fs: 34 });
+  uiBtn(Lb, x0 + 880, 250, 270, 80, "", () => labSave(!A().pub), { labelFn: () => A().pub ? "Unpublish" : "Publish", primary: true, hide: T("file"), fs: 32 });
+  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "PvP"]].forEach(([k, l], i) => uiBtn(Lb, x0 + 300 + i * 170, 350, 160, 66, l, () => { if (LAB.mode !== k) { LAB.mode = k; labChange(true); } }, { active: () => LAB.mode === k, hide: T("file"), fs: 28 }));
+  uiBtn(Lb, x0 + 840, 342, 310, 82, "Walk it", () => labWalk(), { primary: true, hide: T("file"), fs: 36 });
+  uiBtn(Lb, x0, 500, 300, 64, "New map", () => { LAB.A = labRecipe(); LAB.undo = []; LAB.start = null; LAB.c = [0, 0]; LAB.zoom = 1; labChange(true); LAB.buildAt = 0; }, { hide: T("file"), fs: 28 });
+  for (let i = 0; i < 8; i++) uiBtn(Lb, x0 + (i % 4) * 290, 662 + Math.floor(i / 4) * 80, 280, 68, "", () => { const s = LAB.saved && LAB.saved[LAB.spage * 8 + i]; if (s) labLoad(s.name); },
+    { labelFn: () => { const s = LAB.saved && LAB.saved[LAB.spage * 8 + i]; return s ? (s.pub ? "★ " : "") + s.name : ""; }, hide: () => LAB.tab !== "file" || !(LAB.saved && LAB.saved[LAB.spage * 8 + i]), fs: 26 });
+  uiBtn(Lb, x0 + 900, 592, 120, 56, "◀", () => { LAB.spage = Math.max(0, LAB.spage - 1); }, { hide: () => LAB.tab !== "file" || !LAB.saved || LAB.saved.length <= 8, fs: 26 });
+  uiBtn(Lb, x0 + 1030, 592, 120, 56, "▶", () => { LAB.spage = Math.min(Math.ceil(LAB.saved.length / 8) - 1, LAB.spage + 1); }, { hide: () => LAB.tab !== "file" || !LAB.saved || LAB.saved.length <= 8, fs: 26 });
+  uiBtn(Lb, x0, 1078, 260, 70, "Dev menu", () => { labLeave(); vruiOpen("dev"); }, { fs: 30 });
+  uiBtn(Lb, x0 + 280, 1078, 180, 70, "Undo", () => labUndo(), { disabled: () => !LAB.undo.length, fs: 30 });
+}
+/* ---- 2.46: arenas for players: the published ones, picked from the map settings (solo, or the host online; the arena travels with the settings) ---- */
+const ARN = { list: null, page: 0, msg: "" };
+function arenasOpen() {
+  ARN.list = null; ARN.msg = "Loading the arenas…"; ARN.page = 0; vruiOpen("arenas");
+  fetch((DEV.url || DEV_URL) + "?list=arena", { cache: "no-store" }).then(r => r.json()).then(o => { ARN.list = (o.items || []).filter(i => i.pub); ARN.msg = ARN.list.length ? "" : "No arenas yet"; if (VRUI.panels.arenas) uiDraw(VRUI.panels.arenas); })
+    .catch(() => { ARN.list = []; ARN.msg = "Can't reach the arenas right now"; if (VRUI.panels.arenas) uiDraw(VRUI.panels.arenas); });
+}
+function arenaPick(name) {
+  ARN.msg = "Loading " + name + "…"; uiDraw(VRUI.panels.arenas);
+  fetch((DEV.url || DEV_URL) + "?get=arena&name=" + encodeURIComponent(name), { cache: "no-store" }).then(r => r.json()).then(o => {
+    if (!(o && o.data && o.data.v)) { ARN.msg = "Couldn't load it"; uiDraw(VRUI.panels.arenas); return; }
+    const A = Object.assign(labRecipe(), o.data, { name: o.name }); delete A.pub; set.arena = A; arenaApply(A); renderSetup(); vruiOpen("setup");
+  }).catch(() => { ARN.msg = "Can't reach the arenas right now"; uiDraw(VRUI.panels.arenas); });
+}
+function arenasPanel() {
+  const Ar = uiPanel("arenas", 1400, 1000, 2.0, 74, 1.45);
+  Ar.paint = (g, P) => { uiBg(g, P, "ARENAS"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim;
+    uiWrap(g, "Maps built by hand. The land, trees, rocks and loot come from the arena; the time and weather are yours unless the arena sets them.", 700, 146, 1200, 36);
+    if (ARN.msg) { g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun; g.fillText(ARN.msg, 700, 520); } };
+  for (let i = 0; i < 8; i++) uiBtn(Ar, 90 + (i % 2) * 620, 220 + Math.floor(i / 2) * 150, 600, 136, "", () => { const a = ARN.list && ARN.list[ARN.page * 8 + i]; if (a) arenaPick(a.name); },
+    { labelFn: () => { const a = ARN.list && ARN.list[ARN.page * 8 + i]; return a ? a.name : ""; }, sub: " ", after: (g, w) => { const a = ARN.list && ARN.list[ARN.page * 8 + i]; if (!a) return; g.fillStyle = "#13241b"; uiRound(g, w.x + 20, w.y + 78, w.w - 40, 42, 10); g.fill(); g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "center"; g.fillText(fitText(g, a.info || "", w.w - 60), w.x + w.w / 2, w.y + 106); },
+      active: () => { const a = ARN.list && ARN.list[ARN.page * 8 + i]; return !!a && !!set.arena && set.arena.name === a.name; }, hide: () => !(ARN.list && ARN.list[ARN.page * 8 + i]), fs: 40 });
+  uiBtn(Ar, 90, 830, 120, 70, "◀", () => { ARN.page = Math.max(0, ARN.page - 1); }, { hide: () => !ARN.list || ARN.list.length <= 8, fs: 30 });
+  uiBtn(Ar, 220, 830, 120, 70, "▶", () => { ARN.page = Math.min(Math.ceil(ARN.list.length / 8) - 1, ARN.page + 1); }, { hide: () => !ARN.list || ARN.list.length <= 8, fs: 30 });
+  uiBtn(Ar, 380, 830, 520, 90, "Normal maps (no arena)", () => { set.arena = null; renderSetup(); vruiOpen("setup"); }, { active: () => !set.arena, fs: 32 });
+  uiBtn(Ar, 930, 830, 380, 90, "Back", () => vruiOpen("setup"), { fs: 34 });
+}
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"] }[st] || [];
-  if (WS.group) WS.group.visible = st === "work"; wsEnv(st === "work");   // 2.45
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"], lab: ["lab"], arenas: ["arenas"] }[st] || [];
+  if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");   // 2.45 / 2.46
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
 // ---- 2.40: one anonymous count per map made (no name, no tag, nothing about you): how many maps a day, in VR / on a PC / on a phone, solo or online,
@@ -9067,7 +9601,8 @@ const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk)
 function vruiOpen(stage) {
   vruiParts();
   if (stage === "mode" && !rulesOk()) stage = "rules";       // 2.28: the rules come first, once
-  if (stage !== "tag") VRUI.keyFor = null;                       // 2.45: the keyboard types a gamer tag unless it was opened for the dev key or a creature's name
+  if (stage !== "tag") VRUI.keyFor = null;
+  if (LAB.on && stage !== "lab" && stage !== "tag" && stage !== "pause" && stage !== "height") labLeave();   // 2.46: out of Map Lab                       // 2.45: the keyboard types a gamer tag unless it was opened for the dev key or a creature's name
   if (stage === "mode" && MP.code) mpLeave();                    // back to the main menu leaves an online game
   if (stage === "mode" || stage === "mp" || stage === "rooms") verCheck();                     // 2.43
   if (stage === "setup" && MP.code) stage = "lobby";             // 2.38: online, the map settings sit beside the lobby
@@ -9092,7 +9627,7 @@ function vruiOpen(stage) {
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntro(0); introSounds(true); }
-  if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
+  if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : VRUI.keyFor === "arena" ? LAB.A.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
   if (!inWorld) state = "vrmenu";                                // (2.38: leaving a game that kept going, too)
   mpHostStage(stage);
 }
@@ -9142,6 +9677,7 @@ function vruiTick(dt) {
   if (st === "pause" && vr.off && edge("ymenu", vr.off.b)) { vruiResume(); return; } // tap Y again: back to the game
   if (st === "setup" || st === "lobby" || st === "char") chpTick(dt);
   if (st === "work") wsTick(dt);                                  // 2.45
+  if (st === "lab") labTick(dt);                                  // 2.46
   if (st === "intro") {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
     if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
@@ -9165,6 +9701,11 @@ function vruiTick(dt) {
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(h.rayQ); rc.set(h.rayPos, dir); rc.far = 8;
     const hit = rc.intersectObjects(meshes, false)[0];
     const dHit = st === "preview" && VRUI.dio ? rc.intersectObject(VRUI.dio.userData.terrain, false)[0] : null;
+    if (st === "lab") {                                            // 2.46: Map Lab: the laser on the table uses the tool
+      const lh = labRay(h.rayPos, dir), on = lh && (!hit || lh.d < hit.distance) ? lh : null;
+      labHand(hand, h, dir, on, on ? edge("ui" + hand, h.trig) : false, dt);
+      if (on) { L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, on.d); L.dot.visible = true; L.dot.position.copy(on.p); return; }
+    }
     if (dHit && (!hit || dHit.distance < hit.distance)) {      // pointing at the little map: choose where you'll start
       VRUI.dioHold = true; L.line.visible = true; L.line.position.copy(h.rayPos); L.line.quaternion.copy(h.rayQ); L.line.scale.set(1, 1, dHit.distance);
       L.dot.visible = true; L.dot.position.copy(dHit.point);
@@ -10815,7 +11356,7 @@ function vrClearNades() {
   nadeLootMesh = null; nadeLoot = []; nadeHide(); arrowsClear();
 }
 function spawnNadeLoot() {                                  // grenade boxes: seeded, so both players get the same ones
-  const R = mulberry32(seed * 91 + 7), n = Math.round(LOOT.nade[0] + HALF / LOOT.nade[1]), spots = [];
+  const AL = ARENA && ARENA.loot, R = mulberry32(seed * 91 + 7), n = AL && AL.mode === "custom" ? 0 : Math.round((LOOT.nade[0] + HALF / LOOT.nade[1]) * (AL && AL.amt !== undefined ? AL.amt : 1)), spots = [];   // (2.46: an arena's loot)
   for (let i = 0; i < n; i++) {
     let s = null;
     for (let k = 0; k < 200 && !s; k++) {
@@ -10826,6 +11367,8 @@ function spawnNadeLoot() {                                  // grenade boxes: se
     }
     if (s) spots.push(s);
   }
+  if (AL && AL.mode !== "auto" && AL.pts) for (const p of AL.pts) if (p[2] === "nade") spots.push([p[0], p[1]]);   // 2.46: grenades placed by hand
+  if (spawnNadeLoot.dry) { spawnNadeLoot.dry.push(...spots.map(([x, z]) => ({ type: "nade", x, z }))); return; }   // (Map Lab: just where)
   const grp = new THREE.Group();                             // 2.05: each one a red frag grenade floating and turning like the guns (no glow); one grenade each
   spots.forEach(([x, z], i) => {
     const y = H(x, z) + .55, o = new THREE.Group(), m = nadeModel(); m.scale.setScalar(2.6); o.add(m); o.position.set(x, y, z); o.rotation.y = R() * 6.283; grp.add(o);
@@ -10979,7 +11522,7 @@ function dropObj(d) {
   } else if (d.type === "hp" || d.type === "sh") spin.add(crossMesh(d.type === "hp" ? 0x3fe060 : 0x3f9bff));
   g.position.set(d.x, d.y, d.z); scene.add(g); return g;
 }
-function dropAdd(d) { if (DROPS.has(d.id)) return; d.got = false; d.back = 0; if (d.y === undefined) d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
+function dropAdd(d) { if (dropAdd.dry) { dropAdd.dry.push(Object.assign({}, d)); return; } if (DROPS.has(d.id)) return; d.got = false; d.back = 0; if (d.y === undefined) d.y = groundAt(d.x, d.z); d.obj = dropObj(d); DROPS.set(d.id, d); }
 function dropTake(id) {
   if (ENDLESS && ENDLESS.taken) ENDLESS.taken.add(id);
   const d = DROPS.get(id); if (!d || d.got) return;
@@ -10989,9 +11532,10 @@ function dropTake(id) {
 function dropsClear() { for (const d of DROPS.values()) scene.remove(d.obj); DROPS.clear(); }
 function spawnPvpLoot() {                                   // seeded: everyone gets the same guns and crosses in the same places
   const R = mulberry32(seed * 91 + 13), spot = () => { for (let k = 0; k < 200; k++) { const x = (R() * 2 - 1) * (EDGE - 10), z = (R() * 2 - 1) * (EDGE - 10); if (okSpot(x, z)) return [x, z]; } return null; };
-  const nC = Math.round(LOOT.cross[0] + HALF / LOOT.cross[1]), cell = LOOT.gunGrid[0] + HALF * LOOT.gunGrid[1], kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
+  const AL = ARENA && ARENA.loot, amt = AL && AL.amt !== undefined ? AL.amt : 1, auto = !(AL && AL.mode === "custom") && amt > 0;   // 2.46: an arena's loot
+  const nC = auto ? Math.round((LOOT.cross[0] + HALF / LOOT.cross[1]) * amt) : 0, cell = (LOOT.gunGrid[0] + HALF * LOOT.gunGrid[1]) / Math.sqrt(Math.max(.05, amt)), kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
   let gi = 0;
-  for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
+  if (auto) for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
     let sp = null; for (let k = 0; k < 14 && !sp; k++) { const x = gx + (R() - .5) * cell * .85, z = gz + (R() - .5) * cell * .85; if (okSpot(x, z)) sp = [x, z]; }
     if (!sp) continue;
     const r = R(), kind = kinds[Math.floor(R() * kinds.length)], tier0 = Math.min(kind === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);   // red sniper: only one, up the tallest tree
@@ -11001,6 +11545,8 @@ function spawnPvpLoot() {                                   // seeded: everyone 
   }
   if (PORCH) dropAdd({ id: "gRed", type: "gun", kind: "hunt", tier: 5, x: PORCH.gun[0], z: PORCH.gun[1], y: PORCH.top });
   if (gameMode === "pvp") for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
+  if (AL && AL.mode !== "auto" && AL.pts) AL.pts.forEach(([x, z, type, kind, tier], i) => {   // 2.46: loot placed by hand
+    if (type === "hp" || type === "sh") dropAdd({ id: "a" + i, type, x, z }); else if (type === "gun") dropAdd({ id: "a" + i, type: "gun", kind: kind || "ar", tier: Math.max(1, Math.min(5, tier || 1)), x, z }); });
 }
 function dropsTick(I, dt) {
   if (!DROPS.size) return;
@@ -11115,7 +11661,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino"];
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena"];   // (2.46: the arena travels with the settings)
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (2.00: online in every mode)
@@ -11279,7 +11825,7 @@ const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : 
 const mpTagOf = id => { if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.42";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+MP.netV = "2.46";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -11505,15 +12051,15 @@ function mpLobbyPanels() {
   // ---- your gamer tag: a big simple keyboard ----
   const Tg = uiPanel("tag", 1500, 940, 2.0, 74, 1.42);
   Tg.paint = (g, P) => { const kf = VRUI.keyFor, txt = VRUI.tagEdit || "";
-    uiBg(g, P, kf === "dev" ? "DEV KEY" : kf === "name" ? "NAME THIS CREATURE" : "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((kf === "dev" ? "•".repeat(txt.length) : txt) + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
+    uiBg(g, P, kf === "dev" ? "DEV KEY" : kf === "name" ? "NAME THIS CREATURE" : kf === "arena" ? "NAME THIS MAP" : "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((kf === "dev" ? "•".repeat(txt.length) : txt) + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
     g.font = "28px sans-serif"; g.fillStyle = kf === "dev" && DEV.msg ? UIC.sun : UIC.dim;
-    g.fillText(kf === "dev" ? DEV.msg || "Type the dev key and press OK (OK with nothing typed goes back)" : kf === "name" ? "Up to 24 letters and numbers" : "Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
+    g.fillText(kf === "dev" ? DEV.msg || "Type the dev key and press OK (OK with nothing typed goes back)" : kf === "name" || kf === "arena" ? "Up to 24 letters and numbers" : "Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
   const type = ch => { VRUI.tagEdit = ((VRUI.tagEdit || "") + ch).slice(0, VRUI.keyFor ? 24 : 12); uiDraw(Tg); };
   ["1234567890", "QWERTYUIOP", "ASDFGHJKL_", "ZXCVBNM-."].forEach((row, j) => row.split("").forEach((ch, i) => uiBtn(Tg, 70 + i * 136 + j * 30, 300 + j * 112, 124, 100, ch, () => type(ch), { fs: 44, personal: true })));
   uiBtn(Tg, 70, 760, 300, 110, "Space", () => type(" "), { fs: 38, personal: true });
   uiBtn(Tg, 390, 760, 300, 110, "Delete", () => { VRUI.tagEdit = (VRUI.tagEdit || "").slice(0, -1); uiDraw(Tg); }, { fs: 38, personal: true });
   uiBtn(Tg, 710, 760, 300, 110, "Clear", () => { VRUI.tagEdit = ""; uiDraw(Tg); }, { fs: 38, personal: true });
-  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => { const t = (VRUI.tagEdit || "").trim(); if (VRUI.keyFor === "dev") devTryKey(t); else if (VRUI.keyFor === "name") wsNamed(t); else mpTagDone(); }, { primary: true, fs: 48, personal: true });
+  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => { const t = (VRUI.tagEdit || "").trim(); if (VRUI.keyFor === "dev") devTryKey(t); else if (VRUI.keyFor === "name") wsNamed(t); else if (VRUI.keyFor === "arena") { LAB.A.name = t.slice(0, 24); labChange(false); LAB.tab = "file"; vruiOpen("lab"); } else mpTagDone(); }, { primary: true, fs: 48, personal: true });
 }
 // ---- the host's side of the lobby: whatever the host sees, everyone sees
 function mpHostSetSync() {                                  // a setting changed: send it (only when it really changed)

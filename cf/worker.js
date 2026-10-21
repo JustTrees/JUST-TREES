@@ -122,22 +122,31 @@ async function dev(req, env) {
   const r = await env.DEVSTORE.get(env.DEVSTORE.idFromName("all")).fetch(new Request(req.url, { method: req.method, body: body ? JSON.stringify(body) : undefined }));
   return new Response(await r.text(), { status: r.status, headers: head });
 }
-export class DevStore {
+export class DevStore {                                         // 2.46: big saves (arenas) kept in pieces; arenas can be published
   constructor(ctx, env) { this.ctx = ctx; }
   async fetch(req) {
     const out = (o, st = 200) => new Response(JSON.stringify(o), { status: st, headers: { "Content-Type": "application/json" } });
     const clip = (v, n) => String(v == null ? "" : v).replace(/[^\x20-\x7e]/g, "").slice(0, n);
+    const nameOf = v => clip(v, 24).replace(/[^A-Za-z0-9 _.-]/g, "").trim(), PART = 100000;
     if (req.method === "POST") {
-      const b = await req.json(), kind = clip(b.kind, 16).replace(/[^a-z]/g, ""), name = clip(b.name, 24).trim();
+      const b = await req.json(), kind = clip(b.kind, 16).replace(/[^a-z]/g, ""), name = nameOf(b.name);
       if (b.op !== "save" || !kind || !name) return out({ error: "bad" }, 400);
-      const data = JSON.stringify(b.data || null); if (data.length > 60000) return out({ error: "too big" }, 413);
-      await this.ctx.storage.put(kind + ":" + name.toUpperCase(), { name, t: Date.now(), data });
+      const data = JSON.stringify(b.data || null); if (data.length > 1500000) return out({ error: "too big" }, 413);
+      const key = kind + ":" + name.toUpperCase(), old = await this.ctx.storage.get(key), n = Math.ceil(data.length / PART), parts = {};
+      for (let i = 0; i < n; i++) parts[key + "#" + i] = data.slice(i * PART, (i + 1) * PART);
+      await this.ctx.storage.put(parts);
+      if (old && old.n > n) for (let i = n; i < old.n; i++) await this.ctx.storage.delete(key + "#" + i);
+      await this.ctx.storage.put(key, { name, t: Date.now(), n, pub: !!b.pub, info: clip(b.info, 90) });
       return out({ ok: true });
     }
     const q = new URL(req.url).searchParams, kind = clip(q.get("list") || q.get("get"), 16).replace(/[^a-z]/g, "");
     if (!kind) return out({ error: "bad" }, 400);
-    if (q.get("get")) { const v = await this.ctx.storage.get(kind + ":" + clip(q.get("name"), 24).trim().toUpperCase()); return v ? out({ name: v.name, t: v.t, data: JSON.parse(v.data) }) : out({ error: "not found" }, 404); }
-    const all = await this.ctx.storage.list({ prefix: kind + ":", limit: 300 });
-    return out({ items: [...all.values()].map(v => ({ name: v.name, t: v.t })).sort((a, c) => c.t - a.t) });
+    if (q.get("get")) {
+      const key = kind + ":" + nameOf(q.get("name")).toUpperCase(), v = await this.ctx.storage.get(key); if (!v) return out({ error: "not found" }, 404);
+      let data = v.data; if (data === undefined) { const keys = []; for (let i = 0; i < (v.n || 0); i++) keys.push(key + "#" + i); const got = await this.ctx.storage.get(keys); data = keys.map(k => got.get(k) || "").join(""); }
+      return out({ name: v.name, t: v.t, pub: !!v.pub, data: JSON.parse(data || "null") });
+    }
+    const all = await this.ctx.storage.list({ prefix: kind + ":", limit: 1000 });
+    return out({ items: [...all].filter(([k]) => !k.includes("#")).map(([, v]) => ({ name: v.name, t: v.t, pub: !!v.pub, info: v.info || "" })).sort((a, c) => c.t - a.t) });
   }
 }
