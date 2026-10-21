@@ -8,8 +8,9 @@
 Usage: python3 dev/test_endless.py dbg.html [walk_km] [speed m/s] [budget factor]"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run: a shorter walk
 num = [a for a in sys.argv[2:] if a.replace('.', '', 1).isdigit()]          # (the test runner passes a picture path; numbers are for running it by hand)
-KM = float(num[0]) if len(num) > 0 else 2
+KM = float(num[0]) if len(num) > 0 else (1.2 if QUICK else 2)
 SPEED = float(num[1]) if len(num) > 1 else 12.5
 BUD = float(num[2]) if len(num) > 2 else 1
 async def main():

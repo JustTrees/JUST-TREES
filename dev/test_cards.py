@@ -4,12 +4,13 @@ cell when you move, never when you only turn your head. Checks every tree has th
 Usage: python3 dev/test_cards.py /tmp/dbg.html"""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run
 T = 'file://' + os.path.abspath(sys.argv[1])
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"])
         out = {}; errs = []
-        for size in ["medium", "xxl"]:
+        for size in (["medium"] if QUICK else ["medium", "xxl"]):   # (quick run: the medium map only)
             pg = await (await b.new_context(viewport={"width": 400, "height": 260})).new_page(); pg.on("pageerror", lambda e: errs.append(str(e)))
             await pg.goto(T, timeout=120000); await pg.wait_for_timeout(600)
             out[size] = await pg.evaluate("""(size) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); D.setSeed(4); D.setVR(true); D.setMode('hike'); D.set.size = size; D.set.lat = 44; D.set.env = 'climate'; D.generate(); D.state = 'play';

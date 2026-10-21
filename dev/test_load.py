@@ -2,10 +2,11 @@ import os, sys
 TARGET = 'file://' + os.path.abspath(sys.argv[1])
 import asyncio
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-gl=swiftshader","--enable-webgl","--ignore-gpu-blocklist"])
-        for mode in ["hike", "hunt"]:
+        for mode in (["hunt"] if QUICK else ["hike", "hunt"]):   # (quick run: one mode)
             ctx = await b.new_context(viewport={"width":640,"height":360}); pg = await ctx.new_page(); pg.set_default_timeout(150000); errs = []   # a busy machine (other tests running) can stall the page for a while
             pg.on("pageerror", lambda e: errs.append(str(e))); pg.on("console", lambda m: errs.append(m.text[:200]) if m.type=="error" and "GPU stall" not in m.text else None)
             await pg.goto(TARGET); await pg.wait_for_timeout(800)

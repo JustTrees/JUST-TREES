@@ -2,6 +2,7 @@
 the middle is open to climb through; the one red sniper lies on it (none on the ground); sniper zoom steps = its stars."""
 import os, sys, asyncio, json, base64
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run (fewer maps)
 TARGET = 'file://' + os.path.abspath(sys.argv[1]); SHOTS = sys.argv[2] if len(sys.argv) > 2 and os.path.isdir(sys.argv[2]) else None
 async def main():
     async with async_playwright() as p:
@@ -10,7 +11,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
         out = []
-        for lat, size, sd in [[45, "medium", 11], [58, "large", 222], [12, "small", 3333], [40, "medium", 44], [50, "small", 505]]:
+        for lat, size, sd in ([[45, "medium", 11], [12, "small", 3333]] if QUICK else [[45, "medium", 11], [58, "large", 222], [12, "small", 3333], [40, "medium", 44], [50, "small", 505]]):
             r = await pg.evaluate("""([lat, size, sd]) => { window.FREEZE = true; D.setSeed(sd); D.setVR(true); D.setMode('hunt'); D.set.size = size; D.set.weather = 'clear'; D.set.lat = lat; D.generate(); D.state = 'play';
               const Pc = D.PORCH, o = { lat, porch: !!Pc }; if (!Pc) return o;
               o.top = +Pc.top.toFixed(1); o.name = Pc.name; o.base = +Pc.tree.y.toFixed(1); o.ground = +D.H(Pc.x, Pc.z).toFixed(1);

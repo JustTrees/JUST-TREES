@@ -28,6 +28,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(f"http://127.0.0.1:{PORT}/dbg.html", timeout=120000); await pg.wait_for_timeout(800)
         await pg.evaluate(SETUP); imgs = {}
+        if not OUT: await pg.evaluate("() => { window.shot = () => ''; return 1; }")   # no pictures asked for (run_all's quick run): skip drawing them
         await pg.wait_for_function("() => { frames(2); return !!D.vr.meC || D.CHAR.failed > 0; }", timeout=120000)
         imgs = {}; r = {}
         if os.environ.get("SHOWHEAD"):                                   # pictures for put the head back on (only you never see it)

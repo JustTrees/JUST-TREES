@@ -6,8 +6,9 @@
 Usage: python3 dev/test_en_animals.py dbg.html [walk_km]"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run: a shorter walk
 num = [a for a in sys.argv[2:] if a.replace('.', '', 1).isdigit()]
-KM = float(num[0]) if num else 3
+KM = float(num[0]) if num else (1.5 if QUICK else 3)
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-gl=swiftshader", "--enable-webgl", "--ignore-gpu-blocklist"])

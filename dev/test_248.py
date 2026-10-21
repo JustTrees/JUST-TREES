@@ -157,9 +157,9 @@ async def main():
         # a bot shoots the friend, then takes the friend down: the bot's kill
         bj = hb[1][0]
         hit = await H1.evaluate(f"""() => {{ const T = D.THREE, B = D.VB.list.find(q => q.i === {bj}), L = D.mpOpen()[0]; freeze(B); B.alive = true; const R = L.R; if (!R || !R.cur) return null;
-          const s = near(R.head.x, R.head.z, 15); if (!s) return null; B.x = s[0]; B.z = s[1]; B.y = D.groundAt(B.x, B.z); play(1);
-          const from = new T.Vector3(B.x, B.y + 1.5, B.z), d = new T.Vector3(R.head.x - from.x, R.head.y - .5 - from.y, R.head.z - from.z).normalize();
-          D.makeBullet(from, d.multiplyScalar(715), {{ reach: 900, dmg: 30, gun: 'ar', bot: B }}); play(4); return 1; }}""")
+          let n = 0; for (let k = 0; k < 3; k++) {{ const s = near(R.head.x, R.head.z, 15); if (!s) continue; n++; B.x = s[0]; B.z = s[1]; B.y = D.groundAt(B.x, B.z); play(1);   /* three tries from three spots, 10 each */
+            const from = new T.Vector3(B.x, B.y + 1.5, B.z), d = new T.Vector3(R.head.x - from.x, R.head.y - .45 - from.y, R.head.z - from.z).normalize();
+            D.makeBullet(from, d.multiplyScalar(715), {{ reach: 900, dmg: 10, gun: 'ar', bot: B }}); play(4); }} return n; }}""")
         await until(G, "() => { play(1); return D.MP.hp < 100; }", 5)
         out["botHitFriend"] = [hit, await G.evaluate(f"() => [D.MP.hp, D.MP.lastHitBy]")]
         await H1.evaluate(f"""() => {{ const T = D.THREE, B = D.VB.list.find(q => q.i === {bj}), R = D.mpOpen()[0].R; for (let k = 0; k < 4; k++) {{ const from = new T.Vector3(B.x, B.y + 1.5, B.z), d = new T.Vector3(R.head.x - from.x, R.head.y - .5 - from.y, R.head.z - from.z).normalize();
@@ -183,7 +183,7 @@ async def main():
               and out["hostAlone"] and out["connected"] and out["roomBots"] == [True, True] and out["sameBots"] and out["lobby"] == [4, 2] and out["preview"] and out["playing"]
               and out["puppets"][0] == 2 and out["puppets"][1] and out["puppets"][2] < 8
               and out["friendShot"][0] and out["friendShot"][2][0] is False and out["friendShot"][2][1] >= 1 and out["friendShot"][3] == [1, False]
-              and out["botHitFriend"][0] and out["botHitFriend"][1][0] < 100 and out["botHitFriend"][1][1] == "b:" + str(bj) and out["botKill"] == [True, True] and out["afterLeave"] and not errs)
+              and out["botHitFriend"][0] >= 1 and out["botHitFriend"][1][0] < 100 and out["botHitFriend"][1][1] == "b:" + str(bj) and out["botKill"] == [True, True] and out["afterLeave"] and not errs)
         print("errors:", errs[:5] or ("none" if ok else "CHECKS FAILED")); await b.close(); return ok
 try: res = asyncio.run(main())
 finally: srv.shutdown()

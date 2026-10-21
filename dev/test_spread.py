@@ -2,6 +2,7 @@
 parts that get shot out or run empty are filled again, far from you and out of sight (never popping up in view). After a shot they still run off."""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run (fewer maps)
 TARGET = 'file://' + os.path.abspath(sys.argv[1]); OLD = '--old' in sys.argv
 async def main():
     async with async_playwright() as p:
@@ -12,14 +13,14 @@ async def main():
         await pg.evaluate("() => { window.FREEZE = true; }")
         out = {}
         # 1) at the start: what share of the map's land squares have something to hunt (not counting rabbits)
-        r = await pg.evaluate("""(old) => { const res = [];
-          for (const [lat, size, sd] of [[42, 'medium', 5], [42, 'large', 6], [56, 'large', 7], [10, 'large', 8], [42, 'xl', 9], [70, 'large', 10]]) {
+        r = await pg.evaluate("""([old, QUICK]) => { const res = [];
+          for (const [lat, size, sd] of QUICK ? [[42, 'medium', 5], [10, 'large', 8]] : [[42, 'medium', 5], [42, 'large', 6], [56, 'large', 7], [10, 'large', 8], [42, 'xl', 9], [70, 'large', 10]]) {
             D.setSeed(sd); D.setVR(true); D.setMode('hunt'); D.set.land = 'natural'; D.set.size = size; D.set.lat = lat; D.set.weather = 'clear'; D.generate(); D.state = 'play';
             const S = { medium: 560, large: 800, xl: 1200 }[size], G = Math.max(2, Math.min(8, Math.round(S / 200))), w = S / G, half = S / 2, has = new Set(); let land = [];
             if (!old) land = D.STOCK.land; else for (let q = 0; q < G * G; q++) land.push(q);
             for (const A of D.beasts) if (!A.dead && !A.gone && !A.wings && !['monkey', 'seal', 'crocodile', 'rabbit', 'bigfoot', 'yeti'].includes(A.kind)) { const i = Math.max(0, Math.min(G - 1, Math.floor((A.x + half) / w))), j = Math.max(0, Math.min(G - 1, Math.floor((A.z + half) / w))); has.add(i * G + j); }
             res.push({ lat, size, squares: land.length, withAnimals: land.filter(q => has.has(q)).length, share: +(land.filter(q => has.has(q)).length / land.length).toFixed(2) }); }
-          return res; }""", OLD)
+          return res; }""", [OLD, QUICK])
         out["start"] = r
         if not OLD:
             # 2) shoot out half the map (everything west of the middle), stand in the east looking east: the west fills again, out of sight

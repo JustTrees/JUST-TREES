@@ -11895,10 +11895,12 @@ function verCheck() {                                         // a newer version
     if (m && verNum(m[1]) > verNum(VERSION)) { VRUI.newVer = m[1]; for (const k of ["mode", "mp", "rooms", "lobby"]) if (VRUI.panels[k] && VRUI.panels[k].mesh.visible) uiDraw(VRUI.panels[k]); } }).catch(() => {});
 }
 function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
-function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the smaller one (2.48: bots too, and solo)
-  if (!MP.host && MP.code) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id), ...VB.list.map(B => B.id)];
+function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the side with fewer people
+  if (!MP.host && MP.code) return; const people = [mpMyId(), ...mpOpen().map(L => L.id)], bots = VB.list.map(B => B.id), ids = people.concat(bots);   // (2.48: solo too)
   for (const id of Object.keys(MP.teams)) if (!ids.includes(id)) delete MP.teams[id];
-  for (const id of ids) if (!(id in MP.teams)) { const n0 = ids.filter(i => MP.teams[i] === 0).length, n1 = ids.filter(i => MP.teams[i] === 1).length; MP.teams[id] = n0 <= n1 ? 0 : 1; }
+  for (const id of people) if (!(id in MP.teams)) { const n0 = people.filter(i => MP.teams[i] === 0).length, n1 = people.filter(i => MP.teams[i] === 1).length; MP.teams[id] = n0 <= n1 ? 0 : 1; }
+  const key = people.map(i => i + ":" + MP.teams[i]).join(",") + "|" + bots.join(",");   // 2.48: the bots even the sides out when someone comes, goes or changes side (the host can still move one by hand)
+  if (key !== MP.botKey || bots.some(i => !(i in MP.teams))) { MP.botKey = key; const n = [0, 0]; for (const i of people) n[MP.teams[i] | 0]++; for (const i of bots) { const t = n[0] <= n[1] ? 0 : 1; MP.teams[i] = t; n[t]++; } }
 }
 function mpTeamsRandom() { if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id), ...VB.list.map(B => B.id)].sort(() => Math.random() - .5); ids.forEach((id, i) => { MP.teams[id] = i % 2; }); mpLobSync(true); mpLobbyDraw(); }
 function mpLobSync(force) {

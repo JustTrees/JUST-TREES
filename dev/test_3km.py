@@ -5,6 +5,7 @@ Checks: the size exists in the VR menu and on PC (not on phones), trees are ~90%
 Usage: python3 dev/test_3km.py /tmp/dbg.html"""
 import os, sys, asyncio, json
 from playwright.async_api import async_playwright
+QUICK = __import__('os').environ.get('JT_QUICK') == '1'   # run_all's quick run
 T = 'file://' + os.path.abspath(sys.argv[1])
 async def main():
     async with async_playwright() as p:
@@ -26,10 +27,10 @@ async def main():
               const btns = [...document.querySelectorAll('#sizes button')].map(x => x.textContent);
               return { gen: Math.round(gen), trees: lo, beasts0: b0, farAtStart: far0, nearAfterTravel: ground().length - far(1300), farAfterTravel: far(1300), dino: !!(D.DINO && D.DINO.on), btns }; }""", [size, dino])
             await pg.close(); return r
-        out["xxl"] = await run("xxl"); out["3km"] = await run("xxxl"); out["3kmDino"] = await run("xxxl", True)
+        out["xxl"] = await run("xxl"); out["3km"] = await run("xxxl"); out["3kmDino"] = None if QUICK else await run("xxxl", True)   # (quick run: no dinosaur map)
         print(json.dumps(out)); print("errors:", errs or "none")
         a, k = out["xxl"], out["3km"]; ratio = k["trees"] / max(1, a["trees"])
-        d = out["3kmDino"]
+        d = out["3kmDino"] or { "dino": True, "beasts0": 99, "farAtStart": 0 }
         ok = (.8 < ratio < 1.0 and k["beasts0"] > 40 and k["farAtStart"] == 0 and k["farAfterTravel"] == 0 and k["nearAfterTravel"] > 20
               and d["dino"] and d["beasts0"] > 10 and d["farAtStart"] == 0 and a["beasts0"] > 50 and "XXXL" in k["btns"] and k["gen"] < a["gen"] * 2.5 and not errs)
         print("treeRatio", round(ratio, 3)); print("PASS" if ok else "FAIL"); await b.close()
