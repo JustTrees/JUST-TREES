@@ -1,0 +1,9 @@
+.git
+.github
+cf
+dev
+node_modules
+wrangler.jsonc
+.assetsignore
+HANDOFF.md
+models/source
