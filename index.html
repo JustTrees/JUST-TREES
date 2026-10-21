@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.47</title>
+<title>JUST TREES 2.48</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.47";              // Just Trees 2.47
+const VERSION = "2.48";              // Just Trees 2.48
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -316,6 +316,7 @@ document.title = "JUST TREES " + VERSION;           // the browser tab always sh
      the bow (VR Hunting) . "five bows", "function bowTick", "arrowsTick"
      loot (VR) ............ "PvP loot (VR)", "function spawnLoot", "the little bar low in your view", "end of a round"
      online play .......... "Multiplayer (VR PvP", "mpLobbyPanels"
+     bots (VR PvP) ........ "2.48: bots", "vbThink", "vbAct", "vbMove", "vbPanel"
      VR menus ............. "vruiParts", "vruiOpen", "the little map turning"
      animals .............. "spawnAnimals", "updateAnimals", "addGround", the models: "the hunting animals too" (qdAttach, qrAttach)
      dinosaurs ............ "Prehistoric (1.75", "dinoTick", "huntTick" (the raptor), "rexTick", "Pterosaurs on the dinosaur maps", "the dinosaurs are Quaternius"
@@ -398,7 +399,8 @@ function arenaSpawnNear(p) {                                    // a dry spot ri
   return [p[0], p[1]];
 }
 function arenaFoes() {                                          // where the others are (in a team game, only the other side)
-  const out = []; for (const L of mpOpen()) if (L.R && L.R.cur && L.R.alive && (!teamsOn() || mpTeamOf(L.id) !== mpMyTeam())) out.push([L.R.head.x, L.R.head.z]); return out;
+  const out = []; for (const L of mpOpen()) if (L.R && L.R.cur && L.R.alive && (!teamsOn() || mpTeamOf(L.id) !== mpMyTeam())) out.push([L.R.head.x, L.R.head.z]);
+  for (const B of VB.list) if (B.alive && B.x !== undefined && !vbMate(B.id, mpMyId())) out.push([B.x, B.z]); return out;   // (2.48: and the bots)
 }
 function arenaSpawnFar(away) {                                  // the start point furthest from them (back in after being taken down, joining late)
   const L = arenaSpawnList(); if (!L) return null;
@@ -4077,7 +4079,7 @@ function* envGen(o) {
 }
 function generate() {
   ARENA = set.arena || null; if (ARENA) arenaApply(ARENA);       // 2.46
-  clearSquad(); if (!LAB.on) statPing();
+  clearSquad(); vbClear(); if (!LAB.on) statPing();
   HIKEMAP = ARENA ? null : HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && set.huntMap === "endless" ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
@@ -7888,7 +7890,7 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
 }
 function uwRespawn() {                                      // wake up somewhere random on dry ground
   let s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
-  for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30)) s = [x, z]; }
+  for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30) && (k > 300 || vbFarFrom(x, z, Math.min(120, HALF * .4)))) s = [x, z]; }   // (2.48: not next to a bot)
   if (!s) s = [P.x, P.z];
   P.x = s[0]; P.z = s[1]; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
 }
@@ -7958,6 +7960,7 @@ function vrFire() {
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, gun: W ? vr.gunKind : null, online });
   legendShot(from, v.clone().normalize(), vr.scoped ? 3200 : W ? W.reach : 900, v.length());
   if (MP.on && W) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
+  if (W && gameMode === "pvp") vbHeard(from, vr.gunKind, mpMyId());   // 2.48: the bots hear it
   gunshot(huntM ? vr.gunKind : undefined, W && W.auto ? Math.max(0, AUTO_LAT - late) : 0);   // 1.89: automatic shots sound on an even beat
 }
 // your own body: arms reach your real hands, the torso follows your head, legs step as you walk; your own head is hidden
@@ -8356,7 +8359,7 @@ function uiWrap(g, text, cx, y, maxW, lh) {
   for (const w of words) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
   lines.push(cur); lines.forEach((l, i) => g.fillText(l, cx, y + i * lh));
 }
-function mpLocked(P, w) { return mpGuest() && (P.name === "setup" || P.name === "pause" || P.name === "lobby") && !w.personal; }   // online: only the host changes the map
+function mpLocked(P, w) { return mpGuest() && (P.name === "setup" || P.name === "pause" || P.name === "lobby" || P.name === "bots") && !w.personal; }   // online: only the host changes the map
 const uiBtn = (P, x, y, w, h, label, on, extra = {}) => { const b = Object.assign({ kind: "btn", x, y, w, h, label, on }, extra); P.widgets.push(b); return b; };
 const uiSlider = (P, x, y, w, min, max, get, setv, step = 0) => { const s = { kind: "slider", x, y, w, h: 56, min, max, get, set: v => setv(step ? Math.round(v / step) * step : v) }; P.widgets.push(s); return s; };
 function uiLabel(g, x, y, label, value) {
@@ -8460,7 +8463,7 @@ function vruiParts() {
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
   uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
   uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
-  devPanels(); labPanel(); arenasPanel();
+  devPanels(); labPanel(); arenasPanel(); vbPanel();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -8506,7 +8509,8 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, MODE_NAME[gameMode] + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && MP.code && !mpOpen().length ? " · practice until someone joins" : ""), 1060), lx + 360, 92);   // (2.46: an arena)
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, MODE_NAME[gameMode] + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
+    { const pv = gameMode === "pvp" && !mpGuest(); wAr.w = pv ? 210 : 250; wRnd.x = rx + (pv ? 444 : 262); wRnd.w = pv ? 210 : 250; wGo.x = rx + (pv ? 664 : 524); wGo.w = pv ? 236 : 376; }   // 2.48: room for Bots   // (2.46: an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
     uiLabel(g, lx, 318, "Terrain", roughText(set.rough)); note(g, lx, 354, "From gentle hills to jagged peaks.");
@@ -8522,7 +8526,8 @@ function vruiParts() {
     if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
     else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
-    if (onl() && gameMode === "pvp") { uiLabel(g, rx, 618, "Teams"); note(g, rx, 734, "Deathmatch: you respawn · kills and deaths count" + (set.teams === "teams" ? " · no friendly fire" : "")); }
+    if (!onl() && gameMode === "pvp") uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min");   // 2.48: solo PvP (with bots)
+    if (gameMode === "pvp") { uiLabel(g, rx, 618, "Teams"); note(g, rx, 734, "Deathmatch: you respawn · kills and deaths count" + (set.teams === "teams" ? " · no friendly fire" : "")); }
     if (onl()) {
       uiLabel(g, rx, 790, "Comms", COMMS_NAME[set.comms | 0]);
       note(g, rx, 896, ["Everyone hears everyone, anywhere on the map", "Everyone, louder the closer they are", "Teammates only, like a radio", "Silent until you fist bump a teammate (fists together)"][set.comms | 0]);
@@ -8531,7 +8536,7 @@ function vruiParts() {
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map", P.W - 70, 92);
       g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("The host starts the game · change your look on the left", P.W - 70, 1112); }
   };
-  [["hike", "Hike"], ["hunt", "Hunt"]].forEach(([m, l], i) => uiBtn(S2, 1590 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here
+  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1400 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here (2.48: PvP against bots)
   [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1434 + i * 200, 40, 190, 66, l, () => { setMode(m); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m, hide: () => !MP.code || mpGuest(), fs: 34 }));   // online: the host picks
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
@@ -8549,11 +8554,11 @@ function vruiParts() {
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
   // online: teams, voice, the round (they used to be on the lobby panel)
-  uiBtn(S2, rx, 636, 260, 62, "Free for all", () => { set.teams = "solo"; mpLobSync(true); }, { active: () => set.teams !== "teams", hide: () => !onl() || gameMode !== "pvp", fs: 30 });
-  uiBtn(S2, rx + 275, 636, 260, 62, "2 Teams", () => { set.teams = "teams"; mpTeamFix(); mpLobSync(true); }, { active: () => set.teams === "teams", hide: () => !onl() || gameMode !== "pvp", fs: 30 });
+  uiBtn(S2, rx, 636, 260, 62, "Free for all", () => { set.teams = "solo"; mpLobSync(true); }, { active: () => set.teams !== "teams", hide: () => gameMode !== "pvp", fs: 30 });
+  uiBtn(S2, rx + 275, 636, 260, 62, "2 Teams", () => { set.teams = "teams"; mpTeamFix(); mpLobSync(true); }, { active: () => set.teams === "teams", hide: () => gameMode !== "pvp", fs: 30 });
   uiBtn(S2, rx + 550, 636, 260, 62, "Random teams", () => mpTeamsRandom(), { hide: () => !onl() || !teamsOn(), fs: 28 });
   uiSlider(S2, rx, 806, cw, 0, 3, () => set.comms | 0, v => { set.comms = v; mpLobSync(true); }, 1).hide = () => !onl();
-  uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => !onl();   // round length (2.00: every online mode, 5 to 60 minutes)
+  uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => !onl() && gameMode !== "pvp";   // round length (2.00: every online mode, 5 to 60 minutes)
   // the extras, in three short rows under the months
   [[0, "Together"], [50, "50"], [150, "150"], [300, "300"], [500, "500"], [750, "750"], [1000, "1 km"]].forEach(([v, l], i) => uiBtn(S2, i ? 436 + (i - 1) * 98 : 290, 986, i ? 92 : 140, 62, l, () => { set.spawnD = v; }, { active: () => (set.spawnD || 0) === v, hide: () => !spawnPick(), fs: 26 }));   // 2.24
   uiBtn(S2, 340, 1066, 120, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" });   // PvP capture point
@@ -8564,9 +8569,10 @@ function vruiParts() {
   uiBtn(S2, 300, 906, 110, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
   uiSlider(S2, 690, 908, 280, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
   uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp";
-  uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // 2.46: maps built in Map Lab
-  uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
-  uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // 2.46: maps built in Map Lab
+  const wRnd = uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
+  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  uiBtn(S2, rx + 220, 1060, 214, 90, "Bots", () => vbOpen(), { hide: () => mpGuest() || gameMode !== "pvp", active: () => vbWant() > 0, fs: 32, labelFn: () => vbWant() ? "Bots · " + vbWant() : "Bots · off" });   // 2.48
   for (const w of S2.widgets) if (([212, 216, 366, 666].includes(w.y) && w.x < rx) || ([196, 346].includes(w.y) && w.x >= rx)) { const d0 = w.disabled; w.disabled = () => !!set.arena || !!(d0 && d0()); }   // an arena sets the land
   // ---- your character: beside the map settings (Solo, and online when you tap your own card), and on its own from the main menu ----
   charPanel("me", SIDE_YAW, true);
@@ -8595,7 +8601,7 @@ function vruiParts() {
   Ov.paint = (g, P) => {
     uiBg(g, P, "ROUND OVER"); const rows = MP.board || [];
     rows.slice(0, 8).forEach((r, i) => { const y = 170 + i * 62; g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(250, y, 18, 0, 6.283); g.fill();
-      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " pts · " : "") + r.k + " kills · " + r.d + " deaths", 1160, y); });
+      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : r.bot ? " · bot" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " pts · " : "") + r.k + " kills · " + r.d + " deaths", 1160, y); });
     if (mpGuest()) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
   };
   uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => mpGuest() });
@@ -9625,7 +9631,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"], lab: ["lab"], arenas: ["arenas"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");   // 2.45 / 2.46
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -9721,6 +9727,7 @@ function vruiTick(dt) {
   if (st === "setup" || st === "lobby" || st === "char") chpTick(dt);
   if (st === "work") wsTick(dt);                                  // 2.45
   if (st === "lab") labTick(dt);                                  // 2.46
+  if (st === "bots" && (VRUI.bpT = (VRUI.bpT || 0) - dt) <= 0) { VRUI.bpT = 1; uiDraw(VRUI.panels.bots); }   // 2.48: the pictures arrive
   if (st === "intro") {
     const t = (performance.now() - intro.t0) / 1000; paintIntro(t); VRUI.panels.intro.tex.needsUpdate = true;
     if (t > 8.5) { introSounds(false); titlePaint(); vruiOpen("title"); }
@@ -10432,7 +10439,7 @@ function poseSoldier(S, dt) {
     const foot = B["foot" + sfx]; foot.parent.getWorldQuaternion(_q2); foot.quaternion.copy(_q2.invert().multiply(_q)); foot.updateMatrixWorld(true);
   }
   // arms: right hand on the pistol grip, left hand under the handguard
-  for (const [sfx, gx, gy, gz, pole] of [["R", 0, -.085, -.02, [-.6, -1, -.3]], ["L", 0, -.05, .27, [.7, -1, -.15]]]) {
+  for (const [sfx, gx, gy, gz, pole] of S.hold ? [["R", ...S.hold.r, [-.6, -1, -.3]], ["L", ...S.hold.l, [.7, -1, -.15]]] : [["R", 0, -.085, -.02, [-.6, -1, -.3]], ["L", 0, -.05, .27, [.7, -1, -.15]]]) {   // (2.48: a bot's gun has its own grips)
     S.rifle.localToWorld(_tg.set(gx, gy, gz));
     const fa = B["foreArm" + sfx];
     _pole.set(pole[0], pole[1], pole[2]).applyQuaternion(_yawQ).normalize();
@@ -11178,8 +11185,10 @@ function nadeBoom(p, remote) {
   for (let k = 0; k < 3; k++) addPuff(p.clone().add(_v1.set((Math.random() - .5) * 2, 0, (Math.random() - .5) * 2)), wet ? "water" : "ground");
   const d = camera.position.distanceTo(p); setTimeout(() => boomSound(d), d / 343 * 1000);
   if (d < 25) { const s = 1 - d / 25; buzz("L", .4 + .6 * s, 120); buzz("R", .4 + .6 * s, 120); }
+  if (gameMode === "pvp" && VB.list.length) vbHeard(p, "ar", remote ? null : mpMyId());   // 2.48: a blast carries
   if (remote) return;                                       // only the thrower's game counts what it hits
   scatterBeasts(p); alertBots();
+  if (gameMode === "pvp" && VB.list.length) vbBlast(p);       // 2.48
   for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) hitAnimal(A, camera.position.distanceTo(p), 200);
   for (const S of squad) if (!S.dead) { const sd = S.group.position.distanceTo(p); if (sd < NADE.R) for (let n = sd < 3 ? 3 : sd < 5 ? 2 : 1; n-- > 0;) damageBot(S, false); }
   if (gameMode === "pvp" && MP.on) for (const L of MP.links.values()) {
@@ -11480,6 +11489,7 @@ function captScore(dt) {                                     // (runs with the o
   if (!CAPT || state !== "play") return;
   const me = MP.dead <= 0 && captIn(P.x, P.y, P.z); let others = 0, who = -1;
   for (const L of MP.links.values()) if (L.open && !L.bad && L.R && L.R.alive && captIn(L.R.head.x, L.R.feet, L.R.head.z)) { others++; who = L.idx; }
+  for (const B of VB.list) if (B.alive && B.x !== undefined && captIn(B.x, B.y, B.z)) { others++; who = B.c; }   // 2.48
   CAPT.state = me ? (others ? "contested" : "mine") : others > 1 ? "contested" : others === 1 ? "theirs" : "free";
   CAPT.col = CAPT.state === "mine" ? MP_COL[MP.idx] : CAPT.state === "theirs" ? MP_COL[who] || "#ffffff" : "#ffffff";
   if (CAPT.state === "mine") {
@@ -11691,6 +11701,7 @@ function mpRoundOver() {
 function mpBoard() {                                         // everyone's score this round
   const hu = gameMode === "hunt", rows = [{ id: mpMyId(), u: mpUni(null), c: mpColOf(null), tag: MP.tag, team: mpMyTeam(), k: hu ? hunt.kills : MP.kills, d: MP.deaths, p: hu ? hunt.score : MP.pts, me: true }];
   for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0 });
+  if (gameMode === "pvp") rows.push(...vbBoardRows());        // 2.48
   rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
 }
 function clearLoot() { vrClearNades(); dropsClear(); if (typeof flaresClear === "function") flaresClear(); }
@@ -11708,7 +11719,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena"];   // (2.46: the arena travels with the settings)
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill"];   // (2.46: the arena travels with the settings)
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (2.00: online in every mode)
@@ -11726,6 +11737,7 @@ function mpDropLink(L) {
   if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
 }
 function mpLeave() {
+  vbLeave();                                                 // 2.48
   if (MP.host && MP.pub && MP.code) roomsPost({ op: "gone", code: MP.code }); MP.pub = false; MP.pubKey = "";   // 2.28: off the list
   mpSend({ t: "bye" });
   for (const L of [...MP.links.values()]) mpDropLink(L);
@@ -11818,7 +11830,9 @@ function mpWire(c, out) {
 }
 function mpLinkGone(L, lost) {
   const wasHost = !MP.host && L.id === mpHostId(); mpDropLink(L);
+  if (MP.host) vbFit();                                      // 2.48: a bot takes the empty spot
   if (wasHost) {
+    vbLeave();                                               // (the host's bots go with the host)
     mpNetLocal();
     if (state === "play" && MP.on) { mpStatus("The host left. You can keep playing with the others."); return; }
     mpFail(lost ? "Lost the connection to the host." : "The host left the game"); if (VRUI.on && VRUI.stage !== "mp" && VRUI.stage !== "mode") vruiOpen("mp"); return;
@@ -11869,10 +11883,10 @@ const mpMyTeam = () => mpTeamOf(mpMyId());
 const mpMate = L => !teamsOn() || mpTeamOf(L.id) === mpMyTeam();
 const mpColOf = L => L ? Math.max(0, L.idx) : MP.idx;           // your player colour (map pins, list dot)
 const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : (L ? Math.max(0, L.idx) : MP.idx) % 5; };   // your uniform
-const mpTagOf = id => { if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
+const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.46";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+MP.netV = "2.48";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -11881,12 +11895,12 @@ function verCheck() {                                         // a newer version
     if (m && verNum(m[1]) > verNum(VERSION)) { VRUI.newVer = m[1]; for (const k of ["mode", "mp", "rooms", "lobby"]) if (VRUI.panels[k] && VRUI.panels[k].mesh.visible) uiDraw(VRUI.panels[k]); } }).catch(() => {});
 }
 function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
-function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the smaller one
-  if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id)];
+function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the smaller one (2.48: bots too, and solo)
+  if (!MP.host && MP.code) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id), ...VB.list.map(B => B.id)];
   for (const id of Object.keys(MP.teams)) if (!ids.includes(id)) delete MP.teams[id];
   for (const id of ids) if (!(id in MP.teams)) { const n0 = ids.filter(i => MP.teams[i] === 0).length, n1 = ids.filter(i => MP.teams[i] === 1).length; MP.teams[id] = n0 <= n1 ? 0 : 1; }
 }
-function mpTeamsRandom() { if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id)].sort(() => Math.random() - .5); ids.forEach((id, i) => { MP.teams[id] = i % 2; }); mpLobSync(true); mpLobbyDraw(); }
+function mpTeamsRandom() { if (!MP.host) return; const ids = [mpMyId(), ...mpOpen().map(L => L.id), ...VB.list.map(B => B.id)].sort(() => Math.random() - .5); ids.forEach((id, i) => { MP.teams[id] = i % 2; }); mpLobSync(true); mpLobbyDraw(); }
 function mpLobSync(force) {
   if (!MP.host || !MP.on) return; mpTeamFix(); const j = JSON.stringify({ t: MP.teams, s: mpSet() }); if (!force && j === MP.lastLob) return;
   MP.lastLob = j; mpSend({ t: "lob", teams: MP.teams, set: mpSet() });
@@ -11894,7 +11908,7 @@ function mpLobSync(force) {
 function mpRoster() {
   const rows = [{ id: mpMyId(), tag: MP.tag, c: mpColOf(null), u: mpUni(null), me: true, host: MP.host || !MP.code, idx: MP.host ? 0 : MP.idx }];
   for (const L of mpOpen()) rows.push({ id: L.id, tag: L.tag || "Joining…", c: mpColOf(L), u: mpUni(L), host: !MP.host && L.id === mpHostId(), idx: L.idx });
-  return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx));
+  return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx)).concat(gameMode === "pvp" ? vbRows() : []);   // (2.48: then the bots)
 }
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
   const c = set.comms === undefined ? 1 : set.comms | 0;
@@ -11989,6 +12003,11 @@ function mpRecv2(o, L) {                                     // 2.00's messages
     case "cue": dinoCue(); return true;
     case "mk": mpMarkGot(L, o); return true;
     case "kick": if (!MP.host) mpKicked(); return true;                                   // 2.28
+    case "bl": vbRosterRecv(o.b); return true;                                                   // 2.48: the host's bots
+    case "bs": vbRecvState(o); return true;
+    case "bsc": vbRecvScores(o); return true;
+    case "bk": vbRecvKill(o); return true;
+    case "bh": vbRecvHit(o, L); return true;
     case "fl": if (Array.isArray(o.o) && Array.isArray(o.v)) flareSpawn(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), o.c | 0); return true;   // 2.25: a friend's (or enemy's) flare
   }
   return false;
@@ -11999,6 +12018,7 @@ function mpOnlineTick(dt, playing) {
   const now = performance.now();
   MP.anyRed = false; for (const L of MP.links.values()) if (L.open && !L.bad && L.rd) MP.anyRed = true;
   if (MP.host && MP.on && !playing && (MP.lobT = (MP.lobT || 0) - dt) <= 0) { MP.lobT = .5; mpLobSync(false); }
+  if (MP.host && (VB.fitT -= dt) <= 0) { VB.fitT = .5; vbFit(); }   // 2.48: the bots keep up with who's in the room
   for (const L of MP.links.values()) if (L.mark && L.mark.visible && ((L.markT -= dt) <= 0 || !playing || !L.open)) { L.mark.visible = false; drawMap($("miniMap")); }
   if (playing && (set.comms | 0) === 3 && vr.I && MP.on) mpBumpTick();
   if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing) mpBeastSend(dt);
@@ -12069,7 +12089,7 @@ function mpLobbyPanels() {
       const [x, y] = cardXY(i), b = BD.find(q => q.id === r.id), L = r.me ? null : MP.links.get(r.id), ps = CW - 20, px = x + 10, py = y + 10;
       g.fillStyle = r.me ? "rgba(255,212,90,.16)" : "rgba(255,255,255,.07)"; uiRound(g, x, y, CW, CH, 18); g.fill();
       if (teamsOn()) { g.strokeStyle = TEAM_COL[mpTeamOf(r.id)]; g.lineWidth = 5; uiRound(g, x + 2.5, y + 2.5, CW - 5, CH - 5, 16); g.stroke(); }
-      const pic = r.me ? charPortrait(MP.look, UNIFORMS[mpUni(null)]) : L ? charPortrait(lookOf(L), UNIFORMS[mpUni(L)]) : null;
+      const pic = r.me ? charPortrait(MP.look, UNIFORMS[mpUni(null)]) : r.bot ? charPortrait(r.bot.lk, UNIFORMS[r.bot.u] || "green") : L ? charPortrait(lookOf(L), UNIFORMS[mpUni(L)]) : null;
       g.save(); uiRound(g, px, py, ps, ps, 12); g.clip();
       if (pic) g.drawImage(pic, px, py, ps, ps);
       else { g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(px, py, ps, ps); g.fillStyle = "rgba(255,255,255,.16)"; g.beginPath(); g.arc(px + ps / 2, py + ps * .42, ps * .17, 0, 6.283); g.fill(); g.beginPath(); g.ellipse(px + ps / 2, py + ps * 1.05, ps * .36, ps * .42, 0, 0, 6.283); g.fill(); }
@@ -12077,7 +12097,7 @@ function mpLobbyPanels() {
       g.restore();
       g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(x + 24, y + ps + 47, 11, 0, 6.283); g.fill();
       g.font = (r.me ? "bold " : "") + "30px sans-serif"; g.fillStyle = UIC.text; g.fillText(fitText(g, r.tag, CW - 54), x + 42, y + ps + 58);
-      g.font = "24px sans-serif"; g.fillStyle = UIC.dim; g.fillText(r.host ? "host" : "", x + 16, y + ps + 94);
+      g.font = "24px sans-serif"; g.fillStyle = UIC.dim; g.fillText(r.host ? "host" : r.bot ? "bot " + "\u2605".repeat(r.bot.stars) : "", x + 16, y + ps + 94);
       if (b && !hk) { g.textAlign = "right"; g.fillStyle = UIC.sun; g.font = "bold 24px sans-serif"; g.fillText(hu ? (+b.p).toFixed(1) + " pts" : (CAPT ? b.p + " pts · " : "") + b.k + " K · " + b.d + " D", x + CW - 14, y + ps + 94); g.textAlign = "left"; }
     });
     pers(g);
@@ -12086,7 +12106,7 @@ function mpLobbyPanels() {
   for (let i = 0; i < 8; i++) { const [x, y] = cardXY(i);
     uiBtn(Lb, x + 14, y + 14, 104, 44, "", () => { const r = rowAt(i); if (r && MP.host) { MP.teams[r.id] = 1 - mpTeamOf(r.id); mpLobSync(true); mpLobbyDraw(); } },
       { fs: 24, hide: () => !teamsOn() || !rowAt(i), labelFn: () => { const r = rowAt(i); return r ? TEAM_NAME[mpTeamOf(r.id)] : ""; }, paintColFn: () => { const r = rowAt(i); return r ? TEAM_COL[mpTeamOf(r.id)] : null; } });
-    uiBtn(Lb, x + CW - 88, y + 14, 74, 44, "Kick", () => { const r = rowAt(i); if (r && MP.host && !r.me) mpKick(r.id); }, { fs: 22, hide: () => !MP.host || !rowAt(i) || rowAt(i).me, paintCol: "#8a3a32" });
+    uiBtn(Lb, x + CW - 88, y + 14, 74, 44, "Kick", () => { const r = rowAt(i); if (r && MP.host && !r.me) mpKick(r.id); }, { fs: 22, hide: () => !MP.host || !rowAt(i) || rowAt(i).me || !!rowAt(i).bot, paintCol: "#8a3a32" });
   }
   for (let i = 0; i < 8; i++) { const [x, y] = cardXY(i);
     uiBtn(Lb, x, y, CW, CH, "", () => { const r = rowAt(i); if (r && r.me) { VRUI.edit = true; vruiShow(); } }, { personal: true, paintCol: "rgba(0,0,0,0)", hide: () => !rowAt(i) || !rowAt(i).me }); }
@@ -12116,6 +12136,7 @@ function mpHostSetSync() {                                  // a setting changed
 function mpHostStage(stage) { if (MP.host && MP.on && (stage === "setup" || stage === "lobby")) { MP.lastSet = JSON.stringify(mpSet()); mpTeamFix(); mpSend({ t: "ui", st: stage, set: mpSet(), teams: MP.teams }); } }
 function mpHostGen() { if (MP.host && MP.on) { for (const L of MP.links.values()) L.spawn = null; mpSend({ t: "gen", seed, set: mpSet() }); } }
 function mpSyncTo(L) {                                      // someone joins late: show them where the host is
+  vbFit(); vbRosterSend(L);                                  // (2.48: a bot makes room; they get the bots)
   if (state === "play") { if (gameMode === "pvp" && MP.host && !(MP.roundLeft > 0)) { MP.roundLeft = (set.roundMin || 10) * 60; MP.kills = MP.deaths = MP.pts = 0; }   // 2.27: someone joined your practice: the round starts now
     return mpSendStartTo(L); }
   const st = VRUI.stage; mpTeamFix();
@@ -12164,7 +12185,8 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function pvpRoundStart() {                                   // a fresh round: full health, no scores yet, the round clock set
-  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = MP.code && mpOpen().length ? (set.roundMin || 10) * 60 : 0;   // (2.27: a multiplayer game with nobody else in it yet is practice: the clock stays at 00:00)
+  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (MP.code && mpOpen().length) || (VR_ON && gameMode === "pvp" && vbWant() > 0) ? (set.roundMin || 10) * 60 : 0;
+  vbRoundStart();                                            // 2.48: bots (with bots the clock runs, solo too)   // (2.27: a multiplayer game with nobody else in it yet is practice: the clock stays at 00:00)
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
   if (ENDLESS && !MP.host && MP.reveal && MP.reveal[0] && MP.reveal[0].x != null) { const s2 = enSpawnNear(MP.reveal[0].x, MP.reveal[0].z, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.24: endless: as far from the host as chosen
@@ -12225,13 +12247,804 @@ function mpRecv(o, L) {
   if (o.t === "s" && ENDLESS && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
-  if (o.t === "f") { mpRemoteShot(o); return; }
-  if (o.t === "hit") { MP.lastHitBy = L.id; mpTakeHit(o.d, o.hd); return; }
-  if (o.t === "die") { L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
+  if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (2.48: the bots hear it)
+  if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (2.48: or the host's bot)
+  if (o.t === "die") { if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
   if (o.t === "bye") { try { L.conn.close(); } catch (e) {} return; }
+}
+/* ---------------- 2.48: bots (VR PvP) ----------------
+   Solo: PvP against bots (or with them, in 2 teams). Online: the host's game runs the bots and they fill the room's empty spots; everyone
+   else sees them like players (their moves come from the host 12 times a second; a hit on one goes to the host, which says who got it).
+   Every bot has a name (a tree), a look, a uniform, a skill (1 to 5 stars) and a style (how it likes to play: Rusher, Rifleman, Marksman,
+   Flanker, Guardian, Scavenger), and from those its own traits: aim, reaction, tracking, awareness, aggression, nerve, movement, greed,
+   teamwork and the range it likes to fight at (BOT_STYLE, vbTraits).
+   Senses (vbSee, vbListen, vbHeard): sight is a view cone (wider when alert) out to the fog, less at night and in rain; hills and trunks
+   block it; picking someone out takes a moment (quicker up close, when they move or shoot, slower when they crouch or hold still).
+   Hearing: shots carry far, footsteps a little way, blasts, a bullet going past, being hit. Memory: where it last saw or heard each one,
+   fading. Teammates pass on what they see.
+   Mind (vbThink): a few times a second it weighs fight · take cover · heal (a cross) · a better gun · chase what it saw or heard · the zone
+   · the capture point · stay with the team · roam, and keeps to a choice unless something clearly better comes up.
+   Body (vbAct, vbMove): walks, jogs and runs round trees, steep ground, water and lava; strafes and crouches in a fight. It aims like a
+   person: it needs a moment to react, its aim settles onto you, it leads a runner but is fooled when you change direction, auto guns
+   climb, being shot at shakes it. Real bullets with the same guns, stars, damage, magazines and reloads as players; it picks up guns and
+   crosses like a player and comes back 4 s after it's taken down, keeping its guns (like players). ---------------- */
+const BOTS_TUNE = { think: .2, look: .25, sight: 420, fov: 1.15, send: 1 / 12, fill: 6,
+  speed: { walk: 3, jog: 6, run: 9.5, crouch: 1.8 },                       // m/s (players in a headset walk 8.5, sprint 12.5)
+  reload: { pistol: 1.4, smg: 1.9, ar: 2.2, hunt: 2.8 },                   // seconds
+  semi: { pistol: .32, hunt: 1.3 },                                        // a bot's own pace between single shots (the sniper: the bolt)
+  hear: .5 };                                                              // how far shots carry for them (share of the sound range)
+const BOT_STYLE = {
+  rusher:    { name: "Rusher",    say: "Charges in close and never stops moving",          guns: ["smg", "pistol", "ar", "hunt"], range: 14,  aggr: .9,  nerve: .85, move: .95, greed: .45, team: .35, flank: .25 },
+  rifleman:  { name: "Rifleman",  say: "Steady at middle range, cover to cover",           guns: ["ar", "smg", "hunt", "pistol"], range: 45,  aggr: .55, nerve: .6,  move: .6,  greed: .5,  team: .6,  flank: .3 },
+  marksman:  { name: "Marksman",  say: "Finds high ground and shoots from far away",       guns: ["hunt", "ar", "smg", "pistol"], range: 130, aggr: .25, nerve: .55, move: .3,  greed: .6,  team: .4,  flank: .1 },
+  flanker:   { name: "Flanker",   say: "Circles round to hit you from the side",           guns: ["ar", "smg", "pistol", "hunt"], range: 30,  aggr: .7,  nerve: .65, move: .85, greed: .45, team: .3,  flank: .95 },
+  guardian:  { name: "Guardian",  say: "Holds ground, sticks with the team, takes the point", guns: ["ar", "hunt", "smg", "pistol"], range: 55, aggr: .35, nerve: .8, move: .4,  greed: .35, team: .95, flank: .1 },
+  scavenger: { name: "Scavenger", say: "Grabs every gun first, fights once it's geared up", guns: ["ar", "smg", "hunt", "pistol"], range: 40,  aggr: .4,  nerve: .45, move: .7,  greed: .95, team: .4,  flank: .4 } };
+const BOT_STYLES = Object.keys(BOT_STYLE), BOT_GUNS = ["pistol", "smg", "ar", "hunt"];
+const BOT_SKILL = { easy: [1, 2], normal: [3, 3], hard: [4, 5], mixed: [1, 5] }, BOT_SKILLN = { easy: "Easy", normal: "Normal", hard: "Hard", mixed: "Mixed" };
+const BOT_NAMES = ["Aspen", "Birch", "Cedar", "Hazel", "Juniper", "Maple", "Rowan", "Willow", "Alder", "Spruce", "Laurel", "Hemlock", "Larch", "Linden", "Cypress", "Holly",
+  "Sequoia", "Magnolia", "Hickory", "Tamarack", "Banyan", "Acacia", "Yew", "Elm", "Oak", "Pine", "Fir", "Beech", "Sumac", "Poplar", "Redwood", "Baobab"];
+const VB = { pool: [], list: [], seed: 1 + Math.floor(Math.random() * 1e6), poolKey: "", fitT: 0, sendT: 0, scT: 0, now: 0, ents: [], me: { x: 0, z: 0, vx: 0, vz: 0 }, meShot: -1e9, sent: "", playing: false };
+if (set.botFill === undefined) set.botFill = BOTS_TUNE.fill;
+if (!set.botSkill) set.botSkill = "normal";
+const vbId = i => "b:" + i, vbIsId = id => typeof id === "string" && id.startsWith("b:");
+const vbById = id => VB.list.find(B => B.id === id) || null;
+const vbOn = () => VB.list.length > 0 && gameMode === "pvp" && VR_ON;
+const vbHost = () => !mpGuest();                                             // solo, or the host: the bots' minds run here
+const vbTeam = id => mpTeamOf(id);
+const vbMate = (a, b) => a != null && b != null && teamsOn() && vbTeam(a) === vbTeam(b);
+function vbName(id) { const B = vbById(id); return B ? B.name : "A bot"; }
+// ---- who they are
+function vbTraits(style, stars, r) {
+  const St = BOT_STYLE[style], k = (stars - 1) / 4, j = (a, s = .2) => Math.max(0, Math.min(1, a + (r() - .5) * s));
+  return { aim: j(.12 + .8 * k), react: j(.1 + .85 * k), track: j(.15 + .75 * k), sense: j(.25 + .65 * k),
+    aggr: j(St.aggr), nerve: j(St.nerve), move: j(St.move), greed: j(St.greed), team: j(St.team), flank: St.flank, range: St.range * (.85 + r() * .3) };
+}
+function vbPoolMake() {                                                      // the seven bots this headset would bring (the same until "New bots")
+  const key = VB.seed + "|" + set.botSkill; if (VB.poolKey === key && VB.pool.length) return; VB.poolKey = key;
+  const r = mulberry32(VB.seed), names = BOT_NAMES.slice().sort(() => r() - .5), styles = BOT_STYLES.slice().sort(() => r() - .5), sk = BOT_SKILL[set.botSkill] || BOT_SKILL.normal;
+  const old = new Map(VB.pool.map(B => [B.i, B])); VB.pool = [];
+  for (let i = 0; i < MP_MAX - 1; i++) {
+    const style = styles[i % styles.length], stars = sk[0] === sk[1] ? sk[0] : sk[0] + ((i * 3 + Math.floor(r() * 2)) % (sk[1] - sk[0] + 1));
+    const B = old.get(i) || { i, id: vbId(i) };
+    Object.assign(B, { name: names[i], lk: lookRandom(r), u: Math.floor(r() * UNIFORMS.length), style, stars, T: vbTraits(style, stars, r), c: -1 });
+    if (B.C) { charDrop(B.C); B.C = null; } if (B.S) vbBodyDrop(B);
+    VB.pool.push(B);
+  }
+}
+function vbWant() {                                                          // how many bots this game has: the game size, less the people
+  if (gameMode !== "pvp" || !VR_ON || mpGuest()) return 0;
+  const people = MP.code ? mpCount() : 1, fill = Math.max(1, Math.min(MP_MAX, set.botFill | 0));
+  return Math.max(0, fill - people);
+}
+function vbFit() {                                                            // host / solo: the bots follow the game size and who's in the room
+  if (mpGuest()) return;
+  vbPoolMake(); const want = vbWant(), next = VB.pool.slice(0, want);
+  for (const B of VB.list) if (!next.includes(B)) vbBodyDrop(B);
+  const added = next.filter(B => !VB.list.includes(B)); VB.list = next;
+  const used = new Set([MP.idx | 0, ...mpOpen().map(L => L.idx)]); let k = 0;   // colours: the ones the people aren't using
+  for (const B of VB.list) { while (used.has(k) && k < MP_MAX) k++; B.c = k < MP_MAX ? k : B.i % MP_MAX; used.add(B.c); }
+  mpTeamFix();
+  if (VB.playing && state === "play") for (const B of added) vbJoin(B, false);   // someone left mid-round: a bot takes the spot
+  vbRosterSend();
+}
+const vbRosterRow = B => [B.i, B.name, lookStr(B.lk), B.u, B.stars, B.style, B.c];
+function vbRosterSend(L) {
+  if (!MP.host || !MP.on) return;
+  const b = VB.list.map(vbRosterRow), j = JSON.stringify(b);
+  if (L) { mpSendTo(L, { t: "bl", b }); return; }
+  if (j === VB.sent) return; VB.sent = j; mpSend({ t: "bl", b });
+}
+function vbRosterRecv(b) {                                                   // a guest: the host's bots
+  if (MP.host || !Array.isArray(b)) return;
+  const old = new Map(VB.list.map(B => [B.i, B])), next = [];
+  for (const row of b) {
+    const [i, name, lk, u, stars, style, c] = row; let B = old.get(i); old.delete(i);
+    if (!B) B = { i, id: vbId(i), net: true, rx: [], k: 0, d: 0, pts: 0, alive: true };
+    const look = lookParse(lk) || lookRandom();
+    if (B.C && lookStr(B.C.lk) !== lookStr(look)) { charDrop(B.C); B.C = null; }
+    if (B.S && B.u !== u) vbBodyDrop(B);
+    Object.assign(B, { name: String(name).slice(0, 14), lk: look, u: u | 0, stars: stars | 0, style: BOT_STYLE[style] ? style : "rifleman", c: c | 0 });
+    next.push(B);
+  }
+  for (const B of old.values()) vbBodyDrop(B);
+  VB.list = next; mpLobbyDraw();
+}
+// ---- a body: the old soldier (posed, hidden in VR) holding the bot's gun, with a person over it
+function vbBody(B) {
+  if (B.S) return B.S;
+  const S = makeSoldier(UNIFORMS[B.u] || "green", 11 + B.i); S.group.rotation.order = "YXZ"; S.seedK = 1 + B.i; S.chLook = B.lk;
+  for (const c of S.rifle.children) c.visible = false;                        // the old rifle stays as the frame the gun hangs from
+  scene.add(S.group, S.shadow); B.S = S; B.holdKey = ""; vbGunModel(B); return S;
+}
+function vbBodyDrop(B) {
+  if (B.C) { charDrop(B.C); B.C = null; }
+  if (B.S) { scene.remove(B.S.group, B.S.shadow); disposeSoldier(B.S); B.S = null; }
+  B.hold = null; B.holdKey = ""; B.skinOn = undefined;
+}
+function vbClear() { for (const B of VB.list) { vbBodyDrop(B); if (B.rx) B.rx = []; } for (const B of VB.pool) vbBodyDrop(B); VB.playing = false; }   // a new map: no bodies until the round starts
+function vbLeave() { vbClear(); VB.list = []; VB.sent = ""; }                    // out of the room (or the host left): no bots
+function vbFarFrom(x, z, r) { for (const B of VB.list) if (B.alive && B.x !== undefined && !vbMate(B.id, mpMyId()) && Math.hypot(B.x - x, B.z - z) < r) return false; return true; }
+function vbGunModel(B) {                                                      // the gun in its hands: the same model players hold, star for star
+  const S = B.S; if (!S) return; const kind = B.gun || "pistol", tier = Math.max(1, (B.own && B.own[kind]) || B.tier || 1), Q = qgunFor(kind, tier), key = kind + tier + (Q ? "q" : "");
+  if (B.holdKey === key) return;
+  if (B.hold) S.rifle.remove(B.hold);
+  const model = (Q ? Q.group : kind === "hunt" ? sniper : GUNMODEL[kind] || sniper).clone(true); model.visible = true; model.traverse(o => { if (o.isMesh || o.isGroup) o.visible = true; });
+  const sp = Object.assign({}, GUNSPOT0[kind], Q ? Q.spots : {}), g = sp.grip, f = sp.fore, m = sp.muzzle, h = new THREE.Group(); h.rotation.y = Math.PI; h.add(model);
+  h.position.set(g[0], -.085 - g[1], -.02 + g[2]);                            // its grip where the old rifle's grip was (a gun points along -z; the rifle along +z)
+  S.hold = { r: [0, -.085, -.02], l: [-f[0] + h.position.x, f[1] + h.position.y, -f[2] + h.position.z] };
+  B.muzzle = new THREE.Vector3(-m[0] + h.position.x, m[1] + h.position.y, -m[2] + h.position.z);
+  S.rifle.add(h); B.hold = h; B.holdKey = key;
+}
+// ---- the round
+function vbLoadout(B) {                                                       // like a player at the start: a 1-star pistol
+  B.own = { pistol: 1 }; B.gun = "pistol"; B.mag = { pistol: vbMagOf(B, "pistol") }; B.reloadT = 0; B.cool = 0; B.switchT = 0; B.burst = 0; B.climb = 0;
+}
+const vbMagOf = (B, k) => Math.max(1, Math.round(WEAP[k].mag * TIER.mag[Math.max(1, B.own[k] || 1)]));
+function vbMindReset(B) {
+  B.mem = new Map(); B.goal = "roam"; B.goalT = 0; B.thinkT = Math.random() * .2; B.lookT = Math.random() * .25; B.foe = null; B.foeId = null; B.reactT = 0;
+  B.alert = 0; B.stress = 0; B.hitBy = null; B.hitT = -1e9; B.mv = null; B.roamAt = null; B.side = Math.random() < .5 ? 1 : -1; B.sideT = 0; B.strafe = 1; B.strafeT = 0;
+  B.prog = { x: B.x, z: B.z, t: 0, path: 0 }; B.steerH = undefined; B.stuck = 0; B.coverAt = null; B.coverT = 0; B.scanT = 0; B.aimE = [0, 0]; B.est = null; B.wetT = 0; B.capT = 0; B.headAim = false;
+}
+function vbRoundStart() {                                                     // host / solo: everyone back to a pistol, scores cleared, placed apart
+  vbFit(); if (mpGuest()) return;
+  VB.playing = true; VB.now = performance.now() / 1000;
+  const placed = [[P.x, P.z]]; for (const L of mpOpen()) if (L.spawn) placed.push(L.spawn);
+  for (const B of VB.list) { B.k = 0; B.d = 0; B.pts = 0; vbJoin(B, true, placed); placed.push([B.x, B.z]); }
+  VB.sent = ""; vbRosterSend(); vbScoresSend();
+}
+function vbJoin(B, start, placed) {                                          // into the map: a body, a pistol, a spot
+  vbBody(B); if (start || !B.own) vbLoadout(B); else { for (const k in B.own) B.mag[k] = vbMagOf(B, k); B.reloadT = 0; B.burst = 0; B.climb = 0; }   // back in: its guns kept, magazines full
+  B.hp = 100; B.sh = 0; B.alive = true; B.deadT = 0; B.k = B.k || 0; B.d = B.d || 0; B.pts = B.pts || 0;
+  const sp = vbSpawnSpot(B, start, placed); B.x = sp[0]; B.z = sp[1]; B.y = groundY(B.x, B.z); B.vx = B.vz = 0; B.vy = 0;
+  const S = B.S; S.x = B.x; S.y = B.y; S.z = B.z; S.yaw = Math.random() * 6.283; S.speed = 0; S.vx = S.vz = 0; S.onGround = true; S.crouchWant = 0; S.aimWant = 0; S.dead = false;
+  B.onGround = true; vbMindReset(B); vbGunModel(B); if (B.C && B.C.deadT >= 0) vbRevive(B.C);
+}
+function vbSpawnSpot(B, start, placed) {
+  const foes = []; if (placed) for (const p of placed) foes.push(p);
+  for (const e of VB.ents) if (e.alive && e.id !== B.id && !vbMate(B.id, e.id)) foes.push([e.x, e.z]);
+  { const L = ARENA && ARENA.spawns; if (L && L.length) {                    // an arena's start points (its side's, in a team game)
+      const side = teamsOn() ? vbTeam(B.id) + 1 : 0, ok = L.filter(p => !side || !p[2] || p[2] === side);
+      if (ok.length) { let best = ok[0], bd = -1; for (const p of ok) { const d = foes.length ? Math.min(...foes.map(([a, b]) => Math.hypot(p[0] - a, p[1] - b))) : Math.random(); if (d > bd) { bd = d; best = p; } } return arenaSpawnNear(best); } } }
+  let cx = 0, cz = 0, R = EDGE * .85;
+  if (!start && zone && zone.vr) { const Z = zone, c = Z.phase !== "final" && Z.stage + 1 < Z.circles.length ? Z.circles[Z.stage + 1] : [Z.cx, Z.cz, Z.r]; cx = c[0]; cz = c[1]; R = Math.max(10, c[2] * .75); }
+  const mates = teamsOn() ? VB.ents.filter(e => e.alive && e.id !== B.id && vbMate(B.id, e.id)) : [];
+  let best = null, bs = -1e9;
+  for (let k = 0; k < 140; k++) {
+    const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * R, x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+    if (Math.abs(x) > EDGE - 6 || Math.abs(z) > EDGE - 6 || !okSpot(x, z) || inLava(x, z, 25)) continue;
+    let sc = foes.length ? Math.min(220, Math.min(...foes.map(([fx, fz]) => Math.hypot(x - fx, z - fz)))) : 100;
+    if (mates.length) { const dm = Math.min(...mates.map(e => Math.hypot(x - e.x, z - e.z))); sc += dm < 120 ? 40 - dm * .3 : 0; }
+    sc += Math.random() * 25; if (sc > bs) { bs = sc; best = [x, z]; }
+  }
+  return best || [cx, cz];
+}
+function vbRevive(C) { C.deadT = -1; C.cur = null; C.curA = null; C.mixer.stopAllAction(); for (const a of Object.values(C.acts)) a.clampWhenFinished = false; }
+// ---- everyone a bot could see or hear this frame
+function vbEnts(dt) {
+  const E = VB.ents; E.length = 0; const I = vr.I, now = VB.now;
+  const mv = VB.me, k = Math.min(1, dt * 6), vx = dt > 0 ? (P.x - mv.x) / dt : 0, vz = dt > 0 ? (P.z - mv.z) / dt : 0;
+  if (Math.hypot(vx, vz) < 40) { mv.vx += (vx - mv.vx) * k; mv.vz += (vz - mv.vz) * k; } mv.x = P.x; mv.z = P.z;
+  if (I) E.push({ id: mpMyId(), me: true, alive: MP.dead <= 0 && state === "play", x: P.x, y: P.y, z: P.z, hx: I.head.x, hy: I.head.y, hz: I.head.z, vx: mv.vx, vz: mv.vz,
+    sp: Math.hypot(mv.vx, mv.vz), crouch: I.head.y - P.y < 1.2, shotT: now - VB.meShot, high: playerHigh() });
+  for (const L of mpOpen()) { const R = L.R; if (!R || !R.cur) continue;
+    const q = L.vbV || (L.vbV = { x: R.head.x, z: R.head.z, vx: 0, vz: 0 }), ivx = dt > 0 ? (R.head.x - q.x) / dt : 0, ivz = dt > 0 ? (R.head.z - q.z) / dt : 0;   // how fast they're going
+    if (Math.hypot(ivx, ivz) < 40) { q.vx += (ivx - q.vx) * k; q.vz += (ivz - q.vz) * k; } q.x = R.head.x; q.z = R.head.z;
+    E.push({ id: L.id, L, alive: !!R.alive, x: R.head.x, y: R.feet, z: R.head.z, hx: R.head.x, hy: R.head.y, hz: R.head.z, vx: q.vx, vz: q.vz, sp: Math.hypot(q.vx, q.vz), crouch: R.head.y - R.feet < 1.2, shotT: now - (L.shotAt || -1e9) }); }
+  for (const B of VB.list) if (B.S) { const e = vbEye(B); E.push({ id: B.id, B, alive: !!B.alive, x: B.x, y: B.y, z: B.z, hx: e[0], hy: e[1], hz: e[2], vx: B.vx || 0, vz: B.vz || 0, sp: B.S.speed || 0, crouch: B.S.crouch > .5, shotT: now - (B.shotAt || -1e9) }); }
+}
+const vbEye = B => [B.x, B.y + (B.S && B.S.crouch > .5 ? 1.08 : 1.6), B.z];
+const vbEnt = id => VB.ents.find(e => e.id === id) || null;
+// ---- the bots' minds and bodies, every frame (host / solo)
+function vbTick(dt) {
+  if (!VB.list.length) return;
+  VB.now = performance.now() / 1000;
+  if (mpGuest()) { for (const B of VB.list) vbPuppet(B, dt); return; }
+  vbEnts(dt);
+  for (const B of VB.list) { if (!B.S) vbJoin(B, false); vbLive(B, dt); }
+  vbCapture(dt); vbNetSend(dt);
+}
+function vbLive(B, dt) {
+  if (!B.alive) { B.deadT += dt; if (B.deadT >= PVP.respawn) vbJoin(B, false); vbPose(B, dt); return; }
+  B.cool -= dt; B.switchT -= dt; B.reactT -= dt; B.goalT += dt; B.alert = Math.max(0, B.alert - dt); B.stress = Math.max(0, B.stress - dt * .35);
+  if (B.reloadT > 0 && (B.reloadT -= dt) <= 0) B.mag[B.gun] = vbMagOf(B, B.gun);
+  if ((B.lookT -= dt) <= 0) { const per = BOTS_TUNE.look * (.85 + Math.random() * .3); B.lookT = per; vbSee(B, per); vbListen(B); }
+  if ((B.thinkT -= dt) <= 0) { B.thinkT = BOTS_TUNE.think * (.8 + Math.random() * .4); vbThink(B); }
+  vbAct(B, dt); vbMove(B, dt); vbHazards(B, dt); if ((B.pickT = (B.pickT || 0) - dt) <= 0) { B.pickT = .15; vbPickups(B); } vbPose(B, dt);
+}
+// ---- sight
+function vbLight() {                                                          // how well anyone can be seen: night, rain, fog
+  const h = typeof hourNow === "number" ? hourNow : set.hour, night = h < 5.5 || h > 20 ? .45 : h < 7 || h > 18.5 ? .75 : 1;
+  const w = weather && weather.type, wet = w === "rain" || w === "storm" ? .7 : w === "snow" ? .75 : w === "fog" ? .55 : 1;
+  return night * wet;
+}
+function vbSee(B, per) {
+  const eye = vbEye(B), L0 = vbLight(), far = Math.min(BOTS_TUNE.sight * (.6 + .4 * B.T.sense) * L0, (scene.fog ? scene.fog.far : 600) * 1.05), now = VB.now, yaw = B.S.yaw;
+  for (const e of VB.ents) {
+    if (e.id === B.id || vbMate(B.id, e.id)) continue;
+    let m = B.mem.get(e.id);
+    if (!e.alive) { if (m) { m.seen = false; m.conf = 0; } continue; }
+    const dx = e.hx - eye[0], dz = e.hz - eye[2], d = Math.hypot(dx, dz);
+    let vis = false, rate = 0;
+    if (d < far) {
+      const a = Math.abs(angDiff(Math.atan2(-dx, -dz), yaw)), fov = BOTS_TUNE.fov * (B.alert > 0 ? 1.35 : 1);
+      const cone = a < fov, side = !cone && a < 1.95 && (d < 18 || (e.sp > 3 && d < 40));
+      if ((cone || side || d < 3.5) && (losClear(eye[0], eye[1], eye[2], e.hx, e.hy - .35, e.hz) || losClear(eye[0], eye[1], eye[2], e.hx, e.hy, e.hz))) {
+        vis = true;
+        const v = (e.crouch ? .55 : 1) * (e.sp > 9 ? 1.6 : e.sp > 2 ? 1.2 : .75) * (e.shotT < 1.5 ? 2.2 : 1) * (e.high ? 1.3 : 1) * (cone ? 1 : .45) * Math.max(.5, L0);
+        rate = (.9 + 2.4 * B.T.sense) * v * (B.alert > 0 ? 1.8 : 1) / (1 + d / 55);
+      }
+    }
+    if (vis) {
+      if (!m) B.mem.set(e.id, m = { spot: 0, t: -1e9, conf: 0, seen: false });
+      m.spot = Math.min(1.5, m.spot + rate * per); m.e = e; m.u = now;
+      if (m.spot >= 1) { const fresh = !m.seen; m.seen = true; m.x = e.x; m.y = e.y; m.z = e.z; m.t = now; m.conf = 1; m.heard = false; if (fresh) vbSpotted(B, m, e); }
+    } else if (m) { if (m.seen) { m.seen = false; m.lost = now; } m.spot = Math.max(0, m.spot - per * .2); }
+  }
+  for (const [id, m] of B.mem) if (!m.seen && now - (m.u || m.t) > 25) B.mem.delete(id);
+}
+function vbSpotted(B, m, e) {                                                 // "contact": a moment to react, and the team hears about it
+  B.alert = 8;
+  if (B.foeId !== e.id) B.reactT = Math.max(B.reactT, (1.05 - .75 * B.T.react) * (.75 + Math.random() * .5) * (B.goal === "fight" ? .6 : 1));
+  if (teamsOn()) for (const O of VB.list) if (O !== B && O.alive && O.mem && vbMate(O.id, B.id) && Math.hypot(O.x - B.x, O.z - B.z) < 220 && Math.random() < .4 + .6 * B.T.team) {
+    let q = O.mem.get(e.id); if (!q) O.mem.set(e.id, q = { spot: 0, t: -1e9, conf: 0, seen: false });
+    if (!q.seen) { q.x = e.x; q.y = e.y; q.z = e.z; q.t = q.u = VB.now; q.conf = Math.max(q.conf, .6); q.spot = Math.max(q.spot, .5); q.heard = true; O.alert = Math.max(O.alert, 5); }
+  }
+}
+// ---- hearing
+function vbNoise(B, id, x, y, z, d, conf) {
+  if (!B.mem) return; let m = B.mem.get(id); if (!m) B.mem.set(id, m = { spot: 0, t: -1e9, conf: 0, seen: false });
+  B.alert = Math.max(B.alert, 5); if (m.seen) return;
+  const err = d * (.18 - .12 * B.T.sense);
+  m.x = x + (Math.random() - .5) * 2 * err; m.z = z + (Math.random() - .5) * 2 * err; m.y = y; m.t = m.u = VB.now; m.conf = Math.max(m.conf * .6, conf); m.heard = true; m.spot = Math.max(m.spot, .35);
+}
+function vbHeard(p, kind, id) {                                               // a shot: everyone in earshot hears roughly where it came from
+  if (!VB.list.length || mpGuest() || !VB.playing) return;
+  if (id === mpMyId()) VB.meShot = performance.now() / 1000;
+  const R = (PSND.RANGE[kind] || 500) * BOTS_TUNE.hear;
+  for (const B of VB.list) {
+    if (!B.alive || !B.mem || B.id === id || (id !== null && vbMate(B.id, id))) continue;
+    const d = Math.hypot(B.x - p.x, B.z - p.z), r = R * (.7 + .5 * B.T.sense); if (d > r) continue;
+    vbNoise(B, id === null ? "n" : id, p.x, p.y, p.z, d, .85 - .55 * d / r);
+  }
+}
+function vbListen(B) {                                                        // footsteps close by
+  for (const e of VB.ents) {
+    if (!e.alive || e.id === B.id || vbMate(B.id, e.id) || e.sp < .6) continue;
+    const m = B.mem.get(e.id); if (m && m.seen) continue;
+    const r = (e.sp > 9 ? 30 : e.sp > 3 ? 15 : 6) * (e.crouch ? .3 : 1) * (.7 + .6 * B.T.sense), d = Math.hypot(e.x - B.x, e.z - B.z);
+    if (d < r) vbNoise(B, e.id, e.x, e.y, e.z, d, .7);
+  }
+}
+// ---- deciding what to do
+function vbFoe(B) {                                                          // the one to shoot: whoever it can see, the closest and most dangerous first
+  let best = null, bs = -1e9;
+  for (const [id, m] of B.mem) {
+    if (!m.seen || !m.e || !m.e.alive) continue;
+    const d = Math.hypot(m.e.x - B.x, m.e.z - B.z);
+    const sc = 100 - d * .4 + (m.e.shotT < 2 ? 15 : 0) + (B.hitBy === id && VB.now - B.hitT < 4 ? 35 : 0) + (id === B.foeId ? 25 : 0);
+    if (sc > bs) { bs = sc; best = m; }
+  }
+  return best;
+}
+function vbKnown(B) {                                                         // the freshest thing it remembers but can't see now
+  let best = null, bs = 0;
+  for (const [id, m] of B.mem) { if (m.seen || m.x === undefined) continue; const age = VB.now - m.t, sc = m.conf * Math.max(0, 1 - age / 14); if (sc > bs && sc > .12) { bs = sc; best = m; best.id = id; } }
+  return best;
+}
+const VB_FIT = { pistol: [0, 18, 60, 130], smg: [0, 30, 70, 160], ar: [4, 15, 150, 320], hunt: [25, 70, 450, 900] };   // [too close, good from, good to, useless past]
+function vbGunVal(B, k, d) {
+  const t = Math.max(1, B.own[k] || 0), W = WEAP[k], rate = W.auto ? TIER.rate[t] / W.cool : 1 / Math.max(W.cool / TIER.rate[t], BOTS_TUNE.semi[k] || .3);
+  const F = VB_FIT[k]; let fit = 1;
+  if (d !== undefined) fit = d < F[0] ? .35 : d < F[1] ? 1 : d < F[2] ? 1 - .4 * (d - F[1]) / (F[2] - F[1]) : Math.max(.05, .6 * (1 - (d - F[2]) / (F[3] - F[2])));
+  else fit = 1 - .12 * BOT_STYLE[B.style].guns.indexOf(k);
+  if (k === "hunt" && d !== undefined && d > 60) fit *= 1.8;
+  return W.dmg * TIER.dmg[t] * Math.min(rate, 9) * fit;
+}
+function vbPickGun(B, d) {
+  let best = B.gun, bv = -1;
+  for (const k of BOT_GUNS) if (B.own[k]) { const v = vbGunVal(B, k, d) * (k === B.gun ? 1.15 : 1); if (v > bv) { bv = v; best = k; } }
+  if (best !== B.gun) { B.gun = best; B.switchT = .45; B.burst = 0; B.climb = 0; if (B.mag[best] === undefined) B.mag[best] = vbMagOf(B, best); if (B.reloadT > 0) B.reloadT = 0; if (B.mag[best] <= 0) B.reloadT = BOTS_TUNE.reload[best]; vbGunModel(B); }
+}
+function vbLootPick(B) {                                                      // the best gun upgrade or cross nearby, worth the walk
+  let best = null, bs = 0;
+  for (const d of DROPS.values()) {
+    if (d.got || (B.skip && B.skip.get(d.id) > VB.now)) continue; const dist = Math.hypot(d.x - B.x, d.z - B.z); if (dist > 170 || Math.abs(d.y - B.y) > 6) continue;
+    let gain = 0;
+    if (d.type === "gun" && d.kind !== "bow" && WEAP[d.kind]) { const had = B.own[d.kind] || 0; if (d.tier > had) gain = (had ? .5 : 1.2) * (d.tier - had) * (1.3 - .15 * BOT_STYLE[B.style].guns.indexOf(d.kind)); }
+    else if (d.type === "hp" && B.hp < 90) gain = (100 - B.hp) / 25;
+    else if (d.type === "sh" && B.sh < 85) gain = (100 - B.sh) / 70;
+    if (gain <= 0) continue;
+    const sc = gain / (1 + dist / 50); if (sc > bs) { bs = sc; best = { d, gain, dist, heal: d.type !== "gun" }; }
+  }
+  return best;
+}
+function vbPickups(B) {                                                       // walking over something useful: it takes it, like a player
+  for (const d of DROPS.values()) {
+    if (d.got || Math.abs(d.x - B.x) > 1.6 || Math.abs(d.z - B.z) > 1.6 || Math.hypot(d.x - B.x, d.z - B.z) > 1.5 || Math.abs((d.y || 0) - B.y) > 2.2) continue;
+    if (d.type === "hp") { if (B.hp >= 100) continue; B.hp = Math.min(100, B.hp + PICK.hp); }
+    else if (d.type === "sh") { if (B.sh >= 100) continue; B.sh = Math.min(100, B.sh + PICK.sh); }
+    else if (d.type === "gun" && WEAP[d.kind]) { const had = B.own[d.kind] || 0; if (d.tier <= had) continue; B.own[d.kind] = d.tier; B.mag[d.kind] = vbMagOf(B, d.kind); if (d.kind === B.gun) vbGunModel(B); B.got = (B.got || 0) + 1; }
+    else continue;
+    dropTake(d.id); if (MP.on) mpSend({ t: "take", id: d.id });
+  }
+}
+function vbZoneNeed(B) {                                                      // 0: fine; up to 2: out of the zone now
+  const Z = zone; if (!Z || !Z.vr) return 0;
+  const edge = zoneR(Z, Z.cx, Z.cz, Z.r, B.x, B.z, Z.clock), d = Math.hypot(B.x - Z.cx, B.z - Z.cz);
+  if (d > edge - 4) return 2;
+  if (Z.phase === "final" || Z.stage + 1 >= Z.circles.length) return 0;
+  const [nx, nz, nr] = Z.circles[Z.stage + 1], dn = Math.hypot(B.x - nx, B.z - nz);
+  if (dn < nr * .85) return 0;
+  const left = Z.phase === "shrink" ? 0 : Z.phase === "wait" ? Z.T.wait - Z.t : (Z.T.hold[Z.stage - 1] || 0) - Z.t;
+  return left < 45 ? 1 + (dn - nr) / Math.max(30, nr) * .5 : .3;
+}
+function vbMates(B) { const out = []; if (!teamsOn()) return out; for (const e of VB.ents) if (e.alive && e.id !== B.id && vbMate(B.id, e.id)) out.push(e); return out; }
+function vbThink(B) {
+  const T = B.T, St = BOT_STYLE[B.style], now = VB.now;
+  const fm = vbFoe(B); B.foe = fm; const nf = fm ? fm.e.id : null;
+  if (nf !== B.foeId) { B.foeId = nf; if (fm) { const d0 = Math.hypot(fm.e.x - B.x, fm.e.z - B.z); B.aimE = vbJolt(B, .05 + .1 * (1 - T.aim)); B.headAim = Math.random() < (T.aim - .45) * 1.2 && d0 < 70; B.est = null; } }
+  const fd = fm ? Math.hypot(fm.e.x - B.x, fm.e.z - B.z) : undefined;
+  if (B.switchT <= 0 && B.reloadT <= 0) vbPickGun(B, fd);
+  if (!fm && B.reloadT <= 0 && B.mag[B.gun] < vbMagOf(B, B.gun) * .5 && B.alert < 3) B.reloadT = BOTS_TUNE.reload[B.gun] * (1.15 - .3 * T.move);   // a quiet moment: top up
+  const hpF = (B.hp + B.sh) / 200, sc = {};
+  if (fm) sc.fight = 2 + T.aggr * .6 + (B.style === "scavenger" ? vbGear(B) * .3 - .3 : 0);
+  if (fm && (hpF < .22 + .25 * (1 - T.nerve) || (B.stress > .6 && hpF < .45) || (B.reloadT > .6 && fd < 45))) sc.cover = 2.35 + (1 - T.nerve) * .8 - Math.min(1.2, B.coverT * .25);
+  const lp = vbLootPick(B);
+  if (lp) { if (lp.heal) sc.heal = (fm ? .3 : .8) + lp.gain * .55 - lp.dist / (lp.d.type === "sh" ? 140 : 300); else sc.loot = (fm ? .15 : .7) + T.greed * .9 + lp.gain * .25 - lp.dist / 260; }
+  const kn = !fm ? vbKnown(B) : null;
+  if (kn) sc.chase = .8 + T.aggr * .9 + kn.conf * .3 - (hpF < .35 ? .7 : 0);
+  const zn = vbZoneNeed(B); if (zn > 0) sc.zone = 1.2 + zn * 1.6 + (zn >= 2 ? 1 : 0);
+  if (CAPT && !fm) sc.capture = .9 + (B.style === "guardian" ? .9 : 0) + T.team * .25 + T.aggr * .3 - Math.min(.5, Math.hypot(CAPT.x - B.x, CAPT.z - B.z) / 600);
+  const mates = vbMates(B), lead = mates.sort((a, b) => (b.me || b.L ? 1 : 0) - (a.me || a.L ? 1 : 0) || Math.hypot(a.x - B.x, a.z - B.z) - Math.hypot(b.x - B.x, b.z - B.z))[0];
+  if (lead && !fm && Math.hypot(lead.x - B.x, lead.z - B.z) > 28) sc.team = .45 + T.team * .95;
+  sc.roam = .45;
+  if (sc[B.goal] !== undefined) sc[B.goal] += .3;
+  let g = "roam", gv = -1e9; for (const k in sc) if (sc[k] > gv) { gv = sc[k]; g = k; }
+  if (g !== B.goal) { B.goal = g; B.goalT = 0; B.coverAt = null; if (g !== "cover") B.coverT = 0; B.scanT = 0; }
+  B.lp = lp; B.kn = kn; B.lead = lead;
+  vbPlan(B, fd);
+}
+const vbGear = B => BOT_GUNS.reduce((s, k) => s + (B.own[k] || 0), 0) / 6;
+function vbJolt(B, a) { const t = Math.random() * 6.283; return [Math.cos(t) * a, Math.sin(t) * a * .6]; }
+// where to go and how fast (a few times a second); the frame-by-frame part is vbAct / vbMove
+function vbPlan(B, fd) {
+  const T = B.T, St = BOT_STYLE[B.style], Sp = BOTS_TUNE.speed, g = B.goal, mvK = .75 + .5 * T.move;
+  let tx = B.x, tz = B.z, spd = 0, crouch = 0, look = null;
+  if (g === "fight") {
+    const e = B.foe.e, d = fd, gunR = { pistol: 16, smg: 22, ar: 55, hunt: 140 }[B.gun], R = (T.range * .55 + gunR * .45);
+    const away = Math.atan2(B.x - e.x, B.z - e.z);
+    if (d > R * 1.4) {                                                        // close in (a flanker swings round to the side)
+      const ang = away + B.side * T.flank * 1.1, r = R * .9; tx = e.x + Math.sin(ang) * r; tz = e.z + Math.cos(ang) * r; spd = (T.aggr > .7 ? Sp.run : Sp.jog) * mvK;
+    } else if (d < R * .5 && B.style !== "rusher") { tx = B.x + Math.sin(away) * 10; tz = B.z + Math.cos(away) * 10; spd = Sp.walk * mvK; }   // too close: back off
+    else {                                                                    // in range: strafe, or hold still and crouch (marksmen, guardians)
+      const still = B.style === "marksman" || (B.style === "guardian" && Math.random() < .6) || B.gun === "hunt";
+      if (still) { crouch = 1; spd = 0; }
+      else { const perp = away + Math.PI / 2 * B.strafe; tx = B.x + Math.sin(perp) * 5; tz = B.z + Math.cos(perp) * 5; spd = (Sp.walk + 1.6 * T.move) * mvK; crouch = Math.random() < .15 * (1 - T.aggr) ? 1 : 0; }
+    }
+  } else if (g === "cover") {
+    if (!B.coverAt || B.goalT > 1.5 && Math.random() < .3) B.coverAt = vbCoverSpot(B);
+    if (B.coverAt) { tx = B.coverAt[0]; tz = B.coverAt[1]; const d = Math.hypot(tx - B.x, tz - B.z); spd = d > 1.2 ? Sp.run * mvK : 0; crouch = d < 3 ? 1 : 0; if (d < 1.5) B.coverT += BOTS_TUNE.think; }
+    else { const e = B.foe && B.foe.e, away = e ? Math.atan2(B.x - e.x, B.z - e.z) : 0; tx = B.x + Math.sin(away) * 15; tz = B.z + Math.cos(away) * 15; spd = Sp.run * mvK; }
+  } else if (g === "heal" || g === "loot") { const d = B.lp && B.lp.d; if (d) { tx = d.x; tz = d.z; spd = (B.lp.dist > 25 ? Sp.run : Sp.jog) * mvK; } }
+  else if (g === "chase") {
+    const k = B.kn; if (k) { const d = Math.hypot(k.x - B.x, k.z - B.z), side = Math.atan2(B.x - k.x, B.z - k.z) + B.side * T.flank * .9, r = d > 40 ? 18 : 0;
+      tx = k.x + Math.sin(side) * r; tz = k.z + Math.cos(side) * r; spd = (d > 60 ? Sp.run : Sp.jog) * mvK * (B.style === "marksman" ? .7 : 1); look = [k.x, k.z];
+      if (d < 5) { k.conf *= .5; B.scanT = 3; } }
+  } else if (g === "zone") {
+    const Z = zone, c = Z.phase !== "final" && Z.stage + 1 < Z.circles.length ? Z.circles[Z.stage + 1] : [Z.cx, Z.cz, Z.r];
+    const a = Math.atan2(B.x - c[0], B.z - c[1]), r = Math.min(Math.hypot(B.x - c[0], B.z - c[1]), c[2] * .5); tx = c[0] + Math.sin(a) * r; tz = c[1] + Math.cos(a) * r; spd = Sp.run * mvK;
+  } else if (g === "capture") {
+    if (!B.capAt || Math.hypot(B.capAt[0] - CAPT.x, B.capAt[1] - CAPT.z) > CAPT.r) { const a = Math.random() * 6.283, r = Math.random() * CAPT.r * .55; B.capAt = [CAPT.x + Math.cos(a) * r, CAPT.z + Math.sin(a) * r]; }
+    tx = B.capAt[0]; tz = B.capAt[1]; const d = Math.hypot(tx - B.x, tz - B.z); spd = d > 2 ? (d > 30 ? Sp.run : Sp.jog) * mvK : 0; crouch = d < 2 && Math.random() < .5 ? 1 : 0;
+  } else if (g === "team" && B.lead) {
+    const L = B.lead, a = Math.atan2(B.x - L.x, B.z - L.z) + B.side * .6; tx = L.x + Math.sin(a) * 9; tz = L.z + Math.cos(a) * 9; const d = Math.hypot(tx - B.x, tz - B.z); spd = d > 40 ? Sp.run : d > 4 ? Sp.jog : 0;
+  } else {                                                                    // roam: somewhere worth going, now and then a look round
+    if (!B.roamAt || Math.hypot(B.roamAt[0] - B.x, B.roamAt[1] - B.z) < 4 || B.goalT > 50) { B.roamAt = vbRoamSpot(B); B.goalT = 0; B.scanT = B.style === "marksman" ? 12 + Math.random() * 15 : Math.random() < .4 ? 2.5 : 0; }
+    if (B.scanT > 0) { B.scanT -= BOTS_TUNE.think; spd = 0; crouch = B.style === "marksman" ? 1 : 0; }
+    else { tx = B.roamAt[0]; tz = B.roamAt[1]; spd = (B.alert > 0 ? Sp.jog : Sp.jog * .8) * mvK; }
+  }
+  if (B.scanT > 0 && g === "chase") { B.scanT -= BOTS_TUNE.think; spd = 0; }
+  if (B.reloadT > 0 && g === "fight") spd *= .7;
+  B.mv = { x: tx, z: tz, spd, crouch, look };
+}
+function vbRoamSpot(B) {                                                      // a few places to try: toward the middle, where the guns are, high ground for a marksman, spread from teammates
+  let best = null, bs = -1e9; const mates = vbMates(B);
+  for (let k = 0; k < 8; k++) {
+    const a = Math.random() * 6.283, r = 50 + Math.random() * 160, x = B.x + Math.cos(a) * r, z = B.z + Math.sin(a) * r;
+    if (Math.abs(x) > EDGE - 15 || Math.abs(z) > EDGE - 15 || !okSpot(x, z) || inLava(x, z, 20)) continue;
+    let sc = -Math.hypot(x, z) / Math.max(60, HALF) + Math.random() * .8;
+    if (B.style === "marksman") sc += (H(x, z) - H(B.x, B.z)) / 25;
+    if (CAPT) sc -= Math.hypot(x - CAPT.x, z - CAPT.z) / Math.max(80, HALF) * .5;
+    for (const e of mates) if (Math.hypot(e.x - x, e.z - z) < 40) sc -= .3 * (1 - B.T.team);
+    if (zone && zone.vr) { const Z = zone; if (Math.hypot(x - Z.cx, z - Z.cz) > Z.r * .9) sc -= 2; }
+    if (sc > bs) { bs = sc; best = [x, z]; }
+  }
+  return best || [B.x * .7, B.z * .7];
+}
+function vbCoverSpot(B) {                                                     // somewhere close the threat can't see: behind a trunk, a rock or a rise
+  const e = B.foe && B.foe.e; const th = e ? [e.hx, e.hy, e.hz] : null; if (!th) return null;
+  const away = Math.atan2(B.x - th[0], B.z - th[2]), cands = [];
+  const cx = Math.floor(B.x / 8), cz = Math.floor(B.z / 8);
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    for (const o of list) { if (o.soft || o.r < .25) continue; const a = Math.atan2(o.x - th[0], o.z - th[2]), r = (o.tr !== undefined ? o.tr : o.r) + .7; cands.push([o.x + Math.sin(a) * r, o.z + Math.cos(a) * r]); } }
+  for (let q = 0; q < 12; q++) for (const r of [6, 11, 16]) { const a = away + (q / 12 - .5) * 3.4; cands.push([B.x + Math.sin(a) * r, B.z + Math.cos(a) * r]); }
+  let best = null, bs = 1e9, n = 0;
+  for (const [x, z] of cands) {
+    const dB = Math.hypot(x - B.x, z - B.z); if (dB > 24) continue; const dT = Math.hypot(x - th[0], z - th[2]); if (dT < 8) continue;
+    const s0 = dB + Math.max(0, 25 - dT) * .6; if (s0 >= bs) continue;
+    if (Math.abs(x) > EDGE - 5 || Math.abs(z) > EDGE - 5 || H(x, z) < water + .3 || inLava(x, z, 3)) continue;
+    if (++n > 30) break;
+    if (losClear(th[0], th[1], th[2], x, groundY(x, z) + 1.1, z)) continue;   // still in their view
+    bs = s0; best = [x, z];
+  }
+  return best;
+}
+// ---- every frame: turn, aim, shoot
+function vbAct(B, dt) {
+  const S = B.S, T = B.T, fm = B.foe, mv = B.mv;
+  let fe = fm && fm.e && fm.seen ? vbEnt(fm.e.id) : null;                    // where they really are this frame (it can see them)
+  if (fe && !fe.alive) fe = null;
+  if (B.goal === "fight" && (B.strafeT -= dt) <= 0) { B.strafeT = .4 + Math.random() * (1.6 - T.move); if (Math.random() < .55 + .3 * T.move) B.strafe = -B.strafe; }
+  if ((B.sideT -= dt) <= 0 && Math.random() < .02) B.side = -B.side;
+  S.crouchWant = mv ? mv.crouch : 0;
+  if (fe) {
+    const eye = vbEye(B), p = vbAimPoint(B, fe, dt), dx = p[0] - eye[0], dy = p[1] - eye[1], dz = p[2] - eye[2], dh = Math.hypot(dx, dz);
+    const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(dy, Math.max(.5, dh)), turn = (3 + 7 * T.track) * dt;
+    const gap = angDiff(wantYaw, S.yaw); S.yaw += Math.max(-turn, Math.min(turn, gap)); S.aim = wantPitch; S.aimWant = 1;
+    B.aimE[0] *= Math.exp(-dt / (.2 + .9 * (1 - T.aim))); B.aimE[1] *= Math.exp(-dt / (.2 + .9 * (1 - T.aim)));
+    if (B.climb > 0 && B.burst <= 0) B.climb = Math.max(0, B.climb - RECOIL.back * Math.PI / 180 * dt);
+    vbTryFire(B, fe, p, Math.abs(gap), dh);
+  } else {
+    B.climb = 0; S.aimWant = B.alert > 0 || (fm && VB.now - (fm.lost || 0) < 2) ? 1 : 0;
+    let ty = null, heard = null;
+    if (B.alert > 0) for (const m of B.mem.values()) if (!m.seen && m.heard && m.x !== undefined && VB.now - m.t < 2.5 && (!heard || m.t > heard.t)) heard = m;   // a sound just now: it looks that way
+    const lm = fm && !fm.seen && fm.x !== undefined && VB.now - fm.t < 2 ? [fm.x, fm.z] : heard ? [heard.x, heard.z] : mv && mv.look ? mv.look : null;
+    if (lm) ty = Math.atan2(-(lm[0] - B.x), -(lm[1] - B.z));
+    else if (S.speed > 1) ty = Math.atan2(-B.vx, -B.vz);
+    else { B.scanA = (B.scanA || 0) + dt * (.5 + B.alert * .1); ty = S.yaw + Math.sin(B.scanA * 1.3) * dt * 1.4; }
+    if (B.hitBy && VB.now - B.hitT < 1.5) { const m = B.mem.get(B.hitBy); if (m && m.x !== undefined) ty = Math.atan2(-(m.x - B.x), -(m.z - B.z)); }
+    if (ty !== null) S.yaw += Math.max(-dt * 4.5, Math.min(dt * 4.5, angDiff(ty, S.yaw)));
+    S.aim *= Math.exp(-dt * 3);
+  }
+}
+function vbAimPoint(B, e, dt) {                                               // where it aims: chest (or head), led for the bullet's flight, seen a moment late
+  const T = B.T, tgt = [e.hx, B.headAim ? e.hy - .04 : e.hy - (e.crouch ? .38 : .5), e.hz];
+  const lag = .04 + .22 * (1 - T.track), k = B.est ? 1 - Math.exp(-dt / lag) : 1;
+  if (!B.est) B.est = { x: tgt[0], y: tgt[1], z: tgt[2], vx: e.vx, vz: e.vz };
+  const E = B.est; E.x += (tgt[0] - E.x) * k; E.y += (tgt[1] - E.y) * k; E.z += (tgt[2] - E.z) * k;
+  const kv = 1 - Math.exp(-dt / (.08 + .45 * (1 - T.track))); E.vx += (e.vx - E.vx) * kv; E.vz += (e.vz - E.vz) * kv;
+  const d = Math.hypot(tgt[0] - B.x, tgt[2] - B.z), fl = d / WEAP[B.gun].spd, lead = (fl + lag) * (.55 + .45 * T.track);
+  return [E.x + E.vx * lead, E.y, E.z + E.vz * lead];
+}
+function vbTryFire(B, e, p, gap, d) {
+  const T = B.T, k = B.gun, W = WEAP[k];
+  if (B.reactT > 0 || B.switchT > 0 || B.reloadT > 0 || B.cool > 0 || state !== "play") return;
+  if (gap > (k === "hunt" ? .02 : .09) || d > W.reach * .95) return;
+  if (k === "pistol" && d > 110 && B.own.ar) return;
+  if (B.mag[k] === undefined) B.mag[k] = vbMagOf(B, k);
+  if (B.mag[k] <= 0) { B.reloadT = BOTS_TUNE.reload[k] * (1.15 - .3 * T.move); return; }
+  if (k === "hunt" && (B.S.speed > 1 || Math.hypot(B.aimE[0], B.aimE[1]) > .006)) return;   // the sniper waits for a steady aim
+  const t = Math.max(1, B.own[k] || 1);
+  if (W.auto) {
+    if (B.burst <= 0) { B.burst = Math.max(2, Math.round((3 + 6 * Math.max(0, 1 - d / 110)) * (.7 + .6 * Math.random()))); }
+    B.cool = W.cool / TIER.rate[t];
+    if (--B.burst <= 0) B.cool += .18 + Math.min(.6, d / 180) + (1 - T.aim) * .3;
+  } else B.cool = Math.max(W.cool / TIER.rate[t], BOTS_TUNE.semi[k] * (1.2 - .4 * T.aim) + d / 500);
+  B.mag[k]--; vbShoot(B, p, d);
+}
+const _vbA = new THREE.Vector3(), _vbB = new THREE.Vector3(), _vbC = new THREE.Vector3(), _vbQ = new THREE.Quaternion(), _vbE = new THREE.Euler(0, 0, 0, "YXZ");
+function vbShoot(B, p, d) {
+  const T = B.T, k = B.gun, W = WEAP[k], S = B.S, t = Math.max(1, B.own[k] || 1);
+  let from;
+  if (B.hold && S.group.visible !== false && B.posed) { S.rifle.updateMatrixWorld(true); from = S.rifle.localToWorld(_vbA.copy(B.muzzle)); }
+  else { const e = vbEye(B); from = _vbA.set(e[0], e[1] - .25, e[2]); }
+  const dir = _vbB.set(p[0] - from.x, p[1] - from.y, p[2] - from.z).normalize();
+  const sig = (.0025 + .016 * (1 - T.aim)) * (1 + (S.speed || 0) / 4) * (1 + B.stress * 1.5) * (S.crouch > .5 ? .8 : 1) * (k === "hunt" ? .6 : 1);
+  const gs = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.41;   // roughly a bell curve
+  let ey = B.aimE[0] + gs() * sig, ep = B.aimE[1] + gs() * sig + B.climb;
+  if (W.auto) B.climb = Math.min(RECOIL.max * Math.PI / 180, B.climb + RECOIL.up[6 - t] * Math.PI / 180 * (1 - .65 * T.aim));
+  const yaw = Math.atan2(-dir.x, -dir.z) + ey, pitch = Math.asin(Math.max(-1, Math.min(1, dir.y))) + ep;
+  dir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+  const v = dir.multiplyScalar(W.spd).clone(), o = from.clone();
+  makeBullet(o, v, { reach: W.reach, dmg: Math.round(W.dmg * TIER.dmg[t]), gun: k, bot: B });
+  if (MP.on) mpSend({ t: "f", o: [+o.x.toFixed(3), +o.y.toFixed(3), +o.z.toFixed(3)], v: [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], k });
+  if (SND.ctx && SND.on && !mpShotSound(k, o)) { const dd = camera.position.distanceTo(o); if (dd < 700) gunshot(k, 0, dd); }
+  B.shotAt = VB.now; vbHeard(o, k, B.id);
+}
+// ---- what a bullet hits (2.48): bots for everyone's bullets; for a bot's bullet (host only) players and bots
+const _vbR = { head: new THREE.Vector3(), feet: 0, alive: true, cur: true };
+function vbRayOne(B, from, dir, maxT) {
+  if (!B.alive || !B.S || B.x === undefined) return null;
+  if (B.C && charOn() && B.C.top.visible && B.C.deadT < 0) return charHit(B.C, from, dir, maxT);
+  const e = vbEye(B); _vbR.head.set(e[0], e[1] + .05, e[2]); _vbR.feet = B.y; _vbR.C = null; return mpHitOne(_vbR, from, dir, maxT);
+}
+function vbBullet(t, a, d, maxT) {                                            // nearest thing this bullet reaches this step; applies the hit
+  let best = null;
+  const shooter = t.bot ? t.bot.id : mpMyId(), consider = (h, who) => { if (h && h.t <= maxT && (!best || h.t < best.t)) best = { t: h.t, head: h.head, who }; };
+  for (const B of VB.list) if (B !== t.bot && !vbMate(B.id, shooter)) consider(vbRayOne(B, a, d, maxT), B);
+  if (t.bot) {
+    if (MP.dead <= 0 && state === "play" && vr.I && !vbMate(shooter, mpMyId())) { _vbR.head.copy(vr.I.head); _vbR.feet = P.y; _vbR.C = null; consider(mpHitOne(_vbR, a, d, maxT), "me"); }
+    for (const L of mpOpen()) if (!vbMate(shooter, L.id)) consider(mpHitOne(L.R, a, d, maxT), L);
+  }
+  vbWhiz(t, a, d, best ? best.t : maxT, shooter);
+  if (!best) return null;
+  const dmg = t.dmg * (best.head ? 2 : 1), w = best.who;
+  if (w === "me") { MP.lastHitBy = shooter; mpTakeHit(dmg, best.head); }
+  else if (w.conn !== undefined) mpSendTo(w, { t: "hit", d: dmg, hd: best.head, b: t.bot.i });
+  else if (mpGuest()) { mpSendHost({ t: "bh", i: w.i, d: dmg, hd: best.head ? 1 : 0 }); hitTick(); }
+  else { vbDamage(w, dmg, best.head, shooter, t.from); if (!t.bot) hitTick(); }
+  return best;
+}
+function vbWhiz(t, a, d, len, shooter) {                                      // a bullet going past makes a bot jumpy (and tells it someone's there)
+  if (mpGuest() || !VB.playing) return;
+  for (const B of VB.list) {
+    if (!B.alive || !B.mem || B === t.bot || vbMate(B.id, shooter)) continue;
+    const e = vbEye(B), wx = e[0] - a.x, wy = e[1] - .4 - a.y, wz = e[2] - a.z, s = Math.max(0, Math.min(len, wx * d.x + wy * d.y + wz * d.z));
+    const miss = Math.hypot(wx - d.x * s, wy - d.y * s, wz - d.z * s);
+    if (miss < 2.5 && !(t.whz && t.whz.has(B.i))) { (t.whz = t.whz || new Set()).add(B.i); B.stress = Math.min(1, B.stress + .3); const sh = t.from; vbNoise(B, shooter || "n", sh.x, sh.y, sh.z, Math.hypot(sh.x - B.x, sh.z - B.z), .75); }
+  }
+}
+function vbBulletStep(t, a, d, maxT) {                                        // (from bulletStep) a friend's bullet on the host only shakes the bots it passes
+  if (t.remote) { if (VB.playing && !mpGuest()) vbWhiz(t, a, d, maxT, t.by || null); return null; }
+  return t.dmg ? vbBullet(t, a, d, maxT) : null;
+}
+function vbBlast(p) {                                                          // your grenade: bots in the blast (no friendly fire)
+  for (const B of VB.list) {
+    if (!B.alive || B.x === undefined || vbMate(B.id, mpMyId())) continue;
+    const rd = Math.min(Math.hypot(B.x - p.x, B.y + 1.5 - p.y, B.z - p.z), Math.hypot(B.x - p.x, B.y + .3 - p.y, B.z - p.z));
+    if (rd < NADE.R) { const dmg = Math.max(10, Math.round(120 * (1 - rd / NADE.R))); if (mpGuest()) mpSendHost({ t: "bh", i: B.i, d: dmg, hd: 0 }); else vbDamage(B, dmg, false, mpMyId(), p.clone()); hitTick(); }
+  }
+}
+function vbDamage(B, dmg, head, by, from) {                                  // host / solo: a hit on a bot (shield first, like a player)
+  if (!B.alive) return;
+  const s = Math.min(B.sh, dmg); B.sh -= s; B.hp -= dmg - s;
+  B.stress = Math.min(1, B.stress + .25 + dmg / 120); B.hitBy = by; B.hitT = VB.now;
+  if (by !== null && by !== undefined) { const e = vbEnt(by); if (e) vbNoise(B, by, e.x, e.y, e.z, Math.hypot(e.x - B.x, e.z - B.z) * .4, .95); }
+  if (B.hp <= 0) vbDie(B, by, head, from);
+}
+function vbDie(B, by, head, from) {
+  B.alive = false; B.hp = 0; B.deadT = 0; B.d++; B.killHead = !!head; B.killBy = by;
+  const ke = by !== null && by !== undefined ? vbEnt(by) : null; B.killFrom = ke ? new THREE.Vector3(ke.hx, ke.hy, ke.hz) : from ? from.clone() : null;
+  if (by !== null && by !== undefined && by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+  else if (vbIsId(by)) { const K = vbById(by); if (K) K.k++; }
+  if (MP.on) mpSend({ t: "bk", i: B.i, by: by === undefined ? null : by, hd: head ? 1 : 0 });
+  B.mem = new Map(); B.foe = null; B.foeId = null;
+}
+function vbCredit(by) { if (vbIsId(by) && !mpGuest()) { const K = vbById(by); if (K) K.k++; } }   // a bot got a player
+// a guest's hit on a bot, and the host saying a bot went down
+function vbRecvHit(o, L) { if (!MP.host) return; const B = VB.list.find(q => q.i === o.i); if (B && B.alive && !vbMate(B.id, L.id)) { const e = vbEnt(L.id); vbDamage(B, Math.max(0, Math.min(400, +o.d || 0)), !!o.hd, L.id, e ? new THREE.Vector3(e.hx, e.hy, e.hz) : null); } }
+function vbRecvKill(o) {
+  if (MP.host) return; const B = VB.list.find(q => q.i === o.i); if (!B) return;
+  B.alive = false; B.killBy = o.by; B.killHead = !!o.hd; B.deadT = 0; B.deadAt = performance.now(); const ke = o.by ? vbEnt2(o.by) : null; B.killFrom = ke;
+  if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+}
+function vbEnt2(id) {                                                         // a guest: where someone is, for which way a body falls
+  if (id === mpMyId()) return camera.position.clone();
+  const L = MP.links.get(id); if (L && L.R) return L.R.head.clone();
+  const B = vbById(id); if (B && B.x !== undefined) return new THREE.Vector3(B.x, B.y + 1.5, B.z);
+  return null;
+}
+// ---- moving: steer round trees, steep ground, water and lava; get unstuck
+function vbSolid(x, z, pad) {                                                 // a trunk or a rock here (bushes don't stop anyone)
+  const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    for (const o of list) if (!o.soft) { const r = (o.tr !== undefined ? o.tr : o.r) + pad; if ((x - o.x) * (x - o.x) + (z - o.z) * (z - o.z) < r * r) return true; } }
+  return false;
+}
+function vbPass(x0, z0, x1, z1, step = .85) {                                 // can it walk straight there: no water, lava, edge, trunk, or step up it can't take
+  if (Math.abs(x1) > EDGE - 3 || Math.abs(z1) > EDGE - 3) return false;
+  if (edgeShape.island && Math.hypot(x1, z1) > edgeR(x1, z1) - 4) return false;
+  if (inLava(x1, z1, 2)) return false;
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / 1.2)); let gp = groundY(x0, z0);
+  for (let i = 1; i <= n; i++) { const t = i / n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
+    if (H(x, z) < water + .25) return false; const g = groundY(x, z); if (g - gp > step) return false; gp = g; }   // (about 35° is as steep as it climbs; more when it scrambles out of a hole)
+  return !vbSolid(x1, z1, .35);
+}
+function vbMove(B, dt) {
+  const S = B.S, mv = B.mv, T = B.T;
+  let want = 0, hx = 0, hz = 0;
+  if (mv && mv.spd > 0) {
+    const dx = mv.x - B.x, dz = mv.z - B.z, d = Math.hypot(dx, dz);
+    if (d > .8) {
+      if ((B.steerT = (B.steerT || 0) - dt) <= 0 || B.steerH === undefined) {   // which way to go: straight there, or the nearest way round (10 times a second)
+        B.steerT = .1; const h0 = Math.atan2(dx, dz), probe = Math.min(4, Math.max(1.5, d)), tries = [0, .45, -.45, .9, -.9, 1.4, -1.4, 2, -2, 2.8];
+        let h = null;
+        const step = B.trap && B.trap.n >= 2 ? 1.7 : .85;
+        for (const o of tries) { const a = h0 + o * B.side; if (vbPass(B.x, B.z, B.x + Math.sin(a) * probe, B.z + Math.cos(a) * probe, step)) { h = a; if (o !== 0) B.sideT = .8; break; } }
+        if (h === null) h = h0 + Math.PI * (Math.random() - .5);
+        B.steerH = h;
+      }
+      const h = B.steerH; hx = Math.sin(h); hz = Math.cos(h); want = Math.min(mv.spd, mv.spd * Math.max(.3, d / 3));
+      if (S.crouchWant > .5) want = Math.min(want, BOTS_TUNE.speed.crouch);
+    }
+  }
+  const k = Math.min(1, dt * 6); B.vx += (hx * want - B.vx) * k; B.vz += (hz * want - B.vz) * k;
+  let nx = B.x + B.vx * dt, nz = B.z + B.vz * dt;
+  const cx = Math.floor(nx / 8), cz = Math.floor(nz / 8);                     // trunks push them out (as they do you)
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    for (const o of list) { const ox = nx - o.x, oz = nz - o.z, dd = Math.hypot(ox, oz), mn = (o.tr !== undefined ? o.tr + .3 : o.r + .35); if (!o.soft && dd < mn && dd > 1e-4) { nx = o.x + ox / dd * mn; nz = o.z + oz / dd * mn; } } }
+  const gN = groundY(nx, nz), g0 = groundY(B.x, B.z);
+  if (gN - g0 > (B.trap && B.trap.n >= 2 ? 1.3 : .7) && B.onGround !== false) { nx = B.x; nz = B.z; B.vx *= .3; B.vz *= .3; B.steerT = 0; }   // a ledge: stop (and look for a way round)
+  const o = { x: Math.max(-EDGE, Math.min(EDGE, nx)), z: Math.max(-EDGE, Math.min(EDGE, nz)) }; clampToMap(o);
+  B.prog.path += Math.hypot(o.x - B.x, o.z - B.z); B.x = o.x; B.z = o.z;
+  const g = groundY(B.x, B.z);
+  if (B.y - g > .7) { B.vy = (B.vy || 0) - 22 * dt; B.y += B.vy * dt; if (B.y <= g) { B.y = g; B.vy = 0; } B.onGround = false; } else { B.y = g; B.vy = 0; B.onGround = true; }
+  S.x = B.x; S.y = B.y; S.z = B.z; S.vx = B.vx; S.vz = B.vz; S.speed = Math.hypot(B.vx, B.vz); S.onGround = B.onGround;
+  // unstuck: little progress for a while → go round the other way, then give up on that spot
+  const P0 = B.prog; P0.t += dt;
+  if (P0.t > 1.5) { const moved = B.goal === "fight" ? P0.path : Math.hypot(B.x - P0.x, B.z - P0.z), exp = (mv ? mv.spd : 0) * P0.t;   // (strafing back and forth isn't being stuck)
+    if (exp > 3 && moved < exp * .2) { B.stuck += 1; B.side = -B.side;
+      if (B.stuck > 2.5) {                                      // can't get there: forget that spot (a gun it can't reach is left for a minute)
+        if ((B.goal === "loot" || B.goal === "heal") && B.lp) (B.skip = B.skip || new Map()).set(B.lp.d.id, VB.now + 60);
+        B.roamAt = null; B.coverAt = null; B.capAt = null; if (B.goal !== "fight") B.goal = "roam"; B.stuck = 0; B.stucks = (B.stucks || 0) + 1;
+        const tp = B.trap; if (tp && Math.hypot(B.x - tp.x, B.z - tp.z) < 5) tp.n++; else B.trap = { x: B.x, z: B.z, n: 1 };   // stuck in the same place again: scramble (steeper), then hop out
+        if (B.trap.n >= 4) { vbHop(B); B.trap = null; } } }
+    else B.stuck = Math.max(0, B.stuck - 1);
+    P0.x = B.x; P0.z = B.z; P0.t = 0; P0.path = 0; }
+}
+function vbHop(B) {                                                           // trapped in a hole it can't climb out of: out onto the nearest good ground
+  for (let r = 4; r <= 30; r += 3) for (let q = 0; q < 12; q++) { const a = q / 12 * 6.283 + r, x = B.x + Math.cos(a) * r, z = B.z + Math.sin(a) * r;
+    if (okSpot(x, z) && !inLava(x, z, 4)) { B.x = x; B.z = z; B.y = groundY(x, z); B.vx = B.vz = 0; B.prog.x = x; B.prog.z = z; B.hops = (B.hops || 0) + 1; return; } }
+}
+function vbHazards(B, dt) {                                                   // the zone, lava, deep water
+  const Z = zone;
+  if (Z && Z.vr) { const edge = zoneR(Z, Z.cx, Z.cz, Z.r, B.x, B.z, Z.clock);
+    if (Math.hypot(B.x - Z.cx, B.z - Z.cz) > edge) { B.zoneT = (B.zoneT || 0) + dt; if (B.zoneT > 2 && (B.zoneD = (B.zoneD || 0) + dt) >= 1) { B.zoneD = 0; B.hp -= 1 + Math.round(Math.min(1, Z.clock / ROUND_SEC) * 3); if (B.hp <= 0) vbDie(B, null, false, null); } }
+    else B.zoneT = B.zoneD = 0; }
+  if (B.alive && inLava(B.x, B.z)) vbDie(B, null, false, null);
+  if (B.alive && H(B.x, B.z) < water - 1.3) { if ((B.wetT += dt) > 8) vbDie(B, null, false, null); } else B.wetT = 0;
+}
+// ---- the capture point: a bot alone in it earns points like a player
+function vbCapture(dt) {
+  if (!CAPT || state !== "play") return;
+  const inside = [];
+  if (MP.dead <= 0 && captIn(P.x, P.y, P.z)) inside.push("me");
+  for (const L of mpOpen()) if (L.R && L.R.alive && captIn(L.R.head.x, L.R.feet, L.R.head.z)) inside.push(L.id);
+  for (const B of VB.list) if (B.alive && B.x !== undefined && captIn(B.x, B.y, B.z)) inside.push(B);
+  for (const B of VB.list) { if (inside.length === 1 && inside[0] === B) { if ((B.capT += dt) >= CAPTURE.every) { B.capT -= CAPTURE.every; B.pts++; } } else if (!inside.includes(B)) B.capT = 0; }
+}
+// ---- online: the host sends where the bots are; everyone else moves copies of them
+function vbNetSend(dt) {
+  if (!MP.host || !MP.on) return;
+  if ((VB.sendT -= dt) <= 0) {
+    VB.sendT = BOTS_TUNE.send; const a = [], r2 = v => Math.round(v * 100) / 100;
+    for (const B of VB.list) if (B.S) { const S = B.S; a.push(B.i, r2(B.x), r2(B.y), r2(B.z), r2(S.yaw), r2(S.aim || 0), r2(B.vx), r2(B.vz),
+      (B.alive ? 1 : 0) | (B.onGround === false ? 2 : 0) | (S.aimWant > .5 ? 4 : 0) | (S.crouchWant > .5 ? 8 : 0), BOT_GUNS.indexOf(B.gun) * 10 + Math.max(1, B.own[B.gun] || 1)); }
+    mpSend({ t: "bs", ts: Math.round(performance.now()), a });
+  }
+  if ((VB.scT -= dt) <= 0) { VB.scT = 2; vbScoresSend(); }
+}
+function vbScoresSend() { if (MP.host && MP.on) { const s = []; for (const B of VB.list) s.push(B.i, B.k | 0, B.d | 0, B.pts | 0); mpSend({ t: "bsc", s }); } }
+function vbRecvState(o) {
+  if (MP.host || !Array.isArray(o.a)) return; const now = performance.now();
+  for (let i = 0; i + 9 < o.a.length; i += 10) {
+    const B = VB.list.find(q => q.i === o.a[i]); if (!B) continue;
+    const s = { at: Math.max(B.rx.length ? B.rx[B.rx.length - 1].at + 1 : 0, now), x: o.a[i + 1], y: o.a[i + 2], z: o.a[i + 3], yaw: o.a[i + 4], aim: o.a[i + 5], vx: o.a[i + 6], vz: o.a[i + 7], f: o.a[i + 8], g: o.a[i + 9] };
+    B.rx.push(s); if (B.rx.length > 24) B.rx.shift();
+  }
+}
+function vbRecvScores(o) { if (MP.host || !Array.isArray(o.s)) return; for (let i = 0; i + 3 < o.s.length; i += 4) { const B = VB.list.find(q => q.i === o.s[i]); if (B) { B.k = o.s[i + 1]; B.d = o.s[i + 2]; B.pts = o.s[i + 3]; } } }
+function vbPuppet(B, dt) {                                                    // a guest: the host's bot, a moment behind, smoothed
+  const rx = B.rx; if (!rx || !rx.length) return;
+  const t = performance.now() - 130; let a = rx[0], b = rx[0];
+  for (let i = 0; i < rx.length; i++) { if (rx[i].at <= t) a = rx[i]; if (rx[i].at >= t) { b = rx[i]; break; } b = rx[i]; }
+  const k = b.at > a.at ? Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at))) : 1;
+  if (!B.S) { vbBody(B); B.alive = !!(b.f & 1); }
+  const S = B.S, alive = !!(b.f & 1) && !(B.deadAt && b.at <= B.deadAt + 300);   // (the host's "down" can come before the last moves)
+  if (alive && !B.alive) { B.alive = true; if (B.C && B.C.deadT >= 0) vbRevive(B.C); }
+  if (!alive && B.alive) { B.alive = false; B.deadT = 0; }
+  if (!B.alive) B.deadT = (B.deadT || 0) + dt;
+  B.x = a.x + (b.x - a.x) * k; B.y = a.y + (b.y - a.y) * k; B.z = a.z + (b.z - a.z) * k; B.vx = b.vx; B.vz = b.vz;
+  S.x = B.x; S.y = B.y; S.z = B.z; S.yaw = a.yaw + angDiff(b.yaw, a.yaw) * k; S.aim = a.aim + (b.aim - a.aim) * k; S.vx = B.vx; S.vz = B.vz; S.speed = Math.hypot(B.vx, B.vz);
+  S.onGround = !(b.f & 2); S.aimWant = b.f & 4 ? 1 : 0; S.crouchWant = b.f & 8 ? 1 : 0; B.onGround = S.onGround;
+  const gk = BOT_GUNS[Math.floor(b.g / 10)] || "pistol", gt = b.g % 10 || 1; if (gk !== B.gun || gt !== B.tier) { B.gun = gk; B.tier = gt; B.own = { [gk]: gt }; vbGunModel(B); }
+  vbPose(B, dt);
+  if (B.alive && SND.ctx) mpStepTick({ id: B.id }, B, S, dt);
+}
+// ---- drawing: the soldier frame posed, the person over it (legs the way it walks, chest and gun the way it aims, head where it looks)
+function vbPose(B, dt) {
+  const S = B.S; if (!S) return;
+  const dc = Math.hypot(B.x - camera.position.x, B.z - camera.position.z), far = dc > (scene.fog ? scene.fog.far : 800) + 20;
+  if (far || !B.alive && B.deadT > PVP.bodyGone || state !== "play") { S.group.visible = false; S.shadow.visible = false; if (B.C) B.C.top.visible = false; B.posed = false; return; }
+  B.pacc = (B.pacc || 0) + dt; if (dc > 70 && B.pacc < (dc > 160 ? .1 : .05)) return; const adt = B.pacc; B.pacc = 0;
+  vbGunModel(B);
+  if (!B.alive) {
+    if (charOn() && vbChar(B, adt)) { S.group.visible = false; S.shadow.visible = false; return; }
+    vbSoldierSkin(B, true); S.group.visible = S.shadow.visible = true; B.fallT = Math.min(1, (B.fallT || 0) + adt * 1.8); const e = B.fallT * B.fallT * (3 - 2 * B.fallT);
+    S.group.position.set(S.x, S.y + e * .25, S.z); S.group.rotation.set(-e * 1.48, S.yaw + Math.PI, 0); return;
+  }
+  B.fallT = 0; S.group.rotation.x = 0; S.group.visible = true; S.shadow.visible = true; if (B.hold) B.hold.visible = true; VB.shown = true;
+  poseSoldier(S, adt); B.posed = true;
+  if (charOn() && vbChar(B, adt)) { S.shadow.position.set(B.x, groundY(B.x, B.z) + .04, B.z); } else vbSoldierSkin(B, true);
+  if (B.alive && SND.ctx && !mpGuest()) mpStepTick({ id: B.id }, B, S, adt);
+}
+function vbHide() {                                                          // back in the menus: nobody standing about in the menu room
+  VB.shown = false; for (const B of VB.list) { if (B.S) { B.S.group.visible = false; B.S.shadow.visible = false; } if (B.C) B.C.top.visible = false; B.pacc = 1; }
+}
+function vbChar(B, dt) {
+  const S = B.S;
+  if (!B.C) { B.C = charMake(B.lk, UNIFORMS[B.u] || "green"); if (!B.C) return false; }
+  vbSoldierSkin(B, false);
+  const C = B.C; C.top.visible = true;
+  if (!B.alive) { if (B.hold) B.hold.visible = false; if (C.deadT < 0) charKill(C, B.killFrom || null, B.killHead); C.top.visible = B.deadT < PVP.bodyGone; if (C.top.visible) charDeath(C, dt); return true; }
+  if (C.deadT >= 0) vbRevive(C);
+  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)));
+  const sp = S.speed || 0, aimYaw = S.yaw; let legYaw = aimYaw, back = false;
+  if (sp > .5) { const mv = Math.atan2(-S.vx, -S.vz), d = angDiff(mv, aimYaw); if (Math.abs(d) < 1.9) legYaw = mv; else { legYaw = mv + Math.PI; back = true; } }
+  C.legY = C.legY === undefined ? legYaw : C.legY + angDiff(legYaw, C.legY) * Math.min(1, dt * 8);
+  C.yaw = C.legY; C.x = S.x; C.z = S.z; C.y = S.y; C.top.position.set(S.x, S.y, S.z);
+  vbAnimate(C, { speed: sp, crouch: S.crouch, air: !S.onGround, back, dt });
+  const tw = Math.max(-1.3, Math.min(1.3, angDiff(aimYaw, C.yaw)));
+  if (Math.abs(tw) > .01) for (const b of ["spine_01", "spine_02", "spine_03"]) charRot(C, b, _chUp, tw / 3);
+  C.top.updateMatrixWorld(true); S.group.updateMatrixWorld(true); C.chestYaw = aimYaw;
+  { const cc = C.by.spine_03.getWorldPosition(_vbA), sc = S.B.chest.getWorldPosition(_vbB); S.group.position.x += cc.x - sc.x; S.group.position.y += cc.y - sc.y; S.group.position.z += cc.z - sc.z; S.group.updateMatrixWorld(true); }   // the gun at the person's chest (crouched, they're lower than the old soldier)
+  for (const sd of ["r", "l"]) charArm(C, sd, S.B["hand" + sd.toUpperCase()].getWorldPosition(_vbC), null);
+  charHead(C, _vbQ.setFromEuler(_vbE.set(S.aim * (S.aimK || 0), aimYaw, 0, "YXZ")));
+  C.top.updateMatrixWorld(true); return true;
+}
+function vbSoldierSkin(B, on) {                                               // the old soldier's own body drawn or not (its gun always): hiding the body mesh itself would hide the gun it carries
+  const S = B.S; if (!S || B.skinOn === on) return; B.skinOn = on;
+  S.group.traverse(o => { if (o.isMesh && !charUnder(o, S.rig)) for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.visible = on; });
+}
+function vbAnimate(C, st) {                                                   // like charAnimate, faster, and stepping backwards when it backs off
+  const dt = st.dt; if (C.deadT >= 0) { charDeath(C, dt); return; }
+  C.top.rotation.order = "YXZ"; C.top.rotation.set(0, C.yaw + Math.PI, 0);
+  const sp = st.speed, sg = st.back ? -1 : 1, cl = (v, a, b) => Math.max(a, Math.min(b, v));
+  if (st.air) { const a = charPlay(C, "Jump_Loop", 0, .15); if (a) a.time = .35; }
+  else if (st.crouch > .5) { if (sp > .35) charPlay(C, "Crouch_Fwd_Loop", sg * cl(sp / CH_SPEED.Crouch_Fwd_Loop, .6, 2)); else charPlay(C, "Crouch_Idle_Loop"); }
+  else if (sp < .35) charPlay(C, "Idle_Loop");
+  else if (sp < 2.6) charPlay(C, "Walk_Loop", sg * cl(sp / CH_SPEED.Walk_Loop, .55, 1.8));
+  else if (sp < 6.5) charPlay(C, "Jog_Fwd_Loop", sg * cl(sp / CH_SPEED.Jog_Fwd_Loop, .7, 1.8));
+  else charPlay(C, "Sprint_Loop", sg * cl(sp / CH_SPEED.Sprint_Loop, .8, 2.1));
+  C.mixer.update(dt); C.top.updateMatrixWorld(true); charBounce(C, dt, false);
+}
+// ---- lobby cards, the board, settings
+function vbRows() { return VB.list.map(B => ({ id: B.id, tag: B.name, c: B.c, u: B.u, bot: B, host: false, idx: 100 + B.i })); }
+function vbBoardRows() { return VB.list.map(B => ({ id: B.id, u: B.u, c: B.c, tag: B.name, team: vbTeam(B.id), k: B.k | 0, d: B.d | 0, p: B.pts | 0, bot: true })); }
+function vbPeopleText() {
+  const n = VB.list.length, people = MP.code ? mpCount() : 1, fill = Math.max(1, Math.min(MP_MAX, set.botFill | 0));
+  if (fill <= 1) return "Off · no bots";
+  if (!MP.code) return fill + " players · you + " + n + (n === 1 ? " bot" : " bots");
+  return fill + " players · " + people + (people === 1 ? " person" : " people") + " + " + n + (n === 1 ? " bot" : " bots");
+}
+function vbOpen() { vbFit(); vruiOpen("bots"); }
+function vbPanel() {
+  const Bp = uiPanel("bots", 2048, 1170, 2.1, MAP_ARC, 1.4, MAP_YAW), lx = 70, rx = 1078, CW = 461, CH = 330;
+  const pool = () => { vbPoolMake(); return VB.list.length ? VB.list : []; };
+  const bar = (g, x, y, w, v, label, col) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, x + 92, y - 13, w - 92, 14, 7); g.fill(); g.fillStyle = col; uiRound(g, x + 92, y - 13, Math.max(10, (w - 92) * v), 14, 7); g.fill();
+    g.font = "22px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText(label, x, y); };
+  Bp.paint = (g, P) => {
+    uiBg(g, P); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("BOTS", lx, 92);
+    g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText(MP.code ? "They fill the room's empty spots and play like people. Your game runs them." : "PvP against bots: they see, hear, loot, fight and come back like players.", lx + 190, 88);
+    uiLabel(g, lx, 168, "Game size", vbPeopleText());
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(MP.code ? "When a friend joins, a bot leaves to make room." : "Slide left to play on your own (practice, no clock).", lx, 304);
+    uiLabel(g, rx, 168, "Skill", BOT_SKILLN[set.botSkill] || "Normal");
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText({ easy: "Slow to react, shaky aim", normal: "A fair fight", hard: "Quick and sharp: they punish mistakes", mixed: "Some of each, 1 to 5 stars" }[set.botSkill] || "", rx, 304);
+    const L = pool();
+    if (!L.length) { g.textAlign = "center"; g.font = "bold 34px sans-serif"; g.fillStyle = UIC.sun; g.fillText(gameMode !== "pvp" ? "Bots play PvP: pick PvP on the map settings" : "No bots in this game", P.W / 2, 700); return; }
+    L.slice(0, 8).forEach((B, i) => {
+      const x = lx + (i % 4) * (CW + 16), y = 440 + Math.floor(i / 4) * (CH + 16), St = BOT_STYLE[B.style], T = B.T || {};
+      g.fillStyle = "rgba(255,255,255,.07)"; uiRound(g, x, y, CW, CH, 18); g.fill();
+      if (teamsOn()) { g.strokeStyle = TEAM_COL[vbTeam(B.id)]; g.lineWidth = 5; uiRound(g, x + 2.5, y + 2.5, CW - 5, CH - 5, 16); g.stroke(); }
+      const pic = charPortrait(B.lk, UNIFORMS[B.u] || "green"), ps = 150;
+      g.save(); uiRound(g, x + 14, y + 14, ps, ps, 12); g.clip(); if (pic) g.drawImage(pic, x + 14, y + 14, ps, ps); else { g.fillStyle = "rgba(0,0,0,.25)"; g.fillRect(x + 14, y + 14, ps, ps); } g.restore();
+      g.textAlign = "left"; g.font = "bold 36px sans-serif"; g.fillStyle = MP_COL[B.c] || UIC.text; g.fillText(fitText(g, B.name, CW - ps - 40), x + ps + 30, y + 58);
+      g.font = "bold 28px sans-serif"; g.fillStyle = UIC.text; g.fillText(St.name, x + ps + 30, y + 98);
+      g.font = "30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("★".repeat(B.stars) + "☆".repeat(5 - B.stars), x + ps + 30, y + 140);
+      g.font = "22px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, St.say, x + 14, y + 196, CW - 28, 26);
+      if (B.T) { const bw = (CW - 44) / 2;
+        bar(g, x + 14, y + 262, bw, T.aim, "Aim", "#ff9a6a"); bar(g, x + 30 + bw, y + 262, bw, T.react, "React", "#ffd166");
+        bar(g, x + 14, y + 300, bw, T.aggr, "Push", "#ff6b6b"); bar(g, x + 30 + bw, y + 300, bw, T.nerve, "Nerve", "#7fd1ff"); }
+    });
+  };
+  uiSlider(Bp, lx, 216, 900, 1, MP_MAX, () => Math.max(1, Math.min(MP_MAX, set.botFill | 0)), v => { set.botFill = Math.round(v); vbFit(); mpHostSetSync(); mpLobSync(true); }, 1);
+  [["easy", "Easy"], ["normal", "Normal"], ["hard", "Hard"], ["mixed", "Mixed"]].forEach(([k, l], i) => uiBtn(Bp, rx + i * 228, 196, 214, 66, l, () => { set.botSkill = k; vbFit(); mpHostSetSync(); mpLobSync(true); }, { active: () => set.botSkill === k, fs: 30 }));
+  uiBtn(Bp, lx, 330, 320, 80, "New bots", () => { VB.seed = 1 + Math.floor(Math.random() * 1e6); VB.sent = ""; vbFit(); mpLobSync(true); }, { fs: 34 });
+  uiBtn(Bp, rx + 524, 330, 376, 80, "Done", () => vruiOpen("setup"), { primary: true, fs: 38 });
 }
 /* ---------------- 2.37: people (VR only) — Quaternius Universal Base Characters, Modular Character Outfits (Fantasy) and Universal Animation Library (CC0) ----------------
    Other players and the PvP bots are people: man or woman, Soldier · Ranger · Peasant, skin tone, hair and hair colour, beard (men); the Soldier wears
@@ -12452,7 +13265,7 @@ function charRemote(R, L, s, dt) {
   if (!R.C) { R.C = charMake(lk, UNIFORMS[mpUni(L)]); if (!R.C) return false; }
   const C = R.C, f = _chV.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   C.top.visible = state === "play";
-  if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : null; charKill(C, killer, L.dieHead); }
+  if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : vbIsId(by) ? vbEnt2(by) : null; charKill(C, killer, L.dieHead); }
     C.top.visible = C.deadT < PVP.bodyGone && state === "play"; if (C.top.visible) { charDeath(C, dt); } return true; }
   if (C.deadT >= 0) { C.deadT = -1; C.cur = null; C.curA = null; C.mixer.stopAllAction(); }
   C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)));          // 2.42: their eyes at a standing player's eye height
@@ -12689,7 +13502,7 @@ function mpStepTick(L, R, S, dt) {                          // their footsteps, 
 }
 function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
-  makeBullet(from, new THREE.Vector3(...o.v), { reach: 3200, remote: true });
+  makeBullet(from, new THREE.Vector3(...o.v), { reach: 3200, remote: true, by: o.by });
   if (!mpShotSound(o.k, from)) { const dd = camera.position.distanceTo(from); if (dd < 700) gunshot(o.k, 0, dd); }   // (2.12: from where they are)
 }
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
@@ -12722,7 +13535,8 @@ function mpTakeHit(d, head, noShield) {
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
   if (MP.hp <= 0) {
     MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0 });
-    if (MP.lastHitBy && MP.on) vrBanner(mpTagOf(MP.lastHitBy) + " got you", 2.5, 1);   // 2.00: deathmatch: you respawn with your guns (nothing spills)
+    vbCredit(MP.lastHitBy);                                    // 2.48: a bot got you
+    if (MP.lastHitBy && (MP.on || vbIsId(MP.lastHitBy))) vrBanner(mpTagOf(MP.lastHitBy) + " got you", 2.5, 1);   // 2.00: deathmatch: you respawn with your guns (nothing spills)
   }
 }
 function mpDeadHold() { if (MP.dead > 0 && MP.deathPos && gameMode === "pvp") { P.x = MP.deathPos[0]; P.y = MP.deathPos[1]; P.z = MP.deathPos[2]; P.vy = 0; P.gliding = false; } }   // your view stays where you fell
@@ -12966,7 +13780,7 @@ const _bB = new THREE.Vector3(), _bD = new THREE.Vector3(), _bT = new THREE.Vect
 function makeBullet(from, v, o) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
-  const t = { head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, gun: o.gun || null, online: !!o.online, remote: !!o.remote,
+  const t = { bot: o.bot || null, by: o.by || null, head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, gun: o.gun || null, online: !!o.online, remote: !!o.remote,
               cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true };
   tracers.push(t); return t;
 }
@@ -12976,10 +13790,10 @@ function bulletStep(t, dt) {                                // move one frame al
   const seg = a.distanceTo(b); if (seg < 1e-6) return true;
   const d = _bD.subVectors(b, a).divideScalar(seg);
   let h = castShot(a, d, seg, t.cs), end = h.kind ? h.p : null;
-  if (t.online && MP.on) {                                  // online: did it reach them? (they take the damage; head shots double)
-    const rh = mpHitTest(a, d, end ? a.distanceTo(end) : seg);
-    if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
-  }
+  let rh = t.online && MP.on ? mpHitTest(a, d, end ? a.distanceTo(end) : seg) : null;   // online: did it reach them? (they take the damage; head shots double)
+  const bh = VB.list.length && gameMode === "pvp" ? vbBulletStep(t, a, d, rh ? rh.t : end ? a.distanceTo(end) : seg) : null;   // 2.48: a bot in the way (a bot's own bullet: anyone)
+  if (bh) { rh = null; end = a.clone().addScaledVector(d, bh.t); h = { kind: null }; }
+  if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
   const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
@@ -13393,6 +14207,7 @@ function loop(now) {
   if (state === "play" || state === "fly") { updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
   if (MP.peer || (vr.on && gameMode === "pvp")) mpTick(dt);
+  if (VB.shown && state !== "play" && state !== "pause") vbHide();      // 2.48
   if (state === "play") {
     if (vr.on) vrTick(dt);
     if (!(vr.on && vr.climbing)) update(dt);
@@ -13400,6 +14215,7 @@ function loop(now) {
     updateZone(dt);
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
     updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
+    if (vr.on && gameMode === "pvp") vbTick(dt);                            // 2.48: bots
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
       PORCH.found = true; bing(); if (vr.on) { vr.lootMsg = PORCH.name; vr.lootT = 6; vr.wristT = 0; } else flashHint("You found the " + PORCH.name + "." + (gameMode === "hunt" && legendName() ? " There's " + legendName() + (DRY(biomeOf(set.lat * set.hemi)) ? " out here." : " in these woods.") : ""));
