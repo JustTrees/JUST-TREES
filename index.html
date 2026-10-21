@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.46</title>
+<title>JUST TREES 2.47</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.46";              // Just Trees 2.46
+const VERSION = "2.47";              // Just Trees 2.47
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -385,6 +385,26 @@ const arenaGridAt = (g, x, z) => {                             // the change at 
   const n = g.n, c = S / (n - 1), fx = Math.max(0, Math.min(n - 1.001, (x + HALF) / c)), fz = Math.max(0, Math.min(n - 1.001, (z + HALF) / c)), i = fx | 0, j = fz | 0, tx = fx - i, tz = fz - j, k = j * n + i, D = g.D;
   return D[k] * (1 - tx) * (1 - tz) + D[k + 1] * tx * (1 - tz) + D[k + n] * (1 - tx) * tz + D[k + n + 1] * tx * tz;
 };
+/* 2.47: an arena's start points [x, z, side]: side 0 = anyone, 1 = Red, 2 = Blue. In a team game you start (and come back after being taken down)
+   at your side's points and the "anyone" ones; otherwise at any of them. With none, everything works as before. */
+function arenaSpawnList() {
+  const L = ARENA && ARENA.spawns; if (!L || !L.length) return null;
+  const mine = teamsOn() ? mpMyTeam() + 1 : 0, out = L.filter(p => !mine || !p[2] || p[2] === mine);
+  return out.length ? out : null;
+}
+function arenaSpawnNear(p) {                                    // a dry spot right by a start point (a few metres off, so friends on the same point don't stack)
+  const r0 = 1 + Math.random() * 3, a0 = Math.random() * 6.283;
+  for (let r = r0; r <= 30; r += 2) for (let q = 0; q < 12; q++) { const a = a0 + q / 12 * 6.283, x = p[0] + Math.cos(a) * r, z = p[1] + Math.sin(a) * r; if (okSpot(x, z)) return [x, z]; }
+  return [p[0], p[1]];
+}
+function arenaFoes() {                                          // where the others are (in a team game, only the other side)
+  const out = []; for (const L of mpOpen()) if (L.R && L.R.cur && L.R.alive && (!teamsOn() || mpTeamOf(L.id) !== mpMyTeam())) out.push([L.R.head.x, L.R.head.z]); return out;
+}
+function arenaSpawnFar(away) {                                  // the start point furthest from them (back in after being taken down, joining late)
+  const L = arenaSpawnList(); if (!L) return null;
+  let best = null, bd = -1; for (const p of L) { const d = away && away.length ? Math.min(...away.map(([a, b]) => Math.hypot(p[0] - a, p[1] - b))) : Math.random(); if (d > bd) { bd = d; best = p; } }
+  return arenaSpawnNear(best);
+}
 function arenaApply(A) {                                       // an arena's settings become the map settings
   seed = A.seed | 0 || 1; set.size = A.size || "medium"; set.lat = A.lat !== undefined ? A.lat : 45; set.hemi = A.hemi || 1; set.rough = A.rough !== undefined ? A.rough : .35;
   set.density = A.dens !== undefined ? A.dens : .5; set.edges = A.edges || "island"; set.land = A.land || "natural";
@@ -4814,6 +4834,7 @@ function generate() {
   perchTrees = allTrees.filter(t => t.kind !== "bare").map(t => ({ x: t.x, z: t.z, top: t.y + kinds[t.kind].vars[t.vi].h * t.s * t.sy * .78 })).filter(t => t.top - H(t.x, t.z) > 7);
   if (gameMode === "hunt") spawnAnimals(); else clearAnimals();
   if (ARMED() && VR_ON) { resetArms(); spawnLoot(); } else clearLoot();
+  { const L = arenaSpawnList(); if (L) { const p = arenaSpawnNear(L[(MP.idx || 0) % L.length]); P.x = p[0]; P.z = p[1]; P.y = Math.max(groundAt(P.x, P.z), rockAround(P.x, P.z, .3)); } }   // 2.47: at an arena's start point
   startZone(); startCapture();
   soundEnv = { day: smooth(-2, 15, sunPos(lat, set.month, hourNow).el), cold: winterSnow, season, biome };
   footEnv = { snow: winterSnow, sandy, leaves: litter > .5, snowLine };
@@ -7866,7 +7887,7 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
   if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
 function uwRespawn() {                                      // wake up somewhere random on dry ground
-  let s = null;
+  let s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
   for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30)) s = [x, z]; }
   if (!s) s = [P.x, P.z];
   P.x = s[0]; P.z = s[1]; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
@@ -9141,8 +9162,8 @@ const LAB_KIND_NAME = { fir: "Fir", broad: "Broadleaf", bare: "Bare", palm: "Pal
 const LAB_TW = 2.0, LAB_C = new THREE.Vector3(.15, .8, -1.38), LAB_EX = 1.2;   // the table: 2 m across, its top at .8 m, in front of you; heights a little taller than life
 const labRecipe = () => ({ v: 1, name: "", seed: 1 + Math.floor(Math.random() * 999999), size: "medium", lat: 45, hemi: 1, env: "auto", rough: .35, dens: .5, edges: "island", land: "natural",
   shape: { len: 1, wid: 1, round: 0, wob: 1 }, px: 0, pz: 0, hk: 1, wl: 0, fix: true, giant: true, rocks: 1, time: null, sc: null,
-  treesOff: [], treesAdd: [], rocksOff: [], rocksAdd: [], loot: { mode: "auto", amt: 1, pts: [] }, pub: false });
-const LAB = { on: false, A: null, tab: "land", tool: { sculpt: "raise", trees: "remove", rocks: "place", loot: "place" }, br: 15, str: .5, kind: "auto", tsize: 1, rkind: "boulder", rsize: 2.5, loot: "gun:ar", tier: 3,
+  treesOff: [], treesAdd: [], rocksOff: [], rocksAdd: [], loot: { mode: "auto", amt: 1, pts: [] }, spawns: [], pub: false });
+const LAB = { on: false, A: null, tab: "land", tool: { sculpt: "raise", trees: "remove", rocks: "place", loot: "place", spawns: "place" }, side: 1, mirror: true, br: 15, str: .5, kind: "auto", tsize: 1, rkind: "boulder", rsize: 2.5, loot: "gun:ar", tier: 3,
   mode: "hike", needBuild: true, building: 0, buildAt: 0, dirty: false, status: "", saved: null, spage: 0, undo: [], tbl: null, rot: 0, zoom: 1, c: [0, 0], start: null, grab: {}, stroke: {}, hold: null,
   testing: false, setBak: null, saveT: 0, kinds: [], walkAfter: false, clip: null };
 let MAPKINDS = [];
@@ -9208,11 +9229,13 @@ function labTable() {                                           // the table: th
   const rk = new THREE.DodecahedronGeometry(1, 0), mr = (MAPROCKS || []).filter(r => !r[4]), rm = new THREE.InstancedMesh(rk, lam({ color: 0x8a8580 }), Math.max(1, mr.length)), rl = mr.map(([x, z, s, k], i) => ({ x, z, s, k, i }));
   rm.count = mr.length; inner.add(rm);
   const lm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), lam({}), 4000); lm.count = 0; inner.add(lm);
+  const sp = new THREE.InstancedMesh(new THREE.CylinderGeometry(.05, .05, 2.4, 5).translate(0, 1.2, 0), lam({ color: 0xf2f2ea }), 400), sf = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .62, .08).translate(.5, 2.05, 0), lam({}), 400);   // 2.47: start points: a pole with a flag
+  sp.count = sf.count = 0; inner.add(sp, sf);
   const ct = new THREE.InstancedMesh(cone, lam({}), 4000), cr = new THREE.InstancedMesh(rk, lam({ color: 0xa8a29a }), 2000); ct.count = cr.count = 0; inner.add(ct, cr);
   const ring = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: .9, depthTest: false, clippingPlanes: clip })); ring.renderOrder = 61; ring.visible = false; inner.add(ring);
   const pin = new THREE.Mesh(new THREE.ConeGeometry(.5, 1.6, 10).rotateX(Math.PI).translate(0, .8, 0), new THREE.MeshBasicMaterial({ color: 0xffd45a, clippingPlanes: clip })); inner.add(pin);
   const held = new THREE.Mesh(cone.clone(), new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: .7, clippingPlanes: clip })); held.visible = false; inner.add(held);
-  LAB.tbl = { root, outer, spin, inner, land, geo, hb, hv, N, n1, tm, tl, rm, rl, lm, ct, cr, ring, pin, held, maxY, minY: -12 * LAB_EX, invM: new THREE.Matrix4(), plan: labLootPlan(), normT: 0, dirtyN: false };
+  LAB.tbl = { root, outer, spin, inner, land, geo, hb, hv, N, n1, tm, tl, rm, rl, lm, sp, sf, ct, cr, ring, pin, held, maxY, minY: -12 * LAB_EX, invM: new THREE.Matrix4(), plan: labLootPlan(), normT: 0, dirtyN: false };
   VRUI.root.add(root); root.visible = VRUI.stage === "lab";
   labTreesShow(); labRocksShow(); labCustom(); labLootShow(); labView();
 }
@@ -9259,6 +9282,9 @@ function labLootShow() {                                         // loot: the au
   if (L.mode !== "custom") for (const d of T.plan) put(d.x, d.z, LAB_LCOL(d.type, d.kind, d.tier), 1);
   if (L.mode !== "auto") for (const [x, z, type, kind, tier] of L.pts) put(x, z, LAB_LCOL(type, kind, tier), 1.9);
   T.lm.count = n; T.lm.instanceMatrix.needsUpdate = true; if (T.lm.instanceColor) T.lm.instanceColor.needsUpdate = true;
+  const SP = A.spawns || [], fs = sz * 3.2; T.sp.count = T.sf.count = Math.min(400, SP.length);      // 2.47: the start points, flags in their side's colour
+  for (let i = 0; i < T.sp.count; i++) { const [x, z, t] = SP[i]; _lm4.compose(_lv.set(x, labY(labH(x, z)), z), _lq.setFromAxisAngle(_LAB_UP, -LAB.rot), _ls.set(fs, fs, fs)); T.sp.setMatrixAt(i, _lm4); T.sf.setMatrixAt(i, _lm4); T.sf.setColorAt(i, c.set(t ? TEAM_COL[t - 1] : "#ffffff")); }
+  T.sp.instanceMatrix.needsUpdate = T.sf.instanceMatrix.needsUpdate = true; if (T.sf.instanceColor) T.sf.instanceColor.needsUpdate = true;
 }
 function labView() {                                             // the table's turn, zoom and where it's centred
   const T = LAB.tbl; if (!T) return; const sc = LAB_TW / S * LAB.zoom;
@@ -9288,12 +9314,12 @@ function labRay(from, dir) {                                     // where a lase
   return { x, z, y, p, d: from.distanceTo(p) };
 }
 function labUndoPush() {
-  const A = LAB.A, g = arenaGrid(A); LAB.undo.push({ D: g.D.slice(), L: JSON.stringify({ treesOff: A.treesOff, treesAdd: A.treesAdd, rocksOff: A.rocksOff, rocksAdd: A.rocksAdd, pts: A.loot.pts }) });
+  const A = LAB.A, g = arenaGrid(A); LAB.undo.push({ D: g.D.slice(), L: JSON.stringify({ treesOff: A.treesOff, treesAdd: A.treesAdd, rocksOff: A.rocksOff, rocksAdd: A.rocksAdd, pts: A.loot.pts, spawns: A.spawns }) });
   if (LAB.undo.length > 25) LAB.undo.shift();
 }
 function labUndo() {
   const u = LAB.undo.pop(); if (!u) return; const A = LAB.A, g = arenaGrid(A), o = JSON.parse(u.L);
-  g.D.set(u.D); Object.assign(A, { treesOff: o.treesOff, treesAdd: o.treesAdd, rocksOff: o.rocksOff, rocksAdd: o.rocksAdd }); A.loot.pts = o.pts; LAB.hold = null;
+  g.D.set(u.D); Object.assign(A, { treesOff: o.treesOff, treesAdd: o.treesAdd, rocksOff: o.rocksOff, rocksAdd: o.rocksAdd, spawns: o.spawns || [] }); A.loot.pts = o.pts; LAB.hold = null;
   labRefresh(); labChange(false); buzz("L", .2, 15); uiDraw(VRUI.panels.lab);
 }
 function labRefresh() {                                          // everything on the table again from the recipe (after an undo or a load)
@@ -9351,6 +9377,8 @@ function labPress(hit) {                                          // the first m
   else if (tab === "rocks" && tool === "place") { A.rocksAdd.push([labR1(hit.x), labR1(hit.z), LAB.rkind, labR2(LAB.rsize), labR2(Math.random() * 6.283)]); labCustom(); }
   else if (tab === "loot" && tool === "place") { const [t, k] = LAB.loot.split(":"); A.loot.pts.push(t === "gun" ? [labR1(hit.x), labR1(hit.z), "gun", k, k === "bow" ? Math.max(2, LAB.tier) : LAB.tier] : [labR1(hit.x), labR1(hit.z), t]);
     if (A.loot.mode === "auto") A.loot.mode = "both"; labLootShow(); }
+  else if (tab === "spawns" && tool === "place") { const P0 = [labR1(hit.x), labR1(hit.z), LAB.side]; A.spawns = A.spawns || []; A.spawns.push(P0);   // 2.47: a start point (and its mirror for the other side)
+    if (LAB.mirror && (Math.abs(hit.x) > 2 || Math.abs(hit.z) > 2)) A.spawns.push([labR1(-hit.x), labR1(-hit.z), LAB.side === 1 ? 2 : LAB.side === 2 ? 1 : 0]); labLootShow(); }
   else if (tab === "land" || tab === "world" || tab === "file") { LAB.start = [labR1(hit.x), labR1(hit.z)]; labView(); }
   else return;
   labChange(false); uiDraw(VRUI.panels.lab);
@@ -9361,6 +9389,7 @@ function labHold(hit, dt, stk) {                                  // while the t
   else if (tab === "trees" && tool === "remove") { labCut(A.treesOff, hit.x, hit.z, R); A.treesAdd = labNear(A.treesAdd, hit.x, hit.z, R); labTreesShow(hit.x - R, hit.x + R, hit.z - R, hit.z + R); labCustom(); labChange(false); }
   else if (tab === "trees" && tool === "plant") { const L = stk.last || [hit.x, hit.z]; if (Math.hypot(hit.x - L[0], hit.z - L[1]) > Math.max(2.5, R * .5)) { stk.last = [hit.x, hit.z]; labPress(hit); } }
   else if (tab === "rocks" && tool === "remove") { labCut(A.rocksOff, hit.x, hit.z, R); A.rocksAdd = labNear(A.rocksAdd, hit.x, hit.z, R); labRocksShow(hit.x - R, hit.x + R, hit.z - R, hit.z + R); labCustom(); labChange(false); }
+  else if (tab === "spawns" && tool === "remove") { const n0 = (A.spawns || []).length; A.spawns = labNear(A.spawns || [], hit.x, hit.z, R); if (A.spawns.length !== n0) { labLootShow(); labChange(false); } }
   else if (tab === "loot" && tool === "remove") { const n0 = A.loot.pts.length; A.loot.pts = labNear(A.loot.pts, hit.x, hit.z, R); if (A.loot.pts.length !== n0) { labLootShow(); labChange(false); } }
 }
 function labStrokeEnd(stk) {
@@ -9368,14 +9397,14 @@ function labStrokeEnd(stk) {
   if (LAB.tbl && LAB.tbl.dirtyN) { LAB.tbl.geo.computeVertexNormals(); LAB.tbl.dirtyN = false; }
   if (VRUI.panels.lab) uiDraw(VRUI.panels.lab);
 }
-const labToolTab = () => LAB.tab === "sculpt" || LAB.tab === "trees" || LAB.tab === "rocks" || LAB.tab === "loot";
+const labToolTab = () => LAB.tab === "sculpt" || LAB.tab === "trees" || LAB.tab === "rocks" || LAB.tab === "loot" || LAB.tab === "spawns";
 function labHand(hand, h, dir, hit, pressed, dt) {                // one controller pointing at the table (hit) or not (null)
   const stk = LAB.stroke[hand], down = h.trig > .5;
   if (!hit || !down) { if (stk) { LAB.stroke[hand] = null; labStrokeEnd(stk); } }
   if (!hit) return;
   if (pressed) { if (labToolTab()) labUndoPush(); LAB.stroke[hand] = { target: labH(hit.x, hit.z), last: [hit.x, hit.z] }; labPress(hit); }
   const s = LAB.stroke[hand]; if (s && down) labHold(hit, dt, s);
-  const T = LAB.tbl, R = LAB.tab === "rocks" && LAB.tool.rocks === "place" ? LAB.rsize * 1.5 : LAB.tab === "loot" && LAB.tool.loot === "place" ? 3 : LAB.br;
+  const T = LAB.tbl, R = LAB.tab === "rocks" && LAB.tool.rocks === "place" ? LAB.rsize * 1.5 : (LAB.tab === "loot" || LAB.tab === "spawns") && LAB.tool[LAB.tab] === "place" ? 3 : LAB.br;
   if (labToolTab()) { T.ring.visible = true; T.ring.position.set(hit.x, hit.y + .3, hit.z); T.ring.scale.setScalar(R); LAB.ringT = 2; }
   if (LAB.hold) { T.held.visible = true; const sz = 12 * (LAB.hold.s || 1); T.held.position.set(hit.x, hit.y, hit.z); T.held.scale.set(sz * .2, sz * LAB_EX, sz * .2); }
 }
@@ -9405,6 +9434,7 @@ function labTick(dt) {
     } else if (G) LAB.grab[hand] = null;
   }
   if (zoomed) { labView(); LAB.zoomT = .25; }
+  if (LAB.zoomT <= 0 && Math.abs((LAB.flagRot || 0) - LAB.rot) > .2) { LAB.flagRot = LAB.rot; labLootShow(); }   // (the flags keep facing you)
   if (LAB.zoomT > 0 && (LAB.zoomT -= dt) <= 0) labLootShow();
   if (T.dirtyN && (T.normT = (T.normT || 0) + dt) > .15) { T.geo.computeVertexNormals(); T.dirtyN = false; T.normT = 0; }
   if ((LAB.ringT = (LAB.ringT || 0) - 1) < 0) T.ring.visible = false;
@@ -9437,7 +9467,7 @@ function labLoad(name) {
 function labPanel() {
   const Lb = uiPanel("lab", 1300, 1170, 1.8, 50, 1.38, 57), x0 = 50, x1 = 680, A = () => LAB.A, T = k => () => LAB.tab !== k, sw = 560;
   const lab = (g, x, y, t, v) => uiLabel(g, x, y, t, v), small = (g, x, y, t, c) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "26px sans-serif"; g.fillStyle = c || UIC.dim; g.fillText(t, x, y); };
-  const TABS = [["land", "Land"], ["world", "World"], ["sculpt", "Sculpt"], ["trees", "Trees"], ["rocks", "Rocks"], ["loot", "Loot"], ["file", "File"]];
+  const TABS = [["land", "Land"], ["world", "World"], ["sculpt", "Sculpt"], ["trees", "Trees"], ["rocks", "Rocks"], ["loot", "Loot"], ["spawns", "Spawns"], ["file", "File"]];
   const RB = () => labChange(true), sh = () => A().shape, isl = () => A().edges === "island";
   Lb.paint = (g, P) => {
     uiBg(g, P); const a = A(), [l, w] = labDims(a); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 44px sans-serif"; g.fillStyle = UIC.text; g.fillText("MAP LAB", x0, 70);
@@ -9469,6 +9499,13 @@ function labPanel() {
       lab(g, x0, 228, "Loot"); lab(g, x1 + 40, 228, "Auto amount", a.loot.amt.toFixed(1) + "×"); lab(g, x0, 372, "Place"); lab(g, x0, 612, "Stars"); lab(g, x0, 722, "Brush size (remove)", Math.round(LAB.br) + " m");
       small(g, x0, 860, a.loot.pts.length + " placed by hand" + (LAB.tbl ? " · " + LAB.tbl.plan.length + " from the auto loot" : "") + " · shown as in PvP");
       small(g, x0, 900, "Auto: the usual loot · Custom: only yours · Both: the two together");
+    } else if (t === "spawns") {
+      const SP = a.spawns || [], n = k => SP.filter(p => (p[2] || 0) === k).length;
+      lab(g, x0, 228, "Tool"); lab(g, x0, 372, "Side"); lab(g, x0, 512, "Mirror"); lab(g, x0, 722, "Brush size (remove)", Math.round(LAB.br) + " m");
+      small(g, x0 + 470, 512, "places the other side's point opposite, across the middle");
+      g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = TEAM_COL[0]; g.fillText("Red " + n(1), x0, 640); g.fillStyle = TEAM_COL[1]; g.fillText("Blue " + n(2), x0 + 170, 640); g.fillStyle = UIC.text; g.fillText("Anyone " + n(0), x0 + 350, 640);
+      small(g, x0, 860, "Team games: each side starts, and comes back in, at its own flags (and the white ones), furthest from the other side.");
+      small(g, x0, 900, "Free for all, hiking and hunting use them all. No flags: players pick their start as before.");
     } else if (t === "file") {
       lab(g, x0, 228, "Name"); lab(g, x0, 398, "Walk it as"); small(g, x0, 470, "Walk it drops you at the yellow pin (pull the trigger on the table to move it). Y menu: Back to Map Lab.");
       lab(g, x0, 640, "Saved maps"); if (LAB.saved && !LAB.saved.length) small(g, x0 + 260, 640, "None yet");
@@ -9477,7 +9514,7 @@ function labPanel() {
     const st = LAB.building ? "Building the map…" : LAB.status || (LAB.needBuild ? "The map will rebuild in a moment" : LAB.dirty ? "Changes since the last build: Walk it rebuilds first" : "");
     if (st) { g.textAlign = "right"; g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, st, 700), P.W - 50, 1130); }
   };
-  TABS.forEach(([k, l], i) => uiBtn(Lb, x0 + i * 174, 96, 164, 68, l, () => { LAB.tab = k; LAB.hold = null; if (k === "file" && !LAB.saved) labList(); }, { active: () => LAB.tab === k, fs: 30 }));
+  TABS.forEach(([k, l], i) => uiBtn(Lb, x0 + i * 151, 96, 143, 68, l, () => { LAB.tab = k; LAB.hold = null; if (k === "file" && !LAB.saved) labList(); }, { active: () => LAB.tab === k, fs: 30 }));
   // land
   LAB_SIZES.forEach(([k, l], i) => uiBtn(Lb, x0 + 300 + i * 124, 188, 116, 58, l, () => { A().size = k; RB(); }, { active: () => A().size === k, hide: T("land"), fs: 28 }));
   const sl = (x, y, a, b, get, setv, step, hide) => uiSlider(Lb, x, y, sw, a, b, get, v => { setv(v); RB(); }, step).hide = hide;
@@ -9518,7 +9555,7 @@ function labPanel() {
   [["raise", "Raise"], ["lower", "Lower"], ["flatten", "Flatten"], ["smooth", "Smooth"]].forEach(([k, l], i) => uiBtn(Lb, x0 + i * 300, 250, 285, 76, l, () => { LAB.tool.sculpt = k; }, { active: () => LAB.tool.sculpt === k, hide: T("sculpt"), fs: 32 }));
   const brush = () => !["sculpt", "trees", "rocks", "loot"].includes(LAB.tab);
   uiSlider(Lb, x0, 392, 1150, 2, 150, () => LAB.br, v => { LAB.br = v; }, 1).hide = () => brush() || LAB.tab === "rocks" || LAB.tab === "loot";
-  uiSlider(Lb, x0, 742, 1150, 2, 150, () => LAB.br, v => { LAB.br = v; }, 1).hide = () => LAB.tab !== "rocks" && LAB.tab !== "loot";
+  uiSlider(Lb, x0, 742, 1150, 2, 150, () => LAB.br, v => { LAB.br = v; }, 1).hide = () => LAB.tab !== "rocks" && LAB.tab !== "loot" && LAB.tab !== "spawns";
   uiSlider(Lb, x0, 502, 1150, .05, 1, () => LAB.str, v => { LAB.str = v; }, .01).hide = T("sculpt");
   uiBtn(Lb, x0, 650, 440, 70, "Undo the last stroke", () => labUndo(), { hide: () => LAB.tab !== "sculpt", disabled: () => !LAB.undo.length, fs: 28 });
   uiBtn(Lb, x0 + 460, 650, 440, 70, "Clear all sculpting", () => { labUndoPush(); const g = arenaGrid(A()); g.D.fill(0); labRefresh(); labChange(false); }, { hide: T("sculpt"), fs: 28 });
@@ -9539,6 +9576,12 @@ function labPanel() {
   uiBtn(Lb, x0 + 3 * 236, 462, 226, 60, "Remove", () => { LAB.tool.loot = "remove"; }, { active: () => LAB.tool.loot === "remove", hide: T("loot"), fs: 26, paintCol: "#7a3a32" });
   for (let i = 1; i <= 5; i++) uiBtn(Lb, x0 + 140 + (i - 1) * 130, 580, 120, 56, "★" + i, () => { LAB.tier = i; }, { active: () => LAB.tier === i, hide: T("loot"), fs: 26, textCol: ["", "#ffffff", "#9cc4ff", "#dcb8ff", "#ffd060", "#ff8a7a"][i] });
   uiBtn(Lb, x0 + 820, 580, 330, 56, "Clear placed loot", () => { labUndoPush(); A().loot.pts = []; labLootShow(); labChange(false); }, { hide: T("loot"), fs: 24 });
+  // spawns (2.47)
+  [["place", "Place"], ["remove", "Remove"]].forEach(([k, l], i) => uiBtn(Lb, x0 + i * 300, 250, 285, 76, l, () => { LAB.tool.spawns = k; }, { active: () => LAB.tool.spawns === k, hide: T("spawns"), fs: 32 }));
+  [[1, "Red"], [2, "Blue"], [0, "Anyone"]].forEach(([k, l], i) => uiBtn(Lb, x0 + 140 + i * 250, 336, 236, 66, l, () => { LAB.side = k; LAB.tool.spawns = "place"; }, { active: () => LAB.side === k, hide: T("spawns"), fs: 30, textCol: k ? TEAM_COL[k - 1] : "#ffffff" }));
+  uiBtn(Lb, x0 + 160, 476, 140, 60, "On", () => { LAB.mirror = true; }, { active: () => LAB.mirror, hide: T("spawns"), fs: 26 });
+  uiBtn(Lb, x0 + 310, 476, 140, 60, "Off", () => { LAB.mirror = false; }, { active: () => !LAB.mirror, hide: T("spawns"), fs: 26 });
+  uiBtn(Lb, x0, 940, 440, 64, "Clear all flags", () => { labUndoPush(); A().spawns = []; labLootShow(); labChange(false); }, { hide: T("spawns"), fs: 26 });
   // file
   uiBtn(Lb, x0, 250, 560, 80, "", () => { VRUI.keyFor = "arena"; vruiOpen("tag"); }, { labelFn: () => A().name || "Tap to name it", hide: T("file"), fs: 32 });
   uiBtn(Lb, x0 + 580, 250, 280, 80, "Save", () => labSave(), { hide: T("file"), fs: 34 });
@@ -9743,6 +9786,7 @@ function vruiTick(dt) {
 let vruiRay = null;
 function pickSpawn(p) {                                     // the nearest good spot to where you pointed: dry, not too steep, inside the map
   if (MP.revealT > 0) return;
+  { const L = arenaSpawnList(); if (L) { let b = L[0], bd = 1e18; for (const q of L) { const d = (q[0] - p.x) ** 2 + (q[1] - p.z) ** 2; if (d < bd) { bd = d; b = q; } } p = new THREE.Vector3(b[0], 0, b[1]); } }   // 2.47: an arena: your side's nearest start point
   let best = null;
   for (let r = 0; r <= 80 && !best; r += 4) for (let k = 0; k < (r ? 16 : 1) && !best; k++) {
     const a = k / 16 * Math.PI * 2, x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
@@ -9799,6 +9843,9 @@ function buildDiorama() {
   spin.add(tm);
   const myCol = MP.code ? MP_COL[mpColOf(null)] : 0xf2c14e;          // online: your pin is in your colour
   const pin = new THREE.Mesh(new THREE.ConeGeometry(4, 14, 10).rotateX(Math.PI).translate(0, 7, 0), new THREE.MeshBasicMaterial({ color: myCol, fog: false }));
+  { const L = arenaSpawnList(); if (L) for (const q of L) {     // 2.47: an arena's start points you can pick (in your side's colour)
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 3, 10).translate(0, 1.5, 0), new THREE.MeshBasicMaterial({ color: q[2] ? TEAM_COL[q[2] - 1] : 0xffffff, fog: false }));
+    m.scale.setScalar(S / 560); m.position.set(q[0], (H(q[0], q[1]) - water) * ex, q[1]); spin.add(m); } }
   const ps = S / 560; pin.scale.setScalar(ps); pin.position.set(P.x, (H(P.x, P.z) - water) * ex + 16 * ps, P.z); spin.add(pin);
   const beam = new THREE.Mesh(new THREE.CylinderGeometry(.8, .8, 16, 6).translate(0, 8, 0), new THREE.MeshBasicMaterial({ color: myCol, transparent: true, opacity: .5, fog: false }));
   beam.scale.setScalar(ps); beam.position.set(P.x, (H(P.x, P.z) - water) * ex, P.z); spin.add(beam);
@@ -12097,7 +12144,9 @@ function mpGuestGen(o) {
   }, vr.on ? 350 : 40);
 }
 function mpRandomSpawn() {                                  // your own random start is already picked; point at the little map to change it
-  for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z)) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } }
+  const AS = arenaSpawnList();                                 // (2.47: an arena: one of your side's start points)
+  if (AS) { const p = arenaSpawnNear(AS[(MP.idx || 0) % AS.length]); P.x = p[0]; P.z = p[1]; P.y = groundAt(P.x, P.z); }
+  else for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z)) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } }
   mpSendHost({ t: "spawn", x: P.x, z: P.z });
 }
 function mpRevealStart(list) {                              // everyone's flags pop up in their colours for 3 seconds
@@ -12136,6 +12185,7 @@ function mpGuestStart(o) {
     let best = null; const want = Math.min(160, HALF * .55);
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
+    { const as = arenaSpawnFar(far); if (as) { P.x = as[0]; P.z = as[1]; P.y = groundAt(P.x, P.z); } }   // 2.47: an arena: your side's start point
     if (ENDLESS) { const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.21: joining endless land: near the host (2.24: as far as chosen)
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");

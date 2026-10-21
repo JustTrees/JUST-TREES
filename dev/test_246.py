@@ -3,6 +3,8 @@ the slide through the landscape) rebuild it; the laser on the table sculpts a hi
 loot are placed; the map gets a name on the keyboard, is saved and published (a stand-in for the online server); Walk it builds the real map
 and drops you in it at the pin; the Y menu takes you back to Map Lab; leaving puts the normal settings back. Then online: the host picks the
 arena under Arenas in the map settings, a friend joins, and both get exactly the map that was built in Map Lab.
+2.47: a mirrored pair of spawn flags (Red west, Blue east) is placed in the Spawns tab; in a 2-team PvP game the host starts at Red,
+the friend at Blue, and the friend comes back in at Blue after a respawn.
 Served over http with a stand-in /dev; local PeerJS server on :9000 (run_all's ONLINE set).
 Usage: python3 dev/test_246.py dbg.html [outdir]"""
 import os, sys, asyncio, json, threading, shutil, tempfile, base64
@@ -98,13 +100,14 @@ async def main():
         await A.evaluate("() => { W('lab', 'Trees').on(); W('lab', 'Remove').on(); D.LAB.br = 25; aim(-40, -50); tick(2); pad.R.trig = 1; tick(8); pad.R.trig = 0; tick(2); return 1; }")
         await A.evaluate("""() => { const h = (x, z) => ({ x, z, y: 0 }), L = D.LAB; L.tab = 'trees'; L.tool.trees = 'plant'; [[90, 80], [100, 80], [110, 80]].forEach(([x, z]) => D.labPress(h(x, z)));
           L.tab = 'rocks'; L.tool.rocks = 'place'; L.rkind = 'crag'; L.rsize = 6; D.labPress(h(-90, 60)); L.rkind = 'boulder'; L.rsize = 3; D.labPress(h(-70, 60));
-          L.tab = 'loot'; L.tool.loot = 'place'; L.loot = 'gun:hunt'; L.tier = 5; D.labPress(h(20, -20)); L.loot = 'hp'; D.labPress(h(24, -20)); L.tab = 'land'; D.LAB.start = [40, 10]; return 1; }""")
-        out["recipe"] = await A.evaluate("() => { const a = D.LAB.A; return [a.treesOff.length, a.treesAdd.length, a.rocksAdd.length, a.loot.mode, a.loot.pts.length].join(' '); }")
+          L.tab = 'loot'; L.tool.loot = 'place'; L.loot = 'gun:hunt'; L.tier = 5; D.labPress(h(20, -20)); L.loot = 'hp'; D.labPress(h(24, -20)); L.tab = 'spawns'; L.tool.spawns = 'place'; L.side = 1; L.mirror = true; D.labPress(h(-50, 0));   /* 2.47: Red flag, Blue mirrored */
+          L.tab = 'land'; D.LAB.start = [40, 10]; return 1; }""")
+        out["recipe"] = await A.evaluate("() => { const a = D.LAB.A; return [a.treesOff.length, a.treesAdd.length, a.rocksAdd.length, a.loot.mode, a.loot.pts.length, JSON.stringify(a.spawns)].join(' '); }")
         if OUT:
             await A.evaluate("() => { D.LAB.tab = 'sculpt'; D.uiDraw(D.VRUI.panels.lab); tick(1); return 1; }")
             save("t246_lab.jpg", await A.evaluate("() => shot([0, 1.62, .05], [-.25, 1.0, -1.3], 78, 1600, 1000)"))
             save("t246_table.jpg", await A.evaluate("() => shot([.15, 1.75, -.35], [.15, .8, -1.38], 62, 1400, 1000)"))
-            for t in ["land", "world", "sculpt", "trees", "rocks", "loot", "file"]:
+            for t in ["land", "world", "sculpt", "trees", "rocks", "loot", "spawns", "file"]:
                 save(f"t246_panel_{t}.jpg", await A.evaluate(f"() => {{ D.LAB.tab = '{t}'; D.uiDraw(D.VRUI.panels.lab); return D.VRUI.panels.lab.cv.toDataURL('image/jpeg', .85); }}"))
             await A.evaluate("() => { D.LAB.tab = 'land'; return 1; }")
         # ---- name it on the keyboard, save, publish
@@ -134,7 +137,7 @@ async def main():
         # ---- online: the host picks the arena, a friend joins, both get the same map as Map Lab built
         await A.evaluate("() => { D.MP.tag = 'HOSTY'; D.vruiOpen('mode'); W('mode', 'Online').on(); W('mp', 'Host a room').on(); return 1; }")
         await until(A, "() => /Waiting/.test(D.MP.status)", 15); code = await A.evaluate("() => D.MP.code")
-        await A.evaluate("() => { W('setup', 'PvP').on(); W('setup', 'Arenas').on(); return 1; }")
+        await A.evaluate("() => { W('setup', 'PvP').on(); W('setup', '2 Teams').on(); W('setup', 'Arenas').on(); return 1; }")
         await until(A, "() => D.ARN.list && D.ARN.list.length > 0", 10)
         out["arenaList"] = await A.evaluate("() => D.ARN.list.map(a => a.name + ' · ' + a.info).join(',')")
         if OUT: save("t246_arenas.jpg", await A.evaluate("() => { D.uiDraw(D.VRUI.panels.arenas); return D.VRUI.panels.arenas.cv.toDataURL('image/jpeg', .85); }"))
@@ -151,13 +154,15 @@ async def main():
         await A.evaluate("() => { W('setup', 'Start').on(); return 1; }")
         out["bothPreview"] = await until(A, "() => { D.vruiTick(1 / 60); return D.VRUI.stage === 'preview'; }", 60) and await until(B, "() => { D.vruiTick(1 / 60); return D.VRUI.stage === 'preview'; }", 60)
         out["maps"] = [labFp, await A.evaluate("() => fp()"), await B.evaluate("() => fp()")]
+        out["starts"] = [await A.evaluate("() => D.mpMyTeam ? 0 : 0"), await A.evaluate("() => Math.round(Math.hypot(D.P.x + 50, D.P.z))"), await B.evaluate("() => Math.round(Math.hypot(D.P.x - 50, D.P.z))")]   # Red near (-50, 0), Blue near (50, 0)
+        await B.evaluate("() => { D.uwRespawn(); return 1; }"); out["respawn"] = await B.evaluate("() => Math.round(Math.hypot(D.P.x - 50, D.P.z))")
         print(json.dumps(out))
         ok = (out["stage"] == "lab" and out["built"] and out["tableParts"] == "true true true true" and out["reshaped"] and out["shape"][0] == "small" and 120 < out["shape"][1] < 260 and out["shape"][1] > out["shape"][2] * 1.35
-              and out["slide"] == [True, True] and float(out["sculpted"][0]) > 3 and out["sculpted"][1] >= 1 and out["undone"] == "0.0" and out["recipe"] == "1 3 2 both 2"
+              and out["slide"] == [True, True] and float(out["sculpted"][0]) > 3 and out["sculpted"][1] >= 1 and out["undone"] == "0.0" and out["recipe"] == "1 3 2 both 2 [[-50,0,1],[50,0,2]]"
               and out["keyboard"] == "tag arena" and out["named"] == "lab RIDGE RUN" and ["save", "arena", True] in out["saved"][0] and "*RIDGE RUN" in out["saved"][1]
               and out["walkReady"] and out["walking"][0] == "play" and out["walking"][1] and out["walking"][2] < 40 and "a0" in out["walking"][3] and out["pause"] == [True, True]
               and out["back"] == "lab false true" and out["left"] == "dev false " + set0 and "RIDGE RUN" in out["arenaList"] and out["picked"] == "RIDGE RUN lobby" and out["connected"]
-              and out["guestArena"] == "RIDGE RUN" and out["bothPreview"] and out["maps"][0] == out["maps"][1] == out["maps"][2] and not errs)
+              and out["guestArena"] == "RIDGE RUN" and out["bothPreview"] and out["maps"][0] == out["maps"][1] == out["maps"][2] and out["starts"][1] < 35 and out["starts"][2] < 35 and out["respawn"] < 35 and not errs)
         print("errors:", errs[:5] or ("none" if ok else "CHECKS FAILED")); await b.close(); return ok
 try: res = asyncio.run(main())
 finally: srv.shutdown()
