@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.51</title>
+<title>JUST TREES 2.52</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.51";              // Just Trees 2.51
+const VERSION = "2.52";              // Just Trees 2.52
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -342,7 +342,9 @@ const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"]; 
 const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
 const LOOT = { nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
-const PVP = { respawn: 4, bodyGone: 3, flags: 3 };
+const PVP = { respawn: 4, bodyGone: 3, flags: 3, bigHead: 4 };   // (2.52: Big heads: how many times bigger)
+const bigHeadK = () => gameMode === "pvp" && set.bigHead ? PVP.bigHead : 1;   // 2.52: Big heads mode (PvP setup, the host's choice online)
+function charBigHead(C) { const k = bigHeadK(); if (C && C.by.Head && C.by.Head.scale.x !== k) C.by.Head.scale.setScalar(k); }   // the head bone grows from the neck (hair and all); shots hit what you see
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
 const CAPTURE = { r: 12, every: 20 };                     // capture point: radius (m), seconds held alone for each point
@@ -7061,12 +7063,27 @@ function legendNotice(A, dt) {                              // he's seen you: st
   A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
   if (A.noticeT <= 0) { A.noticeT = 0; fleeFrom(A, vr.head.x, vr.head.z, A.walk * 2, 7, 70); }
 }
+const DEAD_FADE = { wait: 60, fade: 3 };                        // 2.52: a body lies a minute, then fades away over 3 s
+function deadFade(dt) {
+  for (let i = beasts.length - 1; i >= 0; i--) {
+    const A = beasts[i]; if (!A.dead || A.faded) continue;
+    A.fadeT = (A.fadeT || 0) + dt; if (A.fadeT < DEAD_FADE.wait) continue;
+    if (!A.fadeMats) { A.fadeMats = []; A.root.traverse(o => { if (!o.material) return; const one = m => { const c = m.clone(); c.transparent = true; c.depthWrite = false; A.fadeMats.push([c, m.opacity === undefined ? 1 : m.opacity]); return c; };
+      o.material = Array.isArray(o.material) ? o.material.map(one) : one(o.material); }); }   // its own see-through copies (the others keep theirs)
+    const k = Math.max(0, 1 - (A.fadeT - DEAD_FADE.wait) / DEAD_FADE.fade); for (const [m, o0] of A.fadeMats) m.opacity = o0 * k;
+    if (k > 0) continue;
+    A.faded = true; if (animalGroup) animalGroup.remove(A.root); for (const [m] of A.fadeMats) m.dispose(); A.fadeMats = null;
+    if (!A.net) { A.gone = true; beasts.splice(i, 1); if (A.nid) MP.byNid.delete(A.nid); }   // (online, a guest keeps a note of it so the host's list doesn't bring it back)
+  }
+}
 function updateAnimals(dt) {
   if (!animalGroup) return;
   if (ENDLESS) enAnimTick(dt);
   senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
   const far = fogFar() + 40, T = performance.now() / 1000;
+  deadFade(dt);
   for (const A of beasts) {
+    if (A.faded) continue;
     if (A.ptero) { pteroTick(A, dt); continue; }                 // 2.02: the pteranodons fly their own way
     if (QR_KINDS[A.kind] && !A.qr) qrAttach(A);
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -8569,7 +8586,7 @@ function vruiParts() {
     else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     if (!onl() && gameMode === "pvp") uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min");   // 2.48: solo PvP (with bots)
-    if (gameMode === "pvp") { uiLabel(g, rx, 618, "Teams"); note(g, rx, 734, "Deathmatch: you respawn · kills and deaths count" + (set.teams === "teams" ? " · no friendly fire" : "")); }
+    if (gameMode === "pvp") { uiLabel(g, rx, 618, "Teams"); note(g, rx, 734, "Deathmatch: you respawn · kills and deaths count" + (set.teams === "teams" ? " · no friendly fire" : "") + (set.bigHead ? " · big heads" : "")); }
     if (onl()) {
       uiLabel(g, rx, 790, "Comms", COMMS_NAME[set.comms | 0]);
       note(g, rx, 896, ["Everyone hears everyone, anywhere on the map", "Everyone, louder the closer they are", "Teammates only, like a radio", "Silent until you fist bump a teammate (fists together)"][set.comms | 0]);
@@ -8596,9 +8613,10 @@ function vruiParts() {
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic" });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
   // online: teams, voice, the round (they used to be on the lobby panel)
-  uiBtn(S2, rx, 636, 260, 62, "Free for all", () => { set.teams = "solo"; mpLobSync(true); }, { active: () => set.teams !== "teams", hide: () => gameMode !== "pvp", fs: 30 });
-  uiBtn(S2, rx + 275, 636, 260, 62, "2 Teams", () => { set.teams = "teams"; mpTeamFix(); mpLobSync(true); }, { active: () => set.teams === "teams", hide: () => gameMode !== "pvp", fs: 30 });
-  uiBtn(S2, rx + 550, 636, 260, 62, "Random teams", () => mpTeamsRandom(), { hide: () => !onl() || !teamsOn(), fs: 28 });
+  uiBtn(S2, rx, 636, 215, 62, "Free for all", () => { set.teams = "solo"; mpLobSync(true); }, { active: () => set.teams !== "teams", hide: () => gameMode !== "pvp", fs: 28 });
+  uiBtn(S2, rx + 225, 636, 215, 62, "2 Teams", () => { set.teams = "teams"; mpTeamFix(); mpLobSync(true); }, { active: () => set.teams === "teams", hide: () => gameMode !== "pvp", fs: 28 });
+  uiBtn(S2, rx + 450, 636, 215, 62, "Random teams", () => mpTeamsRandom(), { hide: () => !onl() || !teamsOn(), fs: 26 });
+  uiBtn(S2, rx + 685, 636, 215, 62, "Big heads", () => { set.bigHead = !set.bigHead; mpHostSetSync(); mpLobSync(true); }, { active: () => !!set.bigHead, hide: () => gameMode !== "pvp" || mpGuest(), fs: 28 });   // 2.52: like GoldenEye
   uiSlider(S2, rx, 806, cw, 0, 3, () => set.comms | 0, v => { set.comms = v; mpLobSync(true); }, 1).hide = () => !onl();
   uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => !onl() && gameMode !== "pvp";   // round length (2.00: every online mode, 5 to 60 minutes)
   // the extras, in three short rows under the months
@@ -11761,7 +11779,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill"];   // (2.46: the arena travels with the settings)
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill", "bigHead"];   // (2.46: the arena travels with the settings)
 const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (2.00: online in every mode)
@@ -13016,7 +13034,7 @@ function vbHide() {                                                          // 
 function vbChar(B, dt) {
   const S = B.S;
   if (!B.C) { B.C = charMake(B.lk, UNIFORMS[B.u] || "green"); if (!B.C) return false; }
-  vbSoldierSkin(B, false);
+  vbSoldierSkin(B, false); charBigHead(B.C);
   const C = B.C; C.top.visible = true;
   if (!B.alive) { if (B.hold) B.hold.visible = false; if (C.deadT < 0) charKill(C, B.killFrom || null, B.killHead); C.top.visible = B.deadT < PVP.bodyGone; if (C.top.visible) charDeath(C, dt); return true; }
   if (C.deadT >= 0) vbRevive(C);
@@ -13314,6 +13332,7 @@ function charRemote(R, L, s, dt) {
   const lk = lookOf(L);
   if (R.C && (lookStr(R.C.lk) !== lookStr(lk) || R.C.uni !== UNIFORMS[mpUni(L)])) { charDrop(R.C); R.C = null; }   // they changed their look
   if (!R.C) { R.C = charMake(lk, UNIFORMS[mpUni(L)]); if (!R.C) return false; }
+  charBigHead(R.C);
   const C = R.C, f = _chV.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   C.top.visible = state === "play";
   if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : vbIsId(by) ? vbEnt2(by) : null; charKill(C, killer, L.dieHead); }
@@ -13559,8 +13578,8 @@ function mpRemoteShot(o) {                                  // their bullet and 
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
   if (R && R.C && charOn() && R.C.top.visible) return R.alive ? charHit(R.C, from, dir, maxT) : null;   // 2.37: exactly the body you see (not hair)
   if (!R || !R.cur || !R.alive) return null;
-  const hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04, 0)), oc = new THREE.Vector3().subVectors(from, hc);
-  const bq = oc.dot(dir), cq = oc.lengthSq() - .15 * .15, disc = bq * bq - cq;
+  const bh = bigHeadK(), hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04 + (bh - 1) * .11, 0)), oc = new THREE.Vector3().subVectors(from, hc);   // (2.52: Big heads: a bigger head, grown upward)
+  const bq = oc.dot(dir), cq = oc.lengthSq() - (.15 * bh) ** 2, disc = bq * bq - cq;
   let best = null;
   if (disc >= 0) { const t = -bq - Math.sqrt(disc); if (t > 0 && t < maxT) best = { t, head: true }; }
   // the body: a capsule from the hips to the shoulders
