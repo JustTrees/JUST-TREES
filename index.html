@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.61</title>
+<title>JUST TREES 2.62</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.61";              // Just Trees 2.55
+const VERSION = "2.62";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -14179,6 +14179,7 @@ function dmgTier(d) { return d >= 350 ? 3 : d >= 250 ? 2 : d >= 150 ? 1 : 0; }
 function makeBullet(from, v, o) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
+  head.material.color.set(NIGHT_K > .5 ? 0xffb860 : 0xff8418); head.material.toneMapped = false; trail.material.color.set(0xff9a3a); trail.material.toneMapped = false;   // 2.62: orange by day, a glowing streak at night
   const t = { bot: o.bot || null, by: o.by || null, head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, gun: o.gun || null, online: !!o.online, remote: !!o.remote,
               cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true };
   tracers.push(t); return t;
@@ -14195,9 +14196,11 @@ function bulletStep(t, dt) {                                // move one frame al
   if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; const dm = shotDmg(t, rh.head, end); mpSendTo(rh.L, { t: "hit", d: dm, hd: rh.head }); myDmg(dm, t); hitTick(rh.head, t.gun === "hunt" ? dm : 0); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
-  const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
+  const cd = pos.distanceTo(camera.position), vd = _bT.copy(t.v).normalize(), w = .012 + cd * .0007;   // 2.62: a small solid streak, thicker only far off so you still see it
   const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
-  place(t.head, 18, w * 1.3); place(t.trail, 70, w * .65); t.trail.material.opacity = .6;   // (2.55: brighter)
+  place(t.head, 4, w);                                     // 2.62: one solid streak, like a long bullet: no fading trail, no cloud
+  t.trail.visible = NIGHT_K > .05; if (t.trail.visible) { place(t.trail, 4.4, w * 2.6); t.trail.material.opacity = .3 * NIGHT_K; }   // at night a soft glow round it
+  if (cd < 1.5) t.head.visible = t.trail.visible = false;    // (never right in your face)
   if (end) {
     if (!t.remote) {                                        // only the shooter's own game counts the hit
       if (h.kind === "animal") hitAnimal(h.animal, t.from.distanceTo(end), t.dmg, h.head, t.gun);
@@ -14294,7 +14297,8 @@ function updateGun(dt) {
       if (k >= 1 && t.hit.botHit) { t.hit.botHit = false; if (state === "play") hurt(BOT.hitDmg); }
       if (k >= 1 && t.hit.animal) { hitAnimal(t.hit.animal, t.hit.dist, 0, t.hit.head); t.hit.animal = null; t.hit.kind = null; }   // no blood: it just drops, and a bing
       if (k >= 1 && t.hit.kind) addPuff(t.end, t.hit.kind);
-    } else {
+    } else if (t.vr) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); }   // 2.62: gone when it stops (no lingering trail)
+    else {
       t.fade += dt;
       const tf = t.vr ? .65 : .3, hf = t.vr ? .18 : .08, t0 = t.vr ? .6 : .35;   // (2.55: a headset tracer lingers a little)
       t.head.material.opacity = Math.max(0, 1 - t.fade / hf); t.trail.material.opacity = Math.max(0, t0 * (1 - t.fade / tf));
