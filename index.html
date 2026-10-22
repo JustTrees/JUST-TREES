@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.50</title>
+<title>JUST TREES 2.51</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.50";              // Just Trees 2.50
+const VERSION = "2.51";              // Just Trees 2.51
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2096,7 +2096,7 @@ function spawnRunner(rand) {
 function updateRunner(dt, now) {
   const r = runner; if (!r) return;
   const dx = r.x - P.x, dz = r.z - P.z, d = Math.hypot(dx, dz);
-  r.g.visible = d < scene.fog.far + 30;
+  r.g.visible = d < fogFar() + 30;
   if (d < 11 && r.flee <= 0) { r.flee = 3; const a = Math.atan2(dz, dx); [r.tx, r.tz] = [r.x + Math.cos(a) * 25, r.z + Math.sin(a) * 25]; }
   r.flee -= dt;
   const tx = r.tx - r.x, tz = r.tz - r.z, td = Math.hypot(tx, tz);
@@ -4897,6 +4897,7 @@ function makeSkyStyle(rand, biome) {            // every map gets its own sky pe
            lean, spread: wow ? 1 : .45 + rand() * .3, wow, mw: [Math.cos(mwA) * Math.sin(mwT), Math.cos(mwT), Math.sin(mwA) * Math.sin(mwT)], mwAmt: .5 + rand() * .5 };
 }
 function liftLum(c, min) { const l = c.r * .3 + c.g * .59 + c.b * .11; if (l < min) c.multiplyScalar(min / Math.max(l, .02)); return c; }
+const fogFar = () => scene.fog ? scene.fog.far : 1200;     // 2.51: Map Lab and the Workshop take the fog away: everything that reads it goes through here (a crash every frame froze the headset)
 function setLighting(lat, biome, topMix) {
   const sp = sunPos(lat, set.month, hourNow), el = sp.el, oc = weather.overcast, Q = skyP || makeSkyStyle(Math.random, biome);
   const pmW = smooth(11, 13.5, hourNow);                                             // morning palette blends into the evening one
@@ -5135,7 +5136,7 @@ function zoneRespawn() {                        // single-player: the mist took 
 // fog and sound outside the zone (applied after the normal fog each frame)
 const ZONE_GREEN = new THREE.Color("#5fbf7a");
 function zoneFog() {
-  if (!zone) return;
+  if (!zone || !scene.fog) return;
   if (!zone.fogBase) zone.fogBase = scene.fog.color.clone();
   if (zone.out < .01) {                          // back inside: hand the true fog colour back
     if (zone.tinted) { scene.fog.color.copy(zone.fogBase); zone.tinted = false; } else zone.fogBase.copy(scene.fog.color);
@@ -7064,7 +7065,7 @@ function updateAnimals(dt) {
   if (!animalGroup) return;
   if (ENDLESS) enAnimTick(dt);
   senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
-  const far = scene.fog.far + 40, T = performance.now() / 1000;
+  const far = fogFar() + 40, T = performance.now() / 1000;
   for (const A of beasts) {
     if (A.ptero) { pteroTick(A, dt); continue; }                 // 2.02: the pteranodons fly their own way
     if (QR_KINDS[A.kind] && !A.qr) qrAttach(A);
@@ -7420,7 +7421,7 @@ function pteroMind(A, dt) {
 }
 function pteroTick(A, dt) {
   if (A.gone) { A.root.visible = false; return; }
-  const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), far = scene.fog.far * 1.4;
+  const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z), far = fogFar() * 1.4;
   if (!A.qd && !pteroAttach(A)) { A.root.visible = false; return; }
   const py = A.y;
   if (A.net) mpNetBeast(A, dt);
@@ -7946,6 +7947,7 @@ function uwAudio(under, dt) {
   }
 }
 function uwTick(dt, I) {                                     // runs after you've moved this frame
+  if (!scene.fog) return;                                    // (2.51: Map Lab and the Workshop have no fog)
   const ov = uwOverlay(), headY = P.y + vr.headLocalY;
   const under = !iced && state === "play" && headY < water - .05 && (!edgeShape.island || true);
   if (under && !UW.under) { UW.fogC.copy(scene.fog.color); UW.fogN = scene.fog.near; }
@@ -10691,7 +10693,7 @@ function updateSquad(dt) {
     const g = groundY(S.x, S.z);
     if (S.onGround && S.y - g < .6 && S.vy <= 0) { S.y = g; S.vy = 0; }
     else { S.vy -= 22 * dt; S.y += S.vy * dt; S.onGround = false; if (S.y <= g) { S.y = g; S.vy = 0; S.onGround = true; } }
-    const far = Math.hypot(S.x - camera.position.x, S.z - camera.position.z) > scene.fog.far + 20;
+    const far = Math.hypot(S.x - camera.position.x, S.z - camera.position.z) > fogFar() + 20;
     S.group.visible = S.shadow.visible = !far;
     if (!far) { poseSoldier(S, dt); if (charOn()) charBot(S, dt); } else if (S.C) S.C.top.visible = false;
   }
@@ -13319,7 +13321,7 @@ function charRemote(R, L, s, dt) {
   if (C.deadT >= 0) { C.deadT = -1; C.cur = null; C.curA = null; C.mixer.stopAllAction(); }
   C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)));          // 2.42: their eyes at a standing player's eye height
   const dc = Math.hypot(s.h.p.x - camera.position.x, s.h.p.z - camera.position.z);
-  if (dc > scene.fog.far + 20) { C.top.visible = false; return true; }   // past the fog: not drawn (shots use the old shape)
+  if (dc > fogFar() + 20) { C.top.visible = false; return true; }   // past the fog: not drawn (shots use the old shape)
   C.acc = (C.acc || 0) + dt; if (dc > 60 && C.acc < 1 / 20) return true;   // far off: posed 20 times a second
   const adt = C.acc; C.acc = 0;
   C.vy = (s.feet - (C.fy === undefined ? s.feet : C.fy)) / Math.max(adt, 1e-3); C.fy = s.feet;
@@ -14237,7 +14239,7 @@ function cullTiles() {
     const t = tiles[i], d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
     const tr = t.r || TILE * .72;
     if (t.hi) t.lo.visible = d > b0 * zk - TILE * .72;     // this square's cards
-    if (d - tr > scene.fog.far) { t.group.visible = false; continue; }
+    if (d - tr > fogFar()) { t.group.visible = false; continue; }
     SPH.center.set(t.cx, t.cy, t.cz); SPH.radius = tr + 60;
     t.group.visible = FR.intersectsSphere(SPH);
   }
