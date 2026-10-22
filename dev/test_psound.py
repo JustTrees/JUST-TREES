@@ -22,7 +22,7 @@ async def main():
           D.mpShotSound('ar', at(100, 1.2)); const v = D.PSND.shots[D.PSND.si]; out.pannerAtShooter = Math.abs(v.positionX.value - at(100, 1.2).x) < .01;
           // footsteps
           const L = { id: 'x' }, steps = (d, sp, crouch) => { const R = {}, S = { x: cam.x + d, y: cam.y - 1.6, z: cam.z, speed: sp, gliding: false, crouchWant: crouch ? 1 : 0 }; const n0 = n; for (let i = 0; i < 60; i++) D.mpStepTick(L, R, S, 1 / 60); return n - n0; };
-          out.sprintNear = steps(8, 12.5); out.walkNear = steps(8, 8.5); out.far = steps(40, 12.5); out.still = steps(8, 0);
+          out.sprintNear = steps(8, 11.25); out.walkNear = steps(8, 7.65); out.far = steps(40, 11.25); out.still = steps(8, 0);
           return out; }""")
         print(json.dumps(r))
         ok = r["ak"][0] == 1 and r["ak"][1] == 1 and r["ak"][2] == 0 and r["sniper"] == [1, 0] and r["smg"] == [1, 0] and r["pistol"] == [1, 0] and r["hrtf"] and r["pannerAtShooter"] \

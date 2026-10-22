@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.53</title>
+<title>JUST TREES 2.54</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.53";              // Just Trees 2.53
+const VERSION = "2.54";              // Just Trees 2.54
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -350,7 +350,8 @@ const ZONE_STAGES_MAX = 5;                                 // VR zone: most shri
 const CAPTURE = { r: 12, every: 20 };                     // capture point: radius (m), seconds held alone for each point
 const ZONE_SAFE = 15;                                      // VR zone: respawns land at least this far (m) inside the circle the zone is heading to
 const ZONE_LAST = [.1, 18, 55];                           // VR zone: the radius of the last circle = 0.1 × half the map width, kept between 18 and 55 m
-const ZONE_EDGE_MAX = 11;                                  // VR zone: the edge never moves faster than this (m/s), a bit under sprinting (12.5), so you can always outrun it           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
+const VR_FOOT = { walk: 7.65, run: 11.25 };                 // 2.54: on foot in a headset, m/s (10% slower than 8.5 / 12.5: a little too quick for the game)
+const ZONE_EDGE_MAX = 10;                                  // VR zone: the edge never moves faster than this (m/s), a bit under sprinting (12.5), so you can always outrun it           // seconds: down before you respawn; your body stays for others; everyone's flags show before a round
 const $ = id => document.getElementById(id);
 const isTouch = matchMedia("(pointer: coarse)").matches || "ontouchstart" in window;
 if (isTouch) document.body.classList.add("touch");
@@ -6200,7 +6201,7 @@ function dinoTick(dt) {
   const netG = mpNetGuest();
   if (!netG && (DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
   dinoSteps(dt); dinoVoices(); if (SND.ctx && !DSND.asked) { DSND.asked = true; dsndLoad(DSND_ALL()); } rexAnnounce();
-  if (!mpNetGuest()) spookWatch(dt);
+  spookWatch(dt);                                            // (2.54: every player gets their own: an online guest's is made in their own headset, and only they see it)
   if (netG) { for (const A of beasts) if (A.flinch > 0 && A.body) { A.flinch = Math.max(0, A.flinch - dt * 3.5); const k = A.flinch; A.body.rotation.z = Math.sin(k * 18) * .1 * k; if (k <= 0) A.body.rotation.z = 0; } return; }   // (the hunts run on the host's game)
   for (const A of beasts) {                                   // a dinosaur that hasn't got anywhere for a while pushes straight on through
     if (!A.hpMax || A.hunter || A.dead || A.gone) continue;
@@ -6259,7 +6260,7 @@ const SPOOK = { gap: 150 + Math.random() * 150, A: null, n: 0 };
 function spookWatch(dt) {
   const A = SPOOK.A;
   if (A) { if (A.gone || !beasts.includes(A)) { if (A.gone) dinoRemove(A); SPOOK.A = null; } return; }
-  if (state !== "play" || (DINO.hunter && !DINO.hunter.dead) || rexChase() || P.y < water - 1) return;
+  if (state !== "play" || (DINO.hunter && !DINO.hunter.dead) || beasts.some(B => B.hunter && !B.dead && !B.gone) || rexChase() || P.y < water - 1) return;
   if ((SPOOK.gap -= dt) > 0) return;
   SPOOK.gap = 180 + Math.random() * 240; spookStart();
 }
@@ -6269,7 +6270,7 @@ function spookStart() {
     const a = Math.atan2(bx, bz) + (Math.random() - .5) * (k < 40 ? 1.4 : 3), r = 45 + Math.random() * 20, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
     if (Math.abs(x) > EDGE - 12 || Math.abs(z) > EDGE - 12 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 12) || H(x, z) < water + .5 || inLava(x, z, 3)) continue;
     if (((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (r * fl) > .2) continue;                // out of sight
-    const A = addGround("raptor", x, z); if (!A) return null;
+    const A = addGround("raptor", x, z); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset: never sent to anyone)
     Object.assign(A, { spook: { ph: "follow", t: 0, dur: 16 + Math.random() * 16, side: Math.random() < .5 ? 1 : -1, stare: 0, stared: 0, seen: false }, grp: -1, thru: true, look: 0, fleeT: 99, mode: "idle", want: 0, jawK: .04 });
     A.yaw = Math.atan2(P.x - x, P.z - z); SPOOK.A = A; SPOOK.n++; return A;
   }
@@ -10094,7 +10095,7 @@ function update(dt) {
   if (P.gliding && P.onGround) { P.onGround = false; P.vy = Math.max(P.vy, 1.5); P.y += .05; }   // push off the slope into the air
   if (swimming || P.gliding) P.crouch = false;
   if (vr.on && P.gliding && vr.glideDir) mag = 1;                            // in a headset you always fly forward, the way your arms point
-  let speed = P.gliding ? (vr.on ? GLIDE_VR : GLIDE_SPEED) * mag : (vr.on ? (running ? 12.5 : 8.5) : running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
+  let speed = P.gliding ? (vr.on ? GLIDE_VR : GLIDE_SPEED) * mag : (vr.on ? (running ? VR_FOOT.run : VR_FOOT.walk) : running ? 8.5 : 4.8) * mag * (swimming ? .5 : wading ? .65 : 1) * (P.climb ? .5 : 1) * (P.crouch ? .45 : 1);
   let moved = 0; const px0 = P.x, pz0 = P.z;
   if (!P.gliding && P.carry && !P.onGround && dt > 0) {      // 2.24: just stopped flying: still going, curving down
     const k = Math.exp(-dt * .9); P.carry[0] *= k; P.carry[1] *= k; P.x += P.carry[0] * dt; P.z += P.carry[1] * dt; clampToMap(P);

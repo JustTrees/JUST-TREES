@@ -45,7 +45,7 @@ async def main():
             out["shot"] = r
             # 4) walking in VR is walking (they notice you at 60 m), sprinting in VR they notice at 150 m
             r = await pg.evaluate("""() => { D.vr.on = true; const R = v => { D.P.onGround = true; D.P.crouch = false; for (let i = 0; i < 30; i++) { D.P.x += v / 30; D.updateAnimals(1 / 30); } return D.sense.R; };
-              const o = { walk: R(8.5), sprint: R(12.5) }; D.vr.on = false; o.pcWalk = R(4.8); o.pcRun = R(8.5); return o; }""")
+              const o = { walk: R(7.65), sprint: R(11.25) };   /* (2.54: a headset walks 7.65, sprints 11.25) */ D.vr.on = false; o.pcWalk = R(4.8); o.pcRun = R(8.5); return o; }""")
             out["notice"] = r
         print(json.dumps(out))
         if OLD: print("(old build: numbers only)"); await b.close(); return
