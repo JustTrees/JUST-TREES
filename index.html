@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.57</title>
+<title>JUST TREES 2.58</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.57";              // Just Trees 2.55
+const VERSION = "2.58";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1863,10 +1863,10 @@ let rockGrid = null, rockLow = null, rockN = 0, rockMask = null;
    (about 10, reused thousands of times) keeps its triangles in a 12x12 grid of its own, so a test touches a few dozen triangles. */
 const RS = { geos: new WeakMap(), B: new Map(), iv: new Float32Array(64), n: 0, hits: new Float32Array(256), q: 1,
   ck: new Int32Array(8192 * 2).fill(-2147483648), cn: new Int8Array(8192), cv: new Float32Array(8192 * 8) };   // a memory of recent spots (5 cm), rocks never move
-function rsColumn(x, z) {
+function rsColumn(x, z, B) {
   const kx = Math.round(x * 20), kz = Math.round(z * 20), h = ((kx * 73856093) ^ (kz * 19349663)) & 8191;
   if (RS.ck[h * 2] === kx && RS.ck[h * 2 + 1] === kz) { const n = RS.cn[h]; for (let q = 0; q < n * 2; q++) RS.iv[q] = RS.cv[h * 8 + q]; return RS.n = n; }
-  const n = rsColumnExact(kx / 20, kz / 20);
+  const n = rsColumnExact(kx / 20, kz / 20, B || RS.B);
   if (n <= 4) { RS.ck[h * 2] = kx; RS.ck[h * 2 + 1] = kz; RS.cn[h] = n; for (let q = 0; q < n * 2; q++) RS.cv[h * 8 + q] = RS.iv[q]; }
   return n;
 }
@@ -1886,23 +1886,24 @@ function rsGeo(geo) {
   for (let f = 0; f < n; f++) { const o = f * 9; for (let a = 0; a < 3; a++) { T[o + 6 + a] -= T[o + a]; T[o + 3 + a] -= T[o + a]; } }   // (kept as a corner and two edges)
   G = { T, n, N, x0, z0, y0, y1, cw, cd, off, L, mark: new Uint32Array(n), c: new THREE.Vector3(cx, cy, cz), r }; RS.geos.set(geo, G); return G;
 }
-function rsAdd(geo, list) {                                  // remember where each rock is, by 16 m squares
-  rockMask = null; const G = rsGeo(geo), m = new THREE.Matrix4(), c = new THREE.Vector3();
+function rsAdd(geo, list, B) {                               // remember where each rock is, by 16 m squares (B: an endless square's own)
+  if (!B) { B = RS.B; rockMask = null; } const G = rsGeo(geo), m = new THREE.Matrix4(), c = new THREE.Vector3();
   for (const t of list) {
     instMatrix(t, m); c.copy(G.c).applyMatrix4(m); const r = G.r * m.getMaxScaleOnAxis() + .05, e = new Float32Array(m.clone().invert().elements);
     const R = { G, e, x: c.x, z: c.z, r, top: c.y + r };
     for (let bx = Math.floor((c.x - r) / 16); bx <= Math.floor((c.x + r) / 16); bx++) for (let bz = Math.floor((c.z - r) / 16); bz <= Math.floor((c.z + r) / 16); bz++) {
-      const k = rsKey(bx, bz); let a = RS.B.get(k); if (!a) RS.B.set(k, a = []); a.push(R); }
+      const k = rsKey(bx, bz); let a = B.get(k); if (!a) B.set(k, a = []); a.push(R); }
   }
 }
-function rsMaskBuild() {                                     // squares a rock may reach (the stamped grid, one square wider)
-  const N = rockN, M = new Uint8Array(N * N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (rockGrid[j * N + i] > -1e8)
+function rsMaskOf(top, N) {                                  // squares a rock may reach (the stamped grid, one square wider)
+  const M = new Uint8Array(N * N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) if (top[j * N + i] > -1e8)
     for (let b = Math.max(0, j - 1); b <= Math.min(N - 1, j + 1); b++) for (let a = Math.max(0, i - 1); a <= Math.min(N - 1, i + 1); a++) M[b * N + a] = 1;
-  rockMask = M;
+  return M;
 }
-function rsColumnExact(x, z) {                               // the solid spans of rock straight up through (x, z): RS.iv = [bottom, top, ...], RS.n of them
-  RS.n = 0; const a = RS.B.get(rsKey(Math.floor(x / 16), Math.floor(z / 16))) || [];
+function rsMaskBuild() { rockMask = rsMaskOf(rockGrid, rockN); }
+function rsColumnExact(x, z, B) {                            // the solid spans of rock straight up through (x, z): RS.iv = [bottom, top, ...], RS.n of them
+  RS.n = 0; const a = B.get(rsKey(Math.floor(x / 16), Math.floor(z / 16))) || [];
   const H2 = RS.hits, iv = RS.iv;
   for (const R of a) {
     const dx = x - R.x, dz = z - R.z; if (dx * dx + dz * dz > R.r * R.r) continue;
@@ -1931,32 +1932,36 @@ function rsColumnExact(x, z) {                               // the solid spans 
       else if (RS.n < 32) { iv[RS.n * 2] = -1e9; iv[RS.n * 2 + 1] = t; RS.n++; } }   // (open underneath: solid from far below)
     if (inside && RS.n < 32) { iv[RS.n * 2] = b0; iv[RS.n * 2 + 1] = R.top; RS.n++; }
   }
-  if (PORCH && PORCH.th !== undefined && RS.n < 32) { const d = Math.hypot(x - PORCH.x, z - PORCH.z); if (d >= PORCH.rIn + .3 && d <= PORCH.rOut) { iv[RS.n * 2] = PORCH.top - PORCH.th - .1; iv[RS.n * 2 + 1] = PORCH.top; RS.n++; } }
+  if (!ENDLESS && PORCH && PORCH.th !== undefined && RS.n < 32) { const d = Math.hypot(x - PORCH.x, z - PORCH.z); if (d >= PORCH.rIn + .3 && d <= PORCH.rOut) { iv[RS.n * 2] = PORCH.top - PORCH.th - .1; iv[RS.n * 2 + 1] = PORCH.top; RS.n++; } }
   return RS.n;
 }
-function rockTopAt(x, z, y, head) {                          // the top of the rock here; with a height: a rock with a gap under it (an overhang) doesn't count while you're under it
-  if (ENDLESS) { const ch = enRockGrid(x, z); if (!ch) return -1e9; const k = Math.floor(z - ch.z0) * EN_C + Math.floor(x - ch.x0), top = ch.rg.top[k];   // 2.19: each square near you has its own grid
-    if (y === undefined || top < -1e8) return top; const low = ch.rg.low[k], hd = head || 0; return low > y + hd + .4 && low > H(x, z) + Math.max(hd, 0) + .5 ? -1e9 : top; }
-  if (!rockGrid) return -1e9;
-  const i = Math.floor(x + HALF), j = Math.floor(z + HALF);
-  if (i < 0 || j < 0 || i >= rockN || j >= rockN) return -1e9;
-  if (!rockMask) rsMaskBuild();
-  if (!rockMask[j * rockN + i]) return -1e9;
-  const n = rsColumn(x, z), iv = RS.iv; if (!n) return -1e9;    // 2.57: the real shape right here (a span well over your head doesn't count: walk and shoot under it)
+function rockTopAt(x, z, y, head, pad) {                     // the top of the rock here; with a height: a rock with a gap under it (an overhang) doesn't count while you're under it
+  let n;                                                       // (pad: room over the head that still counts as "under"; .4 unless said)
+  if (ENDLESS) { const ch = enRockGrid(x, z); if (!ch) return -1e9; const k = Math.floor(z - ch.z0) * EN_C + Math.floor(x - ch.x0);   // 2.19: each square near you has its own grid; 2.58: and its own real shapes
+    if (!ch.rg.mask) ch.rg.mask = rsMaskOf(ch.rg.top, EN_C); if (!ch.rg.mask[k]) return -1e9; n = rsColumn(x, z, ch.rg.B); }
+  else {
+    if (!rockGrid) return -1e9;
+    const i = Math.floor(x + HALF), j = Math.floor(z + HALF);
+    if (i < 0 || j < 0 || i >= rockN || j >= rockN) return -1e9;
+    if (!rockMask) rsMaskBuild();
+    if (!rockMask[j * rockN + i]) return -1e9;
+    n = rsColumn(x, z);
+  }
+  const iv = RS.iv; if (!n) return -1e9;    // 2.57: the real shape right here (a span well over your head doesn't count: walk and shoot under it)
   let best = -1e9;
   if (y === undefined) { for (let q = 0; q < n; q++) if (iv[q * 2 + 1] > best) best = iv[q * 2 + 1]; return best; }
-  const hd = head || 0; let g = null;
+  const hd = head || 0, pd = pad === undefined ? .4 : pad; let g = null;
   for (let q = 0; q < n; q++) { const b = iv[q * 2], t = iv[q * 2 + 1]; if (t <= best) continue;
-    if (b > y + hd + .4 && b > (g === null ? (g = H(x, z)) : g) + Math.max(hd, 0) + .5) continue; best = t; }
+    if (b > y + hd + pd && b > (g === null ? (g = H(x, z)) : g) + Math.max(hd, 0) + pd + .1) continue; best = t; }
   return best;
 }
 function porchGround(x, z, y) {                             // 2.24: the tree deck, for anyone whose feet are within ~1.6 m below it (easy to land on)
   if (!PORCH) return -1e9; const d = Math.hypot(x - PORCH.x, z - PORCH.z);
   return d > PORCH.rIn - .1 && d < PORCH.rOut + .35 && y > PORCH.top - 1.6 ? PORCH.top : -1e9;
 }
-function rockAround(x, z, r, y, head) {
-  let m = rockTopAt(x, z, y, head);
-  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832; m = Math.max(m, rockTopAt(x + Math.cos(a) * r, z + Math.sin(a) * r, y, head)); }
+function rockAround(x, z, r, y, head, pad) {
+  let m = rockTopAt(x, z, y, head, pad);
+  for (let k = 0; k < 6; k++) { const a = k / 6 * 6.2832; m = Math.max(m, rockTopAt(x + Math.cos(a) * r, z + Math.sin(a) * r, y, head, pad)); }
   return m;
 }
 function instMatrix(t, out) {
@@ -3224,14 +3229,14 @@ function* enShadowGen(ch, T) {                              // T: which picture 
 }
 function enSolid(ch) { const it = enSolidGen(ch); while (!it.next().done); }
 function* enSolidGen(ch) {                                   // the rocks and logs of this square (and any reaching in from next door) traced onto a 1 m grid
-  const E = ENDLESS, C = EN_C, top = new Float32Array(C * C).fill(-1e9), low = new Float32Array(C * C).fill(1e9);
+  const E = ENDLESS, C = EN_C, top = new Float32Array(C * C).fill(-1e9), low = new Float32Array(C * C).fill(1e9), B = new Map();
   const put = (x, z, y) => { const i = Math.floor(x - ch.x0), j = Math.floor(z - ch.z0); if (i >= 0 && j >= 0 && i < C && j < C) { const k = j * C + i; if (y > top[k]) top[k] = y; if (y < low[k]) low[k] = y; } };
   for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
     const nb = E.chunks.get(enKey(ch.ix + a, ch.iz + b)); if (!nb || !nb.solidSrc) continue;
     for (const [geo, list] of nb.solidSrc) { const L = list.filter(t => t.x > ch.x0 - 30 && t.x < ch.x0 + C + 30 && t.z > ch.z0 - 30 && t.z < ch.z0 + C + 30);
-      for (let q = 0; q < L.length; q += 4) { stampSolid(geo, L.slice(q, q + 4), put); if (enOver()) yield "solid"; } }
+      for (let q = 0; q < L.length; q += 4) { const L4 = L.slice(q, q + 4); stampSolid(geo, L4, put); rsAdd(geo, L4, B); if (enOver()) yield "solid"; } }
   }
-  ch.rg = { top, low };
+  ch.rg = { top, low, B, mask: null };
 }
 function enRockGrid(x, z) { const ch = ENDLESS.chunks.get(enKey(Math.floor(x / EN_C), Math.floor(z / EN_C))); return ch && ch.rg ? ch : null; }
 // the map in your hand: a 1.6 km window round you, redrawn as you go; explored ground is remembered square by square (25 m) for the whole hike
@@ -4310,7 +4315,7 @@ function generate() {
   if (EN) {                                            // 2.19/2.20 endless: regions of every environment, built square by square as you walk
     const E = ENDLESS;
     water = 0; riverW = null; tiles = []; FEAT = null; LAVA = null; ARCHI = null; iced = false;
-    limbGrid = new Map(); limbHold = new Map(); rockGrid = null; rockLow = null; soundSpots = { birds: [], crickets: [] }; terrainMesh = null;
+    limbGrid = new Map(); limbHold = new Map(); rockGrid = null; rockLow = null; RS.ck.fill(-2147483648); soundSpots = { birds: [], crickets: [] }; terrainMesh = null;
     E.clock = true; E.mapJob = null; E.envBase = { densN, spN, aspN, fluN, varN, nearRiver: () => false };
     E.kindCache = new Map(); E.envL = {}; E.envH = {}; E.regs = new Map(); E.feats = new Map(); E.lavas = []; E.prepQ = new Set();
     enWorldSetup(seed);
@@ -8315,7 +8320,7 @@ function climbableAt(p) {                                  // is this point insi
 function headBlocked(x, y, z) {                            // your face can't go inside trunks, limbs or boulders
   _hd.set(x, y, z);
   if (y < H(x, z) + .12) return true;                                         // inside the mountain itself
-  { let n = 0; for (const [a, c] of [[0, 0], [.35, 0], [-.35, 0], [0, .35], [0, -.35]]) { const rk = rockTopAt(x + a, z + c, y, 0); if (rk > H(x + a, z + c) + .3 && y < rk - .05) n++; }
+  { let n = 0; for (const [a, c] of [[0, 0], [.35, 0], [-.35, 0], [0, .35], [0, -.35]]) { const rk = rockTopAt(x + a, z + c, y, 0, .05); if (rk > H(x + a, z + c) + .3 && y < rk - .05) n++; }
     if (n >= 4) return true; }                                                // well inside a rock (right up against its face is fine, so you can climb it)
   if (limbHit(_hd, .1)) return true;
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
@@ -10202,7 +10207,7 @@ function update(dt) {
     const tryMove = (nx, nz) => {
       const mx2 = nx - P.x, mz2 = nz - P.z, ml = Math.hypot(mx2, mz2) + 1e-6, lx = mx2 / ml, lz = mz2 / ml;
       // rocks and logs are solid; low ones you can step onto, and you can jump onto taller ones
-      let rk = rockAround(nx, nz, .32, P.y, 1.6);           // (walk under an overhang if there is room for you)
+      let rk = rockAround(nx, nz, .32, P.y, (vr.on ? Math.max(.7, vr.headLocalY || EYE) : EYE - CROUCH_DROP * P.ck) + .12, .05);   // (walk under an overhang if there is room for you; 2.58: as you are now, so crouch to get under a low one)
       if (PORCH && Math.abs(rk - PORCH.top) < .05 && Math.hypot(nx - PORCH.x, nz - PORCH.z) < PORCH.rOut + 1) rk = P.y > PORCH.top - 1.6 ? Math.min(rk, P.y) : -1e9;   // 2.24: a tree deck is never a wall (step or land up onto it, or pass underneath)
       if (rk > P.y + (P.onGround || P.climb ? CLIMB : .6)) return false;
       // slope is measured over a meter ahead, so small kinks and bumps never stop you
