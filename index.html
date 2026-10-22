@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.49</title>
+<title>JUST TREES 2.50</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.49";              // Just Trees 2.49
+const VERSION = "2.50";              // Just Trees 2.50
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3382,7 +3382,7 @@ function enEnvFree(b) {
 const EA_C = 500, EA_N = EN_P / EA_C, EA_ON = 850, EA_OFF = 1250, EA_SEEN = 790;
 function enAnimInit() {
   const E = ENDLESS; clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
-  HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.hunter = null; STOCK.land = [];
+  HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.hunter = null; DINO.pack = []; STOCK.land = [];
   E.acG = new Map(); E.acB = new Map(); E.acL = new Map(); E.aQ = []; E.aInit = true; E.aT = 0; E.aMade = 0; E.aDropped = 0; E.taken = new Set();
   if (gameMode === "hunt") {                                   // 2.23: hunting (Prehistoric: dinosaurs), as spawnAnimals starts it on the island maps
     DINO.on = !!set.dino && VR_ON; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);
@@ -6207,9 +6207,12 @@ function dinoTick(dt) {
     A.flinch = Math.max(0, A.flinch - dt * 3.5); const k = A.flinch; A.body.rotation.z = Math.sin(k * 18) * .1 * k; if (!A.hunter) A.speed *= 1 - dt * 2 * k;
     if (k <= 0) A.body.rotation.z = 0;
   }
+  for (const B of beasts.filter(B => B.gone && (B.extra || (B.hunter && B !== DINO.hunter)))) dinoRemove(B);   // 2.50: a pack raptor or the second T. rex that's gone off
   const Hn = DINO.hunter;
   if (Hn) {
-    if (Hn.dead || Hn.gone) { if (Hn.gone) dinoRemove(Hn); DINO.hunter = null; DINO.gap = 50 + Math.random() * 40; droneLevel(0, true); }
+    if (Hn.dead || Hn.gone) { const nx = (DINO.pack || []).find(B => B !== Hn && !B.dead && !B.gone);   // 2.50: the rest of the pack carries on
+      if (Hn.gone) dinoRemove(Hn);
+      if (nx) DINO.hunter = nx; else { DINO.hunter = null; DINO.pack = []; DINO.gap = 50 + Math.random() * 40; droneLevel(0, true); } }
     else droneLevel(Hn.hs === "charge" || Hn.hs === "approach" ? .11 : Hn.hs === "leave" ? .015 : .04 + .04 * (Hn.rage || 0));
     return;
   }
@@ -6235,9 +6238,20 @@ function dinoSpawnHunter() {                                 // far off, out of 
   Object.assign(A, { hunter: true, grp: -1, hs: "stalk", hsT: 0, stalkFor: 60 + Math.random() * 50, orbit: Math.random() < .5 ? 1 : -1, giveUp: Math.random() < .15, creepT: 0, move: "circle",
     look: 0, lookOn: true, lookT: 2, jawK: .04, jawT: 0, hits: 0, sinceHit: 99, rage: 0, mode: "idle", top: A.hpMax, healing: false, weaveP: Math.random() * 6, lastSnd: "" });
   A.yaw = Math.atan2(P.x - A.x, P.z - A.z); DINO.hunter = A; DINO.hunts++; droneLevel(.05);
+  DINO.pack = [A]; const r = Math.random() / (DINO.packK ?? 1), n = r < .15 ? 3 : r < .45 ? 2 : 1;   /* (packK: 0 for lone raptors, as the older tests want) */   // 2.50: a pack: 15% three, 30% two
+  for (let i = 1; i < n; i++) {
+    let q = null; for (let k = 0; k < 40 && !q; k++) { const a = Math.random() * 6.283, rr = 5 + Math.random() * 6, x = s[0] + Math.sin(a) * rr, z = s[1] + Math.cos(a) * rr; if (H(x, z) > water + .5 && !inLava(x, z, 3)) q = [x, z]; }
+    if (!q) break;
+    const B = addGround("raptor", q[0], q[1]);
+    Object.assign(B, { hunter: true, grp: -1, hs: "stalk", hsT: 0, stalkFor: A.stalkFor + i * (4 + Math.random() * 4), orbit: i % 2 ? -A.orbit : A.orbit, giveUp: A.giveUp, creepT: .5 + i, move: "circle",
+      look: 0, lookOn: true, lookT: 2, jawK: .04, jawT: 0, hits: 0, sinceHit: 99, rage: 0, mode: "idle", top: B.hpMax, healing: false, weaveP: Math.random() * 6, lastSnd: "", ringK: i === 1 ? .8 : 1.2, packI: i });
+    B.yaw = Math.atan2(P.x - B.x, P.z - B.z); DINO.pack.push(B);
+  }
 }
 function dinoRemove(A) { if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); }
-function dinoCharge(A) { A.hs = "charge"; A.hsT = 0; A.steerT = 0; A.jawT = 1.2; A.chargeSide = A.orbit; dinoCall(A, "charge"); }
+function dinoCharge(A) { const now = performance.now(); if (DINO.pack && DINO.pack.length > 1 && now - (DINO.lastCharge || 0) < 1600) return; DINO.lastCharge = now;   // 2.50: a pack charges one after another, not all at once
+  if (DINO.pack && DINO.pack.length > 1 && Math.random() < .7) for (const B of DINO.pack) if (B !== A && !B.dead && !B.gone && B.hs === "stalk") dinoCall(B, "stalk");   // the others call to it
+  A.hs = "charge"; A.hsT = 0; A.steerT = 0; A.jawT = 1.2; A.chargeSide = A.orbit; dinoCall(A, "charge"); }
 function dinoLeave(A) {
   A.hs = "leave"; A.hsT = 0; const a = Math.atan2(A.x - P.x, A.z - P.z) + (Math.random() - .5) * .8, cl = v => Math.max(-EDGE + 20, Math.min(EDGE - 20, v));
   A.target = [cl(A.x + Math.sin(a) * 300), cl(A.z + Math.cos(a) * 300)]; A.steerT = 0;
@@ -6265,7 +6279,7 @@ function huntTick(A, dt) {                                   // the raptor's min
   A.look += (lookW - A.look) * Math.min(1, dt * 4);
   A.jawT -= dt; A.jawK += ((A.jawT > 0 || A.hs === "charge" ? .55 : .04) - A.jawK) * Math.min(1, dt * 10); if (A.jaw) A.jaw.rotation.x = A.jawK;
   const pace = lerp(A.run * .6, A.run, Math.max(A.rage * .8, smooth(1, .3, f)));             // always fast; hurt or worn down: flat out
-  const R0 = lerp(32, 92, smooth(.3, 1, f));                                                // far while it's strong; as it weakens the circle closes to ~30 m
+  const R0 = lerp(32, 92, smooth(.3, 1, f)) * (A.ringK || 1);                               // far while it's strong; as it weakens the circle closes to ~30 m (2.50: a pack spreads out, one closer, one further)
   const doom = () => { if (d < 15 && !high) { if (!A.doomT) { A.doomT = .01; A.jawT = 1; dinoCall(A, "charge"); } } };   // inside 15 m you're done for
   if (A.doomT) {                                             // the last lunge: straight in, mouth open
     A.doomT += dt; A.mode = "walk"; A.target = [P.x, P.z]; A.want = A.run * 1.25;
@@ -6322,12 +6336,13 @@ function rexWho(A) {                                         // 2.00: it goes af
   const who = A.killBy || "me", now = performance.now();
   if (!A.rexOn) { A.tgt = who; A.tgtT = now; } else if (who !== A.tgt && now - (A.tgtT || 0) > 4000) { A.tgt = who; A.tgtT = now; }
 }
-function rexStart(A) { if (A.net && mpNetGuest()) { mpSendHost({ t: "rs", n: A.nid }); return; } rexWho(A); if (A.rexOn || A.dead) return; if (DINO.hunter && !DINO.hunter.dead) dinoLeave(DINO.hunter); /* the raptor clears off */ A.rexOn = true; A.rexT = 0; A.stops = 3; A.stopN = 0; A.stopIn = 4 + Math.random() * 1.5; A.sideK = 0; A.side = Math.random() < .5 ? 1 : -1; A.sideT = 3; A.doomT = 0; A.rearT = 0; A.jawT = 1.5; dinoCall(A, "start"); }
+function rexStart(A) { if (A.net && mpNetGuest()) { mpSendHost({ t: "rs", n: A.nid }); return; } rexWho(A); if (A.rexOn || A.dead) return; for (const R of DINO.pack && DINO.pack.length ? DINO.pack : [DINO.hunter]) if (R && !R.dead && !R.gone) dinoLeave(R); /* the raptors clear off (2.50: all of them) */ A.rexOn = true; A.rexT = 0; A.stops = 3; A.stopN = 0; A.stopIn = 4 + Math.random() * 1.5; A.sideK = 0; A.side = Math.random() < .5 ? 1 : -1; A.sideT = 3; A.doomT = 0; A.rearT = 0; A.jawT = 1.5; dinoCall(A, "start"); }
 function rexTick(A, dt) {
   A.timer = 25; A.trek = false; A.fleeT = 1;
   const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, toP = Math.atan2(dx, dz), climbH = P.y - groundAt(P.x, P.z), safe = (TGT_HIGH !== null ? TGT_HIGH : (vr.climbing || !!(vr.cl && vr.cl.hold) || climbH > 2.2)) && climbH > 6;
   A.jawT -= dt; A.jawK = (A.jawK || 0) + ((A.jawT > 0 || A.rearT > 0 ? .7 : .05) - (A.jawK || 0)) * Math.min(1, dt * 8); if (A.jaw) A.jaw.rotation.x = A.jawK;
   A.rearK = (A.rearK || 0) + ((A.rearT > 0 ? 1 : 0) - (A.rearK || 0)) * Math.min(1, dt * 3);
+  if (!A.rexOn && A.extra && (A.leaving || A.leader === null) && d > 160) { A.gone = true; return; }   // 2.50: the second one goes off once the hunt is over
   if (!A.rexOn) {                                            // roaming: anywhere on the map, at a steady walk
     if (!A.target || (A.roamT = (A.roamT || 0) - dt) <= 0 || Math.hypot(A.target[0] - A.x, A.target[1] - A.z) < 8) { A.target = rexRoamTarget(A); A.roamT = 90; A.steerT = 0; }
     A.mode = "walk"; A.want = A.walk; A.fleeT = 0; A.look = 0;
@@ -6356,13 +6371,37 @@ function rexTick(A, dt) {
   if ((A.sideT -= dt) <= 0) { A.side = -A.side; A.sideT = 9 + Math.random() * 4; A.steerT = 0; const r = Math.random(); if (r < .25) dinoCall(A, "charge"); else if (r < .45) dinoCall(A, "growl"); }
   A.sideK = (A.sideK || 0) + (A.side - (A.sideK || 0)) * Math.min(1, dt * .9);   // swings slowly from one side to the other: wide S-curves that close in, not a circle
   const off = Math.min(160, d * 1.3) * A.sideK, px = -dz / d, pz = dx / d;
-  A.mode = "walk"; A.target = [P.x + px * off, P.z + pz * off]; A.want = A.run * .85;
+  A.mode = "walk"; A.target = [P.x + px * off * 1.25, P.z + pz * off * 1.25]; A.want = Math.max(A.run, 10.5);   // (2.50: faster, a little under your sprint, on wider curves)
+  if (!A.extra && !A.pair && d > 100 && A.rexT > 6) rexCallPartner(A);   // 2.50: you're getting away: a second one comes in ahead of you
   if (A.rexT > 90) rexGiveUp(A);
 }
-function rexGiveUp(A) { A.rexOn = false; A.doomT = 0; A.rearT = 0; A.waitT = 0; A.target = rexRoamTarget(A); A.steerT = 0; }
+function rexGiveUp(A) { A.rexOn = false; A.doomT = 0; A.rearT = 0; A.waitT = 0; A.target = rexRoamTarget(A); A.steerT = 0;
+  const pr = A.pair; A.pair = null; if (pr && pr.rexOn && !pr.dead) rexGiveUp(pr);              // 2.50: the pair give up together
+  if (A.extra) { A.leaving = true; const ld = A.leader; A.leader = null; if (ld && ld.rexOn && !ld.dead) rexGiveUp(ld); } }
+function rexChase() {                                        // 2.50: a T. rex is after you (or someone near you): no climbing, no flinging: run
+  if (gameMode !== "hunt") return false;
+  for (const B of beasts) if (B.kind === "trex" && B.rexOn && !B.dead && !B.gone && Math.hypot(B.x - P.x, B.z - P.z) < 400) return true;
+  return false;
+}
+function rexCallPartner(A) {                                 // 2.50: a second T. rex, out ahead of where you're running, out of sight; it screams as it comes
+  A.pair = A;                                                 // (one try per hunt, found or not)
+  const ax = P.x - A.x, az = P.z - A.z, al = Math.hypot(ax, az) || 1;
+  camera.getWorldDirection(_lf);
+  for (let k = 0; k < 80; k++) {
+    const a = Math.atan2(ax / al, az / al) + (Math.random() < .5 ? 1 : -1) * (.5 + Math.random() * .6), r = 110 + Math.random() * 40, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+    if (Math.abs(x) > EDGE - 30 || Math.abs(z) > EDGE - 30 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 30) || H(x, z) < water + .5 || inLava(x, z, 6)) continue;
+    if (k < 50 && ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (r * (Math.hypot(_lf.x, _lf.z) || 1)) > .5) continue;   // not right where you're looking
+    const B = addGround("trex", x, z); if (!B) return;
+    B.extra = true; B.leader = A; A.pair = B; B.killBy = A.tgt || "me"; B.yaw = Math.atan2(P.x - x, P.z - z);
+    rexStart(B); B.stops = 1; dinoCall(B, "scream");
+    if (!TGT_L && VR_ON) vrBanner("Another T. rex!", 2.5, 1);
+    return;
+  }
+}
 function dinoGot(A, text, call) {                            // caught: you black out (red), and wake up somewhere else
   if (TGT_L) { mpSendTo(TGT_L, { t: "got", text, call }); dinoCall(A, call); if (A.hunter) A.gone = true; return; }   // (2.00: it got a friend)
   dinoCall(A, call); if (A.hunter) A.gone = true;
+  if (A.hunter && DINO.pack) for (const B of DINO.pack) if (B !== A && !B.dead && !B.gone && B.hs !== "leave") dinoLeave(B);   // 2.50: the rest of the pack goes too
   if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner(text, 3.5, 1); }
   else uwRespawn();
 }
@@ -6866,7 +6905,7 @@ function spawnAnimals() {
   habInit(peak); appear.t = 12; stockInit();
   const nearSecs = BIG3() ? STOCK.land.filter(q => { const b = secBox(q); return inBubble((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, BUBBLE - 100); }) : null;   // XXXL: only the sections round you
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl" || set.size === "xxxl";   // Bigfoot / Yeti: Large and up, one per map
-  DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
+  DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pack = []; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
   const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: kind === "trex" ? ({ large: 1, xl: 3, xxl: 4, xxxl: 5 }[set.size] || 0) : LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));   // (2.01: more T. rexes on bigger maps)
   const netG = mpNetGuest();                                   // 2.00: an online guest's ground animals come from the host
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
@@ -8076,11 +8115,12 @@ function climbTick(dt, I) {                               // returns true while 
   const gunOutH = ARMED() && vr.gunOut, mainS = set.hand === "right" ? "R" : "L";    // Hunting: the gun hand holds the gun, the off hand can still hold on
   const sides = { R: I.hands.right, L: I.hands.left };
   if (!vr.cl) vr.cl = { hold: null, anchor: new THREE.Vector3(), vel: new THREE.Vector3(), prevP: null, air: null, was: {} };
-  const C = vr.cl;
+  const C = vr.cl, rexLock = rexChase();                      // 2.50: the T. rex is after you: your hands won't hold on (and no fling), run
+  if (rexLock && !vr.rexLockWas && VR_ON) vrBanner("T. rex! No climbing \u00b7 RUN", 2.5, 1); vr.rexLockWas = rexLock;
   for (const side of ["L", "R"]) {
     const h = sides[side]; if (!h) { C.was[side + "in"] = false; continue; }
     const offS = mainS === "R" ? "L" : "R", bowOn = ARMED() && vr.bowMode, nadeOn = ARMED() && vr.nadeMode && vr.nades > 0;
-    const busy = (gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab)))       // the gun hand, and the front hand while it's on the gun or reloading
+    const busy = rexLock || (gunOutH && (side === mainS || vr.two || (vr.rl && vr.rl.grab)))       // the gun hand, and the front hand while it's on the gun or reloading
       || (bowOn && (side === offS || (side === mainS && vr.bowSt && vr.bowSt.arrow)))   // 2.15: the bow hand, and the hand holding an arrow
       || (nadeOn && side === mainS) || (ARMED() && vr.flareMode && side === mainS);                                                    // 2.15: the hand holding a grenade
     if (busy && C.hold === side) C.hold = null;
