@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.60</title>
+<title>JUST TREES 2.61</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.60";              // Just Trees 2.55
+const VERSION = "2.61";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2987,7 +2987,7 @@ function drawMap(canvas) {
       const bw = W - pad * 3, y0 = Hh - bh - pad * .4; ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fillRect(pad * 1.5, y0, bw, f * .32); ctx.fillRect(pad * 1.5, y0 + f * .45, bw, f * .32);
       ctx.fillStyle = "#3f9bff"; ctx.fillRect(pad * 1.5, y0, bw * Math.min(1, (MP.sh || 0) / 100), f * .32); ctx.fillStyle = MP.hp > 35 ? "#5fd068" : "#ff6a5a"; ctx.fillRect(pad * 1.5, y0 + f * .45, bw * Math.min(1, MP.hp / 100), f * .32);
       ctx.fillStyle = "#e8f0dc"; ctx.font = `700 ${f * .8}px system-ui`; ctx.fillText("Health " + Math.round(MP.hp) + " · Shield " + Math.round(MP.sh || 0), pad * 1.5, Hh - f * .95 - pad * .6);
-      ctx.font = `600 ${f * .7}px system-ui`; ctx.fillStyle = "#cfd8c4"; ctx.fillText(MP.kills + " kills · " + MP.deaths + " deaths · " + clockText(MP.roundLeft || 0) + (MP.on ? " · " + mpCount() + " players" : ""), pad * 1.5, Hh - pad * .8);
+      ctx.font = `600 ${f * .7}px system-ui`; ctx.fillStyle = "#cfd8c4"; ctx.fillText(MP.kills + " kills · " + MP.deaths + " deaths · " + (MP.dmg | 0) + " dmg · " + clockText(MP.roundLeft || 0) + (MP.on ? " · " + mpCount() + " players" : ""), pad * 1.5, Hh - pad * .8);
     } else { ctx.fillStyle = "#e8f0dc"; ctx.font = `700 ${f * .8}px system-ui`; ctx.fillText(($("info").textContent || "") + (ENDLESS && ENDLESS.clock ? " · " + hourText(hourNow) : ""), pad * 1.5, Hh - pad * .9); }
   }
   if (gameMode === "hunt" && canvas.id === "vrMap") {   // the score, big enough to read in a headset
@@ -7528,12 +7528,14 @@ function nearGunLine(p, a, b) {                             // how far p is from
 }
 function edge(key, v) { const was = vr.prev[key] || 0; vr.prev[key] = v; return v > .6 && was <= .6; }
 // the rifle you hold: a copy of this mode's rifle, placed in the world at your hand
+const SNIPER_SC = [1.375, 1.25, 1.25];                     // 2.61: snipers 25% bigger, and 10% wider on top (x = across, y = up, z = along)
+function sniperScaleSpots(S) { const o = {}; for (const k in S) { const v = S[k]; o[k] = Array.isArray(v) && v.length === 3 && typeof v[0] === "number" ? v.map((a, i) => a * SNIPER_SC[i]) : typeof v === "number" && k !== "fov" ? v * SNIPER_SC[1] : v; } return o; }
 const GUNSPOT = { hunt: { grip: [0, -.075, .1], fore: [0, -.02, -.42], eye: [0, .082, .215], muzzle: [0, .012, -.96], fov: [5.5, 3.2, 2.1], counter: [.03, .0, .0], drop: .06, magC: 0, handle: [.058, -.01, .1], pull: .14 },
                   ar:     { grip: [0, -.075, .1], fore: [0, -.02, -.27], eye: [0, .07, .2], muzzle: [0, .012, -.635], counter: [.025, -.004, .015], drop: .065, magC: .06, handle: [.054, .02, .03], pull: .12 },
                   smg:    { grip: [0, -.075, .08], fore: [0, -.02, -.15], eye: [0, .062, .17], muzzle: [0, .012, -.265], counter: [.026, -.002, .0], drop: .07, magC: .075, handle: [-.047, .03, -.13], pull: .1 },
                   pistol: { grip: [0, -.06, .04], fore: [0, -.09, .045], eye: [0, .041, .2], muzzle: [0, .02, -.138], counter: [.017, -.006, -.06], drop: .055, magC: .05, handle: [0, .02, .05], pull: .07, snap: .15 },
                   pvp:  { grip: [0, -.085, .1], fore: [0, -.03, -.27], eye: [0, .068, .16], muzzle: [0, .012, -.71], fov: [6, 3.4] } };
-const GUNSPOT0 = JSON.parse(JSON.stringify(GUNSPOT));          // 1.89: the old guns' hold points (each pack gun brings its own)
+const GUNSPOT0 = JSON.parse(JSON.stringify(GUNSPOT)); GUNSPOT0.hunt = sniperScaleSpots(GUNSPOT0.hunt);          // 1.89: the old guns' hold points (each pack gun brings its own)
 let lensRT = null, lensCam = null, lensMat = null;
 function makeLens(r) {
   if (!lensRT) { lensRT = new THREE.WebGLRenderTarget(isTouch ? 320 : 448, isTouch ? 320 : 448); lensCam = new THREE.PerspectiveCamera(6, 1, .1, 5000); lensMat = new THREE.MeshBasicMaterial({ map: lensRT.texture, fog: false, toneMapped: false }); }
@@ -7781,10 +7783,10 @@ function qdTick(A, dt, cd) {                                 // pick the move, m
 function qgunLoad(key) {
   if (QGUN.models[key] || QGUN.loading[key] || typeof fetch === "undefined" || location.protocol === "file:") return;   // (a saved copy opened from disk can't load them: it keeps the old guns)
   QGUN.loading[key] = true;
-  fetch("models/guns/" + key + ".glb").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QGUN.models[key] = qgunParse(buf); })
+  fetch("models/guns/" + key + ".glb").then(r => r.ok ? r.arrayBuffer() : Promise.reject(r.status)).then(buf => { QGUN.models[key] = qgunParse(buf, key.startsWith("hunt_") ? SNIPER_SC : null); })
     .catch(() => { QGUN.failed++; });
 }
-function qgunParse(buf) {
+function qgunParse(buf, SC) {                              // (SC: grow it, x/y/z)
   const dv = new DataView(buf), jl = dv.getUint32(12, true), js = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 20, jl))), bo = 20 + jl + 8;
   const ex = js.scenes[0].extras, group = new THREE.Group();
   const mat = gunSkinOn(new THREE.MeshPhongMaterial({ vertexColors: true, fog: false, shininess: 34, specular: 0x333333 }));
@@ -7795,16 +7797,18 @@ function qgunParse(buf) {
       const o = bo + pv.byteOffset + i * pv.byteStride; P[i * 3] = dv.getInt16(o, true) * sc; P[i * 3 + 1] = dv.getInt16(o + 2, true) * sc; P[i * 3 + 2] = dv.getInt16(o + 4, true) * sc;
       const oc = bo + cv.byteOffset + i * cv.byteStride; C[i * 3] = dv.getUint8(oc) / 255; C[i * 3 + 1] = dv.getUint8(oc + 1) / 255; C[i * 3 + 2] = dv.getUint8(oc + 2) / 255;
     }
+    if (SC) for (let i = 0; i < n * 3; i++) P[i] *= SC[i % 3];
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(P, 3)); geo.setAttribute("color", new THREE.BufferAttribute(C, 3)); geo.computeVertexNormals();
     const K = new Uint8Array(n * 3); for (let i = 0; i < n; i++) { const pt = GUN_PART[Math.round(C[i * 3] * 255) + "," + Math.round(C[i * 3 + 1] * 255) + "," + Math.round(C[i * 3 + 2] * 255)]; if (pt !== undefined) K[i * 3 + pt] = 255; }
     geo.setAttribute("skinK", new THREE.BufferAttribute(K, 3, true));   // 2.16: metal / wood / plastic, for the skin
-    const m = new THREE.Mesh(geo, mat); m.name = nd.name; m.position.fromArray(nd.translation || [0, 0, 0]);
+    const m = new THREE.Mesh(geo, mat); m.name = nd.name; m.position.fromArray(nd.translation || [0, 0, 0]); if (SC) m.position.multiply(new THREE.Vector3(...SC));
     if (nd.name === "mag") m.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), ex.magTilt || 0);   // its own slot direction
     group.add(m);
   }
   group.visible = false;
-  const spots = { grip: ex.grip, fore: ex.fore, muzzle: ex.muzzle, eye: ex.eye, handle: ex.handle, counter: ex.counter, drop: ex.drop, magC: ex.magC, pull: ex.pull };
-  return { group, spots, lensR: ex.lensR, name: ex.name };
+  let spots = { grip: ex.grip, fore: ex.fore, muzzle: ex.muzzle, eye: ex.eye, handle: ex.handle, counter: ex.counter, drop: ex.drop, magC: ex.magC, pull: ex.pull };
+  if (SC) spots = sniperScaleSpots(spots);
+  return { group, spots, lensR: ex.lensR && SC ? ex.lensR * SC[1] : ex.lensR, name: ex.name };
 }
 function qgunFor(kind, tier) {                               // the pack gun for this kind and star (loading it, and the kind's others, if needed)
   if (kind === "pvp") return null;
@@ -7820,10 +7824,11 @@ function vrGun() {
   let g = vr.guns[key];
   if (!g) {
     g = new THREE.Group(); const model = (Q ? Q.group : kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
+    if (kind === "hunt" && !Q) model.scale.multiply(new THREE.Vector3(...SNIPER_SC));   // 2.61
     if (Q) model.traverse(o => { if (o.isMesh) o.material = o.material.clone(); });
     if (kind === "hunt" && !Q) { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(7, 7);
       model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.map = t; o.material.color.set("#ffffff"); o.material.needsUpdate = true; } }); }   // camo sniper stock
-    if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? (Q && Q.lensR ? Math.max(.016, Q.lensR * 1.05) : .024) : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
+    if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? (Q && Q.lensR ? Math.max(.016, Q.lensR * 1.05) : .024 * SNIPER_SC[1]) : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
     if (kind !== "pvp") {                                     // the parts you reload by hand get their own materials, so they can glow
       const U = g.userData; U.mag = model.getObjectByName("mag"); U.charge = model.getObjectByName("charge");
       for (const o of [U.mag, U.charge]) if (o) { if (o.isMesh) o.material = o.material.clone(); o.traverse(c => { if (c.isMesh && c !== o) c.material = c.material.clone(); }); }
@@ -8525,9 +8530,9 @@ let zoomOv = null;
 function zoomOverlay() {
   if (zoomOv) return zoomOv;
   zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
-    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 } },
+    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 } },
     vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
-    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; varying vec2 vN; varying vec2 vC; varying vec2 vS;
+    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; uniform sampler2D uTxt; uniform float uTxtOn; varying vec2 vN; varying vec2 vC; varying vec2 vS;
       void main(){
         vec2 t = (vN - vC) / vS * uK;                     // the real direction, so the lens stays the same size at every zoom
         float cr = cos(uRoll), sr = sin(uRoll); t = vec2(cr * t.x - sr * t.y, sr * t.x + cr * t.y);   // turned level with the real horizon
@@ -8538,6 +8543,10 @@ function zoomOverlay() {
           float line = (abs(t.x) < 0.0022 || abs(t.y) < 0.0022) ? 1.0 : 0.0;
           float post = ((abs(t.x) < 0.008 && abs(t.y) > 0.16) || (abs(t.y) < 0.008 && abs(t.x) > 0.16)) ? 1.0 : 0.0;
           a = max(a, max(line, post) * 0.88 * step(r, R));
+          if (uTxtOn > 0.5 && uOpen > 0.97) {                 /* 2.61: the readout, in the black top left, just outside the lens (room for more there later) */
+            vec2 uv = vec2((t.x + 0.80) / 0.40, (t.y - 0.36) / 0.20);   /* (t: the real direction: the lens edge is .5, ~27 degrees out; this box sits 28-39 degrees left, 20-29 up) */
+            if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 tc = texture2D(uTxt, uv); float oa = max(a, tc.a); gl_FragColor = vec4(tc.rgb * (tc.a / max(oa, 0.0001)), oa); return; }
+          }
         } else {
           float r = min(length(t - vec2(-0.25, 0.0)), length(t - vec2(0.25, 0.0))), R = 0.4 * uOpen;
           a = smoothstep(R - 0.07, R + 0.01, r);
@@ -8559,9 +8568,30 @@ function zoomViewQ(aimQ) {                                  // look where the gu
   if (Math.abs(_zvF.dot(_zvU)) > .995) return levelQ(aimQ);
   return _zvQ.setFromRotationMatrix(_zvM.lookAt(_lvO, _zvF, _zvU));
 }
+const SCOPE_RO = { cv: null, tex: null, t: 0, key: "" };
+function scopeRange() {                                       // 2.61: how far the sniper's bullet would go to what's under the crosshair (null: nothing, the sky)
+  const S = GUNSPOT.hunt, from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
+  const h = castShot(from, dir, 1600); let best = h.kind ? from.distanceTo(h.p) : 1e9;
+  if (gameMode === "pvp") { for (const B of VB.list) { const r = vbRayOne(B, from, dir, best); if (r && r.t < best) best = r.t; }
+    if (MP.on) for (const L of mpOpen()) { const r = mpHitOne(L.R, from, dir, best); if (r && r.t < best) best = r.t; } }
+  return best < 1e8 ? best : null;
+}
+function scopeReadout() {                                    // distance (to 5 m), and in PvP what a head or body shot does there
+  const R = SCOPE_RO; if (!R.cv) { R.cv = document.createElement("canvas"); R.cv.width = 320; R.cv.height = 160; R.tex = new THREE.CanvasTexture(R.cv); }
+  const now = performance.now(); if (now - R.t < 100) return R.tex; R.t = now;
+  const d = scopeRange(), m5 = d === null ? null : Math.round(d / 5) * 5, tier = Math.max(1, tierOf("hunt") || 1), base = Math.round(WEAP.hunt.dmg * TIER.dmg[tier]), mul = d === null ? 1 : sniperMul(d);
+  const pvpOn = gameMode === "pvp", body = Math.round(base * mul), head = Math.round(base * 2 * mul), key = [m5, pvpOn, body, head].join("|");
+  if (key === R.key) return R.tex; R.key = key;
+  const g = R.cv.getContext("2d"); g.clearRect(0, 0, 320, 160); g.textAlign = "left"; g.textBaseline = "middle"; g.lineJoin = "round";
+  const txt = (s, x, y, font, col) => { g.font = font; g.lineWidth = 7; g.strokeStyle = "rgba(0,0,0,.85)"; g.strokeText(s, x, y); g.fillStyle = col; g.fillText(s, x, y); };
+  txt(m5 === null ? "– m" : m5 + " m", 10, 46, "bold 64px sans-serif", "#ffffff");
+  if (pvpOn) { txt("Head " + head, 10, 106, "bold 34px sans-serif", "#ffd65a"); txt("Body " + body, 10, 142, "bold 34px sans-serif", "#e8f0dc"); }
+  R.tex.needsUpdate = true; return R.tex;
+}
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
+  const ro = vr.scoped && vr.gun && vr.gunKind === "hunt"; U.uTxtOn.value = ro ? 1 : 0; if (ro) U.uTxt.value = scopeReadout();   // 2.61
   { const f = _v1.set(0, 0, -1).applyQuaternion(q), vu = _v2.set(0, 1, 0).applyQuaternion(q), vrt = new THREE.Vector3(1, 0, 0).applyQuaternion(q);   // how far the view is tilted from level
     const lu = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y); U.uRoll.value = lu.lengthSq() > 1e-6 ? Math.atan2(lu.dot(vrt), lu.dot(vu)) : 0; }
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vr.meC && vr.meC.top, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
@@ -8913,7 +8943,7 @@ function vruiParts() {
   Ov.paint = (g, P) => {
     uiBg(g, P, "ROUND OVER"); const rows = MP.board || [];
     rows.slice(0, 8).forEach((r, i) => { const y = 170 + i * 62; g.textAlign = "left"; g.textBaseline = "middle"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(250, y, 18, 0, 6.283); g.fill();
-      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : r.bot ? " · bot" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " pts · " : "") + r.k + " kills · " + r.d + " deaths", 1160, y); });
+      g.font = (r.me ? "bold " : "") + "40px sans-serif"; g.fillText((i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : r.bot ? " · bot" : ""), 290, y); g.textAlign = "right"; g.fillStyle = UIC.text; g.fillText((CAPT ? r.p + " caps · " : "") + r.k + " kills · " + r.d + " deaths · " + (r.m || 0) + " dmg", 1160, y); });
     if (mpGuest()) { g.textAlign = "center"; g.textBaseline = "alphabetic"; g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Waiting for the host to pick the next map…", 700, 735); }
   };
   uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => mpGuest() });
@@ -10883,13 +10913,29 @@ function damageBot(S, head) {
   } else { el.textContent = head ? "Headshot" : "Hit"; hitTick(); }
   el.style.opacity = 1; clearTimeout(popT); popT = setTimeout(() => { el.style.opacity = 0; }, 1400);
 }
-function hitTick(head) {                                     // 2.55: a clear "tink" you can hear over the guns (a headshot rings higher)
+function hitTick(head, dm) {                                 // 2.55: a clear "tink" you can hear over the guns (a headshot rings higher); 2.61: a sniper hit grows with its damage
   if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, f0 = head ? 1760 : 1180;
+  if (dm) bigHitFx(dmgTier(dm), head);
   [[f0, .2, .12], [f0 * 1.5, .09, .09], [f0 * 2.01, .05, .06]].forEach(([f, v, d]) => { const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = f;
     g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .003); g.gain.exponentialRampToValueAtTime(.0005, t + d); o.connect(g).connect(SND.master); o.start(t); o.stop(t + d + .02); });
 }
-function downChime() {                                       // 2.55: you took someone down: a bright rising three-note chime over a soft thump
-  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime;
+function tone(f, at, v, dur, type = "sine", f2) {           // 2.61: one note (f2: slide to it)
+  const c = SND.ctx, t = c.currentTime + at, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur * .8);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .006); g.gain.exponentialRampToValueAtTime(.0005, t + dur); o.connect(g).connect(SND.master); o.start(t); o.stop(t + dur + .02);
+}
+function hitBoom(at, v, f0 = 120, dur = .35) { tone(f0, at, v, dur, "sine", 38); }
+function sparkle(at, n, v, lo, hi) { for (let i = 0; i < n; i++) tone(lo + Math.random() * (hi - lo), at + i * .028 + Math.random() * .01, v, .12 + Math.random() * .1, "sine"); }
+function bigHitFx(tier, head) {                                // 2.61 (placeholders until the sound pack): a sniper hit, bigger with its damage
+  if (!SND.ctx || !SND.on || tier <= 0) return; const k = head ? 1.19 : 1;
+  tone(587 * k, .0, .12, .35, "triangle");                                              // 150+: a lower bell under the tink
+  if (tier >= 2) { tone(900 * k, .02, .08, .25, "sine", 2400 * k); hitBoom(0, .18, 150, .3); }   // 250+: a rising "shing" and a thump
+  if (tier >= 3) { sparkle(.06, 6, .045, 2200, 4200); tone(1175 * k, .1, .09, .5, "triangle"); }   // 350+: sparkles and a high bell
+}
+function downChime(dm) {                                     // 2.55: you took someone down: a bright rising three-note chime over a soft thump; 2.61: a sniper kill gets more the bigger the shot
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, tier = dm ? dmgTier(dm) : 0;
+  if (tier >= 1) { tone(2349, .225, .12, .6, "triangle"); tone(4698, .225, .03, .5, "triangle"); }   // 150+: a fourth note on top
+  if (tier >= 2) { [1397, 1760, 2093, 2794].forEach((f, i) => tone(f, .32 + i * .055, .08, .55, "triangle")); hitBoom(0, .3, 110, .45); }   // 250+: a run up and a deeper thump
+  if (tier >= 3) { [1047, 1319, 1568, 2093].forEach(f => tone(f, .55, .07, 1.3, "sawtooth")); [523, 784].forEach(f => tone(f, .55, .08, 1.4, "triangle")); sparkle(.55, 14, .04, 2500, 6000); hitBoom(.55, .35, 90, .7); }   // 350+: a held chord, sparkles and a boom
   [[880, 0], [1175, .075], [1760, .15]].forEach(([f, at]) => [[f, .17], [f * 2, .05]].forEach(([ff, v]) => { const o = c.createOscillator(), g = c.createGain(); o.type = "triangle"; o.frequency.value = ff;
     g.gain.setValueAtTime(0, t + at); g.gain.linearRampToValueAtTime(v, t + at + .006); g.gain.exponentialRampToValueAtTime(.0005, t + at + .55); o.connect(g).connect(SND.master); o.start(t + at); o.stop(t + at + .6); }));
   const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(60, t + .2);
@@ -11524,7 +11570,7 @@ function nadeBoom(p, remote) {
   if (gameMode === "pvp" && MP.on) for (const L of MP.links.values()) {
     const R = L.R; if (!L.open || L.bad || !R || !R.alive || (teamsOn() && mpMate(L))) continue;   // (no friendly fire)
     const rd = Math.min(R.head.distanceTo(p), new THREE.Vector3(R.head.x, R.feet + .3, R.head.z).distanceTo(p));
-    if (rd < NADE.R) { mpSendTo(L, { t: "hit", d: Math.max(10, Math.round(120 * (1 - rd / NADE.R))), hd: false }); hitTick(); }
+    if (rd < NADE.R) { const dm = Math.max(10, Math.round(120 * (1 - rd / NADE.R))); mpSendTo(L, { t: "hit", d: dm, hd: false }); myDmg(dm, null); hitTick(); }
   }
 }
 function boomSound(d) {
@@ -12006,12 +12052,12 @@ function pvpHud(I, dt) {
   if (!VHUD.init) { VHUD.p.copy(want); VHUD.q.copy(I.headQ); VHUD.init = true; }
   VHUD.p.lerp(want, 1 - Math.exp(-dt * 7)); VHUD.q.slerp(I.headQ, 1 - Math.exp(-dt * 7));
   VHUD.m.position.copy(VHUD.p); VHUD.m.quaternion.copy(VHUD.q); VHUD.m.rotateX(.32);
-  const zs = zoneStatus(), zout = !!(zone && zone.out > .2), key = [Math.ceil(MP.roundLeft || 0), hunt.score, gameMode, Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.pts, MP.dead > 0, zs, zout].join("|"); if (key === VHUD.key) return; VHUD.key = key;
+  const zs = zoneStatus(), zout = !!(zone && zone.out > .2), key = [Math.ceil(MP.roundLeft || 0), hunt.score, gameMode, Math.round(MP.hp), Math.round(MP.sh), MP.kills, MP.pts, MP.dmg | 0, MP.dead > 0, zs, zout].join("|"); if (key === VHUD.key) return; VHUD.key = key;
   const g = VHUD.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 512, 150);
   g.fillStyle = "rgba(8,12,10,.62)"; uiRound(g, 4, 4, 504, 142, 22); g.fill();
   g.textAlign = "center"; g.textBaseline = "middle"; g.font = "bold 44px sans-serif"; g.fillStyle = (MP.roundLeft || 0) < 60 ? "#ff7a5a" : "#f2f6ec"; g.fillText(clockText(MP.roundLeft || 0), 256, 38);
   if (gameMode !== "pvp") { g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText(gameMode === "hunt" ? "Score " + hunt.score.toFixed(1) + " · " + hunt.kills + (hunt.kills === 1 ? " kill" : " kills") : mpCount() + " hiking together", 256, 100); VHUD.m.material.map.needsUpdate = true; return; }
-  g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills + (CAPT ? "  Pts " + MP.pts : ""), 26, 38);
+  g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec"; g.fillText("Kills " + MP.kills + "  Dmg " + (MP.dmg | 0) + (CAPT ? "  Caps " + MP.pts : ""), 26, 38);
   if (zs) { g.textAlign = "right"; g.font = "bold 24px sans-serif"; g.fillStyle = zout ? "#ff7a5a" : "#9dffc0"; g.fillText(zout ? "OUTSIDE ZONE" : zs, 486, 38); }
   const bar = (y, v, col, label) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, 26, y, 460, 26, 9); g.fill(); if (v > 0) { g.fillStyle = col; uiRound(g, 26, y, Math.max(18, 460 * v / 100), 26, 9); g.fill(); }
     g.fillStyle = "#fff"; g.font = "bold 22px sans-serif"; g.textAlign = "right"; g.fillText(label + " " + Math.round(v), 478, y + 14); g.textAlign = "left"; };
@@ -12029,10 +12075,10 @@ function mpRoundOver() {
   state = "over"; if (vr.on) vruiOpen("over");
 }
 function mpBoard() {                                         // everyone's score this round
-  const hu = gameMode === "hunt", rows = [{ id: mpMyId(), u: mpUni(null), c: mpColOf(null), tag: MP.tag, team: mpMyTeam(), k: hu ? hunt.kills : MP.kills, d: MP.deaths, p: hu ? hunt.score : MP.pts, me: true }];
-  for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0 });
+  const hu = gameMode === "hunt", rows = [{ id: mpMyId(), u: mpUni(null), c: mpColOf(null), tag: MP.tag, team: mpMyTeam(), k: hu ? hunt.kills : MP.kills, d: MP.deaths, p: hu ? hunt.score : MP.pts, m: MP.dmg | 0, me: true }];
+  for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0, m: L.dm || 0 });
   if (gameMode === "pvp") rows.push(...vbBoardRows());        // 2.48
-  rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
+  rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || (b.m || 0) - (a.m || 0) || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
 }
 function clearLoot() { vrClearNades(); dropsClear(); if (typeof flaresClear === "function") flaresClear(); }
 function spawnLoot() {                                       // the things lying about the map (seeded: everyone gets the same): grenades, and in VR PvP / Hunting the guns, bows and crosses
@@ -12216,7 +12262,7 @@ const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : 
 const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.48";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+MP.netV = "2.61";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -12469,7 +12515,7 @@ function mpHostStage(stage) { if (MP.host && MP.on && (stage === "setup" || stag
 function mpHostGen() { if (MP.host && MP.on) { for (const L of MP.links.values()) L.spawn = null; mpSend({ t: "gen", seed, set: mpSet() }); } }
 function mpSyncTo(L) {                                      // someone joins late: show them where the host is
   vbFit(); vbRosterSend(L);                                  // (2.48: a bot makes room; they get the bots)
-  if (state === "play") { if (gameMode === "pvp" && MP.host && !(MP.roundLeft > 0)) { MP.roundLeft = (set.roundMin || 10) * 60; MP.kills = MP.deaths = MP.pts = 0; }   // 2.27: someone joined your practice: the round starts now
+  if (state === "play") { if (gameMode === "pvp" && MP.host && !(MP.roundLeft > 0)) { MP.roundLeft = (set.roundMin || 10) * 60; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; }   // 2.27: someone joined your practice: the round starts now
     return mpSendStartTo(L); }
   const st = VRUI.stage; mpTeamFix();
   if (st === "setup") mpSendTo(L, { t: "ui", st: "setup", set: mpSet(), teams: MP.teams });
@@ -12517,7 +12563,7 @@ function mpRevealStart(list) {                              // everyone's flags 
   if (VRUI.panels && VRUI.panels.preview && VRUI.panels.preview.mesh.visible) uiDraw(VRUI.panels.preview);
 }
 function pvpRoundStart() {                                   // a fresh round: full health, no scores yet, the round clock set
-  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = (MP.code && mpOpen().length) || (VR_ON && gameMode === "pvp" && vbWant() > 0) ? (set.roundMin || 10) * 60 : 0;
+  for (const L of MP.links.values()) L.bumped = false;  MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = (MP.code && mpOpen().length) || (VR_ON && gameMode === "pvp" && vbWant() > 0) ? (set.roundMin || 10) * 60 : 0;
   vbRoundStart();                                            // 2.48: bots (with bots the clock runs, solo too)   // (2.27: a multiplayer game with nobody else in it yet is practice: the clock stays at 00:00)
 }
 function mpRevealEnd() {                                    // into the real map, each at your own flag
@@ -12531,7 +12577,7 @@ function mpSendStartTo(L) {                                 // straight into a g
   mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft, hr: hourNow });
 }
 function mpGuestStart(o) {
-  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
+  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
     generate(); if (ENDLESS && typeof o.hr === "number") { hourNow = o.hr; enLight(); } reveal(); drawMap($("miniMap"));
@@ -12578,10 +12624,10 @@ function mpRecv(o, L) {
   if (o.t === "hr") { if (!MP.host && ENDLESS) enClockSet(o.h); return; }
   if (o.t === "s" && ENDLESS && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
-  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (2.48: the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (2.48: or the host's bot)
-  if (o.t === "die") { if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
+  if (o.t === "die") { if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
@@ -12729,7 +12775,7 @@ function vbRoundStart() {                                                     //
   vbFit(); if (mpGuest()) return;
   VB.playing = true; VB.now = performance.now() / 1000;
   const placed = [[P.x, P.z]]; for (const L of mpOpen()) if (L.spawn) placed.push(L.spawn);
-  for (const B of VB.list) { B.k = 0; B.d = 0; B.pts = 0; vbJoin(B, true, placed); placed.push([B.x, B.z]); }
+  for (const B of VB.list) { B.k = 0; B.d = 0; B.pts = 0; B.dmg = 0; vbJoin(B, true, placed); placed.push([B.x, B.z]); }
   VB.sent = ""; vbRosterSend(); vbScoresSend();
 }
 function vbJoin(B, start, placed) {                                          // into the map: a body, a pistol, a spot
@@ -13098,6 +13144,8 @@ function vbRayOne(B, from, dir, maxT) {
   if (B.C && charOn() && B.C.top.visible && B.C.deadT < 0) return charHit(B.C, from, dir, maxT);
   const e = vbEye(B); _vbR.head.set(e[0], e[1] + .05, e[2]); _vbR.feet = B.y; _vbR.C = null; return mpHitOne(_vbR, from, dir, maxT);
 }
+const _vbH = new THREE.Vector3();
+function myDmg(dm, t) { MP.dmg = (MP.dmg || 0) + dm; MP.lastDmg = t && t.gun === "hunt" ? dm : 0; }   // 2.61: damage you've done (the killing shot's size picks the kill sound)
 function vbBullet(t, a, d, maxT) {                                            // nearest thing this bullet reaches this step; applies the hit
   let best = null;
   const shooter = t.bot ? t.bot.id : mpMyId(), consider = (h, who) => { if (h && h.t <= maxT && (!best || h.t < best.t)) best = { t: h.t, head: h.head, who }; };
@@ -13108,11 +13156,12 @@ function vbBullet(t, a, d, maxT) {                                            //
   }
   vbWhiz(t, a, d, best ? best.t : maxT, shooter);
   if (!best) return null;
-  const dmg = t.dmg * (best.head ? 2 : 1), w = best.who;
+  const dmg = shotDmg(t, best.head, _vbH.copy(a).addScaledVector(d, best.t)), w = best.who, sn = t.gun === "hunt" ? dmg : 0;   // 2.61: snipers by distance
+  if (t.bot) t.bot.dmg = (t.bot.dmg || 0) + dmg; else myDmg(dmg, t);   // 2.61: damage done, on the board
   if (w === "me") { MP.lastHitBy = shooter; mpTakeHit(dmg, best.head); }
   else if (w.conn !== undefined) mpSendTo(w, { t: "hit", d: dmg, hd: best.head, b: t.bot.i });
-  else if (mpGuest()) { mpSendHost({ t: "bh", i: w.i, d: dmg, hd: best.head ? 1 : 0 }); hitTick(best.head); }
-  else { vbDamage(w, dmg, best.head, shooter, t.from); if (!t.bot) hitTick(best.head); }
+  else if (mpGuest()) { mpSendHost({ t: "bh", i: w.i, d: dmg, hd: best.head ? 1 : 0 }); hitTick(best.head, sn); }
+  else { vbDamage(w, dmg, best.head, shooter, t.from); if (!t.bot) hitTick(best.head, sn); }
   return best;
 }
 function vbWhiz(t, a, d, len, shooter) {                                      // a bullet going past makes a bot jumpy (and tells it someone's there)
@@ -13132,7 +13181,7 @@ function vbBlast(p) {                                                          /
   for (const B of VB.list) {
     if (!B.alive || B.x === undefined || vbMate(B.id, mpMyId())) continue;
     const rd = Math.min(Math.hypot(B.x - p.x, B.y + 1.5 - p.y, B.z - p.z), Math.hypot(B.x - p.x, B.y + .3 - p.y, B.z - p.z));
-    if (rd < NADE.R) { const dmg = Math.max(10, Math.round(120 * (1 - rd / NADE.R))); if (mpGuest()) mpSendHost({ t: "bh", i: B.i, d: dmg, hd: 0 }); else vbDamage(B, dmg, false, mpMyId(), p.clone()); hitTick(); }
+    if (rd < NADE.R) { const dmg = Math.max(10, Math.round(120 * (1 - rd / NADE.R))); myDmg(dmg, null); if (mpGuest()) mpSendHost({ t: "bh", i: B.i, d: dmg, hd: 0 }); else vbDamage(B, dmg, false, mpMyId(), p.clone()); hitTick(); }
   }
 }
 function vbDamage(B, dmg, head, by, from) {                                  // host / solo: a hit on a bot (shield first, like a player)
@@ -13145,7 +13194,7 @@ function vbDamage(B, dmg, head, by, from) {                                  // 
 function vbDie(B, by, head, from) {
   B.alive = false; B.hp = 0; B.deadT = 0; B.d++; B.killHead = !!head; B.killBy = by;
   const ke = by !== null && by !== undefined ? vbEnt(by) : null; B.killFrom = ke ? new THREE.Vector3(ke.hx, ke.hy, ke.hz) : from ? from.clone() : null;
-  if (by !== null && by !== undefined && by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+  if (by !== null && by !== undefined && by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
   else if (vbIsId(by)) { const K = vbById(by); if (K) K.k++; }
   if (MP.on) mpSend({ t: "bk", i: B.i, by: by === undefined ? null : by, hd: head ? 1 : 0 });
   B.mem = new Map(); B.foe = null; B.foeId = null;
@@ -13156,7 +13205,7 @@ function vbRecvHit(o, L) { if (!MP.host) return; const B = VB.list.find(q => q.i
 function vbRecvKill(o) {
   if (MP.host) return; const B = VB.list.find(q => q.i === o.i); if (!B) return;
   B.alive = false; B.killBy = o.by; B.killHead = !!o.hd; B.deadT = 0; B.deadAt = performance.now(); const ke = o.by ? vbEnt2(o.by) : null; B.killFrom = ke;
-  if (o.by && o.by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+  if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
 }
 function vbEnt2(id) {                                                         // a guest: where someone is, for which way a body falls
   if (id === mpMyId()) return camera.position.clone();
@@ -13254,7 +13303,7 @@ function vbNetSend(dt) {
   }
   if ((VB.scT -= dt) <= 0) { VB.scT = 2; vbScoresSend(); }
 }
-function vbScoresSend() { if (MP.host && MP.on) { const s = []; for (const B of VB.list) s.push(B.i, B.k | 0, B.d | 0, B.pts | 0); mpSend({ t: "bsc", s }); } }
+function vbScoresSend() { if (MP.host && MP.on) { const s = []; for (const B of VB.list) s.push(B.i, B.k | 0, B.d | 0, B.pts | 0, B.dmg | 0); mpSend({ t: "bsc", s }); } }
 function vbRecvState(o) {
   if (MP.host || !Array.isArray(o.a)) return; const now = performance.now();
   for (let i = 0; i + 9 < o.a.length; i += 10) {
@@ -13263,7 +13312,7 @@ function vbRecvState(o) {
     B.rx.push(s); if (B.rx.length > 24) B.rx.shift();
   }
 }
-function vbRecvScores(o) { if (MP.host || !Array.isArray(o.s)) return; for (let i = 0; i + 3 < o.s.length; i += 4) { const B = VB.list.find(q => q.i === o.s[i]); if (B) { B.k = o.s[i + 1]; B.d = o.s[i + 2]; B.pts = o.s[i + 3]; } } }
+function vbRecvScores(o) { if (MP.host || !Array.isArray(o.s)) return; for (let i = 0; i + 4 < o.s.length; i += 5) { const B = VB.list.find(q => q.i === o.s[i]); if (B) { B.k = o.s[i + 1]; B.d = o.s[i + 2]; B.pts = o.s[i + 3]; B.dmg = o.s[i + 4]; } } }
 function vbPuppet(B, dt) {                                                    // a guest: the host's bot, a moment behind, smoothed
   const rx = B.rx; if (!rx || !rx.length) return;
   const t = performance.now() - 130; let a = rx[0], b = rx[0];
@@ -13340,7 +13389,7 @@ function vbAnimate(C, st) {                                                   //
 }
 // ---- lobby cards, the board, settings
 function vbRows() { return VB.list.map(B => ({ id: B.id, tag: B.name, c: B.c, u: B.u, bot: B, host: false, idx: 100 + B.i })); }
-function vbBoardRows() { return VB.list.map(B => ({ id: B.id, u: B.u, c: B.c, tag: B.name, team: vbTeam(B.id), k: B.k | 0, d: B.d | 0, p: B.pts | 0, bot: true })); }
+function vbBoardRows() { return VB.list.map(B => ({ id: B.id, u: B.u, c: B.c, tag: B.name, team: vbTeam(B.id), k: B.k | 0, d: B.d | 0, p: B.pts | 0, m: B.dmg | 0, bot: true })); }
 function vbPeopleText() {
   const n = VB.list.length, people = MP.code ? mpCount() : 1, fill = vbFill(), auto = (set.botFill | 0) <= 0 ? "Auto · " : "";
   if (fill <= 1) return "Off · no bots";
@@ -13906,7 +13955,7 @@ function mpTick(dt) {                                       // (also runs offlin
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
     MP.sendT = (vr.cl && vr.cl.air) || Math.hypot(sense.v || 0, P.vy || 0) > 14 ? 1 / 45 : P.gliding || sense.v > 6 ? 1 / 30 : .05; /* 2.34: 45 a second while flung */ const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (2.24: 30 a second while moving fast)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
-      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts,
+      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
       sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
@@ -14122,6 +14171,11 @@ const tracerMat = (glow) => new THREE.MeshBasicMaterial({ color: glow ? 0xffe066
 const TRACER_SPEED = 380;     // m/s: still fast, but your eye can follow it
 const PUFF = { ground: 0x6b5a40, rock: 0xd8d6cc, wood: 0xa07048, water: 0xd8eef6, snow: 0xf4f8fb };
 const _bB = new THREE.Vector3(), _bD = new THREE.Vector3(), _bT = new THREE.Vector3();
+function sniperMul(d) {                                       // 2.61: sniper damage by distance: 70% up close (50 m and in), normal at 100 m, 150% from 400 m, smooth between
+  if (d <= 50) return .7; if (d < 100) return .7 + .3 * smooth(50, 100, d); if (d < 400) return 1 + .5 * smooth(100, 400, d); return 1.5;
+}
+function shotDmg(t, head, at) { const m = t.gun === "hunt" ? sniperMul(t.from.distanceTo(at)) : 1; return Math.round(t.dmg * (head ? 2 : 1) * m); }   // what this bullet does where it hits
+function dmgTier(d) { return d >= 350 ? 3 : d >= 250 ? 2 : d >= 150 ? 1 : 0; }
 function makeBullet(from, v, o) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
@@ -14138,7 +14192,7 @@ function bulletStep(t, dt) {                                // move one frame al
   let rh = t.online && MP.on ? mpHitTest(a, d, end ? a.distanceTo(end) : seg) : null;   // online: did it reach them? (they take the damage; head shots double)
   const bh = VB.list.length && gameMode === "pvp" ? vbBulletStep(t, a, d, rh ? rh.t : end ? a.distanceTo(end) : seg) : null;   // 2.48: a bot in the way (a bot's own bullet: anyone)
   if (bh) { rh = null; end = a.clone().addScaledVector(d, bh.t); h = { kind: null }; }
-  if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(rh.head); }
+  if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; const dm = shotDmg(t, rh.head, end); mpSendTo(rh.L, { t: "hit", d: dm, hd: rh.head }); myDmg(dm, t); hitTick(rh.head, t.gun === "hunt" ? dm : 0); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
   const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
