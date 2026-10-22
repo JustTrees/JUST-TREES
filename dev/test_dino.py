@@ -15,7 +15,7 @@ async def main():
         pg = await (await b.new_context(viewport={"width": 320, "height": 200})).new_page(); errs = []
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(TARGET); await pg.wait_for_timeout(800)
-        r = await pg.evaluate("""() => { window.FREEZE = true; D.DINO.packK = 0; const out = {}, T = D.THREE, DN = ['triceratops', 'parasaur', 'stego', 'bronto'];
+        r = await pg.evaluate("""() => { window.FREEZE = true; D.DINO.packK = 0; D.SPOOK.gap = 1e12; const out = {}, T = D.THREE, DN = ['triceratops', 'parasaur', 'stego', 'bronto'];
           if (!D.VRUI.panels || !D.VRUI.panels.setup) { D.setVR(true); D.vruiOpen('setup'); }
           const btns = () => D.VRUI.panels.setup ? D.VRUI.panels.setup.widgets.filter(w => w.label === 'On' && !(w.hide && w.hide())) : [];
           D.setMode('hunt'); D.set.dino = false; const hb = btns(); out.huntOnBtns = hb.length; if (hb.length === 1) hb[0].on(); out.switched = D.set.dino === true;

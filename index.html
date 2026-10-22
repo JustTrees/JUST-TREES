@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.52</title>
+<title>JUST TREES 2.53</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.52";              // Just Trees 2.52
+const VERSION = "2.53";              // Just Trees 2.53
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3409,7 +3409,7 @@ function enAnimPick(b, R, birds) {                            // one kind from t
   for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
 }
 function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
-  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = Math.round((DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3)) * (nightNow() ? NIGHT.more : 1)), x0 = i * EA_C, z0 = j * EA_C;
   for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
     const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false); if (!e) break;
     const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
@@ -6200,6 +6200,7 @@ function dinoTick(dt) {
   const netG = mpNetGuest();
   if (!netG && (DINO.callT -= dt) <= 0) { DINO.callT = 3 + Math.random() * 7; dinoAmbient(); }
   dinoSteps(dt); dinoVoices(); if (SND.ctx && !DSND.asked) { DSND.asked = true; dsndLoad(DSND_ALL()); } rexAnnounce();
+  if (!mpNetGuest()) spookWatch(dt);
   if (netG) { for (const A of beasts) if (A.flinch > 0 && A.body) { A.flinch = Math.max(0, A.flinch - dt * 3.5); const k = A.flinch; A.body.rotation.z = Math.sin(k * 18) * .1 * k; if (k <= 0) A.body.rotation.z = 0; } return; }   // (the hunts run on the host's game)
   for (const A of beasts) {                                   // a dinosaur that hasn't got anywhere for a while pushes straight on through
     if (!A.hpMax || A.hunter || A.dead || A.gone) continue;
@@ -6250,6 +6251,55 @@ function dinoSpawnHunter() {                                 // far off, out of 
       look: 0, lookOn: true, lookT: 2, jawK: .04, jawT: 0, hits: 0, sinceHit: 99, rage: 0, mode: "idle", top: B.hpMax, healing: false, weaveP: Math.random() * 6, lastSnd: "", ringK: i === 1 ? .8 : 1.2, packI: i });
     B.yaw = Math.atan2(P.x - B.x, P.z - B.z); DINO.pack.push(B);
   }
+}
+/* 2.53: spooks. Every few minutes in Prehistoric a raptor turns up behind you and shadows you: it keeps its distance, stops dead and stares
+   when you look at it, slips off to the side; then it comes for you flat out and tears past a couple of metres away, calling, and runs on
+   and is gone. Just a scare: bullets and grenades go through it (it isn't really there to hit). Not while a raptor or a T. rex is after you. */
+const SPOOK = { gap: 150 + Math.random() * 150, A: null, n: 0 };
+function spookWatch(dt) {
+  const A = SPOOK.A;
+  if (A) { if (A.gone || !beasts.includes(A)) { if (A.gone) dinoRemove(A); SPOOK.A = null; } return; }
+  if (state !== "play" || (DINO.hunter && !DINO.hunter.dead) || rexChase() || P.y < water - 1) return;
+  if ((SPOOK.gap -= dt) > 0) return;
+  SPOOK.gap = 180 + Math.random() * 240; spookStart();
+}
+function spookStart() {
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, bx = -_lf.x / fl, bz = -_lf.z / fl;
+  for (let k = 0; k < 60; k++) {
+    const a = Math.atan2(bx, bz) + (Math.random() - .5) * (k < 40 ? 1.4 : 3), r = 45 + Math.random() * 20, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+    if (Math.abs(x) > EDGE - 12 || Math.abs(z) > EDGE - 12 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 12) || H(x, z) < water + .5 || inLava(x, z, 3)) continue;
+    if (((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (r * fl) > .2) continue;                // out of sight
+    const A = addGround("raptor", x, z); if (!A) return null;
+    Object.assign(A, { spook: { ph: "follow", t: 0, dur: 16 + Math.random() * 16, side: Math.random() < .5 ? 1 : -1, stare: 0, stared: 0, seen: false }, grp: -1, thru: true, look: 0, fleeT: 99, mode: "idle", want: 0, jawK: .04 });
+    A.yaw = Math.atan2(P.x - x, P.z - z); SPOOK.A = A; SPOOK.n++; return A;
+  }
+  return null;
+}
+function spookTick(A, dt) {                                   // sets where it's going and how fast; the normal walking does the rest
+  const K = A.spook; K.t += dt;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, inView = (-dx * _lf.x - dz * _lf.z) / (d * fl) > .82 && d < 90;
+  const toP = Math.atan2(dx, dz); A.look += (Math.max(-1.6, Math.min(1.6, angDiff(toP, A.yaw))) - A.look) * Math.min(1, dt * 5);
+  if (K.ph === "follow") {
+    if (inView && K.stare <= 0 && K.stared < 2) { K.stare = 1.4 + Math.random() * 1.6; K.stared++; K.seen = true; dinoCall(A, "s_call"); }   // caught looking: it stops dead and stares back
+    if (K.stare > 0) { K.stare -= dt; A.mode = "idle"; A.want = 0; A.yaw += angDiff(toP, A.yaw) * Math.min(1, dt * 6);
+      if (K.stare <= 0) K.slip = 2.5; return; }
+    const want = Math.max(16, 34 - K.t * .8), sd = K.slip > 0 ? 1 : .35;                  // closing in slowly; after a stare it slips off sideways
+    if (K.slip > 0) K.slip -= dt;
+    A.mode = "walk"; A.target = [P.x - ux * want + uz * K.side * want * sd, P.z - uz * want - ux * K.side * want * sd];
+    A.want = d > want + 12 ? A.run * .85 : d > want ? A.walk * 2.2 : A.walk * .8;
+    if (K.t > K.dur && !inView || K.t > K.dur + 10) { K.ph = "rush"; K.t = 0; K.nx = -uz * K.side; K.nz = ux * K.side; K.ux = ux; K.uz = uz; dinoCall(A, "rush"); }
+    if (d > 140) A.gone = true;                                // you got well away
+    return;
+  }
+  if (K.ph === "rush") {                                       // flat out, aimed to pass you a couple of metres off
+    A.mode = "walk"; A.want = 15; A.target = [P.x + K.nx * 2.4 + K.ux * 4, P.z + K.nz * 2.4 + K.uz * 4];
+    if (((A.x - P.x) * K.ux + (A.z - P.z) * K.uz) > 0 || d < 3.2) { K.ph = "gone"; K.t = 0; dinoCall(A, "s_bark"); if (vr.on) { buzz("L", .7, 140); buzz("R", .7, 140); } }   // it's past you
+    if (K.t > 15) K.ph = "gone";
+    return;
+  }
+  A.mode = "walk"; A.want = 14; A.target = [A.x + K.ux * 60 + K.nx * 10, A.z + K.uz * 60 + K.nz * 10];   // on and away
+  if ((d > 80 && !inView) || K.t > 10) A.gone = true;
 }
 function dinoRemove(A) { if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); }
 function dinoCharge(A) { const now = performance.now(); if (DINO.pack && DINO.pack.length > 1 && now - (DINO.lastCharge || 0) < 1600) return; DINO.lastCharge = now;   // 2.50: a pack charges one after another, not all at once
@@ -6612,6 +6662,7 @@ const legendName = () => { const A = beasts.find(a => LEGEND[a.kind]); return A 
 const VBAN = { m: null, t: 0, p: new THREE.Vector3(), q: new THREE.Quaternion(), init: false };
 function vrBanner(text, secs, prio = 2) {                  // a message in front of you (VR), fades after a few seconds
   if (prio < 1) return;                                       // 2.35: the small stuff (a mark, a fist bump) doesn't pop up at all
+  VBAN.last = text;
   if (VBAN.t > 0 && (VBAN.prio || 0) > prio) return;        // a pickup message never covers the Bigfoot one
   VBAN.prio = prio;
   if (!VBAN.m) {
@@ -6633,7 +6684,9 @@ function bannerTick(I, dt) {
 const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORCH.found);   // Bigfoot / Yeti only show themselves once you hold the red sniper
 const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
 const DINO_GROW = { trex: () => 1 + Math.random() * .5, raptor: () => 1.2, triceratops: () => .5 + Math.random(), stego: () => .5 + Math.random(), parasaur: () => .5 + Math.random(), bronto: () => .5 + Math.random() };   // 1.92: every one a different size (the raptor always the same)
-const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.1 };
+const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.25, bigfoot: 1.15 };   // (2.53: Bigfoot and the Yeti a little bigger)
+const NIGHT = { more: 1.4, big: 1.2 };                          // 2.53: after dark: 40% more animals and dinosaurs, each 20% bigger
+const nightNow = () => sunPos(set.lat * set.hemi, set.month, hourNow).el < -4;
 const SCORE = { ptero: .3, gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
   elephant: .03, giraffe: .04, zebra: .15, rhino: .05, lion: .25, crocodile: .2, parrot: 1.5, goat: .3, horse: .12, elk: .08, moose: .06, boar: .25,
   coyote: .3, fox: .5, turkey: .5, eagle: 1, caribou: .1, muskox: .07, arcticfox: .6, owl: 1.2, bigfoot: 5, yeti: 5, raptor: 1, parasaur: .3, triceratops: .25, stego: .25, bronto: .15, trex: 1 };
@@ -6658,7 +6711,7 @@ const NATIVE = {
   tundra:    [["caribou", 4, [4, 8]], ["muskox", 3, [3, 6]], ["wolf", 3, [4, 6]], ["arcticfox", 5], ["polar", 4], ["seal", 8, [2, 5]], ["rabbit", 18], ["owl", 4], ["bird", 3], ["yeti", 1]],
   polar:     [["polar", 6], ["seal", 12, [2, 5]], ["arcticfox", 3], ["owl", 3], ["bird", 3], ["yeti", 1]]
 };
-const BEAST_CAP = isTouch ? 120 : 230, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
+const BEAST_CAP = isTouch ? 140 : 280, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
 const beastDraw = () => vr.on ? 750 * Math.min(4.2, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
 const sealOk = (x, z) => Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) + 10) && !nearObstacle(x, z, 1.2)
   && (iced ? H(x, z) < water + 1.5 : H(x, z) > water + .05 && H(x, z) < water + 1.6) && slopeNy(x, z) > .85;     // the shore, or out on the ice
@@ -6847,7 +6900,7 @@ function beastBody(kind, r, bio, cold) {                       // the hand-built
 function addGround(kind, x, z, home, size0) {
   const r = Math.random, lat = set.lat * set.hemi, eL = ENDLESS ? ENDLESS.envL[enDom(x, z).b] : null, bio = eL ? eL.biome : biomeOf(lat), cold = bio === "tundra" || bio === "polar" || (eL ? eL.season === "winter" : seasonOf(lat, set.month) === "winter");
   const b = beastBody(kind, r, bio, cold);
-  const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
+  const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1) * (nightNow() ? NIGHT.big : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : ENDLESS ? enAnimOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
   qaPick(A, cold, TROPIC(bio)); qdinoLoad(A.qf); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
@@ -6903,7 +6956,7 @@ function spawnKind(kind, grp, peak, onlySec) {
 }
 function spawnAnimals() {
   clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
-  const sw = S / 640, k = BIG3() ? 3.6 : Math.max(.5, sw * (1 + .35 * Math.max(0, sw - 1))), n = v => Math.max(1, Math.round(v * k)),   /* 2.49: bigger maps get more than their width's worth (nearer their area) */ biome = biomeOf(set.lat * set.hemi);   // XXXL: as many as a ~1.7 km map, all in the bubble
+  const sw = S / 640, k = (BIG3() ? 3.6 : Math.max(.5, sw * (1 + .35 * Math.max(0, sw - 1)))) * (nightNow() ? NIGHT.more : 1), n = v => Math.max(1, Math.round(v * k)),   /* 2.49: bigger maps get more than their width's worth (nearer their area) */ biome = biomeOf(set.lat * set.hemi);   // XXXL: as many as a ~1.7 km map, all in the bubble
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12; stockInit();
   const nearSecs = BIG3() ? STOCK.land.filter(q => { const b = secBox(q); return inBubble((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, BUBBLE - 100); }) : null;   // XXXL: only the sections round you
@@ -6965,10 +7018,54 @@ function legendShot(o, dir, reach, speed) {                // a shot at Bigfoot:
     if (d < 15) { if (A.kind === "trex") rexStart(A); else A.boltIn = t / speed + .15; }   // (the T. rex doesn't run: it comes for you)                  // he bolts the moment it goes by (a hit lands first and counts)
   }
 }
-function legendBolt(A) {                                  // Bigfoot / Yeti: sprints off like a runner, arms pumping, and is never seen again on this map
-  A.bolting = true; A.run = 9.5; A.stride = 2.8 * (A.scale || 1); A.swing = .9; A.wary = 99; A.goneT = 9;
-  if (!fleeFar(A, P.x, P.z, A.run, 200, 420)) fleeFrom(A, P.x, P.z, A.run, 10, 120);
-  A.fleeT = 99; A.want = A.run;
+const BIGFOOT = { away: 600, run: 12.5, pass: 2.6 };            // 2.53: gone this long after a miss (s); his sprint (m/s); how close he passes you (m)
+function legendBolt(A) {                                  // Bigfoot / Yeti, missed: off in a wide swerve that ends up running right past you, then gone (he can't be hit now)
+  if (!A.base) A.base = { run: A.run, stride: A.stride, swing: A.swing, wary: A.wary, thru: !!A.thru };
+  A.bolting = true; A.run = BIGFOOT.run; A.stride = 2.8 * (A.scale || 1); A.swing = .9; A.wary = 99; A.thru = true; A.fleeT = 99; A.noticeT = 0;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
+  let side = Math.random() < .5 ? 1 : -1, w1 = null;
+  for (const sd of [side, -side]) { const out = Math.max(25, Math.min(90, d * .45)), x = A.x + ux * d * .45 + uz * sd * out, z = A.z + uz * d * .45 - ux * sd * out;
+    if (H(x, z) > water + .3 && !inLava(x, z, 4)) { side = sd; w1 = [x, z]; break; } }
+  A.swerve = { ph: w1 ? "out" : "in", t: 0, all: 0, w1, side, babbled: false };
+  A.mode = "walk"; A.want = A.run; A.steerT = 0;
+  if (SND.ctx) dsndLoad(["beast/bigfoot_babble"]);
+}
+function legendSwerve(A, dt) {                             // sets the way and the pace; the normal walking does the rest
+  const K = A.swerve; K.t += dt; K.all += dt; A.mode = "walk"; A.want = A.run; A.fleeT = 99;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1;
+  if (K.ph === "out") { A.target = K.w1; if (Math.hypot(K.w1[0] - A.x, K.w1[1] - A.z) < 12 || K.t > 9) { K.ph = "in"; K.t = 0; } return; }
+  if (K.ph === "in") {                                      // curving in: aimed at a spot just to one side of you
+    if (!K.ux) { K.ux = dx / d; K.uz = dz / d; }
+    K.ux += (dx / d - K.ux) * Math.min(1, dt * 2); K.uz += (dz / d - K.uz) * Math.min(1, dt * 2); const ul = Math.hypot(K.ux, K.uz) || 1, ux = K.ux / ul, uz = K.uz / ul;
+    const nx = uz * K.side, nz = -ux * K.side; A.target = [P.x + nx * BIGFOOT.pass + ux * 6, P.z + nz * BIGFOOT.pass + uz * 6];
+    if (d < 9 && !K.babbled) { K.babbled = true; bigfootBabble(A); if (vr.on) { buzz("L", .5, 220); buzz("R", .5, 220); } }   // "eb-le-bla-blbl" as he goes by
+    if (((A.x - P.x) * ux + (A.z - P.z) * uz) > 1.5 || K.t > 30) { if (!K.babbled) { K.babbled = true; bigfootBabble(A); } K.ph = "off"; K.t = 0; K.ox = ux; K.oz = uz; K.onx = nx; K.onz = nz; }
+    return;
+  }
+  A.target = [A.x + K.ox * 60 + K.onx * 25, A.z + K.oz * 60 + K.onz * 25];   // on past you and curving away
+  if (K.babbleT > 0) { K.babbleT -= dt; dinoVoices(); }
+  camera.getWorldDirection(_lf); const inView = (-dx * _lf.x - dz * _lf.z) / (d * (Math.hypot(_lf.x, _lf.z) || 1)) > .5;
+  if ((d > 110 && !inView) || d > 220 || K.t > 25) legendAway(A);
+}
+function bigfootBabble(A) {
+  const b = DSND.buf["beast/bigfoot_babble"]; if (!b || !SND.ctx) return; const O = dinoOut(A, 2.2, false, false, b.duration + 2); if (!O) return;
+  const s = SND.ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = (.92 + Math.random() * .1) / Math.pow(A.size || 1, .3); s.connect(O.node); s.start(SND.ctx.currentTime + .02 + O.delay);
+  A.swerve.babbleT = b.duration + .5;
+}
+function legendAway(A) {                                   // gone: back in 10 minutes somewhere else, and you hear about it
+  A.swerve = null; A.bolting = false; A.gone = true; A.root.visible = false; A.awayT = BIGFOOT.away; A.mode = "idle"; A.want = 0; A.speed = 0;
+}
+function legendAwayTick(dt) {
+  for (const A of beasts) if (A.awayT > 0 && (A.awayT -= dt) <= 0) {
+    const b = A.base || {}; Object.assign(A, { run: b.run || A.run, stride: b.stride || A.stride, swing: b.swing || A.swing, wary: b.wary || A.wary, thru: !!b.thru, fleeT: 0, awayT: 0, boltIn: 0, noticeT: 0 });
+    camera.getWorldDirection(_lf); let spot = null;
+    for (let k = 0; k < 80 && !spot; k++) { const a = Math.random() * 6.283, r = 250 + Math.random() * 250, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+      if (Math.abs(x) > EDGE - 30 || Math.abs(z) > EDGE - 30 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 30) || !targetOk(A, x, z)) continue;
+      if (k < 60 && ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / r > 0) continue; spot = [x, z]; }
+    if (!spot) { A.awayT = 20; continue; }
+    A.x = spot[0]; A.z = spot[1]; A.y = beastGround(A, A.x, A.z); A.home = [A.x, A.z]; A.target = null; A.timer = 2; A.gone = false;
+    if (gameMode === "hunt" && legendSeen() && state === "play") vrBanner("There's " + legendName() + (DRY(biomeOf(set.lat * set.hemi)) ? " out here" : " in these woods"), 6);
+  }
 }
 function fleeFrom(A, ox, oz, speed, secs, dist) {         // head directly away, bending round water and cliffs
   const base = Math.atan2(A.x - ox, A.z - oz);
@@ -7079,7 +7176,7 @@ function deadFade(dt) {
 function updateAnimals(dt) {
   if (!animalGroup) return;
   if (ENDLESS) enAnimTick(dt);
-  senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
+  senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); legendAwayTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
   const far = fogFar() + 40, T = performance.now() / 1000;
   deadFade(dt);
   for (const A of beasts) {
@@ -7091,19 +7188,21 @@ function updateAnimals(dt) {
     if (A.gone) { A.root.visible = false; continue; }
     if (A.net) { mpNetBeast(A, dt); if (A.dead) { deadPose(A, dt); continue; } } else {   // 2.00: online, a guest's animals move as the host's do
     if (A.boltIn > 0 && (A.boltIn -= dt) <= 0 && !A.dead) legendBolt(A);
-    if (A.bolting && !A.dead && ((A.goneT -= dt) <= 0 || Math.hypot(A.x - P.x, A.z - P.z) > 700)) { A.gone = true; A.root.visible = false; continue; }   // gone
+    if (A.gone) continue;                                    // (2.53: Bigfoot went off: legendAwayTick brings him back)
     if (A.dead) { deadPose(A, dt); continue; }
     if (A.noticeT > 0 && !A.bolting) { legendNotice(A, dt); continue; }
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const TH = beastThreat(A), TX = TH[0], TZ = TH[1], pd = TH[2];   // 2.00: whichever player is scaring it most (online, guests too)
     const sR = TH[3];                                       // the legends notice you from further off
-    if (sR > 0 && pd < sR && !A.hunter && A.kind !== "trex") {                               // you're moving and close enough: ease away, or bolt if you're near
+    if (sR > 0 && pd < sR && !A.hunter && A.kind !== "trex" && !A.spook && !A.swerve) {                               // you're moving and close enough: ease away, or bolt if you're near
       const k = 1 - pd / sR, sp = k > .55 ? A.run : A.walk * 1.5;
       if (A.trek && pd > 25) {}                                                      // already leaving for somewhere else
       else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, TX, TZ, sp, 70, 160)) fleeFrom(A, TX, TZ, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
       else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, TX, TZ, sp, 3 + 4 * k, 18 + 45 * k);
     }
-    if (A.hunter) mpAsTarget(A, DINO.tgt, () => huntTick(A, dt));          // (2.00: the raptor and the T. rex can be after another player)
+    if (A.spook) spookTick(A, dt);                                         // 2.53
+    else if (A.swerve) legendSwerve(A, dt);
+    else if (A.hunter) mpAsTarget(A, DINO.tgt, () => huntTick(A, dt));          // (2.00: the raptor and the T. rex can be after another player)
     else if (A.kind === "trex") mpAsTarget(A, A.tgt, () => rexTick(A, dt));
     else if (A.mode !== "walk" && A.timer <= 0) {
       const t = pickAnimalTarget(A);
@@ -7128,13 +7227,14 @@ function updateAnimals(dt) {
     if (A.ghostT > 0) {                                      // squeezing out: straight for open ground, past whatever it was caught on
       A.ghostT -= dt; const gx = A.ghost[0] - A.x, gz = A.ghost[1] - A.z, gd = Math.hypot(gx, gz);
       if (gd < .25) A.ghostT = 0;
-      else { const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 6, Math.min(dt * 6, angDiff(h, A.yaw))); const st = Math.min(gd, Math.max(1.2, A.hunter ? A.want : A.walk) * dt); A.x += gx / gd * st; A.z += gz / gd * st; A.speed = Math.max(A.walk * .6, A.speed * .9); }
+      else { const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 6, Math.min(dt * 6, angDiff(h, A.yaw))); const st = Math.min(gd, Math.max(1.2, A.hunter || A.spook || A.swerve ? A.want : A.walk) * dt); A.x += gx / gd * st; A.z += gz / gd * st; A.speed = Math.max(A.walk * .6, A.speed * .9); }
       if (A.ghostT <= 0) A.steerT = 0;
     } else
     if (A.mode === "walk") {
       // look a few metres ahead and pick the clearest heading toward the goal
       if ((A.steerT -= dt) <= 0) {
         A.steerT = .2; const goal = Math.atan2(A.target[0] - A.x, A.target[1] - A.z); let best = null, part = null, partC = 0;
+        if (A.spook || A.swerve) best = goal;                  // 2.53: a spook or Bigfoot on his run goes where it means to (rocks and banks don't box it in)
         for (let k = 0; k < 15 && best === null; k++) {
           const h = goal + (k === 0 ? 0 : Math.ceil(k / 2) * (k % 2 ? 1 : -1) * .3 * A.side);
           const c = walkable(A, A.x + Math.sin(h) * .5, A.z + Math.cos(h) * .5) ? walkable(A, A.x + Math.sin(h) * 1.3, A.z + Math.cos(h) * 1.3) ? walkable(A, A.x + Math.sin(h) * 2.8, A.z + Math.cos(h) * 2.8) ? 3 : 2 : 1 : 0;
@@ -7150,7 +7250,7 @@ function updateAnimals(dt) {
     A.speed += (want - A.speed) * Math.min(1, dt * 3);
     if (A.speed > .02 && !(A.ghostT > 0)) {
       const nx = A.x + Math.sin(A.yaw) * A.speed * dt, nz = A.z + Math.cos(A.yaw) * A.speed * dt;
-      if (walkable(A, nx, nz) || !walkable(A, A.x, A.z)) { A.x = nx; A.z = nz; }          // (already wedged? always allowed to walk out)
+      if (A.spook || A.swerve || walkable(A, nx, nz) || !walkable(A, A.x, A.z)) { A.x = nx; A.z = nz; }          // (already wedged? always allowed to walk out)
       else {                                                // brushing past a trunk: slide along it instead of stopping
         let ok = false;
         for (const da of [.6, -.6, 1.1, -1.1]) { const h = A.yaw + da, tx = A.x + Math.sin(h) * A.speed * dt, tz = A.z + Math.cos(h) * A.speed * dt; if (walkable(A, tx, tz)) { A.x = tx; A.z = tz; ok = true; break; } }
@@ -7183,7 +7283,7 @@ function updateAnimals(dt) {
       A.body.position.y = Math.abs(fl) * (A.bolting ? .1 : .04) * amt; A.body.rotation.x = A.bolting ? .28 * amt : -(A.rearK || 0) * .35;   // (the T. rex rears up to roar)
     } else A.body.position.y = Math.abs(Math.sin(A.phase)) * .05 * Math.min(1, A.speed * 2);   // seals hump along
     A.head.rotation.x = A.grazeK * A.graze + Math.sin(T * .7 + A.phase) * .04 - (A.rearK || 0) * .8;                  // head down to graze, up to look around
-    A.head.rotation.y = A.hunter ? A.look : (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);   // the hunter keeps its eyes on you
+    A.head.rotation.y = A.hunter || A.spook ? A.look : (1 - A.grazeK) * Math.sin(T * .3 + A.x) * .35 * (A.mode === "idle" ? 1 : .2);   // the hunter keeps its eyes on you
   }
 }
 function deadPose(A, dt) {                                 // falls over sideways, and once it hits the ground the legs and head go limp
@@ -7229,7 +7329,7 @@ function beastRadius(A) {                                  // a sphere round the
 function animalRay(o, dir, minT = .5, maxT = 1e9) {                  // the nearest animal hit box along the shot
   let best = 1e9, who = null, whoH = false;
   for (const A of beasts) {
-    if (A.dead || !A.root.visible || A.bolting) continue;
+    if (A.dead || !A.root.visible || A.bolting || A.spook) continue;
     const c = A.root.position, R = A.bR || (A.bR = beastRadius(A)), ox = c.x - o.x, oy = c.y - o.y, oz = c.z - o.z, tc = ox * dir.x + oy * dir.y + oz * dir.z;
     if (tc < -R || tc > maxT + R) continue; const qx = ox - dir.x * tc, qy = oy - dir.y * tc, qz = oz - dir.z * tc; if (qx * qx + qy * qy + qz * qz > R * R) continue;   // nowhere near this one
     A.root.updateMatrixWorld();
@@ -7571,11 +7671,11 @@ function qdTick(A, dt, cd) {                                 // pick the move, m
   const pT = Math.atan2(groundAt(A.x - fx * hl, A.z - fz * hl) - groundAt(A.x + fx * hl, A.z + fz * hl), hl * 2), rT = Math.atan2(groundAt(A.x + fz * hw, A.z - fx * hw) - groundAt(A.x - fz * hw, A.z + fx * hw), hw * 2);
   const kT = Math.min(1, dt * 5); Q.pitch += (Math.max(-.6, Math.min(.6, pT)) - Q.pitch) * kT; Q.roll += (Math.max(-.3, Math.min(.3, rT * .6)) - Q.roll) * kT;
   Q.wrap.rotation.set(Q.pitch, 0, Q.roll + A.body.rotation.z, "YXZ");   // (and the flinch when hit)
-  Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn ? 0 : cd < 140 ? 1 / 30 : cd < 320 || zoomed || (vr.on && (vr.scoped || vr.binos)) ? 1 / 12 : 1 / 4;   // far ones move a little less often
+  Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn || A.spook ? 0 : cd < 140 ? 1 / 30 : cd < 320 || zoomed || (vr.on && (vr.scoped || vr.binos)) ? 1 / 12 : 1 / 4;   // far ones move a little less often
   if (Q.acc < every) return;
   if (Q.looked) { Q.neck.quaternion.copy(Q.nq); Q.head.quaternion.copy(Q.hq); Q.looked = false; }   // (1.92: the turn was piling up on moves that don't move the neck: the head spun)
   Q.mixer.update(Q.acc); Q.acc = 0;
-  const look = !A.dead && (A.hunter || A.kind === "trex") ? A.look || 0 : 0;
+  const look = !A.dead && (A.hunter || A.spook || A.kind === "trex") ? A.look || 0 : 0;
   if (look) { Q.nq.copy(Q.neck.quaternion); Q.hq.copy(Q.head.quaternion); Q.looked = true; Q.neck.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upN, look * .45)); Q.head.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upH, look * .55)); }
 }
 function qgunLoad(key) {
@@ -11249,7 +11349,7 @@ function nadeBoom(p, remote) {
   if (remote) return;                                       // only the thrower's game counts what it hits
   scatterBeasts(p); alertBots();
   if (gameMode === "pvp" && VB.list.length) vbBlast(p);       // 2.48
-  for (const A of beasts) if (!A.dead && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) hitAnimal(A, camera.position.distanceTo(p), 200);
+  for (const A of beasts) if (!A.dead && !A.spook && !A.bolting && A.root.visible && A.root.getWorldPosition(_v2).distanceTo(p) < NADE.R) hitAnimal(A, camera.position.distanceTo(p), 200);
   for (const S of squad) if (!S.dead) { const sd = S.group.position.distanceTo(p); if (sd < NADE.R) for (let n = sd < 3 ? 3 : sd < 5 ? 2 : 1; n-- > 0;) damageBot(S, false); }
   if (gameMode === "pvp" && MP.on) for (const L of MP.links.values()) {
     const R = L.R; if (!L.open || L.bad || !R || !R.alive || (teamsOn() && mpMate(L))) continue;   // (no friendly fire)
@@ -12021,7 +12121,7 @@ function mpBeastSend(dt) {                                   // host: the animal
   for (const L of mpOpen()) {
     const R = L.R; if (!R || !R.cur) continue; const a = [];
     for (const A of beasts) {
-      if (A.gone || !A.nid || FLY[A.kind] || A.kind === "monkey") continue;
+      if (A.gone || A.spook || !A.nid || FLY[A.kind] || A.kind === "monkey") continue;
       const d = Math.hypot(A.x - R.head.x, A.z - R.head.z), big = A.kind === "trex" || A.hunter || A.ptero;
       if (d > 480 && !big) continue; if (d > 160 && (MP.anN + A.nid) % 3) continue;
       a.push(A.nid, A.kind, Math.round(A.x * 10) / 10, Math.round(A.y * 100) / 100, Math.round(A.z * 10) / 10, Math.round(A.yaw * 100) / 100, Math.round((A.speed || 0) * 10) / 10,

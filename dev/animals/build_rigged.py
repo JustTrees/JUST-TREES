@@ -159,23 +159,68 @@ def heron():
 
 # ---------------------------------------------------------------- Bigfoot and the Yeti
 def ape(yeti):
+    """2.53: a proper Bigfoot: hunched, huge shoulders and a back hump, barrel chest, a pointed crest on a low head under a heavy brow,
+    deep-set eyes with a faint shine, long arms with real hands, thick legs and the big flat feet, shaggy tufts of fur all over"""
     sh = lambda s: np.array((s * .54, 1.92, .08)); a = .05; b = .05 - .25
     el = lambda s: sh(s) + .55 * np.array((0, -math.cos(a), -math.sin(a))); wr = lambda s: el(s) + .55 * np.array((0, -math.cos(b), -math.sin(b)))
     R = Rig({"body": (0, 0, 0), "head": (0, 2.18, .16), "leg0": (-.19, 1.02, 0), "leg0k": (-.19, .52, 0), "leg1": (.19, 1.02, 0), "leg1k": (.19, .52, 0),
              "arm0": sh(-1), "arm0k": el(-1), "arm1": sh(1), "arm1k": el(1)})
-    fur, fur2, face = (0xe8e6e2, 0xd6d4ce, 0x6a7280) if yeti else (0x4a3020, 0x3a2618, 0x2a1e18)
-    secs = [(.9, 0, .27, .2), (1.2, .02, .36, .27), (1.55, .05, .45, .32), (1.85, .08, .5, .33), (2.0, .1, .4, .27), (2.12, .12, .18, .16)]
-    rings = [ring((0, y, z), (0, 1, 0), (0, 0, 1), rx, rz, 9, math.pi / 9) for y, z, rx, rz in secs]
-    R.loft(rings, [fur, fur, fur2, fur, fur, fur], ["body"] * 6, [np.array((0, y, z)) for y, z, _, _ in secs])
-    R.ball((0, 2.2, .14), .17, fur, "head", n=9, rows=5, sq=(.9, 1.05, .95)); R.ball((0, 2.17, .27), .1, face, "head", n=7, rows=4, sq=(1, .95, .55))
-    R.ball((0, 2.27, .25), .1, fur2, "head", n=7, rows=3, sq=(1.5, .45, .7)); R.tube([(0, 2.3, .1), (0, 2.44, .05)], [.12, .02], fur, "head", sides=7)   # brow, crown
-    for s in (-1, 1): R.ball((s * .045, 2.2, .31), .014, 0x0a0806, "head", n=4, rows=2)
+    if yeti: fur, fur2, fur3, skin, chest, eye = 0xe8e6e2, 0xd2d0ca, 0xf4f2ee, 0x5a6270, 0xc6ccd2, 0x6ab0d0
+    else: fur, fur2, fur3, skin, chest, eye = 0x4a3020, 0x38241a, 0x5a3c28, 0x241a14, 0x3e2c22, 0xc89a3a
+    rng = np.random.default_rng(11)
+    def tuft(base, d, ln, r, col, w):                 # a shaggy lock of fur sticking out and hanging down
+        base = np.array(base, float); d = np.array(d, float); d /= np.linalg.norm(d); R.tube([base, base + d * ln], [r, .006], col, w, sides=4)
+    # the trunk: hips, belly, a deep chest, shoulders wider than a man's, the trapezius sloping up to a short neck; leaning forward
+    secs = [(.74, -.02, .2, .16), (.86, -.02, .32, .24), (1.08, .02, .34, .27), (1.32, .06, .4, .32), (1.58, .1, .48, .36), (1.8, .12, .56, .37), (1.95, .1, .5, .33), (2.06, .1, .32, .25), (2.14, .13, .18, .17)]
+    rings = [ring((0, y, z), (0, 1, 0), (0, 0, 1), rx, rz, 10, math.pi / 10) for y, z, rx, rz in secs]
+    R.loft(rings, [fur] * len(secs), ["body"] * len(secs), [np.array((0, y, z)) for y, z, _, _ in secs])
+    R.ball((0, 1.86, -.14), .3, fur2, "body", n=9, rows=4, sq=(1.35, .8, .7))                  # the hump between the shoulders
+    R.ball((0, 1.55, .3), .3, chest, "body", n=9, rows=4, sq=(1.2, 1.0, .35))                  # the bare-ish chest
+    for s in (-1, 1):
+        R.ball((s * .19, 1.68, .34), .16, chest, "body", n=7, rows=3, sq=(1, .7, .5))           # pecs
+        R.ball((s * .16, .9, -.12), .21, fur2, "body", n=7, rows=3, sq=(1, 1, .85))             # the seat
+    # the head: low, a pointed crest sloping back, the brow, sunken eyes, a broad nose, a heavy jaw
+    R.ball((0, 2.22, .14), .17, fur, "head", n=9, rows=5, sq=(1.0, 1.0, 1.0))
+    R.tube([(0, 2.28, .12), (0, 2.42, .04), (0, 2.5, -.05)], [.14, .08, .015], fur2, "head", sides=7)
+    for s in (-1, 1): R.ball((s * .12, 2.16, .16), .09, fur, "head", n=6, rows=3, sq=(.8, 1.3, 1))   # cheek fur
+    R.ball((0, 2.18, .27), .11, skin, "head", n=8, rows=4, sq=(1, 1, .55))                      # the face
+    R.ball((0, 2.28, .29), .1, skin, "head", n=7, rows=3, sq=(1.2, .32, .5))                    # the brow ridge
+    R.ball((0, 2.21, .37), .035, 0x140e0a, "head", n=6, rows=3, sq=(1.5, .8, .9))                 # the nose
+    R.ball((0, 2.09, .28), .1, skin, "head", n=7, rows=3, sq=(1.05, .7, .75))                    # jaw and mouth
+    R.tube([(-.05, 2.11, .345), (.05, 2.11, .345)], [.008, .008], 0x0a0806, "head", sides=4)    # the line of the mouth
+    for s in (-1, 1): R.ball((s * .048, 2.24, .335), .017, eye, "head", n=5, rows=2)            # eyes, a little eyeshine
+    for k in range(5):                                                                           # hair down the back of the head
+        a2 = -.8 + k * .4; tuft((math.sin(a2) * .1, 2.3, -.02), (math.sin(a2) * .3, -.6, -.75), .13, .05, fur2, "head")
+    # the arms: a big shoulder, a long upper arm, a hairy forearm and real hands, the fingers curled
     for i, s in ((0, -1), (1, 1)):
-        R.tube([(s * .19, 1.02, 0), (s * .19, .52, 0)], [.18, .13], fur, f"leg{i}", sides=7); R.ball((s * .19, .52, 0), .13, fur2, f"leg{i}k", n=6, rows=3)
-        R.tube([(s * .19, .52, 0), (s * .19, .08, -.02)], [.13, .1], fur2, f"leg{i}k", sides=7)
-        R.ball((s * .19, .05, .1), .1, face, f"leg{i}k", n=7, rows=3, sq=(.9, .5, 2.0))                             # the big foot
-        R.tube([sh(s), el(s)], [.15, .11], fur, f"arm{i}", sides=7); R.ball(el(s), .11, fur2, f"arm{i}k", n=6, rows=3)
-        R.tube([el(s), wr(s)], [.11, .09], fur2, f"arm{i}k", sides=7); R.ball(wr(s) + np.array((0, -.06, .02)), .1, face, f"arm{i}k", n=6, rows=3, sq=(.8, 1.2, 1))
+        A = f"arm{i}"; K = f"arm{i}k"
+        R.ball(sh(s) + np.array((s * .02, .02, 0)), .19, fur, A, n=8, rows=4, sq=(1, 1, 1))
+        R.tube([sh(s) + np.array((-s * .08, .04, 0)), sh(s), (sh(s) + el(s)) / 2, el(s)], [.19, .17, .15, .12], fur, [[("body", .5), (A, .5)], [(A, 1)], [(A, 1)], [(A, .4), (K, .6)]], sides=8)
+        R.ball(el(s), .125, fur2, [(A, .5), (K, .5)], n=7, rows=3)
+        R.tube([el(s), (el(s) + wr(s)) / 2, wr(s)], [.12, .12, .085], fur2, [[(A, .3), (K, .7)], [(K, 1)], [(K, 1)]], sides=8)
+        hand = wr(s) + np.array((0, -.07, .03)); R.ball(hand, .085, skin, K, n=7, rows=3, sq=(.75, 1.25, 1.05))
+        for f in range(4):
+            fx = s * (-.04 + f * .027) * 1.0; b0 = hand + np.array((fx, -.06, .05)); R.tube([b0, b0 + np.array((0, -.08, .03)), b0 + np.array((0, -.12, -.02))], [.022, .019, .014], skin, K, sides=5)
+        t0 = hand + np.array((-s * .06, -.02, .06)); R.tube([t0, t0 + np.array((-s * .02, -.06, .06))], [.022, .015], skin, K, sides=5)
+        for k in range(3):                                                                      # long hair hanging off the arm
+            t = .3 + k * .25; base = sh(s) + (el(s) - sh(s)) * t; tuft(base + np.array((s * .09, 0, -.07)), (s * .3, -1, -.25), .13 + .03 * k, .07, fur2, A)
+            base = el(s) + (wr(s) - el(s)) * t; tuft(base + np.array((s * .05, 0, -.07)), (s * .15, -1, -.45), .12 + .03 * k, .06, fur2, K)
+    # the legs: thick thighs, a calf, the famous big flat feet with toes
+    for i, s in ((0, -1), (1, 1)):
+        Lg = f"leg{i}"; Kn = f"leg{i}k"
+        R.tube([(s * .17, 1.14, -.01), (s * .19, 1.0, -.01), (s * .19, .78, .01), (s * .19, .6, .01), (s * .19, .46, 0)], [.22, .21, .19, .15, .14], fur, [[("body", .5), (Lg, .5)], [(Lg, 1)], [(Lg, 1)], [(Lg, .8), (Kn, .2)], [(Lg, .3), (Kn, .7)]], sides=8)   # (joints blended, so a bent knee doesn't crack open)
+        R.ball((s * .19, .52, .03), .15, fur2, [(Lg, .5), (Kn, .5)], n=7, rows=3)
+        R.tube([(s * .19, .58, 0), (s * .19, .36, -.05), (s * .19, .16, -.02), (s * .19, .05, 0)], [.14, .145, .11, .1], fur2, [[(Lg, .4), (Kn, .6)], [(Kn, 1)], [(Kn, 1)], [(Kn, 1)]], sides=8)
+        R.ball((s * .19, .06, .1), .12, skin, Kn, n=8, rows=3, sq=(.95, .55, 2.0))
+        for t in range(5): R.ball((s * .19 + (t - 2) * .04, .04, .31 - abs(t - 2) * .02), .03, skin, Kn, n=5, rows=2, sq=(1, .8, 1.3))
+        for k in range(3): tuft((s * .32, .92 - k * .14, -.04), (s * .25, -1, -.2), .14, .07, fur2, Lg)
+        for k in range(4): a2 = k / 4 * 6.283 + .6; tuft((s * .19 + math.cos(a2) * .08, .2, -.02 + math.sin(a2) * .08), (math.cos(a2) * .25, -1, math.sin(a2) * .25), .07, .06, fur2, Kn)   # a fringe over the ankle
+    # shaggy back, shoulders and sides
+    for k in range(26):                                                                         # long hair hanging over the back and sides, lying close
+        y = 1.0 + rng.random() * 1.0; ang = (rng.random() - .5) * 3.4 + math.pi; rad = (.3 + .2 * min(1, max(0, (y - .95) / .85))) * .9
+        base = (math.sin(ang) * rad, y, .06 + math.cos(ang) * rad * .72); tuft(base, (math.sin(ang) * .28, -1, math.cos(ang) * .28), .14 + rng.random() * .1, .07, fur2 if k % 3 else fur3, "body")
+    for s in (-1, 1):
+        for k in range(3): tuft((s * (.42 + k * .05), 1.9 - k * .05, -.02), (s * .3, -1, -.15), .17, .08, fur2, "body")   # off the shoulders
     return R
 @kind("bigfoot")
 def bigfoot(): return ape(False)
