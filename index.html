@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.54</title>
+<title>JUST TREES 2.55</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.54";              // Just Trees 2.54
+const VERSION = "2.55";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -327,8 +327,8 @@ document.title = "JUST TREES " + VERSION;           // the browser tab always sh
 const WEAP = {                     // mag = rounds per magazine, start = spare rounds you begin with, can = rounds in an ammo can, cool = seconds between shots,
                                    // spd = bullet speed m/s, reach = how far it flies, dmg = damage (head shots double), col = its colour on the wheel (kick/spread: off for now)
   hunt:   { name: "Sniper",  mag: 5,  start: 15, can: 10, cool: .25,       auto: false, kick: 1,   spread: 0,     spd: 850, reach: 900, dmg: 100, col: "#e04848" },
-  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .13,       auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
-  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .07,       auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
+  ar:     { name: "Assault", mag: 30, start: 30, can: 30, cool: .145,      auto: true,  kick: .32, spread: .0075, spd: 715, reach: 900, dmg: 30,  col: "#e8c33a" },
+  smg:    { name: "SMG",     mag: 32, start: 32, can: 40, cool: .082,      auto: true,  kick: .22, spread: .014,  spd: 400, reach: 350, dmg: 18,  col: "#f08a2a" },
   pistol: { name: "Pistol",  mag: 12, start: 24, can: 24, cool: .14,       auto: false, kick: .5,  spread: .009,  spd: 360, reach: 250, dmg: 25,  col: "#4f86ff" } };
 const AMMO_CAP = 300, INF_AMMO = true;                      // 1.85: unlimited spare ammo on every gun (no ammo cans or ammo drops)                                       // most spare rounds you can carry for one gun
 const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no drop (they fly dead straight, just take time to arrive); sight distance if drop ever comes back
@@ -6185,7 +6185,7 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (A.ptero) A.aggro = A.killBy || "me";                     // (a shot pteranodon comes for the shooter)
   A.hp -= hit; A.flinch = 1;                                  // it reacts with its body, not a cry every time
   if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
-  dinoBar(A); hitTick();
+  dinoBar(A); hitTick(head);
   const now = performance.now() / 1000; if (now - (A.painT || -99) > 6 && Math.random() < .35) { A.painT = now; dinoCall(A, "hurt"); }   // only now and then a pain call
   if (A.kind === "trex") rexStart(A);
   if (A.hunter) {
@@ -7907,7 +7907,8 @@ function vrTick(dt) {
     vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
     vr.climb = (vr.climb || 0) * Math.exp(-dt * (!(main.trig > .6) || performance.now() - (vr.lastShot || 0) > 160 ? RECOIL.back : RECOIL.hold));   // stop firing: it settles back to your hand (2.49: and a little while you keep firing)
-    G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12 + (vr.climb || 0)));
+    { const up = vr.kick * .12 + (vr.climb || 0), fw = _rcF.set(0, 0, -1).applyQuaternion(vr.gq), ax = _rcA.crossVectors(fw, _UPv);   // 2.55: recoil goes straight up (it used to follow the gun's tilt, so a canted grip kicked left or right)
+      if (up > 1e-5 && ax.lengthSq() > 1e-6) G.quaternion.copy(_q1.setFromAxisAngle(ax.normalize(), up)).multiply(vr.gq); else G.quaternion.copy(vr.gq); }
     vr.gunHandQ.copy(G.quaternion);                                          // the hand keeps the controller's own angle
     if (huntV && vr.gunKind !== "hunt") G.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), IRON_DIP));   // rifles and pistol without a scope: nose a touch down
     G.position.copy(vr.gp).sub(_v2.set(...S.grip).applyQuaternion(G.quaternion)).add(_v1.set(0, 0, vr.kick * .04).applyQuaternion(G.quaternion));
@@ -8088,6 +8089,7 @@ function uwTick(dt, I) {                                     // runs after you'v
   uwAudio(under, dt);
 }
 
+const _rcF = new THREE.Vector3(), _rcA = new THREE.Vector3();
 function vrFire() {
   let late = 0; if (vr.plHover) return;                      // (2.26: pointing at the player list, not shooting)
   if (state !== "play" || gameMode === "hike" || !vr.gun || !vr.gun.visible || MP.dead > 0) return;   // (2.24: flying too)
@@ -10725,7 +10727,18 @@ function damageBot(S, head) {
   } else { el.textContent = head ? "Headshot" : "Hit"; hitTick(); }
   el.style.opacity = 1; clearTimeout(popT); popT = setTimeout(() => { el.style.opacity = 0; }, 1400);
 }
-function hitTick() { if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, o = c.createOscillator(), g = c.createGain(); o.frequency.value = 900; g.gain.setValueAtTime(.06, t); g.gain.exponentialRampToValueAtTime(.0005, t + .08); o.connect(g).connect(SND.master); o.start(t); o.stop(t + .09); }
+function hitTick(head) {                                     // 2.55: a clear "tink" you can hear over the guns (a headshot rings higher)
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, f0 = head ? 1760 : 1180;
+  [[f0, .2, .12], [f0 * 1.5, .09, .09], [f0 * 2.01, .05, .06]].forEach(([f, v, d]) => { const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + .003); g.gain.exponentialRampToValueAtTime(.0005, t + d); o.connect(g).connect(SND.master); o.start(t); o.stop(t + d + .02); });
+}
+function downChime() {                                       // 2.55: you took someone down: a bright rising three-note chime over a soft thump
+  if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime;
+  [[880, 0], [1175, .075], [1760, .15]].forEach(([f, at]) => [[f, .17], [f * 2, .05]].forEach(([ff, v]) => { const o = c.createOscillator(), g = c.createGain(); o.type = "triangle"; o.frequency.value = ff;
+    g.gain.setValueAtTime(0, t + at); g.gain.linearRampToValueAtTime(v, t + at + .006); g.gain.exponentialRampToValueAtTime(.0005, t + at + .55); o.connect(g).connect(SND.master); o.start(t + at); o.stop(t + at + .6); }));
+  const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(60, t + .2);
+  g.gain.setValueAtTime(.25, t); g.gain.exponentialRampToValueAtTime(.0005, t + .25); o.connect(g).connect(SND.master); o.start(t); o.stop(t + .27);
+}
 function updateBotHud() {
   const left = squad.filter(o => !o.dead).length;
   $("botInfo").textContent = gameMode === "pvp" && squad.length ? "Enemies left " + left + " / " + squad.length + (pvp.deaths ? "  ·  deaths " + pvp.deaths : "") : "";
@@ -12412,7 +12425,7 @@ function mpRecv(o, L) {
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (2.48: the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (2.48: or the host's bot)
-  if (o.t === "die") { if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
+  if (o.t === "die") { if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
   if (o.t === "nade") { if (nadeLoot[o.i] && !nadeLoot[o.i].got) nadeLootTake(o.i); return; }
   if (o.t === "g") { makeNade(new THREE.Vector3(...o.o), new THREE.Vector3(...o.v), true); return; }
   if (o.t === "full") { mpFail("That game is already full (" + MP_MAX + " players)"); return; }
@@ -12942,8 +12955,8 @@ function vbBullet(t, a, d, maxT) {                                            //
   const dmg = t.dmg * (best.head ? 2 : 1), w = best.who;
   if (w === "me") { MP.lastHitBy = shooter; mpTakeHit(dmg, best.head); }
   else if (w.conn !== undefined) mpSendTo(w, { t: "hit", d: dmg, hd: best.head, b: t.bot.i });
-  else if (mpGuest()) { mpSendHost({ t: "bh", i: w.i, d: dmg, hd: best.head ? 1 : 0 }); hitTick(); }
-  else { vbDamage(w, dmg, best.head, shooter, t.from); if (!t.bot) hitTick(); }
+  else if (mpGuest()) { mpSendHost({ t: "bh", i: w.i, d: dmg, hd: best.head ? 1 : 0 }); hitTick(best.head); }
+  else { vbDamage(w, dmg, best.head, shooter, t.from); if (!t.bot) hitTick(best.head); }
   return best;
 }
 function vbWhiz(t, a, d, len, shooter) {                                      // a bullet going past makes a bot jumpy (and tells it someone's there)
@@ -12976,7 +12989,7 @@ function vbDamage(B, dmg, head, by, from) {                                  // 
 function vbDie(B, by, head, from) {
   B.alive = false; B.hp = 0; B.deadT = 0; B.d++; B.killHead = !!head; B.killBy = by;
   const ke = by !== null && by !== undefined ? vbEnt(by) : null; B.killFrom = ke ? new THREE.Vector3(ke.hx, ke.hy, ke.hz) : from ? from.clone() : null;
-  if (by !== null && by !== undefined && by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+  if (by !== null && by !== undefined && by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
   else if (vbIsId(by)) { const K = vbById(by); if (K) K.k++; }
   if (MP.on) mpSend({ t: "bk", i: B.i, by: by === undefined ? null : by, hd: head ? 1 : 0 });
   B.mem = new Map(); B.foe = null; B.foeId = null;
@@ -12987,7 +13000,7 @@ function vbRecvHit(o, L) { if (!MP.host) return; const B = VB.list.find(q => q.i
 function vbRecvKill(o) {
   if (MP.host) return; const B = VB.list.find(q => q.i === o.i); if (!B) return;
   B.alive = false; B.killBy = o.by; B.killHead = !!o.hd; B.deadT = 0; B.deadAt = performance.now(); const ke = o.by ? vbEnt2(o.by) : null; B.killFrom = ke;
-  if (o.by && o.by === mpMyId()) { MP.kills++; bing(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
+  if (o.by && o.by === mpMyId()) { MP.kills++; downChime(); vr.wristT = 0; vrBanner("You got " + B.name, 2.5, 1); }
 }
 function vbEnt2(id) {                                                         // a guest: where someone is, for which way a body falls
   if (id === mpMyId()) return camera.position.clone();
@@ -13110,7 +13123,7 @@ function vbPuppet(B, dt) {                                                    //
   S.onGround = !(b.f & 2); S.aimWant = b.f & 4 ? 1 : 0; S.crouchWant = b.f & 8 ? 1 : 0; B.onGround = S.onGround;
   const gk = BOT_GUNS[Math.floor(b.g / 10)] || "pistol", gt = b.g % 10 || 1; if (gk !== B.gun || gt !== B.tier) { B.gun = gk; B.tier = gt; B.own = { [gk]: gt }; vbGunModel(B); }
   vbPose(B, dt);
-  if (B.alive && SND.ctx) mpStepTick({ id: B.id }, B, S, dt);
+  if (B.alive && SND.ctx && vbStepOk(B)) mpStepTick({ id: B.id }, B, S, dt);
 }
 // ---- drawing: the soldier frame posed, the person over it (legs the way it walks, chest and gun the way it aims, head where it looks)
 function vbPose(B, dt) {
@@ -13127,7 +13140,7 @@ function vbPose(B, dt) {
   B.fallT = 0; S.group.rotation.x = 0; S.group.visible = true; S.shadow.visible = true; if (B.hold) B.hold.visible = true; VB.shown = true;
   poseSoldier(S, adt); B.posed = true;
   if (charOn() && vbChar(B, adt)) { S.shadow.position.set(B.x, groundY(B.x, B.z) + .04, B.z); } else vbSoldierSkin(B, true);
-  if (B.alive && SND.ctx && !mpGuest()) mpStepTick({ id: B.id }, B, S, adt);
+  if (B.alive && SND.ctx && !mpGuest() && vbStepOk(B)) mpStepTick({ id: B.id }, B, S, adt);
 }
 function vbHide() {                                                          // back in the menus: nobody standing about in the menu room
   VB.shown = false; for (const B of VB.list) { if (B.S) { B.S.group.visible = false; B.S.shadow.visible = false; } if (B.C) B.C.top.visible = false; B.pacc = 1; }
@@ -13659,6 +13672,11 @@ function mpShotSound(k, from) {
   const w = Math.min(1, Math.max(0, (d - 40) / 460)), wet = w * 1.2 * Math.pow(near, -.4) * (GSND.thick[k] ? 1.3 : 1);   // 2.14: the further off, the more of it is echo (the crack fades, the rumble stays)
   return gunSample(GSND.shot[k], vol, GSND.rate[k] * (1 + (Math.random() - .5) * .06), d / 343, GSND.thick[k] && d < 200, pv, lp, wet);
 }
+function vbStepOk(B) {                                         // 2.55: only the 3 nearest bots' footsteps (within 25 m) are heard
+  const now = performance.now(); if (!VB.stepAt || now - VB.stepAt > 400) { VB.stepAt = now; const c = camera.position;
+    VB.stepSet = new Set(VB.list.filter(b => b.alive && b.x !== undefined && Math.hypot(b.x - c.x, b.z - c.z) < 25).sort((a, b) => Math.hypot(a.x - c.x, a.z - c.z) - Math.hypot(b.x - c.x, b.z - c.z)).slice(0, 3)); }
+  return VB.stepSet.has(B);
+}
 function mpStepTick(L, R, S, dt) {                          // their footsteps, from their feet
   if (!SND.ctx || !SND.on || state !== "play") return;
   const d = Math.hypot(S.x - camera.position.x, S.z - camera.position.z, S.y - camera.position.y);
@@ -13669,7 +13687,7 @@ function mpStepTick(L, R, S, dt) {                          // their footsteps, 
   if (R.stepT < 1 && !land) return; R.stepT = R.stepT % 1;
   if (!R.voice) R.voice = p3dVoice(); sndListener(); p3dAt(R.voice, S.x, S.y + .05, S.z);
   const loud = land ? 1.3 : sp > 10 ? 1 : .5, crouch = S.crouchWant > .5 ? .25 : 1, mate = teamsOn() && mpMate(L) ? .55 : 1, fall = Math.pow(1 - d / PSND.stepR, 1.4);
-  footstep(surfaceAt(S.x, S.z, false), loud * crouch * mate * fall * 2.2, R.voice);
+  footstep(surfaceAt(S.x, S.z, false), loud * crouch * mate * fall * 2.2 * (vbIsId(L.id) ? .6 : 1), R.voice);
 }
 function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
@@ -13964,12 +13982,12 @@ function bulletStep(t, dt) {                                // move one frame al
   let rh = t.online && MP.on ? mpHitTest(a, d, end ? a.distanceTo(end) : seg) : null;   // online: did it reach them? (they take the damage; head shots double)
   const bh = VB.list.length && gameMode === "pvp" ? vbBulletStep(t, a, d, rh ? rh.t : end ? a.distanceTo(end) : seg) : null;   // 2.48: a bot in the way (a bot's own bullet: anyone)
   if (bh) { rh = null; end = a.clone().addScaledVector(d, bh.t); h = { kind: null }; }
-  if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(); }
+  if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; mpSendTo(rh.L, { t: "hit", d: t.dmg * (rh.head ? 2 : 1), hd: rh.head }); hitTick(rh.head); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
   const vd = _bT.copy(t.v).normalize(), w = .009 + pos.distanceTo(camera.position) * .0007;
   const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
-  place(t.head, 18, w); place(t.trail, 70, w * .45);
+  place(t.head, 18, w * 1.3); place(t.trail, 70, w * .65); t.trail.material.opacity = .6;   // (2.55: brighter)
   if (end) {
     if (!t.remote) {                                        // only the shooter's own game counts the hit
       if (h.kind === "animal") hitAnimal(h.animal, t.from.distanceTo(end), t.dmg, h.head, t.gun);
@@ -14068,8 +14086,9 @@ function updateGun(dt) {
       if (k >= 1 && t.hit.kind) addPuff(t.end, t.hit.kind);
     } else {
       t.fade += dt;
-      t.head.material.opacity = Math.max(0, 1 - t.fade / .08); t.trail.material.opacity = Math.max(0, .35 * (1 - t.fade / .3));
-      if (t.fade > .3) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); }
+      const tf = t.vr ? .65 : .3, hf = t.vr ? .18 : .08, t0 = t.vr ? .6 : .35;   // (2.55: a headset tracer lingers a little)
+      t.head.material.opacity = Math.max(0, 1 - t.fade / hf); t.trail.material.opacity = Math.max(0, t0 * (1 - t.fade / tf));
+      if (t.fade > tf) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); }
     }
   }
   for (let i = puffs.length - 1; i >= 0; i--) {

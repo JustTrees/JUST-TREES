@@ -20,26 +20,26 @@ async def main():
           const qs = { R: new T.Quaternion(), L: new T.Quaternion(), head: new T.Quaternion() };
           V.readInputs = () => ({ head: toW(L.head), headQ: qs.head.clone(), hands: { right: Object.assign({ pos: toW(L.R), q: qs.R.clone(), rayPos: toW(L.R), rayQ: qs.R.clone() }, pad.R), left: Object.assign({ pos: toW(L.Lh), q: qs.L.clone(), rayPos: toW(L.Lh), rayQ: qs.L.clone() }, pad.L) } });
           const frames = n => { for (let i = 0; i < n; i++) { D.vrTick(1 / 60); if (!V.climbing) D.update(1 / 60); D.vrAfterMove(1 / 60); D.updateGun(1 / 60); } };
-          const pitch = () => { const f = new T.Vector3(0, 0, -1).applyQuaternion(V.gun.quaternion); return Math.asin(f.y) * 180 / Math.PI; };
-          const run = (kind, tier, two, ads) => {
+          const pitch = () => { const f = new T.Vector3(0, 0, -1).applyQuaternion(V.gun.quaternion); return Math.asin(f.y) * 180 / Math.PI; }, yawG = () => { const f = new T.Vector3(0, 0, -1).applyQuaternion(V.gun.quaternion); return Math.atan2(f.x, -f.z) * 180 / Math.PI; };
+          const run = (kind, tier, two, ads, cant) => { qs.R.setFromAxisAngle(new T.Vector3(0, 0, -1), (cant || 0) * Math.PI / 180);   /* 2.55: a tilted grip */
             const own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; own[kind] = tier; D.setLoot(own); D.arms[kind].mag = 99; D.arms[kind].phase = 0;
             D.pickGun(kind); pad.R.trig = 0; pad.L.grip = 0; L.Lh.set(-.25, 1.2, -.3); L.head.set(0, 1.7, 0); L.R.set(.2, 1.35, -.35); frames(40);
             if (two) { const S = D.GUNSPOT[kind]; L.Lh.copy(toL(V.gun.localToWorld(new T.Vector3(...S.fore)))); pad.L.grip = 1; frames(20); }
             if (ads) { const S = D.GUNSPOT[kind]; const e = V.gun.localToWorld(new T.Vector3(...S.eye)), f = new T.Vector3(0, 0, -1).applyQuaternion(V.gun.quaternion); L.head.copy(toL(e.clone().addScaledVector(f, -.08))); frames(10); }
-            V.climb = 0; frames(2); D.arms[kind].mag = 99; const hold0 = D.RECOIL.hold; D.RECOIL.hold = 0;   /* (2.49: per shot, without the pull-back while firing) */ const p0 = pitch(), t0 = D.tracers.length; let shots = 0;
+            V.climb = 0; frames(2); D.arms[kind].mag = 99; const hold0 = D.RECOIL.hold; D.RECOIL.hold = 0;   /* (2.49: per shot, without the pull-back while firing) */ const p0 = pitch(), y0 = yawG(), t0 = D.tracers.length; let shots = 0;
             pad.R.trig = 1; for (let i = 0; i < 18; i++) { const n0 = D.arms[kind].mag; frames(1); shots += n0 - D.arms[kind].mag; }
-            const climb = V.climb * 180 / Math.PI, p1 = pitch(); D.RECOIL.hold = hold0; pad.R.trig = 0; frames(30); const after = V.climb * 180 / Math.PI;
-            return { shots, perShot: +(climb / Math.max(1, shots)).toFixed(3), climb: +climb.toFixed(2), gunUp: +(p1 - p0).toFixed(2), settled: +after.toFixed(2), two: V.two, ads: !!V.ads };
+            const climb = V.climb * 180 / Math.PI, p1 = pitch(), y1 = yawG(); D.RECOIL.hold = hold0; pad.R.trig = 0; frames(30); const after = V.climb * 180 / Math.PI;
+            qs.R.identity(); return { side: +Math.abs(y1 - y0).toFixed(2), shots, perShot: +(climb / Math.max(1, shots)).toFixed(3), climb: +climb.toFixed(2), gunUp: +(p1 - p0).toFixed(2), settled: +after.toFixed(2), two: V.two, ads: !!V.ads };
           };
           out.ar5two = run('ar', 5, true, false); out.ar1two = run('ar', 1, true, false); out.ar3two = run('ar', 3, true, false); out.ar1one = run('ar', 1, false, false); out.ar5one = run('ar', 5, false, false);
           out.ar1ads = run('ar', 1, true, true); out.smg2two = run('smg', 2, true, false);
-          const pis = run('pistol', 1, false, false); out.pistol = pis;
+          const pis = run('pistol', 1, false, false); out.pistol = pis; out.cant = run('ar', 1, false, false, 40);   /* 2.55: recoil goes straight up even with the gun tilted */
           { const own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; D.setLoot(own); D.arms.ar.mag = 99; D.pickGun('ar'); frames(20); V.climb = 0; pad.R.trig = 1; for (let i = 0; i < 90; i++) { D.arms.ar.mag = 99; frames(1); } out.held1s = +(V.climb * 180 / Math.PI).toFixed(2); pad.R.trig = 0; frames(30); }   /* 2.49: a 1.5 s burst, one-handed 1-star: it pulls back while you fire */
           return out; }""")
         print(json.dumps(r)); E = lambda a, b: abs(a - b) < .02
         ok = (E(r["ar5two"]["perShot"], .25) and E(r["ar1two"]["perShot"], .5) and E(r["ar3two"]["perShot"], .36) and E(r["ar1one"]["perShot"], 1.6) and E(r["ar5one"]["perShot"], 1.6)
               and E(r["ar1ads"]["perShot"], .425) and r["ar1ads"]["ads"] and E(r["smg2two"]["perShot"], .42) and r["ar1two"]["two"] and not r["ar1one"]["two"]
               and r["ar1two"]["shots"] == r["ar1one"]["shots"] == r["ar1ads"]["shots"] and r["ar1one"]["gunUp"] > 3 and r["ar1one"]["settled"] < r["ar1one"]["climb"] * .05
-              and r["pistol"]["climb"] == 0 and r["ar1one"]["climb"] <= 14.01 and r["held1s"] < 9 and not errs)
+              and r["cant"]["gunUp"] > 3 and r["cant"]["side"] < r["cant"]["gunUp"] * .15 and r["pistol"]["climb"] == 0 and r["ar1one"]["climb"] <= 14.01 and r["held1s"] < 9 and not errs)
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)
