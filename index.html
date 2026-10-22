@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.55</title>
+<title>JUST TREES 2.56</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.55";              // Just Trees 2.55
+const VERSION = "2.56";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2845,6 +2845,13 @@ function reveal() {
 let mapDirty = true;
 const FPSM = { t: 0, n: 0, worst: 0, fps: 0, low: 0 };
 function fpsTick(raw) { if (!(raw > 0) || raw > 2) return; FPSM.t += raw; FPSM.n++; FPSM.worst = Math.max(FPSM.worst, raw); if (FPSM.t >= 2) { FPSM.fps = Math.round(FPSM.n / FPSM.t); FPSM.low = Math.round(FPSM.worst * 1000); FPSM.t = 0; FPSM.n = 0; FPSM.worst = 0; } }
+function mapMates() {                                       /* 2.56: your teammates (people and bots) as dots on the VR map; PvP with teams only, never with Team · fist bump comms online */
+  const out = []; if (typeof MP === "undefined" || typeof VB === "undefined" || !teamsOn() || state !== "play" || (MP.on && (set.comms | 0) === 3)) return out;
+  const me = mpMyTeam();
+  for (const L of mpOpen()) if (mpTeamOf(L.id) === me && L.R && L.R.alive && L.R.cur) out.push([L.R.head.x, L.R.head.z]);
+  for (const B of VB.list) if (B.alive && mpTeamOf(B.id) === me && isFinite(B.x)) out.push([B.x, B.z]);
+  return out;
+}
 function drawMap(canvas) {
   if (!mapBase) return;
   if (canvas.id === "miniMap" && vr.on && vrMapCv) drawMap(vrMapCv);
@@ -2864,6 +2871,10 @@ function drawMap(canvas) {
   }
   for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) if (!mapSeen(i, j)) ctx.fillRect(i * cw - .5, j * ch - .5, cw + 1, ch + 1);
   drawZoneOnMap(ctx, W, Hh); drawCaptOnMap(ctx, W, Hh);
+  if (canvas.id === "vrMap") { const mates = mapMates(); if (mates.length) {   /* 2.56: teammates, a dot in your team colour */
+    const r = Math.max(4, W / 55); ctx.save(); ctx.fillStyle = TEAM_COL[mpMyTeam()] || "#4f9bff"; ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.max(1.5, W / 220);
+    for (const [x, z] of mates) { const mx = (x - MAPV.cx + MAPV.half) / MAPV.s * W, mz = (z - MAPV.cz + MAPV.half) / MAPV.s * Hh; ctx.beginPath(); ctx.arc(mx, mz, r, 0, 6.2832); ctx.fill(); ctx.stroke(); }
+    ctx.restore(); } }
   const px = (P.x - MAPV.cx + MAPV.half) / MAPV.s * W, pz = (P.z - MAPV.cz + MAPV.half) / MAPV.s * Hh, a = -P.yaw, sz = Math.max(6, W / 26);
   ctx.save(); ctx.translate(px, pz); ctx.rotate(a);
   ctx.fillStyle = "#F2C14E"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
@@ -8008,7 +8019,7 @@ function vrAfterMove(dt) {                                // carry the play spac
     if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), vr.lootT >= 4 ? 1 : 0); }   // 2.35: pickups and points just buzz and ding; only the big ones (drowned, the giant tree) show
     if (vr.lootT <= 0) vr.banWas = null;
     const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
-    if (vrMap.visible) { _v2.copy(off.rayPos).sub(I.head); _v2.y = 0; if (_v2.lengthSq() > 1e-6) _v2.normalize(); vrMap.position.copy(off.rayPos).add(_v1.set(0, .235, 0)).addScaledVector(_v2, .07); vrMap.lookAt(I.head);   /* 2.33: higher and a bit out in front, clear of the hand */ if ((vr.fpsT = (vr.fpsT || 0) - dt) <= 0 || !mapWas) { vr.fpsT = 1; drawMap(vrMapCv); mapDirty = true; } if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
+    if (vrMap.visible) { _v2.copy(off.rayPos).sub(I.head); _v2.y = 0; if (_v2.lengthSq() > 1e-6) _v2.normalize(); vrMap.position.copy(off.rayPos).add(_v1.set(0, .235, 0)).addScaledVector(_v2, .07); vrMap.lookAt(I.head);   /* 2.33: higher and a bit out in front, clear of the hand */ if ((vr.fpsT = (vr.fpsT || 0) - dt) <= 0 || !mapWas) { vr.fpsT = teamsOn() ? .33 : 1; drawMap(vrMapCv); mapDirty = true; } if (mapDirty || !mapWas) { vrMapTex.needsUpdate = true; mapDirty = false; } }   // only re-send the picture when it changed
     plTick(vrMap.visible ? main : null);                     // 2.26: the player list beside the map
   } else { wrist.visible = false; vrMap.visible = false; plTick(null); }
   if (vr.mark && vr.mark.visible && (vr.markT -= dt) <= 0) { vr.mark.visible = false; drawMap($("miniMap")); }
