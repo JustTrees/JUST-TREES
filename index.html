@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.62</title>
+<title>JUST TREES 2.63</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.62";              // Just Trees 2.55
+const VERSION = "2.63";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6785,6 +6785,7 @@ const legendSeen = () => lootMode() ? (vr.own.hunt || 0) >= 5 : !!(PORCH && PORC
 const HERD = { bighorn: 1, pronghorn: 1, capybara: 1, oryx: 1, camel: 1, baboon: 1, wolf: 1, zebra: 1, horse: 1, elephant: 1, giraffe: 1, caribou: 1, muskox: 1, coyote: 1, triceratops: 1, parasaur: 1, bronto: 1 };
 const DINO_GROW = { trex: () => 1 + Math.random() * .5, raptor: () => 1.2, triceratops: () => .5 + Math.random(), stego: () => .5 + Math.random(), parasaur: () => .5 + Math.random(), bronto: () => .5 + Math.random() };   // 1.92: every one a different size (the raptor always the same)
 const BEAST_SCALE = { roadrunner: .8, polar: 1.15, coyote: .82, fox: .58, arcticfox: .55, yeti: 1.25, bigfoot: 1.15 };   // (2.53: Bigfoot and the Yeti a little bigger)
+const DINO_RUN = { bronto: .7, triceratops: .7, stego: .7, parasaur: .7 };   // 2.63: the big plant-eaters run 30% slower
 const NIGHT = { more: 1.4, big: 1.2 };                          // 2.53: after dark: 40% more animals and dinosaurs, each 20% bigger
 const nightNow = () => sunPos(set.lat * set.hemi, set.month, hourNow).el < -4;
 const SCORE = { ptero: .3, gator: .2, heron: .9, bighorn: .25, pronghorn: .2, tapir: .12, capybara: .3, oryx: .15, camel: .06, roadrunner: 1.2, vulture: 1, buck: .1, bear: .05, baboon: .5, bird: 1, panther: .3, wolf: .2, polar: .05, seal: .1, rabbit: .5, monkey: .6,
@@ -6966,6 +6967,7 @@ function trunkNear(x, z, pad) {                            // trees and other so
   return false;
 }
 function walkable(A, x, z) {                              // logs and small rocks: step over them; trees and big boulders: go round
+  if (A.thru && !A.spook && !A.swerve) { const dd = Math.hypot(x - A.x, z - A.z); if (dd > .1 && H(x, z) - H(A.x, A.z) > dd * 1.2) return false; }   // 2.63: the big ones walk through trees, but not up a cliff (steeper than ~50 degrees)
   return targetOk(A, x, z) && (A.thru || (!trunkNear(x, z, A.rad) && beastGround(A, x, z) - A.y < Math.max(2.5, A.step * 2)));   // only big boulders and cliff rocks turn them
 }
 function neckHits(b) {                                   // hit spheres along the neck, chest to head (the head's own spheres follow it as it grazes)
@@ -7003,6 +7005,7 @@ function addGround(kind, x, z, home, size0) {
   const size = size0 || (DINO_GROW[kind] ? DINO_GROW[kind]() : 1) * (nightNow() ? NIGHT.big : 1), sc = (BEAST_SCALE[kind] || 1) * size; b.root.scale.setScalar(sc); b.stride *= sc; neckHits(b);
   const A = Object.assign({ size, range: kind === "baboon" ? 14 : kind === "bear" || kind === "polar" ? 45 : 35 }, b, { kind, scale: sc, w: b.w * sc, rad: b.rad * sc, ok: kind === "seal" ? sealOk : ENDLESS ? enAnimOk : okSpot,
     x, z, yaw: r() * 6.28, speed: 0, want: 0, phase: r() * 6, mode: "idle", timer: r() * 4, home: home || [x, z], dead: false, deadT: 0, side: r() < .5 ? 1 : -1, grazeK: 0, steerT: 0, steer: 0, stuck: 0 });
+  if (DINO_RUN[kind]) A.run *= DINO_RUN[kind];             // 2.63
   qaPick(A, cold, TROPIC(bio)); qdinoLoad(A.qf); A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); A.y = beastGround(A, x, z); if (DINO_HP[kind]) A.hp = A.hpMax = DINO_HP[kind]; if (kind === "bronto" || kind === "triceratops" || kind === "stego" || kind === "parasaur" || kind === "trex") A.thru = true;
   animalGroup.add(A.root); beasts.push(A); return A;
 }
@@ -7349,7 +7352,9 @@ function updateAnimals(dt) {
     }
     A.speed += (want - A.speed) * Math.min(1, dt * 3);
     if (A.speed > .02 && !(A.ghostT > 0)) {
-      const nx = A.x + Math.sin(A.yaw) * A.speed * dt, nz = A.z + Math.cos(A.yaw) * A.speed * dt;
+      let sp = A.speed;                                         // 2.63: uphill is slow going (big dinosaurs no longer stride up mountainsides at full speed)
+      if (!A.spook && !A.swerve) { const rise = H(A.x + Math.sin(A.yaw) * 1.5, A.z + Math.cos(A.yaw) * 1.5) - H(A.x, A.z); if (rise > .3) sp *= 1 - (A.kind === "trex" ? .45 : .75) * smooth(.3, 1.4, rise); }
+      const nx = A.x + Math.sin(A.yaw) * sp * dt, nz = A.z + Math.cos(A.yaw) * sp * dt;
       if (A.spook || A.swerve || walkable(A, nx, nz) || !walkable(A, A.x, A.z)) { A.x = nx; A.z = nz; }          // (already wedged? always allowed to walk out)
       else {                                                // brushing past a trunk: slide along it instead of stopping
         let ok = false;
@@ -8543,8 +8548,8 @@ function zoomOverlay() {
           float line = (abs(t.x) < 0.0022 || abs(t.y) < 0.0022) ? 1.0 : 0.0;
           float post = ((abs(t.x) < 0.008 && abs(t.y) > 0.16) || (abs(t.y) < 0.008 && abs(t.x) > 0.16)) ? 1.0 : 0.0;
           a = max(a, max(line, post) * 0.88 * step(r, R));
-          if (uTxtOn > 0.5 && uOpen > 0.97) {                 /* 2.61: the readout, in the black top left, just outside the lens (room for more there later) */
-            vec2 uv = vec2((t.x + 0.80) / 0.40, (t.y - 0.36) / 0.20);   /* (t: the real direction: the lens edge is .5, ~27 degrees out; this box sits 28-39 degrees left, 20-29 up) */
+          if (uTxtOn > 0.5 && uOpen > 0.97) {                 /* 2.61: the readout, in the black just outside the lens (2.63: bottom right; room for more there later) */
+            vec2 uv = vec2((t.x - 0.44) / 0.32, (t.y + 0.53) / 0.16);   /* 2.63: bottom right, just outside the lens (t: the real direction; the lens edge is .5, ~27 degrees out; this box sits 24-37 degrees right, 20-28 down) */
             if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 tc = texture2D(uTxt, uv); float oa = max(a, tc.a); gl_FragColor = vec4(tc.rgb * (tc.a / max(oa, 0.0001)), oa); return; }
           }
         } else {
@@ -13133,8 +13138,8 @@ function vbShoot(B, p, d) {
   dir.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
   const v = dir.multiplyScalar(W.spd).clone(), o = from.clone();
   makeBullet(o, v, { reach: W.reach, dmg: Math.round(W.dmg * TIER.dmg[t]), gun: k, bot: B });
-  if (MP.on) mpSend({ t: "f", o: [+o.x.toFixed(3), +o.y.toFixed(3), +o.z.toFixed(3)], v: [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], k });
-  if (SND.ctx && SND.on && !mpShotSound(k, o)) { const dd = camera.position.distanceTo(o); if (dd < 700) gunshot(k, 0, dd); }
+  if (MP.on) mpSend({ t: "f", o: [+o.x.toFixed(3), +o.y.toFixed(3), +o.z.toFixed(3)], v: [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)], k, b: 1 });   // (b: a bot's shot: friends hear less echo too)
+  if (SND.ctx && SND.on && !mpShotSound(k, o, true)) { const dd = camera.position.distanceTo(o); if (dd < 700) gunshot(k, 0, dd); }
   B.shotAt = VB.now; vbHeard(o, k, B.id);
 }
 // ---- what a bullet hits (2.48): bots for everyone's bullets; for a bot's bullet (host only) players and bots
@@ -13868,13 +13873,15 @@ function p3dVoice() {                                       // a 3D voice that o
   const c = SND.ctx, p = c.createPanner(); p.panningModel = "HRTF"; p.distanceModel = "linear"; p.rolloffFactor = 0; p.refDistance = 1; p.maxDistance = 1e5; p.connect(SND.master); return p;
 }
 function p3dAt(p, x, y, z) { if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; } else p.setPosition(x, y, z); }
-function mpShotSound(k, from) {
+function mpShotSound(k, from, bot) {
   if (!SND.ctx || !SND.on || !GSND.shot[k]) return false;
   const d = camera.position.distanceTo(from), R = PSND.RANGE[k] || 600; if (d > R) return true;
   gunSndLoad(); sndListener();
   if (PSND.shots.length < 4) PSND.shots.push(p3dVoice()); const pv = PSND.shots[PSND.si = (PSND.si + 1) % PSND.shots.length]; p3dAt(pv, from.x, from.y, from.z);
   const fade = Math.min(1, (R - d) / (R * .3)), near = 22 / (22 + d), vol = GSND.vol[k] * near * fade, lp = d < 30 ? 0 : Math.max(650, 18000 * Math.exp(-d / 170));
-  const w = Math.min(1, Math.max(0, (d - 40) / 460)), wet = w * 1.2 * Math.pow(near, -.4) * (GSND.thick[k] ? 1.3 : 1);   // 2.14: the further off, the more of it is echo (the crack fades, the rumble stays)
+  const now = SND.ctx.currentTime; PSND.verb = (PSND.verb || []).filter(t => now - t < 1.5);   // 2.63: echoes don't pile up (a burst of far shots was a constant hiss, like wind)
+  const w = Math.min(1, Math.max(0, (d - 40) / 460)), wet = Math.min(1, w * 1.2 * Math.pow(near, -.4) * (GSND.thick[k] ? 1.3 : 1)) * (bot ? .25 : 1) / (1 + .7 * PSND.verb.length);   // 2.14: the further off, the more of it is echo (2.63: a bot's shot much less)
+  if (wet > .05) PSND.verb.push(now);
   return gunSample(GSND.shot[k], vol, GSND.rate[k] * (1 + (Math.random() - .5) * .06), d / 343, GSND.thick[k] && d < 200, pv, lp, wet);
 }
 function vbStepOk(B) {                                         // 2.55: only the 3 nearest bots' footsteps (within 25 m) are heard
@@ -13897,7 +13904,7 @@ function mpStepTick(L, R, S, dt) {                          // their footsteps, 
 function mpRemoteShot(o) {                                  // their bullet and their gunshot
   const from = new THREE.Vector3(...o.o);
   makeBullet(from, new THREE.Vector3(...o.v), { reach: 3200, remote: true, by: o.by });
-  if (!mpShotSound(o.k, from)) { const dd = camera.position.distanceTo(from); if (dd < 700) gunshot(o.k, 0, dd); }   // (2.12: from where they are)
+  if (!mpShotSound(o.k, from, !!o.b)) { const dd = camera.position.distanceTo(from); if (dd < 700) gunshot(o.k, 0, dd); }   // (2.12: from where they are)
 }
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
   if (R && R.C && charOn() && R.C.top.visible) return R.alive ? charHit(R.C, from, dir, maxT) : null;   // 2.37: exactly the body you see (not hair)
@@ -14179,7 +14186,7 @@ function dmgTier(d) { return d >= 350 ? 3 : d >= 250 ? 2 : d >= 150 ? 1 : 0; }
 function makeBullet(from, v, o) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
-  head.material.color.set(NIGHT_K > .5 ? 0xffb860 : 0xff8418); head.material.toneMapped = false; trail.material.color.set(0xff9a3a); trail.material.toneMapped = false;   // 2.62: orange by day, a glowing streak at night
+  head.material.color.set(NIGHT_K > .5 ? 0xffc870 : 0xffa020); head.material.toneMapped = false; trail.material.color.set(0xff9a3a); trail.material.toneMapped = false;   // 2.62: orange by day, a glowing streak at night
   const t = { bot: o.bot || null, by: o.by || null, head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, gun: o.gun || null, online: !!o.online, remote: !!o.remote,
               cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true };
   tracers.push(t); return t;
@@ -14196,10 +14203,10 @@ function bulletStep(t, dt) {                                // move one frame al
   if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; const dm = shotDmg(t, rh.head, end); mpSendTo(rh.L, { t: "hit", d: dm, hd: rh.head }); myDmg(dm, t); hitTick(rh.head, t.gun === "hunt" ? dm : 0); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
-  const cd = pos.distanceTo(camera.position), vd = _bT.copy(t.v).normalize(), w = .012 + cd * .0007;   // 2.62: a small solid streak, thicker only far off so you still see it
+  const cd = pos.distanceTo(camera.position), vd = _bT.copy(t.v).normalize(), w = (.009 + cd * .0007) * 1.3;   // 2.63: back to the 2.55 size (2.62's was too thin to see)
   const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
-  place(t.head, 4, w);                                     // 2.62: one solid streak, like a long bullet: no fading trail, no cloud
-  t.trail.visible = NIGHT_K > .05; if (t.trail.visible) { place(t.trail, 4.4, w * 2.6); t.trail.material.opacity = .3 * NIGHT_K; }   // at night a soft glow round it
+  place(t.head, 20, w);                                    // 2.63: one long bright streak (no 70 m fading trail behind it)
+  t.trail.visible = NIGHT_K > .05; if (t.trail.visible) { place(t.trail, 21, w * 2.4); t.trail.material.opacity = .3 * NIGHT_K; }   // at night a soft glow round it
   if (cd < 1.5) t.head.visible = t.trail.visible = false;    // (never right in your face)
   if (end) {
     if (!t.remote) {                                        // only the shooter's own game counts the hit
@@ -14297,7 +14304,8 @@ function updateGun(dt) {
       if (k >= 1 && t.hit.botHit) { t.hit.botHit = false; if (state === "play") hurt(BOT.hitDmg); }
       if (k >= 1 && t.hit.animal) { hitAnimal(t.hit.animal, t.hit.dist, 0, t.hit.head); t.hit.animal = null; t.hit.kind = null; }   // no blood: it just drops, and a bing
       if (k >= 1 && t.hit.kind) addPuff(t.end, t.hit.kind);
-    } else if (t.vr) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); }   // 2.62: gone when it stops (no lingering trail)
+    } else if (t.vr) { t.fade += dt; const k = Math.max(0, 1 - t.fade / .08); t.head.material.opacity = k; t.trail.material.opacity = .3 * NIGHT_K * k;   // 2.63: when it stops, it cuts out in 0.08 s
+      if (k <= 0) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); } }
     else {
       t.fade += dt;
       const tf = t.vr ? .65 : .3, hf = t.vr ? .18 : .08, t0 = t.vr ? .6 : .35;   // (2.55: a headset tracer lingers a little)
