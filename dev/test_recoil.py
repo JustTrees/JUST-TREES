@@ -26,19 +26,20 @@ async def main():
             D.pickGun(kind); pad.R.trig = 0; pad.L.grip = 0; L.Lh.set(-.25, 1.2, -.3); L.head.set(0, 1.7, 0); L.R.set(.2, 1.35, -.35); frames(40);
             if (two) { const S = D.GUNSPOT[kind]; L.Lh.copy(toL(V.gun.localToWorld(new T.Vector3(...S.fore)))); pad.L.grip = 1; frames(20); }
             if (ads) { const S = D.GUNSPOT[kind]; const e = V.gun.localToWorld(new T.Vector3(...S.eye)), f = new T.Vector3(0, 0, -1).applyQuaternion(V.gun.quaternion); L.head.copy(toL(e.clone().addScaledVector(f, -.08))); frames(10); }
-            V.climb = 0; frames(2); D.arms[kind].mag = 99; const p0 = pitch(), t0 = D.tracers.length; let shots = 0;
+            V.climb = 0; frames(2); D.arms[kind].mag = 99; const hold0 = D.RECOIL.hold; D.RECOIL.hold = 0;   /* (2.49: per shot, without the pull-back while firing) */ const p0 = pitch(), t0 = D.tracers.length; let shots = 0;
             pad.R.trig = 1; for (let i = 0; i < 18; i++) { const n0 = D.arms[kind].mag; frames(1); shots += n0 - D.arms[kind].mag; }
-            const climb = V.climb * 180 / Math.PI, p1 = pitch(); pad.R.trig = 0; frames(30); const after = V.climb * 180 / Math.PI;
+            const climb = V.climb * 180 / Math.PI, p1 = pitch(); D.RECOIL.hold = hold0; pad.R.trig = 0; frames(30); const after = V.climb * 180 / Math.PI;
             return { shots, perShot: +(climb / Math.max(1, shots)).toFixed(3), climb: +climb.toFixed(2), gunUp: +(p1 - p0).toFixed(2), settled: +after.toFixed(2), two: V.two, ads: !!V.ads };
           };
           out.ar5two = run('ar', 5, true, false); out.ar1two = run('ar', 1, true, false); out.ar3two = run('ar', 3, true, false); out.ar1one = run('ar', 1, false, false); out.ar5one = run('ar', 5, false, false);
           out.ar1ads = run('ar', 1, true, true); out.smg2two = run('smg', 2, true, false);
           const pis = run('pistol', 1, false, false); out.pistol = pis;
+          { const own = { hunt: 1, ar: 1, smg: 1, pistol: 1 }; D.setLoot(own); D.arms.ar.mag = 99; D.pickGun('ar'); frames(20); V.climb = 0; pad.R.trig = 1; for (let i = 0; i < 90; i++) { D.arms.ar.mag = 99; frames(1); } out.held1s = +(V.climb * 180 / Math.PI).toFixed(2); pad.R.trig = 0; frames(30); }   /* 2.49: a 1.5 s burst, one-handed 1-star: it pulls back while you fire */
           return out; }""")
         print(json.dumps(r)); E = lambda a, b: abs(a - b) < .02
-        ok = (E(r["ar5two"]["perShot"], .25) and E(r["ar1two"]["perShot"], 1) and E(r["ar3two"]["perShot"], .55) and E(r["ar1one"]["perShot"], 2.5) and E(r["ar5one"]["perShot"], 2.5)
-              and E(r["ar1ads"]["perShot"], .85) and r["ar1ads"]["ads"] and E(r["smg2two"]["perShot"], .75) and r["ar1two"]["two"] and not r["ar1one"]["two"]
-              and r["ar1two"]["shots"] == r["ar1one"]["shots"] == r["ar1ads"]["shots"] and r["ar1one"]["gunUp"] > 7 and r["ar1one"]["settled"] < r["ar1one"]["climb"] * .05
-              and r["pistol"]["climb"] == 0 and r["ar1one"]["climb"] <= 25.01 and not errs)
+        ok = (E(r["ar5two"]["perShot"], .25) and E(r["ar1two"]["perShot"], .5) and E(r["ar3two"]["perShot"], .36) and E(r["ar1one"]["perShot"], 1.6) and E(r["ar5one"]["perShot"], 1.6)
+              and E(r["ar1ads"]["perShot"], .425) and r["ar1ads"]["ads"] and E(r["smg2two"]["perShot"], .42) and r["ar1two"]["two"] and not r["ar1one"]["two"]
+              and r["ar1two"]["shots"] == r["ar1one"]["shots"] == r["ar1ads"]["shots"] and r["ar1one"]["gunUp"] > 3 and r["ar1one"]["settled"] < r["ar1one"]["climb"] * .05
+              and r["pistol"]["climb"] == 0 and r["ar1one"]["climb"] <= 14.01 and r["held1s"] < 9 and not errs)
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

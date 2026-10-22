@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.48</title>
+<title>JUST TREES 2.49</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.48";              // Just Trees 2.48
+const VERSION = "2.49";              // Just Trees 2.49
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -335,7 +335,7 @@ const BULLET_G = 0, BULLET_ZERO = 100;                     // VR bullets: no dro
 const VR_NADE_G = 9.81;                                    // VR grenades still fall in an arc
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
 const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 1 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per pickup (2.05: one floating grenade each)
-const RECOIL = { up: [0, .25, .4, .55, .75, 1, 2.5], ads: .85, max: 25, back: 9 };   // 2.08: auto guns climb per shot (degrees) by level: 1 = 5 stars … 5 = 1 star, 6 = held in one hand; looking down the gun 15% less; most climb; settle-back speed
+const RECOIL = { up: [0, .25, .3, .36, .42, .5, 1.6], ads: .85, max: 14, back: 12, hold: 3 };   // 2.08: auto guns climb per shot (degrees) by level: 1 = 5 stars … 5 = 1 star, 6 = held in one hand; looking down the gun 15% less; most climb; settle-back speed (2.49: gentler below red, and it pulls back a little while you keep firing: hold)
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
@@ -3407,7 +3407,7 @@ function enAnimPick(b, R, birds) {                            // one kind from t
   for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
 }
 function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
-  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = DINO.on && gameMode === "hunt" ? 2 + Math.floor(R() * 2) : (gameMode === "hunt" ? 4 : 3) + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3), x0 = i * EA_C, z0 = j * EA_C;
   for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
     const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false); if (!e) break;
     const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
@@ -3419,8 +3419,8 @@ function enAnimFill(i, j, ps, init) {                         // a square's grou
   if (gameMode !== "hunt") return;
   const far = (x, z) => enAnimNear(ps, x, z) >= (init ? 150 : EA_SEEN);
   if (DINO.on) {
-    if (R() < .12) for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: "trex", x, z, hx: x, hz: z, gid: ++HAB.gid, key, reg: enDom(x, z).key }); break; } }   // 2.24: a T. rex in every region (one alive in each)
-    if (R() < .3) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (far(x, z)) E.aQ.unshift({ k: "ptero", x, z, hx: x, hz: z, gid: -1, key }); }
+    if (R() < .18) for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: "trex", x, z, hx: x, hz: z, gid: ++HAB.gid, key, reg: enDom(x, z).key }); break; } }   // 2.24: a T. rex in every region (one alive in each)
+    if (R() < .45) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (far(x, z)) E.aQ.unshift({ k: "ptero", x, z, hx: x, hz: z, gid: -1, key }); }
   } else if (R() < .05) {                                     // Bigfoot (the Yeti in the cold) in about 1 square in 20
     for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C, L = (NATIVE[enDom(x, z).b] || []).find(e => LEGEND[e[0]]);
       if (L && enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: L[0], x, z, hx: x, hz: z, gid: ++HAB.gid, key }); break; } }
@@ -6616,7 +6616,7 @@ const NATIVE = {
   tundra:    [["caribou", 4, [4, 8]], ["muskox", 3, [3, 6]], ["wolf", 3, [4, 6]], ["arcticfox", 5], ["polar", 4], ["seal", 8, [2, 5]], ["rabbit", 18], ["owl", 4], ["bird", 3], ["yeti", 1]],
   polar:     [["polar", 6], ["seal", 12, [2, 5]], ["arcticfox", 3], ["owl", 3], ["bird", 3], ["yeti", 1]]
 };
-const BEAST_CAP = isTouch ? 90 : 170, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
+const BEAST_CAP = isTouch ? 120 : 230, BEAST_DRAW = isTouch ? 260 : 480;   // keep phones smooth
 const beastDraw = () => vr.on ? 750 * Math.min(4.2, Math.max(1, vr.zoomK)) : BEAST_DRAW;   // in a headset you can spot (and scope) animals far off
 const sealOk = (x, z) => Math.abs(x) < EDGE - 4 && Math.abs(z) < EDGE - 4 && (!edgeShape.island || Math.hypot(x, z) < edgeR(x, z) + 10) && !nearObstacle(x, z, 1.2)
   && (iced ? H(x, z) < water + 1.5 : H(x, z) > water + .05 && H(x, z) < water + 1.6) && slopeNy(x, z) > .85;     // the shore, or out on the ice
@@ -6861,13 +6861,13 @@ function spawnKind(kind, grp, peak, onlySec) {
 }
 function spawnAnimals() {
   clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
-  const k = BIG3() ? 2.6 : Math.max(.5, S / 640), n = v => Math.max(1, Math.round(v * k)), biome = biomeOf(set.lat * set.hemi);   // XXXL: as many as a ~1.7 km map, all in the bubble
+  const sw = S / 640, k = BIG3() ? 3.6 : Math.max(.5, sw * (1 + .35 * Math.max(0, sw - 1))), n = v => Math.max(1, Math.round(v * k)),   /* 2.49: bigger maps get more than their width's worth (nearer their area) */ biome = biomeOf(set.lat * set.hemi);   // XXXL: as many as a ~1.7 km map, all in the bubble
   let peak = water; for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) peak = Math.max(peak, H(-HALF + (i + .5) * S / 16, -HALF + (j + .5) * S / 16));
   habInit(peak); appear.t = 12; stockInit();
   const nearSecs = BIG3() ? STOCK.land.filter(q => { const b = secBox(q); return inBubble((b[0] + b[1]) / 2, (b[2] + b[3]) / 2, BUBBLE - 100); }) : null;   // XXXL: only the sections round you
   const bigMap = set.size === "large" || set.size === "xl" || set.size === "xxl" || set.size === "xxxl";   // Bigfoot / Yeti: Large and up, one per map
   DINO.on = gameMode === "hunt" && !!set.dino && VR_ON; DINO.hunter = null; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);   // Prehistoric: the same maps, dinosaurs instead
-  const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: kind === "trex" ? ({ large: 1, xl: 2, xxl: 3, xxxl: 4 }[set.size] || 0) : LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));   // (2.01: more T. rexes on bigger maps)
+  const plan = (DINO.on ? DINO_NATIVE : NATIVE[biome] || NATIVE.temperate).map(([kind, base, grp]) => ({ kind, grp, left: kind === "trex" ? ({ large: 1, xl: 3, xxl: 4, xxxl: 5 }[set.size] || 0) : LEGEND[kind] ? (bigMap ? 1 : 0) : n(base) }));   // (2.01: more T. rexes on bigger maps)
   const netG = mpNetGuest();                                   // 2.00: an online guest's ground animals come from the host
   for (let more = true; more && beasts.length < BEAST_CAP;) {      // a round at a time, so every kind gets its share before the cap
     more = false;
@@ -6876,7 +6876,7 @@ function spawnAnimals() {
   for (const A of beasts) if (STOCKED(A)) { STOCK.n0[A.kind] = STOCK.n0[A.kind] || new Set(); STOCK.n0[A.kind].add(A.grp); }
   for (const k in STOCK.n0) STOCK.n0[k] = STOCK.n0[k].size;     // how many groups of each kind the map started with
   STOCK.peak = peak;
-  if (DINO.on && !netG) { const nP = { xs: 1, small: 2, medium: 2, large: 3, xl: 4, xxl: 5, xxxl: 5 }[set.size] || 2; for (let i = 0; i < nP; i++) pteroSpawn(); }   // 2.02: pteranodons over the dinosaur maps
+  if (DINO.on && !netG) { const nP = { xs: 1, small: 2, medium: 3, large: 4, xl: 5, xxl: 6, xxxl: 7 }[set.size] || 2; for (let i = 0; i < nP; i++) pteroSpawn(); }   // 2.02: pteranodons over the dinosaur maps
   hunt.score = 0; hunt.kills = 0; hunt.longest = 0; showHuntScore(); sense.calm = 0; sense.v = 0; sense.px = P.x; sense.pz = P.z;
   updateAnimals(0);
 }
@@ -7748,7 +7748,7 @@ function vrTick(dt) {
     vr.gqL.slerp(hQ, 1 - Math.exp(-dt * rq)); vr.gpL.lerp(hL, 1 - Math.exp(-dt * rp));
     vr.gq.copy(yq).multiply(vr.gqL); vr.gp.copy(vr.gpL).applyQuaternion(yq).add(_gO);
     vr.kick = Math.max(0, vr.kick - dt * 6);
-    if (!(main.trig > .6) || performance.now() - (vr.lastShot || 0) > 160) vr.climb = (vr.climb || 0) * Math.exp(-dt * RECOIL.back);   // stop firing: it settles back to your hand
+    vr.climb = (vr.climb || 0) * Math.exp(-dt * (!(main.trig > .6) || performance.now() - (vr.lastShot || 0) > 160 ? RECOIL.back : RECOIL.hold));   // stop firing: it settles back to your hand (2.49: and a little while you keep firing)
     G.quaternion.copy(vr.gq).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), vr.kick * .12 + (vr.climb || 0)));
     vr.gunHandQ.copy(G.quaternion);                                          // the hand keeps the controller's own angle
     if (huntV && vr.gunKind !== "hunt") G.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), IRON_DIP));   // rifles and pistol without a scope: nose a touch down
@@ -12082,7 +12082,7 @@ function mpLobbyPanels() {
     g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.textAlign = "right"; g.fillText(MP.code ? "Code " + MP.code.split("").join(" ") : "", P.W - 50, 88);
     const rows = mpRoster(), BD = MP.board || [], hu = MP.boardMode === "hunt", hk = MP.boardMode === "hike"; g.textAlign = "left";
     if (!MP.on && !MP.host) { g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText(fitText(g, MP.status || "Connecting…", P.W - 100), lx, 156); }
-    else uiLabel(g, lx, 156, "Players", rows.length + " / " + MP_MAX);
+    else uiLabel(g, lx, 156, "Players", (rows.length - VB.list.length) + " / " + MP_MAX + (VB.list.length ? " + " + VB.list.length + (VB.list.length === 1 ? " bot" : " bots") : ""));   // (2.49: bots can go past 8 on big maps)
     if (MP.board && MP.boardTeams) { const t = [0, 1].map(tm => BD.filter(r => r.team === tm).reduce((s, r) => s + (r.k || 0), 0)); g.textAlign = "right"; g.font = "bold 34px sans-serif";   // last round's team score
       g.fillStyle = TEAM_COL[1]; g.fillText(t[1] + " Blue", P.W - 50, 156); const w1 = g.measureText(t[1] + " Blue").width; g.fillStyle = UIC.text; g.fillText(" · ", P.W - 50 - w1, 156); g.fillStyle = TEAM_COL[0]; g.fillText("Red " + t[0], P.W - 50 - w1 - g.measureText(" · ").width, 156); g.textAlign = "left"; }
     const wn = MP.warn && performance.now() - MP.warn.t < 40000 ? MP.warn.text : VRUI.newVer ? "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update." : "";
@@ -12273,8 +12273,10 @@ function mpRecv(o, L) {
    person: it needs a moment to react, its aim settles onto you, it leads a runner but is fooled when you change direction, auto guns
    climb, being shot at shakes it. Real bullets with the same guns, stars, damage, magazines and reloads as players; it picks up guns and
    crosses like a player and comes back 4 s after it's taken down, keeping its guns (like players). ---------------- */
-const BOTS_TUNE = { think: .2, look: .25, sight: 420, fov: 1.15, send: 1 / 12, fill: 6,
-  speed: { walk: 3, jog: 6, run: 9.5, crouch: 1.8 },                       // m/s (players in a headset walk 8.5, sprint 12.5)
+const BOTS_TUNE = { think: .2, look: .25, sight: 420, fov: 1.15, send: 1 / 12, fill: 6, most: 19,
+  speed: { walk: 2.6, jog: 5, run: 7.5, crouch: 1.5 },                     // m/s at 5 stars (2.49: slower; fewer stars slower still. Players in a headset walk 8.5, sprint 12.5)
+  auto: { xs: 4, small: 5, medium: 6, large: 8, xl: 12, xxl: 16, xxxl: 20 },   // 2.49: game size on Auto, by map size (bots fill it)
+  cap: { xs: 6, small: 8, medium: 8, large: 10, xl: 14, xxl: 18, xxxl: 20 },    // the most players + bots on each map size
   reload: { pistol: 1.4, smg: 1.9, ar: 2.2, hunt: 2.8 },                   // seconds
   semi: { pistol: .32, hunt: 1.3 },                                        // a bot's own pace between single shots (the sniper: the bolt)
   hear: .5 };                                                              // how far shots carry for them (share of the sound range)
@@ -12290,7 +12292,7 @@ const BOT_SKILL = { easy: [1, 2], normal: [3, 3], hard: [4, 5], mixed: [1, 5] },
 const BOT_NAMES = ["Aspen", "Birch", "Cedar", "Hazel", "Juniper", "Maple", "Rowan", "Willow", "Alder", "Spruce", "Laurel", "Hemlock", "Larch", "Linden", "Cypress", "Holly",
   "Sequoia", "Magnolia", "Hickory", "Tamarack", "Banyan", "Acacia", "Yew", "Elm", "Oak", "Pine", "Fir", "Beech", "Sumac", "Poplar", "Redwood", "Baobab"];
 const VB = { pool: [], list: [], seed: 1 + Math.floor(Math.random() * 1e6), poolKey: "", fitT: 0, sendT: 0, scT: 0, now: 0, ents: [], me: { x: 0, z: 0, vx: 0, vz: 0 }, meShot: -1e9, sent: "", playing: false };
-if (set.botFill === undefined) set.botFill = BOTS_TUNE.fill;
+if (set.botFill === undefined) set.botFill = 0;                       // 0 = Auto (2.49): more bots on bigger maps
 if (!set.botSkill) set.botSkill = "normal";
 const vbId = i => "b:" + i, vbIsId = id => typeof id === "string" && id.startsWith("b:");
 const vbById = id => VB.list.find(B => B.id === id) || null;
@@ -12301,7 +12303,7 @@ const vbMate = (a, b) => a != null && b != null && teamsOn() && vbTeam(a) === vb
 function vbName(id) { const B = vbById(id); return B ? B.name : "A bot"; }
 // ---- who they are
 function vbTraits(style, stars, r) {
-  const St = BOT_STYLE[style], k = (stars - 1) / 4, j = (a, s = .2) => Math.max(0, Math.min(1, a + (r() - .5) * s));
+  const St = BOT_STYLE[style], k = Math.pow((stars - 1) / 4, 1.4), /* 2.49: a gentler middle (3 stars is about what 2.5 used to be) */ j = (a, s = .2) => Math.max(0, Math.min(1, a + (r() - .5) * s));
   return { aim: j(.12 + .8 * k), react: j(.1 + .85 * k), track: j(.15 + .75 * k), sense: j(.25 + .65 * k),
     aggr: j(St.aggr), nerve: j(St.nerve), move: j(St.move), greed: j(St.greed), team: j(St.team), flank: St.flank, range: St.range * (.85 + r() * .3) };
 }
@@ -12309,7 +12311,7 @@ function vbPoolMake() {                                                      // 
   const key = VB.seed + "|" + set.botSkill; if (VB.poolKey === key && VB.pool.length) return; VB.poolKey = key;
   const r = mulberry32(VB.seed), names = BOT_NAMES.slice().sort(() => r() - .5), styles = BOT_STYLES.slice().sort(() => r() - .5), sk = BOT_SKILL[set.botSkill] || BOT_SKILL.normal;
   const old = new Map(VB.pool.map(B => [B.i, B])); VB.pool = [];
-  for (let i = 0; i < MP_MAX - 1; i++) {
+  for (let i = 0; i < BOTS_TUNE.most; i++) {
     const style = styles[i % styles.length], stars = sk[0] === sk[1] ? sk[0] : sk[0] + ((i * 3 + Math.floor(r() * 2)) % (sk[1] - sk[0] + 1));
     const B = old.get(i) || { i, id: vbId(i) };
     Object.assign(B, { name: names[i], lk: lookRandom(r), u: Math.floor(r() * UNIFORMS.length), style, stars, T: vbTraits(style, stars, r), c: -1 });
@@ -12317,10 +12319,12 @@ function vbPoolMake() {                                                      // 
     VB.pool.push(B);
   }
 }
+const vbCap = () => BOTS_TUNE.cap[set.size] || 8;
+function vbFill() { const f = set.botFill | 0; return Math.max(1, Math.min(vbCap(), f > 0 ? f : BOTS_TUNE.auto[set.size] || 6)); }   // the game size: Auto by map size, or what the host picked
 function vbWant() {                                                          // how many bots this game has: the game size, less the people
   if (gameMode !== "pvp" || !VR_ON || mpGuest()) return 0;
-  const people = MP.code ? mpCount() : 1, fill = Math.max(1, Math.min(MP_MAX, set.botFill | 0));
-  return Math.max(0, fill - people);
+  const people = MP.code ? mpCount() : 1;
+  return Math.max(0, Math.min(BOTS_TUNE.most, vbFill() - people));
 }
 function vbFit() {                                                            // host / solo: the bots follow the game size and who's in the room
   if (mpGuest()) return;
@@ -12614,7 +12618,7 @@ const vbGear = B => BOT_GUNS.reduce((s, k) => s + (B.own[k] || 0), 0) / 6;
 function vbJolt(B, a) { const t = Math.random() * 6.283; return [Math.cos(t) * a, Math.sin(t) * a * .6]; }
 // where to go and how fast (a few times a second); the frame-by-frame part is vbAct / vbMove
 function vbPlan(B, fd) {
-  const T = B.T, St = BOT_STYLE[B.style], Sp = BOTS_TUNE.speed, g = B.goal, mvK = .75 + .5 * T.move;
+  const T = B.T, St = BOT_STYLE[B.style], Sp = BOTS_TUNE.speed, g = B.goal, mvK = (.75 + .4 * T.move) * (.78 + .055 * (B.stars - 1));   // (2.49: fewer stars, slower)
   let tx = B.x, tz = B.z, spd = 0, crouch = 0, look = null;
   if (g === "fight") {
     const e = B.foe.e, d = fd, gunR = { pistol: 16, smg: 22, ar: 55, hunt: 140 }[B.gun], R = (T.range * .55 + gunR * .45);
@@ -12625,7 +12629,7 @@ function vbPlan(B, fd) {
     else {                                                                    // in range: strafe, or hold still and crouch (marksmen, guardians)
       const still = B.style === "marksman" || (B.style === "guardian" && Math.random() < .6) || B.gun === "hunt";
       if (still) { crouch = 1; spd = 0; }
-      else { const perp = away + Math.PI / 2 * B.strafe; tx = B.x + Math.sin(perp) * 5; tz = B.z + Math.cos(perp) * 5; spd = (Sp.walk + 1.6 * T.move) * mvK; crouch = Math.random() < .15 * (1 - T.aggr) ? 1 : 0; }
+      else { const perp = away + Math.PI / 2 * B.strafe; tx = B.x + Math.sin(perp) * 5; tz = B.z + Math.cos(perp) * 5; spd = (Sp.walk + T.move) * mvK; crouch = Math.random() < .15 * (1 - T.aggr) ? 1 : 0; }
     }
   } else if (g === "cover") {
     if (!B.coverAt || B.goalT > 1.5 && Math.random() < .3) B.coverAt = vbCoverSpot(B);
@@ -12690,12 +12694,12 @@ function vbAct(B, dt) {
   const S = B.S, T = B.T, fm = B.foe, mv = B.mv;
   let fe = fm && fm.e && fm.seen ? vbEnt(fm.e.id) : null;                    // where they really are this frame (it can see them)
   if (fe && !fe.alive) fe = null;
-  if (B.goal === "fight" && (B.strafeT -= dt) <= 0) { B.strafeT = .4 + Math.random() * (1.6 - T.move); if (Math.random() < .55 + .3 * T.move) B.strafe = -B.strafe; }
+  if (B.goal === "fight" && (B.strafeT -= dt) <= 0) { B.strafeT = .7 + Math.random() * (1.8 - T.move); if (Math.random() < .45 + .3 * T.move) B.strafe = -B.strafe; }
   if ((B.sideT -= dt) <= 0 && Math.random() < .02) B.side = -B.side;
   S.crouchWant = mv ? mv.crouch : 0;
   if (fe) {
     const eye = vbEye(B), p = vbAimPoint(B, fe, dt), dx = p[0] - eye[0], dy = p[1] - eye[1], dz = p[2] - eye[2], dh = Math.hypot(dx, dz);
-    const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(dy, Math.max(.5, dh)), turn = (3 + 7 * T.track) * dt;
+    const wantYaw = Math.atan2(-dx, -dz), wantPitch = Math.atan2(dy, Math.max(.5, dh)), turn = (2 + 5 * T.track) * dt;   // (2.49: turns slower)
     const gap = angDiff(wantYaw, S.yaw); S.yaw += Math.max(-turn, Math.min(turn, gap)); S.aim = wantPitch; S.aimWant = 1;
     B.aimE[0] *= Math.exp(-dt / (.2 + .9 * (1 - T.aim))); B.aimE[1] *= Math.exp(-dt / (.2 + .9 * (1 - T.aim)));
     if (B.climb > 0 && B.burst <= 0) B.climb = Math.max(0, B.climb - RECOIL.back * Math.PI / 180 * dt);
@@ -13008,8 +13012,9 @@ function vbAnimate(C, st) {                                                   //
 function vbRows() { return VB.list.map(B => ({ id: B.id, tag: B.name, c: B.c, u: B.u, bot: B, host: false, idx: 100 + B.i })); }
 function vbBoardRows() { return VB.list.map(B => ({ id: B.id, u: B.u, c: B.c, tag: B.name, team: vbTeam(B.id), k: B.k | 0, d: B.d | 0, p: B.pts | 0, bot: true })); }
 function vbPeopleText() {
-  const n = VB.list.length, people = MP.code ? mpCount() : 1, fill = Math.max(1, Math.min(MP_MAX, set.botFill | 0));
+  const n = VB.list.length, people = MP.code ? mpCount() : 1, fill = vbFill(), auto = (set.botFill | 0) <= 0 ? "Auto · " : "";
   if (fill <= 1) return "Off · no bots";
+  if (auto) return auto + fill + " players on this map size · " + (MP.code ? people + " + " : "you + ") + n + (n === 1 ? " bot" : " bots");
   if (!MP.code) return fill + " players · you + " + n + (n === 1 ? " bot" : " bots");
   return fill + " players · " + people + (people === 1 ? " person" : " people") + " + " + n + (n === 1 ? " bot" : " bots");
 }
@@ -13023,11 +13028,12 @@ function vbPanel() {
     uiBg(g, P); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("BOTS", lx, 92);
     g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText(MP.code ? "They fill the room's empty spots and play like people. Your game runs them." : "PvP against bots: they see, hear, loot, fight and come back like players.", lx + 190, 88);
     uiLabel(g, lx, 168, "Game size", vbPeopleText());
-    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(MP.code ? "When a friend joins, a bot leaves to make room." : "Slide left to play on your own (practice, no clock).", lx, 304);
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText((MP.code ? "A friend joining takes a bot's spot. " : "Slide left for no bots. ") + "Up to " + vbCap() + " on this map size.", lx, 304);
     uiLabel(g, rx, 168, "Skill", BOT_SKILLN[set.botSkill] || "Normal");
     g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText({ easy: "Slow to react, shaky aim", normal: "A fair fight", hard: "Quick and sharp: they punish mistakes", mixed: "Some of each, 1 to 5 stars" }[set.botSkill] || "", rx, 304);
     const L = pool();
     if (!L.length) { g.textAlign = "center"; g.font = "bold 34px sans-serif"; g.fillStyle = UIC.sun; g.fillText(gameMode !== "pvp" ? "Bots play PvP: pick PvP on the map settings" : "No bots in this game", P.W / 2, 700); return; }
+    if (L.length > 8) { g.textAlign = "right"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("+ " + (L.length - 8) + " more bots", P.W - 70, 1150); g.textAlign = "left"; }   // 2.49: big maps
     L.slice(0, 8).forEach((B, i) => {
       const x = lx + (i % 4) * (CW + 16), y = 440 + Math.floor(i / 4) * (CH + 16), St = BOT_STYLE[B.style], T = B.T || {};
       g.fillStyle = "rgba(255,255,255,.07)"; uiRound(g, x, y, CW, CH, 18); g.fill();
@@ -13043,7 +13049,8 @@ function vbPanel() {
         bar(g, x + 14, y + 300, bw, T.aggr, "Push", "#ff6b6b"); bar(g, x + 30 + bw, y + 300, bw, T.nerve, "Nerve", "#7fd1ff"); }
     });
   };
-  uiSlider(Bp, lx, 216, 900, 1, MP_MAX, () => Math.max(1, Math.min(MP_MAX, set.botFill | 0)), v => { set.botFill = Math.round(v); vbFit(); mpHostSetSync(); mpLobSync(true); }, 1);
+  uiSlider(Bp, lx + 150, 216, 750, 1, 20, () => vbFill(), v => { set.botFill = Math.max(1, Math.min(vbCap(), Math.round(v))); vbFit(); mpHostSetSync(); mpLobSync(true); }, 1);
+  uiBtn(Bp, lx, 208, 130, 62, "Auto", () => { set.botFill = 0; vbFit(); mpHostSetSync(); mpLobSync(true); }, { active: () => (set.botFill | 0) <= 0, fs: 28 });   // 2.49: by map size
   [["easy", "Easy"], ["normal", "Normal"], ["hard", "Hard"], ["mixed", "Mixed"]].forEach(([k, l], i) => uiBtn(Bp, rx + i * 228, 196, 214, 66, l, () => { set.botSkill = k; vbFit(); mpHostSetSync(); mpLobSync(true); }, { active: () => set.botSkill === k, fs: 30 }));
   uiBtn(Bp, lx, 330, 320, 80, "New bots", () => { VB.seed = 1 + Math.floor(Math.random() * 1e6); VB.sent = ""; vbFit(); mpLobSync(true); }, { fs: 34 });
   uiBtn(Bp, rx + 524, 330, 376, 80, "Done", () => vruiOpen("setup"), { primary: true, fs: 38 });
@@ -14248,11 +14255,13 @@ function loop(now) {
   // local fog: thickens as you walk into a fog patch, thins out in the clear areas
   const fogT = 0;                                       // walking into fog is now handled by the ground fog itself
   fogLocal += (fogT - fogLocal) * Math.min(1, dt * .5);
+  if (scene.fog) {                                      // (2.49: the Workshop and Map Lab have no fog: this used to throw every frame and freeze the headset)
   scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(4.5, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
     zoneFog();
+  }
   updateBirds(now);
   if (!vr.on) WIND.value = now / 1000;                 // the trees hold still in a headset (sway makes leaf edges shimmer)
   if (world || (vr.on && VRUI.on)) {

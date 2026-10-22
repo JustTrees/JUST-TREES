@@ -4,6 +4,7 @@
   "name": "just-trees-online",
   "main": "cf/worker.js",
   "compatibility_date": "2026-10-01",
+  "keep_vars": true,   // 2.49: plain-text variables set in the dashboard survive each deploy (secrets always do)
   "assets": { "directory": ".", "binding": "ASSETS" },
   // 2.28: the open games list (one small Durable Object, SQLite-backed so it runs on the free plan; it keeps the list in memory)
   "durable_objects": { "bindings": [{ "name": "ROOMS", "class_name": "Rooms" }, { "name": "COUNTS", "class_name": "Counts" }, { "name": "DEVSTORE", "class_name": "DevStore" }] },   // 2.40: maps made per day; 2.45: Dev Mode saves

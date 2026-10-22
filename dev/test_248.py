@@ -52,7 +52,8 @@ async def main():
         out = {}
         # ================= solo =================
         A = await page("solo")
-        await A.evaluate("() => { D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'PvP').on(); return 1; }")
+        await A.evaluate("() => { D.set.size = 'medium'; D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'PvP').on(); return 1; }")
+        out["auto"] = await A.evaluate("() => { const r = []; for (const sz of ['small', 'xl', 'xxxl', 'medium']) { D.set.size = sz; D.vbFit(); r.push(D.VB.list.length); } return r; }")   # 2.49: Auto: more bots on bigger maps
         out["solo"] = await A.evaluate("() => [D.VRUI.stage, D.gameMode, !!W('setup', 'Bots · 5'), !!W('setup', '2 Teams'), SL('setup').length, !!W('setup', 'Hike')]")
         await A.evaluate("() => { W('setup', 'Bots · 5').on(); W('bots', 'Normal').on(); return 1; }")
         out["panel"] = await A.evaluate("() => [D.VRUI.stage, Object.keys(D.VRUI.panels).filter(k => D.VRUI.panels[k].mesh.visible).sort().join(','), D.VB.list.length, new Set(D.VB.list.map(B => B.style)).size, D.VB.list.every(B => B.stars === 3 && B.T && B.name)]")
@@ -171,7 +172,7 @@ async def main():
         out["afterLeave"] = await until(H1, "() => { window.noBg = false; return D.VB.list.length === 3 && D.VB.list.every(B => !!B.S); }", 25)
         print(json.dumps(out))
         m = out["minutes"]
-        ok = (out["solo"][0] == "setup" and out["solo"][1] == "pvp" and out["solo"][2] and out["solo"][3] and out["solo"][4] >= 6 and out["solo"][5]
+        ok = (out["auto"] == [4, 11, 19, 5] and out["solo"][0] == "setup" and out["solo"][1] == "pvp" and out["solo"][2] and out["solo"][3] and out["solo"][4] >= 6 and out["solo"][5]
               and out["panel"][0] == "bots" and out["panel"][1] == "bots,me" and out["panel"][2] == 5 and out["panel"][3] >= 4 and out["panel"][4] and out["size7"][0] == 6
               and out["back"] == ["setup", 5, 1]
               and out["round"][0] == "play" and out["round"][1] > 590 and out["round"][2] == 5 and out["round"][3] == 5 and out["round"][4] > 40 and out["round"][5]
