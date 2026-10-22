@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.63</title>
+<title>JUST TREES 2.64</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.63";              // Just Trees 2.55
+const VERSION = "2.64";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1617,16 +1617,17 @@ const FADE_VS = role => `
   #endif
   float fdD = distance(fdC.xz, uHead.xz);
   ${role === 0 ? "vFade = 1.0 - smoothstep(uFA.x, uFA.y, fdD);" : role === 1 ? "vFade = smoothstep(uFA.x, uFA.y, fdD) * (1.0 - smoothstep(uFB.x, uFB.y, fdD));" : role === 2 ? "vFade = smoothstep(uFB.x, uFB.y, fdD);" : "vFade = 1.0;"}`;
+const FADE_SOLID = { value: 0 };
 function fadeify(mat, role) {                              // role 0 = full detail, 1 = simple 3D, 2 = card, 3 = card that never fades (the borderlands)
   const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : "";
   mat.onBeforeCompile = (sh, r) => {
     if (prev) prev.call(mat, sh, r);
-    sh.uniforms.uHead = FADE.uHead; sh.uniforms.uFA = FADE.uFA; sh.uniforms.uFB = FADE.uFB;
+    sh.uniforms.uHead = FADE.uHead; sh.uniforms.uFA = FADE.uFA; sh.uniforms.uFB = FADE.uFB; sh.uniforms.uSolid = FADE_SOLID;
     sh.vertexShader = "uniform vec3 uHead; uniform vec2 uFA; uniform vec2 uFB; varying float vFade;\n" + sh.vertexShader
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + FADE_VS(role))
       .replace(/}\s*$/, "  if (vFade < 0.002) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);\n}\n");   // fully faded: the whole tree is skipped
-    sh.fragmentShader = "varying float vFade;\n" + sh.fragmentShader.replace("#include <clipping_planes_fragment>",
-      "#include <clipping_planes_fragment>\n  if (vFade < 0.998 && fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453) > vFade) discard;");
+    sh.fragmentShader = "uniform float uSolid; varying float vFade;\n" + sh.fragmentShader.replace("#include <clipping_planes_fragment>",
+      "#include <clipping_planes_fragment>\n  if (vFade < 0.998 && mix(fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453), 0.5, uSolid) > vFade) discard;");   // 2.64: uSolid: no dots (the thermal picture swaps at the halfway point instead)
   };
   mat.customProgramCacheKey = () => prevKey + "|fade" + role;
   return mat;
@@ -8535,11 +8536,27 @@ let zoomOv = null;
 function zoomOverlay() {
   if (zoomOv) return zoomOv;
   zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
-    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 } },
+    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 },
+      uTherm: { value: 0 }, uDepth: { value: null }, uCol: { value: null }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 3000 }, uPx: { value: 1 / 1024 } },
     vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
     fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; uniform sampler2D uTxt; uniform float uTxtOn; varying vec2 vN; varying vec2 vC; varying vec2 vS;
+      uniform float uTherm; uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx;
+      float th(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      float lin(vec2 uv){ float d = texture2D(uDepth, uv).r; return uNear * uFar / (uFar - d * (uFar - uNear)); }
+      vec3 thermal(vec2 s){                                   /* 2.64: the thermal scope: black, red jittery outlines of everything, warm bodies glowing */
+        vec2 uv = 0.5 + s / 1.02, px = vec2(uPx);
+        float fr = floor(uTime * 20.0); vec2 j = (vec2(th(vec2(fr, floor(uv.y * 260.0))), th(vec2(floor(uv.x * 260.0), fr + 7.0))) - 0.5) * px * 1.6;   /* the shimmer */
+        float d0 = lin(uv + j);
+        float lx = lin(uv + j + vec2(px.x, 0.0)) + lin(uv + j - vec2(px.x, 0.0)) - 2.0 * d0, ly = lin(uv + j + vec2(0.0, px.y)) + lin(uv + j - vec2(0.0, px.y)) - 2.0 * d0;
+        float e = (abs(lx) + abs(ly)) / d0, sky = step(uFar * 0.98, d0);
+        float edge = smoothstep(0.004, 0.03, e) * (1.0 - sky) * (0.75 + 0.25 * th(vec2(fr, uv.x * 50.0 + uv.y)));
+        vec3 col = vec3(0.07, 0.0, 0.0) * exp(-d0 / 300.0) * (1.0 - sky) + vec3(1.0, 0.16, 0.06) * edge;
+        vec4 m = texture2D(uCol, uv + j); float hot = step(0.85, m.r) * step(m.g, 0.15) * step(0.85, m.b);
+        return mix(col, vec3(1.0, 0.93, 0.7) * (0.85 + 0.15 * th(uv * 900.0 + fr)), hot);
+      }
       void main(){
         vec2 t = (vN - vC) / vS * uK;                     // the real direction, so the lens stays the same size at every zoom
+        vec2 sU = t;                                      // (2.64: before the turn, for the thermal picture)
         float cr = cos(uRoll), sr = sin(uRoll); t = vec2(cr * t.x - sr * t.y, sr * t.x + cr * t.y);   // turned level with the real horizon
         float a;
         if (uMode < 0.5) {
@@ -8547,6 +8564,11 @@ function zoomOverlay() {
           a = max(smoothstep(R - 0.025, R + 0.004, r), smoothstep(R * 0.72, R, r) * 0.5);
           float line = (abs(t.x) < 0.0022 || abs(t.y) < 0.0022) ? 1.0 : 0.0;
           float post = ((abs(t.x) < 0.008 && abs(t.y) > 0.16) || (abs(t.y) < 0.008 && abs(t.x) > 0.16)) ? 1.0 : 0.0;
+          if (uTherm > 0.5) {                                 /* 2.64: no world drawn behind: the lens shows the thermal picture, red crosshairs */
+            vec3 tc = r < R ? thermal(sU) : vec3(0.0); tc = mix(tc, vec3(0.95, 0.3, 0.22), max(line, post) * 0.8 * step(r, R)); a = 1.0; gl_FragColor = vec4(tc * (1.0 - max(smoothstep(R - 0.025, R + 0.004, r), smoothstep(R * 0.72, R, r) * 0.5)), 1.0);
+            if (uTxtOn > 0.5 && uOpen > 0.97) { vec2 uv2 = vec2((t.x - 0.44) / 0.32, (t.y + 0.53) / 0.16); if (uv2.x > 0.0 && uv2.x < 1.0 && uv2.y > 0.0 && uv2.y < 1.0) { vec4 q = texture2D(uTxt, uv2); gl_FragColor.rgb = mix(gl_FragColor.rgb, q.rgb, q.a); } }
+            return;
+          }
           a = max(a, max(line, post) * 0.88 * step(r, R));
           if (uTxtOn > 0.5 && uOpen > 0.97) {                 /* 2.61: the readout, in the black just outside the lens (2.63: bottom right; room for more there later) */
             vec2 uv = vec2((t.x - 0.44) / 0.32, (t.y + 0.53) / 0.16);   /* 2.63: bottom right, just outside the lens (t: the real direction; the lens edge is .5, ~27 degrees out; this box sits 24-37 degrees right, 20-28 down) */
@@ -8593,6 +8615,34 @@ function scopeReadout() {                                    // distance (to 5 m
   if (pvpOn) { txt("Head " + head, 10, 106, "bold 34px sans-serif", "#ffd65a"); txt("Body " + body, 10, 142, "bold 34px sans-serif", "#e8f0dc"); }
   R.tex.needsUpdate = true; return R.tex;
 }
+const THERM = { rt: null, cam: null, mag: null, ovScene: null, hot: [], hotT: 0, lay: 5 };
+function thermalOk() {                                         // 2.64: the secret: every gun red (5 stars), all 10 grenades (and in PvP full health and full shield): the red sniper's scope goes thermal
+  if (!(vr.scoped && vr.gunKind === "hunt" && ["hunt", "ar", "smg", "pistol"].every(k => (vr.own[k] || 0) >= 5) && (vr.nades | 0) >= NADE.MAX)) return false;
+  if (gameMode === "hunt") return true;                        // (animals and dinosaurs glow)
+  return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
+}
+function thermHot() {                                          // the warm bodies: animals, bots, other players (looked up twice a second)
+  const now = performance.now(); if (now - THERM.hotT < 500) return THERM.hot; THERM.hotT = now;
+  for (const m of THERM.hot) m.layers.disable(THERM.lay);
+  const L = [], add = o => { if (o) o.traverse(m => { if (m.isMesh) { m.layers.enable(THERM.lay); L.push(m); } }); };
+  for (const A of beasts) if (!A.dead && !A.gone && A.root) add(A.root);
+  for (const B of VB.list) if (B.alive) { add(B.C && B.C.top); add(B.S && B.S.group); }
+  for (const Ln of MP.links.values()) if (Ln.R) { add(Ln.R.C && Ln.R.C.top); add(Ln.R.S && Ln.R.S.group); }
+  return THERM.hot = L;
+}
+function thermPrep(q, k) {                                     // one picture along the aim (the lens is one view for both eyes anyway): the depth for the outlines, then the warm bodies on top
+  const T = THERM, N = 1024;
+  if (!T.rt) { T.rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); T.rt.depthTexture.type = THREE.UnsignedIntType;
+    T.cam = new THREE.PerspectiveCamera(10, 1, .5, 3000); T.mag = new THREE.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }); T.ovScene = new THREE.Scene(); }
+  const cam = T.cam; cam.fov = 2 * Math.atan(.5 * 1.02 / k) * 180 / Math.PI; cam.updateProjectionMatrix(); cam.position.copy(vr.head); cam.quaternion.copy(q); cam.updateMatrixWorld();
+  const hot = thermHot(), xr = renderer.xr, xe = xr.enabled, rt0 = renderer.getRenderTarget(), ac = renderer.autoClear, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+  xr.enabled = false; renderer.setRenderTarget(T.rt); renderer.setClearColor(0x000000, 1); renderer.autoClear = true;
+  FADE_SOLID.value = 1; cam.layers.set(0); renderer.render(scene, cam);
+  const mats = hot.map(m => m.material); hot.forEach(m => { m.material = T.mag; }); cam.layers.set(T.lay); renderer.autoClear = false; renderer.render(scene, cam);
+  hot.forEach((m, i) => { m.material = mats[i]; }); cam.layers.set(0); FADE_SOLID.value = 0;
+  renderer.autoClear = ac; renderer.setClearColor(cc, ca); renderer.setRenderTarget(rt0); xr.enabled = xe;
+  const U = zoomOverlay().material.uniforms; U.uTherm.value = 1; U.uDepth.value = T.rt.depthTexture; U.uCol.value = T.rt.texture; U.uTime.value = performance.now() / 1000; U.uK.value = 1; U.uPx.value = 1 / N;
+}
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
@@ -8602,6 +8652,12 @@ function vrZoomRender() {
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vr.meC && vr.meC.top, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
   const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; }); ov.visible = true;
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
+  U.uTherm.value = 0;
+  if (thermalOk()) {                                          // 2.64: the thermal scope: the overlay alone, drawn from the one picture
+    thermPrep(q, k); if (!vr.thermSaid) { vr.thermSaid = true; vrBanner("Thermal scope", 2.5, 1); }
+    THERM.ovScene.add(ov); renderer.render(THERM.ovScene, camera); scene.add(ov);
+    hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false; return;
+  }
   xr.cameraAutoUpdate = false; xr.updateCamera(camera);
   const R = xr.getCamera(); _zm.compose(vr.head, q, _zone); _zi.copy(_zm).invert();
   for (const c of R.cameras) { const e = c.projectionMatrix.elements; e[0] *= k; e[1] *= k; e[4] *= k; e[5] *= k; c.projectionMatrixInverse.copy(c.projectionMatrix).invert(); c.matrixWorld.copy(_zm); c.matrixWorldInverse.copy(_zi); }
@@ -10932,15 +10988,23 @@ function hitBoom(at, v, f0 = 120, dur = .35) { tone(f0, at, v, dur, "sine", 38);
 function sparkle(at, n, v, lo, hi) { for (let i = 0; i < n; i++) tone(lo + Math.random() * (hi - lo), at + i * .028 + Math.random() * .01, v, .12 + Math.random() * .1, "sine"); }
 function bigHitFx(tier, head) {                                // 2.61 (placeholders until the sound pack): a sniper hit, bigger with its damage
   if (!SND.ctx || !SND.on || tier <= 0) return; const k = head ? 1.19 : 1;
+  if (fxPlay("hit_metal_" + Math.floor(Math.random() * 3), .5, k)) {   // 2.64: 150+ a metal ping, 250+ a heavy clang, 350+ a big bell and a glassy shimmer
+    if (tier >= 2) fxPlay("hit_clang", .45, k * .95); if (tier >= 3) { fxPlay("hit_bell", .42, k, .02); fxPlay("sparkle", .3, 1, .05); } return;
+  }
   tone(587 * k, .0, .12, .35, "triangle");                                              // 150+: a lower bell under the tink
   if (tier >= 2) { tone(900 * k, .02, .08, .25, "sine", 2400 * k); hitBoom(0, .18, 150, .3); }   // 250+: a rising "shing" and a thump
   if (tier >= 3) { sparkle(.06, 6, .045, 2200, 4200); tone(1175 * k, .1, .09, .5, "triangle"); }   // 350+: sparkles and a high bell
 }
 function downChime(dm) {                                     // 2.55: you took someone down: a bright rising three-note chime over a soft thump; 2.61: a sniper kill gets more the bigger the shot
   if (!SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, tier = dm ? dmgTier(dm) : 0;
+  if (tier >= 1 && fxPlay("kill_1", .5, 1, .2)) {             // 2.64: the recorded ones: 150+ a bright confirm, 250+ a sweep, a second confirm and a bell, 350+ a long chime, a big bell and a shimmer
+    if (tier >= 2) { fxPlay("kill_2a", .45, 1, .12); fxPlay("kill_2b", .45, 1, .38); fxPlay("kill_bell", .45, 1, 0); }
+    if (tier >= 3) { fxPlay("kill_3", .55, 1, .32); fxPlay("kill_3b", .45, 1, .08); fxPlay("big_bell", .5, 1, 0); fxPlay("sparkle", .35, 1, .5); }
+  } else {
   if (tier >= 1) { tone(2349, .225, .12, .6, "triangle"); tone(4698, .225, .03, .5, "triangle"); }   // 150+: a fourth note on top
   if (tier >= 2) { [1397, 1760, 2093, 2794].forEach((f, i) => tone(f, .32 + i * .055, .08, .55, "triangle")); hitBoom(0, .3, 110, .45); }   // 250+: a run up and a deeper thump
   if (tier >= 3) { [1047, 1319, 1568, 2093].forEach(f => tone(f, .55, .07, 1.3, "sawtooth")); [523, 784].forEach(f => tone(f, .55, .08, 1.4, "triangle")); sparkle(.55, 14, .04, 2500, 6000); hitBoom(.55, .35, 90, .7); }   // 350+: a held chord, sparkles and a boom
+  }
   [[880, 0], [1175, .075], [1760, .15]].forEach(([f, at]) => [[f, .17], [f * 2, .05]].forEach(([ff, v]) => { const o = c.createOscillator(), g = c.createGain(); o.type = "triangle"; o.frequency.value = ff;
     g.gain.setValueAtTime(0, t + at); g.gain.linearRampToValueAtTime(v, t + at + .006); g.gain.exponentialRampToValueAtTime(.0005, t + at + .55); o.connect(g).connect(SND.master); o.start(t + at); o.stop(t + at + .6); }));
   const o = c.createOscillator(), g = c.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(60, t + .2);
@@ -13882,7 +13946,7 @@ function mpShotSound(k, from, bot) {
   const now = SND.ctx.currentTime; PSND.verb = (PSND.verb || []).filter(t => now - t < 1.5);   // 2.63: echoes don't pile up (a burst of far shots was a constant hiss, like wind)
   const w = Math.min(1, Math.max(0, (d - 40) / 460)), wet = Math.min(1, w * 1.2 * Math.pow(near, -.4) * (GSND.thick[k] ? 1.3 : 1)) * (bot ? .25 : 1) / (1 + .7 * PSND.verb.length);   // 2.14: the further off, the more of it is echo (2.63: a bot's shot much less)
   if (wet > .05) PSND.verb.push(now);
-  return gunSample(GSND.shot[k], vol, GSND.rate[k] * (1 + (Math.random() - .5) * .06), d / 343, GSND.thick[k] && d < 200, pv, lp, wet);
+  return gunSample(shotN(k), vol, GSND.rate[k] * (1 + (Math.random() - .5) * .06), d / 343, GSND.thick[k] && d < 200, pv, lp, wet);
 }
 function vbStepOk(B) {                                         // 2.55: only the 3 nearest bots' footsteps (within 25 m) are heard
   const now = performance.now(); if (!VB.stepAt || now - VB.stepAt > 400) { VB.stepAt = now; const c = camera.position;
@@ -14324,12 +14388,21 @@ const AUTO_LAT = .035;                                      // automatic fire: e
 /* 2.09 ("sounds like a cap gun"): real recorded guns (Snake's Authentic Gun Sounds 1 + 2, free, recorded outdoors with their echo):
    sniper .308, assault rifle 7.62x39 (AK), SMG and pistol 9mm; reloads, bolt, charging handles and slide from the same packs (sounds/guns/,
    cut by the scratch script; a copy opened from disk keeps the made-up ones). Pitch and volume per gun in GSND. */
-const GSND = { shot: { hunt: "sniper_shot", ar: "ar_shot", smg: "nine_shot", pistol: "nine_shot" }, vol: { hunt: 1, ar: .85, smg: .62, pistol: .72 }, rate: { hunt: .87, ar: 1, smg: 1.06, pistol: .97 },
+const GSND = { shot: { hunt: "ffl_sniper", ar: "ffl_ar", smg: "ffl_smg", pistol: "ffl_pistol" }, old: { hunt: "sniper_shot", ar: "ar_shot", smg: "nine_shot", pistol: "nine_shot" }, vol: { hunt: 1, ar: .85, smg: .62, pistol: .72 }, rate: { hunt: 1, ar: 1, smg: 1.03, pistol: 1 },
   thick: { hunt: 1 }, out: 1,                                 // 2.10: the sniper deeper and thicker (lower pitch, a low-end boost and a sub thump). 2.11: no compressor on the guns ("too soft")
   set: { hunt: "sniper", ar: "ar", smg: "smg", pistol: "pistol" }, bus: null };
+function shotN(k) {                                           // 2.64: one of the gun's two recordings (or the old one while they load)
+  const a = GSND.shot[k], b = a + "_b", has = n => !!DSND.buf["guns/" + n], p = Math.random() < .5 ? [a, b] : [b, a];
+  return has(p[0]) ? p[0] : has(p[1]) ? p[1] : GSND.old[k];
+}
+const FX_NAMES = ["hit_metal_0", "hit_metal_1", "hit_metal_2", "hit_clang", "hit_bell", "sparkle", "kill_1", "kill_2a", "kill_2b", "kill_bell", "kill_3", "kill_3b", "big_bell"];
+function fxPlay(n, vol, rate = 1, at = 0) {                     // 2.64: one of the hit / kill sounds (Kenney, sounds/fx); false while it isn't loaded
+  const b = DSND.buf["fx/" + n]; if (!b || !SND.ctx || !SND.on) return false; const c = SND.ctx, s = c.createBufferSource(), g = c.createGain();
+  s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol; s.connect(g).connect(SND.master); s.start(c.currentTime + at); return true;
+}
 function gunSndLoad() {
   if (GSND.asked || !SND.ctx) return; GSND.asked = true;
-  dsndLoad(["sniper_shot", "ar_shot", "nine_shot", "dry", ...["sniper", "ar", "smg", "pistol"].flatMap(g => ["back", "fwd", "magout", "magin"].map(x => g + "_" + x))].map(n => "guns/" + n));
+  dsndLoad(FX_NAMES.map(n => "fx/" + n)); dsndLoad(["sniper_shot", "ar_shot", "nine_shot", "dry", ...["sniper", "ar", "smg", "pistol"].flatMap(g => ["ffl_" + g, "ffl_" + g + "_b"]), ...["sniper", "ar", "smg", "pistol"].flatMap(g => ["back", "fwd", "magout", "magin"].map(x => g + "_" + x))].map(n => "guns/" + n));
 }
 function farVerb() {                                        // 2.14: a long, dark rolling echo for far gunshots (a pop, then thunder off the hills and trees)
   if (GSND.far || !SND.ctx) return GSND.far;
@@ -14363,7 +14436,7 @@ function gunshot(kind, lead, dist) {
   if (!SND.ctx || !SND.on) return;
   if (kind && GSND.shot[kind]) {                             // 2.09: the recording (someone else's shot: quieter and later with distance)
     gunSndLoad(); const d = dist || 0, vol = GSND.vol[kind] * (d > 15 ? Math.pow(15 / d, .8) : 1);
-    if (gunSample(GSND.shot[kind], vol, GSND.rate[kind] * (1 + (Math.random() - .5) * .06), (lead || 0) + d / 343, GSND.thick[kind])) return;
+    if (gunSample(shotN(kind), vol, GSND.rate[kind] * (1 + (Math.random() - .5) * .06), (lead || 0) + d / 343, GSND.thick[kind])) return;
   }
   const c = SND.ctx, t = c.currentTime + (lead || 0), pr = { ar: [.75, 3000, .5, .55], smg: [.5, 4200, .3, .32], pistol: [.6, 3800, .4, .4] }[kind];
   if (pr) {                                                  // VR Hunting's assault rifle, SMG and pistol
