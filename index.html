@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.59</title>
+<title>JUST TREES 2.60</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.59";              // Just Trees 2.55
+const VERSION = "2.60";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -7953,7 +7953,7 @@ function vrTick(dt) {
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
   const hl = [dx * cy - dz * sy, I.head.y - vr.oy + vr.hOff, dx * sy + dz * cy];      // rotate by -yaw (height: your eyes above your feet in the game, after the height setting)
   if (vr.placeAt) {
-    vr.placeAt = false; vr.goodX = undefined;
+    vr.placeAt = false; vr.goodX = undefined; vr.lastL = null; vr.resetPend = false;
     const nh = new THREE.Vector3(P.x, P.y + hl[1], P.z), d = nh.clone().sub(I.head);
     I.head.copy(nh); for (const k in I.hands) { I.hands[k].pos.add(d); I.hands[k].rayPos.add(d); }
     const c0 = Math.cos(vr.yaw), s0 = Math.sin(vr.yaw); vr.ox = P.x - (hl[0] * c0 + hl[2] * s0); vr.oz = P.z - (-hl[0] * s0 + hl[2] * c0); vr.oy = P.y + vr.hOff;
@@ -8090,9 +8090,13 @@ function vrAfterMove(dt) {                                // carry the play spac
   }
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
   const hx = dx * cy - dz * sy, hz = dx * sy + dz * cy;                    // head in the play space
+  const hlYaw = P.yaw - vr.yaw;                                              // (which way the head faces in the play space)
+  if (vr.resetPend && vr.lastL) { const d = vr.lastL[0] - hlYaw; vr.yaw += d; P.yaw += d; P.x = vr.lastL[1]; P.z = vr.lastL[2]; vr.goodX = undefined; }   // 2.60: recentered: the world doesn't move
+  vr.resetPend = false;
   vr.yaw += vr.pendTurn || 0;
   const c2 = Math.cos(vr.yaw), s2 = Math.sin(vr.yaw);
   vr.ox = P.x - (hx * c2 + hz * s2); vr.oz = P.z - (-hx * s2 + hz * c2); vr.oy = P.y + vr.hOff;
+  vr.lastL = [hlYaw, P.x, P.z];
   if (vr.base && typeof XRRigidTransform !== "undefined") {
     const q = _q1.setFromAxisAngle(_UPv, -vr.yaw), p = _v1.set(-vr.ox, -vr.oy, -vr.oz).applyQuaternion(q);
     renderer.xr.setReferenceSpace(vr.base.getOffsetReferenceSpace(new XRRigidTransform({ x: p.x, y: p.y, z: p.z, w: 1 }, { x: q.x, y: q.y, z: q.z, w: q.w })));
@@ -9966,17 +9970,12 @@ function vruiOpen(stage) {
   if (stage !== "lobby" || VRUI.stage !== "lobby") VRUI.edit = false;
   const I = vr.readInputs ? vr.readInputs() : null;
   const inWorld = stage === "pause" || (stage === "height" && VRUI.afterH === "pause");   // 2.38: set your height without leaving the game
-  let hp = new THREE.Vector3(0, 0, 0), fy = 0;
-  if (I) {
-    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(I.headQ), yawW = Math.atan2(-f.x, -f.z);
-    if (inWorld) { hp.set(I.head.x, P.y, I.head.z); fy = yawW; }
-    else { const hl = vrHeadLocal(I); hp.set(hl[0], 0, hl[2]); fy = yawW - vr.yaw; }   // where your head is in the bare play space we are switching to
-  }
+  vruiPlace(I, inWorld);
   if (!inWorld && renderer.xr.isPresenting && vr.base) { renderer.xr.setReferenceSpace(vr.base); vr.ox = vr.oy = vr.oz = 0; vr.yaw = 0; }
+  VRUI.inWorld = inWorld;
   if (world) world.visible = inWorld;
   VRUI.env.visible = !inWorld;
   if (!inWorld && (!VRUI.grove || groveOld)) { groveOld = false; try { menuGrove(); } catch (e) { console.warn("menu grove", e); } }   // 2.59: a new clearing after each map
-  VRUI.root.position.copy(hp); if (!inWorld) VRUI.root.position.y -= vr.hOff; VRUI.root.rotation.set(0, fy, 0);
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
   if (stage === "pause") { let k = 0; for (const w of VRUI.panels.pause.widgets) if (!(w.hide && w.hide())) w.y = 205 + k++ * 124; }   // only the buttons that apply, packed together
   vruiShow();
@@ -9988,6 +9987,15 @@ function vruiOpen(stage) {
   if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : VRUI.keyFor === "arena" ? LAB.A.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
   if (!inWorld) state = "vrmenu";                                // (2.38: leaving a game that kept going, too)
   mpHostStage(stage);
+}
+function vruiPlace(I, inWorld) {                                 // the menus in front of you, wherever you stand and face
+  let hp = new THREE.Vector3(0, 0, 0), fy = 0;
+  if (I) {
+    const f = new THREE.Vector3(0, 0, -1).applyQuaternion(I.headQ), yawW = Math.atan2(-f.x, -f.z);
+    if (inWorld) { hp.set(I.head.x, P.y, I.head.z); fy = yawW; }
+    else { const hl = vrHeadLocal(I); hp.set(hl[0], 0, hl[2]); fy = yawW - vr.yaw; }   // where your head is in the bare play space we are switching to
+  }
+  VRUI.root.position.copy(hp); if (!inWorld) VRUI.root.position.y -= vr.hOff; VRUI.root.rotation.set(0, fy, 0);
 }
 function vrHeightCheck(after) { VRUI.afterH = after; VRUI.hk = 0; VRUI.hy = 0; vruiOpen("height"); }
 function vrHeightDone(measured) {
@@ -10027,6 +10035,7 @@ function vruiTick(dt) {
     if (VRUI.fadeGo && VRUI.fadeV >= 1) { const f = VRUI.fadeGo; VRUI.fadeGo = null; f(); }
   }
   if (!VRUI.on) return;
+  if (vr.reUI) { vr.reUI = false; if (!(VRUI.inWorld && state === "play")) vruiPlace(I, VRUI.inWorld); }   // 2.60: recentered: the menus come round in front of you
   vr.I = I; vr.main = I.hands[set.hand] || null; vr.off = I.hands[set.hand === "right" ? "left" : "right"] || null;
   vrHands();
   if (VRUI.stage === "rooms") roomsTick(dt);                  // 2.28
@@ -10177,7 +10186,8 @@ async function enterVR(menu) {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
     VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(.8);
     await renderer.xr.setSession(session);
-    vr.base = renderer.xr.getReferenceSpace(); vr.on = true; vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
+    vr.base = renderer.xr.getReferenceSpace(); vr.on = true;
+    try { vr.base.addEventListener("reset", () => { vr.resetPend = true; vr.reUI = true; }); } catch (_) {}   // 2.60: holding the headset's button recenters: the menus come round in front of you, the game world stays put vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
     try { renderer.xr.setFoveation(1); } catch (_) {}
     session.addEventListener("end", () => {
       const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
