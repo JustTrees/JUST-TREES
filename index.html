@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.65</title>
+<title>JUST TREES 2.66</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.65";              // Just Trees 2.55
+const VERSION = "2.66";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8537,14 +8537,14 @@ function zoomOverlay() {
   if (zoomOv) return zoomOv;
   zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
     uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 },
-      uTherm: { value: 0 }, uDepth: { value: null }, uCol: { value: null }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 3000 }, uPx: { value: 1 / 1024 } },
+      uTherm: { value: 0 }, uDepth: { value: null }, uCol: { value: null }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 3000 }, uPx: { value: 1 / 1024 }, uSpan: { value: .51 } },
     vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
     fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; uniform sampler2D uTxt; uniform float uTxtOn; varying vec2 vN; varying vec2 vC; varying vec2 vS;
-      uniform float uTherm; uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx;
+      uniform float uTherm; uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx; uniform float uSpan;
       float th(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       float lin(vec2 uv){ float d = texture2D(uDepth, uv).r; return uNear * uFar / (uFar - d * (uFar - uNear)); }
       vec3 thermal(vec2 s){                                   /* 2.64: the thermal scope: black, red jittery outlines of everything, warm bodies glowing */
-        vec2 uv = 0.5 + s / 1.02, px = vec2(uPx);
+        vec2 uv = 0.5 + s / (2.0 * uSpan), px = vec2(uPx);
         float fr = floor(uTime * 20.0); vec2 j = (vec2(th(vec2(fr, floor(uv.y * 260.0))), th(vec2(floor(uv.x * 260.0), fr + 7.0))) - 0.5) * px * 1.6;   /* the shimmer */
         float d0 = lin(uv + j);
         float lx = lin(uv + j + vec2(px.x, 0.0)) + lin(uv + j - vec2(px.x, 0.0)) - 2.0 * d0, ly = lin(uv + j + vec2(0.0, px.y)) + lin(uv + j - vec2(0.0, px.y)) - 2.0 * d0;
@@ -8577,6 +8577,7 @@ function zoomOverlay() {
         } else {
           float r = min(length(t - vec2(-0.25, 0.0)), length(t - vec2(0.25, 0.0))), R = 0.4 * uOpen;
           a = smoothstep(R - 0.07, R + 0.01, r);
+          if (uTherm > 0.5) { vec3 tc = r < R + 0.01 ? thermal(sU) : vec3(0.0); gl_FragColor = vec4(tc * (1.0 - a), 1.0); return; }   /* 2.66: thermal binoculars */
         }
         gl_FragColor = vec4(0.0, 0.0, 0.0, a);
       }` }));
@@ -8616,11 +8617,12 @@ function scopeReadout() {                                    // distance (to 5 m
   R.tex.needsUpdate = true; return R.tex;
 }
 const THERM = { rt: null, cam: null, mag: null, ovScene: null, hot: [], hotT: 0, lay: 5 };
-function thermalOk() {                                         // 2.64: the secret: every gun red (5 stars), all 10 grenades (and in PvP full health and full shield): the red sniper's scope goes thermal
-  if (!(vr.scoped && vr.gunKind === "hunt" && ["hunt", "ar", "smg", "pistol"].every(k => (vr.own[k] || 0) >= 5) && (vr.nades | 0) >= NADE.MAX)) return false;
+function thermalLoaded() {                                     // 2.64: the secret: every gun red (5 stars), all 10 grenades (and in PvP full health and full shield); 2.66: the binoculars too
+  if (!(["hunt", "ar", "smg", "pistol"].every(k => (vr.own[k] || 0) >= 5) && (vr.nades | 0) >= NADE.MAX)) return false;
   if (gameMode === "hunt") return true;                        // (animals and dinosaurs glow)
   return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
 }
+function thermalOk() { return thermalLoaded() && ((vr.scoped && vr.gunKind === "hunt") || (vr.binos && !vr.scoped)); }   // the red sniper's scope, or the binoculars
 function thermHot() {                                          // the warm bodies: animals, bots, other players (looked up twice a second)
   const now = performance.now(); if (now - THERM.hotT < 500) return THERM.hot; THERM.hotT = now;
   for (const m of THERM.hot) m.layers.disable(THERM.lay);
@@ -8630,18 +8632,18 @@ function thermHot() {                                          // the warm bodie
   for (const Ln of MP.links.values()) if (Ln.R) { add(Ln.R.C && Ln.R.C.top); add(Ln.R.S && Ln.R.S.group); }
   return THERM.hot = L;
 }
-function thermPrep(q, k) {                                     // one picture along the aim (the lens is one view for both eyes anyway): the depth for the outlines, then the warm bodies on top
+function thermPrep(q, k, span = .51) {                         // (span: how far out the picture reaches: the scope's lens .5, the binoculars' two lenses .66)                                     // one picture along the aim (the lens is one view for both eyes anyway): the depth for the outlines, then the warm bodies on top
   const T = THERM, N = 1024;
   if (!T.rt) { T.rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); T.rt.depthTexture.type = THREE.UnsignedIntType;
     T.cam = new THREE.PerspectiveCamera(10, 1, .5, 3000); T.mag = new THREE.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }); T.ovScene = new THREE.Scene(); }
-  const cam = T.cam; cam.fov = 2 * Math.atan(.5 * 1.02 / k) * 180 / Math.PI; cam.updateProjectionMatrix(); cam.position.copy(vr.head); cam.quaternion.copy(q); cam.updateMatrixWorld();
+  const cam = T.cam; cam.fov = 2 * Math.atan(span / k) * 180 / Math.PI; cam.updateProjectionMatrix(); cam.position.copy(vr.head); cam.quaternion.copy(q); cam.updateMatrixWorld();
   const hot = thermHot(), xr = renderer.xr, xe = xr.enabled, rt0 = renderer.getRenderTarget(), ac = renderer.autoClear, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
   xr.enabled = false; renderer.setRenderTarget(T.rt); renderer.setClearColor(0x000000, 1); renderer.autoClear = true;
   FADE_SOLID.value = 1; cam.layers.set(0); renderer.render(scene, cam);
   const mats = hot.map(m => m.material); hot.forEach(m => { m.material = T.mag; }); cam.layers.set(T.lay); renderer.autoClear = false; renderer.render(scene, cam);
   hot.forEach((m, i) => { m.material = mats[i]; }); cam.layers.set(0); FADE_SOLID.value = 0;
   renderer.autoClear = ac; renderer.setClearColor(cc, ca); renderer.setRenderTarget(rt0); xr.enabled = xe;
-  const U = zoomOverlay().material.uniforms; U.uTherm.value = 1; U.uDepth.value = T.rt.depthTexture; U.uCol.value = T.rt.texture; U.uTime.value = performance.now() / 1000; U.uK.value = 1; U.uPx.value = 1 / N;
+  const U = zoomOverlay().material.uniforms; U.uTherm.value = 1; U.uDepth.value = T.rt.depthTexture; U.uCol.value = T.rt.texture; U.uTime.value = performance.now() / 1000; U.uK.value = 1; U.uPx.value = 1 / N; U.uSpan.value = span;
 }
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
@@ -8654,7 +8656,7 @@ function vrZoomRender() {
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
   U.uTherm.value = 0;
   if (thermalOk()) {                                          // 2.64: the thermal scope: the overlay alone, drawn from the one picture
-    thermPrep(q, k); if (!vr.thermSaid) { vr.thermSaid = true; vrBanner("Thermal scope", 2.5, 1); }
+    thermPrep(q, k, vr.scoped ? .51 : .66); if (vr.scoped && !vr.thermSaid) { vr.thermSaid = true; vrBanner("Thermal scope", 2.5, 1); }
     THERM.ovScene.add(ov); renderer.render(THERM.ovScene, camera); scene.add(ov);
     hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false; return;
   }
