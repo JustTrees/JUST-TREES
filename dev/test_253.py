@@ -1,5 +1,6 @@
-"""2.53: at night there are 40% more animals (and dinosaurs), each 20% bigger. In Prehistoric, now and then a raptor spook turns up behind
-you, shadows you, stops and stares when you look at it, then tears past you a couple of metres off and is gone; bullets go through it.
+"""2.53: at night there are 40% more animals (and dinosaurs), each 20% bigger. In Prehistoric, now and then a raptor spook (2.69): one creeps
+up behind you and growls (or barks if you turn and catch it), one jogs up beside you and screams, or a pack of 2-3 run up and all screech;
+then they run off and are gone. Shoot one and it bolts unhurt.
 Bigfoot: miss him and he runs a wide swerve that brings him right past you (gibbering as he passes), can't be hit from the miss on,
 goes off and is gone; ten minutes later he's back somewhere else, with "There's a Bigfoot in these woods".
 Usage: python3 dev/test_253.py dbg.html"""
@@ -25,14 +26,17 @@ async def main():
           // ---- a spook (Prehistoric)
           gen({ dino: true }); D.DINO.gap = 1e9; D.DINO.hunter = null;
           for (let k = 0; k < 40; k++) { P.x = (Math.random() - .5) * 300; P.z = (Math.random() - .5) * 300; if (D.okSpot(P.x, P.z) && D.H(P.x, P.z) > D.water + 1) break; } ground(); face(P.x, P.z + 10);
-          D.SPOOK.gap = 0; D.SPOOK.A = null; step(.2); const A = D.SPOOK.A; out.spook = { made: !!A };
-          if (A) { const d0 = Math.hypot(A.x - P.x, A.z - P.z); out.spook.start = [Math.round(d0), +((A.z - P.z) / d0).toFixed(2)];   // behind you (you face +z)
-            let minF = 1e9, maxF = 0; step(6, () => { const d = Math.hypot(A.x - P.x, A.z - P.z); minF = Math.min(minF, d); maxF = Math.max(maxF, d); }); out.spook.follow = [Math.round(minF), Math.round(maxF), A.spook.ph];
-            face(A.x, A.z); step(.3); out.spook.stare = [A.spook.stare > 0, Math.round(A.want * 10) / 10, A.spook.stared];
-            const o = D.camera.position.clone(), dir = new T.Vector3(A.x, A.y + 1, A.z).sub(o).normalize(); const hit = D.animalRay(o, dir); out.spook.shot = hit[1] === A ? 'hit' : 'through';
-            face(P.x, P.z + 10); A.spook.dur = 0; let minR = 1e9, ph = new Set();
-            step(40, () => { ph.add(A.spook ? A.spook.ph : 'none'); if (A.spook && A.spook.ph !== 'follow') minR = Math.min(minR, Math.hypot(A.x - P.x, A.z - P.z)); return !D.beasts.includes(A); });
-            out.spook.rush = { minR: +minR.toFixed(1), phases: [...ph], removed: !D.beasts.includes(A), cleared: !D.SPOOK.A }; }
+          D.SPOOK.gap = 1e9; const spook = (v, f) => { for (const A of D.SPOOK.list) A.gone = true; step(.1); face(P.x, P.z + 10); const A0 = D.spookStart(v); if (!A0) return { made: false };
+            const L = [...D.SPOOK.list], o = { made: true, n: L.length, start: L.map(A => { const d = Math.hypot(A.x - P.x, A.z - P.z); return [Math.round(d), +((A.z - P.z) / d).toFixed(2)]; }), shout: [], calls: [] };
+            const seen = new Set(); step(40, t => { if (f) f(L, t);
+              for (const A of L) if (A.spook && A.spook.ph === 'shout' && !seen.has(A)) { seen.add(A); o.shout.push(+Math.hypot(A.x - P.x, A.z - P.z).toFixed(1)); o.calls.push(A.spook.call); }
+              return L.every(A => !D.beasts.includes(A)); });
+            o.removed = L.every(A => !D.beasts.includes(A)); o.cleared = !D.SPOOK.list.length || (step(.1), !D.SPOOK.list.length); return o; };
+          out.spook = { creep: spook('creep'), jog: spook('jog'), pack: spook('pack'),
+            caught: spook('creep', (L, t) => { const A = L[0]; if (A.spook && A.spook.ph === 'come' && Math.hypot(A.x - P.x, A.z - P.z) < 25) face(A.x, A.z); }) };
+          { face(P.x, P.z + 10); for (const A of D.SPOOK.list) A.gone = true; step(.1); const A = D.spookStart('jog'); step(3); face(A.x, A.z);
+            const o = D.camera.position.clone(), dir = new T.Vector3(A.x, A.y + 1, A.z).sub(o).normalize(), hit = D.animalRay(o, dir); out.spook.shot = hit[1] === A ? 'hit' : 'through';
+            if (hit[1] === A) D.hitAnimal(A, 10, 100, false, 'hunt'); out.spook.shotThen = [A.spook && A.spook.ph, !!A.dead]; step(15, () => !D.beasts.includes(A)); out.spook.shotGone = !D.beasts.includes(A); }
           // ---- Bigfoot
           gen({ size: 'large' }); const B = D.beasts.find(A => A.kind === 'bigfoot' || A.kind === 'yeti'); out.bf = { kind: B && B.kind, scale: B && +B.scale.toFixed(2) };
           if (B) { D.vr.own.hunt = 5; D.state = 'play';
@@ -52,8 +56,11 @@ async def main():
         print(json.dumps(r))
         d, n, s, bf = r["day"], r["night"], r["spook"], r["bf"]
         ok = not d[0] and n[0] and 1.25 < n[1] / d[1] < 1.6 and abs(n[2] / d[2] - 1.2) < .05 \
-             and s["made"] and s["start"][1] < -.3 and 40 <= s["start"][0] <= 70 and s["follow"][0] >= 12 and s["follow"][1] < 75 and s["stare"][0] and s["stare"][1] == 0 and s["shot"] == "through" \
-             and s["rush"]["minR"] < 5 and s["rush"]["removed"] and s["rush"]["cleared"] and "rush" in s["rush"]["phases"] \
+             and all(s[k]["made"] and s[k]["removed"] and s[k]["cleared"] for k in ("creep", "jog", "pack", "caught")) \
+             and s["creep"]["start"][0][1] < -.3 and s["creep"]["shout"] and s["creep"]["shout"][0] < 5 and s["creep"]["calls"] == ["s_call"] \
+             and s["caught"]["calls"] == ["s_bark"] and s["jog"]["shout"] and s["jog"]["shout"][0] < 4.5 and s["jog"]["calls"] == ["rush"] \
+             and s["pack"]["n"] in (2, 3) and len(s["pack"]["shout"]) == s["pack"]["n"] and max(s["pack"]["shout"]) < 8 and set(s["pack"]["calls"]) == {"rush"} \
+             and s["shot"] == "hit" and s["shotThen"] == ["away", False] and s["shotGone"] \
              and bf["kind"] and bf["scale"] >= 1.15 and bf["boltIn"] and bf["run"]["minD"] < 6 and bf["run"]["side"] >= 20 and bf["run"]["babbled"] and not bf["run"]["hitWhileRunning"] \
              and bf["run"]["gone"] and bf["run"]["awayT"] > 590 and bf["at9m"]["gone"] and not bf["back"]["gone"] and "in these woods" in bf["back"]["banner"] and bf["back"]["far"] >= 200 and not bf["back"]["bolting"] and bf["back"]["run"] < 10
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()

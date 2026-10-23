@@ -20,7 +20,7 @@ What the game is, where everything lives, how to build and test it, the design d
 
 ---
 
-## 2. The game now (v2.68)
+## 2. The game now (v2.69)
 
 ### Modes
 - **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR: solo against bots, or online with bots filling the room; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -215,6 +215,7 @@ What the game is, where everything lives, how to build and test it, the design d
 - **2.64** Thermal scope (secret: all guns red + 10 grenades, PvP also full health/shield; Hunting too). New gunshots (Free Firearm Library) and sniper hit/kill sounds (Kenney). Packs added to models/source (test_264).
 - **2.65** Your own shots: a glowing line from the barrel to the bullet, day and night; others' tracers unchanged.
 - **2.66** Thermal binoculars along with the thermal scope when fully loaded.
+- **2.69** Raptor spooks redone (Ron: the one that shadowed/circled you and ignored shots made no sense): `spookStart(v)` picks one of three, never the same twice running — **creep** (sneaks up behind, stops ~4 m back and growls `s_call` then `s_bark`; turn and catch it within 30 m and it barks and runs), **jog** (jogs up to stand ~2.4 m beside you and screeches `rush`), **pack** (2–3 run in from one direction to spots 5.5 m round you and each screeches in turn); then all run off and vanish (`SPOOK.list`, phases come → shout → away; the Attack move via `rearT` while screeching). Spooks can be hit now: a bullet or arrow makes it yelp and bolt unhurt (`spookScare`, the whole pack goes). Test: test_253 (its day/night animal count was already a bit flaky).
 - **2.68** Red-gun tools on X when fully decked out: AK flashlight, pistol laser, SMG thermal mini-sight, bow flaming arrows, sniper/binocular thermal now switched (test_268).
 - **2.67** Tracers round, thinner, gone a third of a second after the shot; red guns easier to find (5★ 5%, red snipers in PvP loot).
 - **2.54** Headset on foot 10% slower (`VR_FOOT` walk 7.65, sprint 11.25; PC and phone unchanged; `ZONE_EDGE_MAX` 10 so you still outrun the zone). Spooks for every player: an online guest makes their own in their own headset (never sent: `nid` 0), seen only by them.

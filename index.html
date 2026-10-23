@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.68";              // Just Trees 2.55
+const VERSION = "2.69";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6279,6 +6279,7 @@ Object.assign(QSPEC, {
 function dinoBar(A) {}                                       // (1.78: no health bar — scarier without, and it cost frames)
 function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a grenade) reached an animal: most drop, dinosaurs take several
   if (!A || A.dead) return;
+  if (A.spook) { spookScare(A); return; }                    // 2.69: a spook isn't hurt, it just bolts
   if (A.net && mpNetGuest()) { mpSendHost({ t: "ah", n: A.nid, d: dist || 0, dmg: dmg || 0, hd: head ? 1 : 0, g: gun || null, ti: gun ? tierOf(gun) : 0 }); if (A.hpMax) { A.flinch = 1; hitTick(); } return; }
   if (!A.hpMax) { killAnimal(A, dist); return; }
   const tbl = A.hunter || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
@@ -6353,54 +6354,88 @@ function dinoSpawnHunter() {                                 // far off, out of 
     B.yaw = Math.atan2(P.x - B.x, P.z - B.z); DINO.pack.push(B);
   }
 }
-/* 2.53: spooks. Every few minutes in Prehistoric a raptor turns up behind you and shadows you: it keeps its distance, stops dead and stares
-   when you look at it, slips off to the side; then it comes for you flat out and tears past a couple of metres away, calling, and runs on
-   and is gone. Just a scare: bullets and grenades go through it (it isn't really there to hit). Not while a raptor or a T. rex is after you. */
-const SPOOK = { gap: 150 + Math.random() * 150, A: null, n: 0 };
+/* 2.53: spooks — just a scare, made in your own headset only. 2.69 (Ron: the one that circled you and ignored your shots made no sense):
+   every few minutes in Prehistoric one of three:
+   - creep: a raptor sneaks up behind you, stops close and growls, then runs off (turn round and catch it first: it barks and runs);
+   - jog:   one jogs right up beside you, screams in your face, and runs off;
+   - pack:  two or three run up together, stop round you, all screech at you, and scatter.
+   Shoot one and it yelps and bolts (no damage: it isn't really there to hunt), and the rest of its pack goes too. Not while a raptor hunt or a T. rex is on. */
+const SPOOK = { gap: 150 + Math.random() * 150, list: [], n: 0, A: null, last: "" };
 function spookWatch(dt) {
-  const A = SPOOK.A;
-  if (A) { if (A.gone || !beasts.includes(A)) { if (A.gone) dinoRemove(A); SPOOK.A = null; } return; }
+  if (SPOOK.list.length) {
+    for (const A of SPOOK.list) if (A.gone && beasts.includes(A)) dinoRemove(A);
+    SPOOK.list = SPOOK.list.filter(A => !A.gone && beasts.includes(A)); SPOOK.A = SPOOK.list[0] || null; return;
+  }
   if (state !== "play" || (DINO.hunter && !DINO.hunter.dead) || beasts.some(B => B.hunter && !B.dead && !B.gone) || rexChase() || P.y < water - 1) return;
   if ((SPOOK.gap -= dt) > 0) return;
   SPOOK.gap = 180 + Math.random() * 240; spookStart();
 }
-function spookStart() {
-  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, bx = -_lf.x / fl, bz = -_lf.z / fl;
+function spookSpot(a0, spread, r0, r1, hidden) {               // somewhere to start from: around angle a0 (from you), r0-r1 m out, on dry land
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1;
   for (let k = 0; k < 60; k++) {
-    const a = Math.atan2(bx, bz) + (Math.random() - .5) * (k < 40 ? 1.4 : 3), r = 45 + Math.random() * 20, x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
+    const a = a0 + (Math.random() - .5) * (k < 40 ? spread : spread * 2.2), r = r0 + Math.random() * (r1 - r0), x = P.x + Math.sin(a) * r, z = P.z + Math.cos(a) * r;
     if (Math.abs(x) > EDGE - 12 || Math.abs(z) > EDGE - 12 || (edgeShape.island && Math.hypot(x, z) > edgeR(x, z) - 12) || H(x, z) < water + .5 || inLava(x, z, 3)) continue;
-    if (((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (r * fl) > .2) continue;                // out of sight
-    const A = addGround("raptor", x, z); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset: never sent to anyone)
-    Object.assign(A, { spook: { ph: "follow", t: 0, dur: 16 + Math.random() * 16, side: Math.random() < .5 ? 1 : -1, stare: 0, stared: 0, seen: false }, grp: -1, thru: true, look: 0, fleeT: 99, mode: "idle", want: 0, jawK: .04 });
-    A.yaw = Math.atan2(P.x - x, P.z - z); SPOOK.A = A; SPOOK.n++; return A;
+    if (hidden && ((x - P.x) * _lf.x + (z - P.z) * _lf.z) / (r * fl) > .2) continue;      // out of sight
+    return [x, z];
   }
   return null;
+}
+function spookMake(x, z, K) {
+  const A = addGround("raptor", x, z); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset: never sent to anyone)
+  Object.assign(A, { spook: Object.assign({ ph: "come", t: 0 }, K), grp: -1, thru: true, look: 0, fleeT: 99, mode: "walk", want: 0, jawK: .04 });
+  A.yaw = Math.atan2(P.x - x, P.z - z); SPOOK.list.push(A); SPOOK.A = SPOOK.list[0]; return A;
+}
+function spookStart(v) {
+  camera.getWorldDirection(_lf); const back = Math.atan2(-_lf.x, -_lf.z);
+  v = v || ["creep", "jog", "pack"].filter(k => k !== SPOOK.last)[Math.floor(Math.random() * 2)];   // never the same one twice running
+  SPOOK.last = v; SPOOK.n++;
+  if (v === "creep") { const p = spookSpot(back, 1.2, 38, 52, true); return p ? spookMake(p[0], p[1], { v }) : null; }
+  if (v === "jog") { const p = spookSpot(back + (Math.random() < .5 ? 1 : -1) * 1.3, 1, 40, 55, false); return p ? spookMake(p[0], p[1], { v, side: Math.random() < .5 ? 1 : -1 }) : null; }
+  const n = Math.random() < .5 ? 2 : 3, a0 = back + (Math.random() - .5) * 2, p = spookSpot(a0, .8, 45, 58, true); if (!p) return null;   // a pack: together, from one direction
+  const from = Math.atan2(p[0] - P.x, p[1] - P.z); let first = null;
+  for (let i = 0; i < n; i++) { const q = spookSpot(from + (i - (n - 1) / 2) * .12, .05, 45, 58, false) || p, A = spookMake(q[0], q[1], { v, slot: (i - (n - 1) / 2) * .7, from, delay: i * .22 + Math.random() * .15 }); if (!first) first = A; }
+  return first;
+}
+function spookScare(A) {                                        // shot (or the pack's one was): a yelp and off it goes
+  const K = A.spook; if (!K || K.ph === "away") return;
+  for (const B of SPOOK.list) if (B.spook && B.spook.ph !== "away" && (B === A || (K.v === "pack" && B.spook.v === "pack"))) {
+    B.spook.ph = "away"; B.spook.t = 0; B.flinch = 1; if (B === A) dinoCall(B, "hurt"); }
 }
 function spookTick(A, dt) {                                   // sets where it's going and how fast; the normal walking does the rest
   const K = A.spook; K.t += dt;
   const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
-  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, inView = (-dx * _lf.x - dz * _lf.z) / (d * fl) > .82 && d < 90;
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, fx = _lf.x / fl, fz = _lf.z / fl, inView = (-dx * fx - dz * fz) / d > .82 && d < 90;
   const toP = Math.atan2(dx, dz); A.look += (Math.max(-1.6, Math.min(1.6, angDiff(toP, A.yaw))) - A.look) * Math.min(1, dt * 5);
-  if (K.ph === "follow") {
-    if (inView && K.stare <= 0 && K.stared < 2) { K.stare = 1.4 + Math.random() * 1.6; K.stared++; K.seen = true; dinoCall(A, "s_call"); }   // caught looking: it stops dead and stares back
-    if (K.stare > 0) { K.stare -= dt; A.mode = "idle"; A.want = 0; A.yaw += angDiff(toP, A.yaw) * Math.min(1, dt * 6);
-      if (K.stare <= 0) K.slip = 2.5; return; }
-    const want = Math.max(16, 34 - K.t * .8), sd = K.slip > 0 ? 1 : .35;                  // closing in slowly; after a stare it slips off sideways
-    if (K.slip > 0) K.slip -= dt;
-    A.mode = "walk"; A.target = [P.x - ux * want + uz * K.side * want * sd, P.z - uz * want - ux * K.side * want * sd];
-    A.want = d > want + 12 ? A.run * .85 : d > want ? A.walk * 2.2 : A.walk * .8;
-    if (K.t > K.dur && !inView || K.t > K.dur + 10) { K.ph = "rush"; K.t = 0; K.nx = -uz * K.side; K.nz = ux * K.side; K.ux = ux; K.uz = uz; dinoCall(A, "rush"); }
-    if (d > 140) A.gone = true;                                // you got well away
+  const shout = (call, hold) => { K.ph = "shout"; K.t = 0; K.hold = hold; K.call = call; K.said = false; };
+  if (K.ph === "come") {
+    A.mode = "walk";
+    if (K.v === "creep") {                                     // sneaking up behind you: run while it's far, creep the last bit
+      A.target = [P.x - fx * 3, P.z - fz * 3]; A.want = d > 16 ? A.run * .7 : A.walk * 1.4;
+      if (inView && d < 30) shout("s_bark", 1.1);              // you turned round and caught it
+      else if (d < 4.2) shout("s_call", 1.7);                  // right behind you: a growl
+    } else if (K.v === "jog") {                                // a jog straight up, to stand just beside you
+      A.target = [P.x - ux * .5 - uz * K.side * 2.4, P.z - uz * .5 + ux * K.side * 2.4]; A.want = A.run * .55;
+      if (d < 3.8) shout("rush", 1.3);
+    } else {                                                   // the pack: run in, each to its own spot round you
+      const a = K.from + K.slot; A.target = [P.x + Math.sin(a) * 5.5, P.z + Math.cos(a) * 5.5]; A.want = A.run * .8;
+      if (d < 7) shout("rush", 1.7 + K.delay);
+    }
+    if (K.t > 25 || d > 140) { K.ph = "away"; K.t = 0; }       // never got there (or you got well away)
     return;
   }
-  if (K.ph === "rush") {                                       // flat out, aimed to pass you a couple of metres off
-    A.mode = "walk"; A.want = 15; A.target = [P.x + K.nx * 2.4 + K.ux * 4, P.z + K.nz * 2.4 + K.uz * 4];
-    if (((A.x - P.x) * K.ux + (A.z - P.z) * K.uz) > 0 || d < 3.2) { K.ph = "gone"; K.t = 0; dinoCall(A, "s_bark"); if (vr.on) { buzz("L", .7, 140); buzz("R", .7, 140); } }   // it's past you
-    if (K.t > 15) K.ph = "gone";
+  if (K.ph === "shout") {                                      // stopped, staring right at you, and lets you have it
+    A.mode = "idle"; A.want = 0; A.yaw += angDiff(toP, A.yaw) * Math.min(1, dt * 8);
+    if (!K.said && K.t > (K.v === "pack" ? K.delay : K.v === "creep" ? .15 : .05)) { K.said = true; A.rearT = .9; dinoCall(A, K.call);   /* (the snapping, screeching move) */
+      if (K.v === "creep" && K.call === "s_call") setTimeout(() => { if (A.spook && !A.gone) dinoCall(A, "s_bark"); }, 900);
+      if (vr.on && d < 12) { buzz("L", .7, 140); buzz("R", .7, 140); } }
+    if (A.rearT > 0) A.rearT -= dt;
+    if (K.t > K.hold) { K.ph = "away"; K.t = 0; }
     return;
   }
-  A.mode = "walk"; A.want = 14; A.target = [A.x + K.ux * 60 + K.nx * 10, A.z + K.uz * 60 + K.nz * 10];   // on and away
-  if ((d > 80 && !inView) || K.t > 10) A.gone = true;
+  A.rearT = 0;
+  if (!K.ax) { const a = Math.atan2(-ux, -uz) + (Math.random() - .5) * 1.2; K.ax = Math.sin(a); K.az = Math.cos(a); }   // off and away, each its own way
+  A.mode = "walk"; A.want = 14; A.target = [A.x + K.ax * 60, A.z + K.az * 60];
+  if ((d > 70 && !inView) || K.t > 10) A.gone = true;
 }
 function dinoRemove(A) { if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); }
 function dinoCharge(A) { const now = performance.now(); if (DINO.pack && DINO.pack.length > 1 && now - (DINO.lastCharge || 0) < 1600) return; DINO.lastCharge = now;   // 2.50: a pack charges one after another, not all at once
@@ -7435,7 +7470,7 @@ function beastRadius(A) {                                  // a sphere round the
 function animalRay(o, dir, minT = .5, maxT = 1e9) {                  // the nearest animal hit box along the shot
   let best = 1e9, who = null, whoH = false;
   for (const A of beasts) {
-    if (A.dead || !A.root.visible || A.bolting || A.spook) continue;
+    if (A.dead || !A.root.visible || A.bolting || (A.spook && A.spook.ph === "away")) continue;   // (2.69: a spook can be hit now: it bolts)
     const c = A.root.position, R = A.bR || (A.bR = beastRadius(A)), ox = c.x - o.x, oy = c.y - o.y, oz = c.z - o.z, tc = ox * dir.x + oy * dir.y + oz * dir.z;
     if (tc < -R || tc > maxT + R) continue; const qx = ox - dir.x * tc, qy = oy - dir.y * tc, qz = oz - dir.z * tc; if (qx * qx + qy * qy + qz * qz > R * R) continue;   // nowhere near this one
     A.root.updateMatrixWorld();
@@ -11991,6 +12026,7 @@ function arrowsTick(dt) {
 }
 function arrowHit(A, R, p, head, spd) {
   if (!A || A.dead) return;
+  if (A.spook) { spookScare(A); return; }
   const dist = R.from.distanceTo(p), k = Math.min(1, spd / (BOW_V[bowTier()] || BOW.vMax)), tier = Math.max(1, bowTier());
   for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
   if (!A.hpMax) {
