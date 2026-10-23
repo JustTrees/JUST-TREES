@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.67";              // Just Trees 2.55
+const VERSION = "2.68";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -7978,7 +7978,7 @@ function vrTick(dt) {
   vr.lastP = [P.x, P.z];
   if (VRUI.on) {                                                // 2.38: the in-game menu is open but the game goes on (online): you just stand still
     input.jx = input.jy = 0; input.run = false; input.glide = false; vr.pendTurn = 0; fireHeld = false; vr.two = vr.scoped = vr.ads = vr.binos = false; vr.zoomK = 1; vr.zoomWas = false;
-    if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; nadeHide(); flareHand(null); bowHide();
+    if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; nadeHide(); flareHand(null); bowHide(); toolFxHide(TOOL.fx);
     vr.I = I; vr.main = main; vr.off = off; return;
   }
   // off-hand stick walks where you look; gun-hand stick snaps 30 degrees (or zooms the scope)
@@ -8056,6 +8056,7 @@ function vrTick(dt) {
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(VR_BINO_FOV.length - 1, vr.zoom)); }
   else if (binos) binos.visible = false;
+  toolTick(off);                                                        // 2.68: X: the tool of what you're holding
   // full-view zoom: steadied view direction, magnification to match the PC zoom steps, a quick iris opening
   const zoomOn = vr.scoped || vr.binos;
   if (zoomOn) {
@@ -8533,14 +8534,7 @@ function vrHands() {
 }
 // the scope and binocular view: the whole headset view zooms in, black round the lens (one mono view, so it stays comfortable)
 let zoomOv = null;
-function zoomOverlay() {
-  if (zoomOv) return zoomOv;
-  zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
-    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 },
-      uTherm: { value: 0 }, uDepth: { value: null }, uCol: { value: null }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 3000 }, uPx: { value: 1 / 1024 }, uSpan: { value: .51 } },
-    vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
-    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; uniform sampler2D uTxt; uniform float uTxtOn; varying vec2 vN; varying vec2 vC; varying vec2 vS;
-      uniform float uTherm; uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx; uniform float uSpan;
+const THERM_FN = `
       float th(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
       float lin(vec2 uv){ float d = texture2D(uDepth, uv).r; return uNear * uFar / (uFar - d * (uFar - uNear)); }
       vec3 thermal(vec2 s){                                   /* 2.64: the thermal scope: black, red jittery outlines of everything, warm bodies glowing */
@@ -8554,6 +8548,16 @@ function zoomOverlay() {
         vec4 m = texture2D(uCol, uv + j); float hot = step(0.85, m.r) * step(m.g, 0.15) * step(0.85, m.b);
         return mix(col, vec3(1.0, 0.93, 0.7) * (0.85 + 0.15 * th(uv * 900.0 + fr)), hot);
       }
+`;                                                         // 2.68: the thermal picture (shared by the scope, the binoculars and the SMG's mini-sight)
+function zoomOverlay() {
+  if (zoomOv) return zoomOv;
+  zoomOv = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false,
+    uniforms: { uK: { value: 1 }, uMode: { value: 0 }, uOpen: { value: 1 }, uRoll: { value: 0 }, uTxt: { value: null }, uTxtOn: { value: 0 },
+      uTherm: { value: 0 }, uDepth: { value: null }, uCol: { value: null }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 3000 }, uPx: { value: 1 / 1024 }, uSpan: { value: .51 } },
+    vertexShader: "varying vec2 vN; varying vec2 vC; varying vec2 vS; void main(){ vN = position.xy; vec4 c = projectionMatrix * vec4(0.0, 0.0, -1.0, 1.0); vC = c.xy / c.w; vS = vec2(projectionMatrix[0][0], projectionMatrix[1][1]); gl_Position = vec4(position.xy, 0.0, 1.0); }",
+    fragmentShader: `uniform float uK; uniform float uMode; uniform float uOpen; uniform float uRoll; uniform sampler2D uTxt; uniform float uTxtOn; varying vec2 vN; varying vec2 vC; varying vec2 vS;
+      uniform float uTherm; uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx; uniform float uSpan;
+      ${THERM_FN}
       void main(){
         vec2 t = (vN - vC) / vS * uK;                     // the real direction, so the lens stays the same size at every zoom
         vec2 sU = t;                                      // (2.64: before the turn, for the thermal picture)
@@ -8599,9 +8603,12 @@ function zoomViewQ(aimQ) {                                  // look where the gu
 const SCOPE_RO = { cv: null, tex: null, t: 0, key: "" };
 function scopeRange() {                                       // 2.61: how far the sniper's bullet would go to what's under the crosshair (null: nothing, the sky)
   const S = GUNSPOT.hunt, from = vr.gun.localToWorld(new THREE.Vector3(...S.muzzle)), dir = new THREE.Vector3(0, 0, -1).applyQuaternion(vr.gun.quaternion);
-  const h = castShot(from, dir, 1600); let best = h.kind ? from.distanceTo(h.p) : 1e9;
-  if (gameMode === "pvp") { for (const B of VB.list) { const r = vbRayOne(B, from, dir, best); if (r && r.t < best) best = r.t; }
-    if (MP.on) for (const L of mpOpen()) { const r = mpHitOne(L.R, from, dir, best); if (r && r.t < best) best = r.t; } }
+  return aimDist(from, dir, 1600);
+}
+function aimDist(from, dir, max) {                            // how far along this line the first thing is (land, trees, animals, bots, players); null: nothing
+  const h = castShot(from, dir, max); let best = h.kind ? from.distanceTo(h.p) : 1e9; aimDist.kind = h.kind;   // (2.68: and what it is)
+  if (gameMode === "pvp") { for (const B of VB.list) { const r = vbRayOne(B, from, dir, best); if (r && r.t < best) { best = r.t; aimDist.kind = "bot"; } }
+    if (MP.on) for (const L of mpOpen()) { const r = mpHitOne(L.R, from, dir, best); if (r && r.t < best) { best = r.t; aimDist.kind = "player"; } } }
   return best < 1e8 ? best : null;
 }
 function scopeReadout() {                                    // distance (to 5 m), and in PvP what a head or body shot does there
@@ -8622,7 +8629,7 @@ function thermalLoaded() {                                     // 2.64: the secr
   if (gameMode === "hunt") return true;                        // (animals and dinosaurs glow)
   return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
 }
-function thermalOk() { return thermalLoaded() && ((vr.scoped && vr.gunKind === "hunt") || (vr.binos && !vr.scoped)); }   // the red sniper's scope, or the binoculars
+function thermalOk() { return thermalLoaded() && ((vr.scoped && vr.gunKind === "hunt" && TOOL.on.hunt) || (vr.binos && !vr.scoped && TOOL.on.binos)); }   // 2.68: switched on with X   // the red sniper's scope, or the binoculars
 function thermHot() {                                          // the warm bodies: animals, bots, other players (looked up twice a second)
   const now = performance.now(); if (now - THERM.hotT < 500) return THERM.hot; THERM.hotT = now;
   for (const m of THERM.hot) m.layers.disable(THERM.lay);
@@ -8632,17 +8639,20 @@ function thermHot() {                                          // the warm bodie
   for (const Ln of MP.links.values()) if (Ln.R) { add(Ln.R.C && Ln.R.C.top); add(Ln.R.S && Ln.R.S.group); }
   return THERM.hot = L;
 }
-function thermPrep(q, k, span = .51) {                         // (span: how far out the picture reaches: the scope's lens .5, the binoculars' two lenses .66)                                     // one picture along the aim (the lens is one view for both eyes anyway): the depth for the outlines, then the warm bodies on top
-  const T = THERM, N = 1024;
-  if (!T.rt) { T.rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); T.rt.depthTexture.type = THREE.UnsignedIntType;
-    T.cam = new THREE.PerspectiveCamera(10, 1, .5, 3000); T.mag = new THREE.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }); T.ovScene = new THREE.Scene(); }
-  const cam = T.cam; cam.fov = 2 * Math.atan(span / k) * 180 / Math.PI; cam.updateProjectionMatrix(); cam.position.copy(vr.head); cam.quaternion.copy(q); cam.updateMatrixWorld();
+function thermRender(rt, cam) {                               // one thermal picture into rt: the depth (for the outlines), then the warm bodies on top in magenta
+  const T = THERM; if (!T.mag) { T.mag = new THREE.MeshBasicMaterial({ color: 0xff00ff, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 }); T.ovScene = new THREE.Scene(); }
   const hot = thermHot(), xr = renderer.xr, xe = xr.enabled, rt0 = renderer.getRenderTarget(), ac = renderer.autoClear, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
-  xr.enabled = false; renderer.setRenderTarget(T.rt); renderer.setClearColor(0x000000, 1); renderer.autoClear = true;
+  xr.enabled = false; renderer.setRenderTarget(rt); renderer.setClearColor(0x000000, 1); renderer.autoClear = true;
   FADE_SOLID.value = 1; cam.layers.set(0); renderer.render(scene, cam);
   const mats = hot.map(m => m.material); hot.forEach(m => { m.material = T.mag; }); cam.layers.set(T.lay); renderer.autoClear = false; renderer.render(scene, cam);
   hot.forEach((m, i) => { m.material = mats[i]; }); cam.layers.set(0); FADE_SOLID.value = 0;
   renderer.autoClear = ac; renderer.setClearColor(cc, ca); renderer.setRenderTarget(rt0); xr.enabled = xe;
+}
+function thermPrep(q, k, span = .51) {                         // (span: how far out the picture reaches: the scope's lens .5, the binoculars' two lenses .66): one picture along the aim (the lens is one view for both eyes anyway)
+  const T = THERM, N = 1024;
+  if (!T.rt) { T.rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); T.rt.depthTexture.type = THREE.UnsignedIntType; T.cam = new THREE.PerspectiveCamera(10, 1, .5, 3000); }
+  const cam = T.cam; cam.fov = 2 * Math.atan(span / k) * 180 / Math.PI; cam.updateProjectionMatrix(); cam.position.copy(vr.head); cam.quaternion.copy(q); cam.updateMatrixWorld();
+  thermRender(T.rt, cam);
   const U = zoomOverlay().material.uniforms; U.uTherm.value = 1; U.uDepth.value = T.rt.depthTexture; U.uCol.value = T.rt.texture; U.uTime.value = performance.now() / 1000; U.uK.value = 1; U.uPx.value = 1 / N; U.uSpan.value = span;
 }
 function vrZoomRender() {
@@ -8656,7 +8666,7 @@ function vrZoomRender() {
   camera.quaternion.copy(q); camera.updateMatrixWorld(); cullTiles();           // keep the trees you're looking at through the lens
   U.uTherm.value = 0;
   if (thermalOk()) {                                          // 2.64: the thermal scope: the overlay alone, drawn from the one picture
-    thermPrep(q, k, vr.scoped ? .51 : .66); if (vr.scoped && !vr.thermSaid) { vr.thermSaid = true; vrBanner("Thermal scope", 2.5, 1); }
+    thermPrep(q, k, vr.scoped ? .51 : .66);
     THERM.ovScene.add(ov); renderer.render(THERM.ovScene, camera); scene.add(ov);
     hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false; return;
   }
@@ -8668,6 +8678,137 @@ function vrZoomRender() {
   xr.cameraAutoUpdate = true;
   hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false;
 }
+
+/* ---- 2.68: red-gun tools. Fully decked out (every gun red, all 10 grenades; in PvP also full health and full shield: thermalLoaded) every
+   weapon gets its tool, and the off-hand X (the bottom button) turns the tool of what you're holding on and off:
+   sniper scope and binoculars = thermal, AK = flashlight, SMG = a thermal mini-sight, pistol = laser, bow (Hunting) = flaming arrows.
+   Everyone sees your flashlight and laser. Lose the full load (hurt, a grenade thrown) and the tools go dark until you're topped up. ---- */
+const TOOL = { on: { hunt: false, ar: false, smg: false, pistol: false, bow: false, binos: false }, saidW: null, fx: null, sight: null, rtT: 0,
+  name: { hunt: "Thermal scope", ar: "Flashlight", smg: "Thermal sight", pistol: "Laser", bow: "Flaming arrows", binos: "Thermal binoculars" },
+  click: { on: [[0, 2600, .015, .12], [.045, 3500, .015, .1]], off: [[0, 3400, .015, .1], [.045, 2100, .015, .1]] },
+  LIGHT: { reach: 60, spread: .26, beam: 35 }, LASER: 160 };
+function toolKey() {                                           // which tool X works on right now (null: nothing in your hands with one)
+  if (vr.binos && !vr.scoped) return "binos";
+  if (vr.bowMode && gameMode === "hunt") return "bow";
+  if (vr.nadeMode || vr.flareMode) return null;
+  return vr.gun && vr.gun.visible && vr.gunKind in TOOL.on ? vr.gunKind : null;
+}
+const toolOn = k => !!TOOL.on[k] && thermalLoaded();
+function toolTex() {
+  if (TOOL.tex) return TOOL.tex; const cv = document.createElement("canvas"); cv.width = cv.height = 64; const x = cv.getContext("2d"), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.45, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,0)"); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  return TOOL.tex = new THREE.CanvasTexture(cv);
+}
+function toolFxMake() {                                        // a flashlight beam + the pool of light where it lands, a glowing lens, a laser line + its dot (one set per gun holder: you, each other player)
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.004, 1, 1, 20, 1, true).translate(0, -.5, 0).rotateX(Math.PI / 2), new THREE.ShaderMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uA: { value: .2 }, uC: { value: new THREE.Color(1, .93, .78) } },
+    vertexShader: "varying float vT; varying float vF; void main(){ vT = -position.z; vec4 mv = modelViewMatrix * vec4(position, 1.0); vec3 n = normalize(normalMatrix * normal); vF = abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform float uA; uniform vec3 uC; varying float vT; varying float vF; void main(){ float a = uA * pow(1.0 - clamp(vT, 0.0, 1.0), 1.6) * pow(vF, 1.5); gl_FragColor = vec4(uC, a); }" }));
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 28), new THREE.MeshBasicMaterial({ map: toolTex(), color: 0xfff0d0, side: THREE.DoubleSide, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }));
+  const pg = new THREE.BufferGeometry(); pg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3), 3)); pg.setAttribute("color", new THREE.BufferAttribute(new Float32Array([1, .95, .8]), 3));
+  const lens = new THREE.Points(pg, flareDot(.16));
+  const laser = new THREE.Mesh(tracerGeoR, new THREE.MeshBasicMaterial({ color: 0xff2410, transparent: true, opacity: .6, depthWrite: false, fog: false, toneMapped: false }));   // (plain, not added light: it shows by day too)
+  const dg = new THREE.BufferGeometry(); dg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3), 3)); dg.setAttribute("color", new THREE.BufferAttribute(new Float32Array([1, .12, .06]), 3));
+  const dot = new THREE.Points(dg, flareDot(.05)); dot.material.blending = THREE.NormalBlending;
+  const F = { beam, pool, lens, laser, dot };
+  for (const k in F) { F[k].frustumCulled = false; F[k].visible = false; F[k].renderOrder = 5; scene.add(F[k]); }
+  return F;
+}
+function toolFxHide(F) { if (F) for (const k in F) F[k].visible = false; }
+function toolFxDrop(F) { if (F) for (const k in F) { scene.remove(F[k]); F[k].geometry !== tracerGeoR && F[k].geometry.dispose(); F[k].material.dispose(); } }
+const _tfM = new THREE.Vector3(), _tfD = new THREE.Vector3(), _tfH = new THREE.Vector3(), _tfN = new THREE.Vector3(), _tfU = new THREE.Vector3(), _tfV = new THREE.Vector3(), _tfMx = new THREE.Matrix4();
+function toolFxShow(F, kind, G, muzzle, far) {                 // kind 1 = flashlight, 2 = laser, on gun G (muzzle in G's own space); far: someone else's, a long way off (skip the costly ray)
+  const mz = G.localToWorld(_tfM.set(...muzzle)), dir = _tfD.set(0, 0, -1).applyQuaternion(G.getWorldQuaternion(_q1));
+  const nk = .25 + .75 * NIGHT_K;
+  if (kind === 1) {
+    F.laser.visible = F.dot.visible = false; const L = TOOL.LIGHT;
+    const d = far ? null : aimDist(mz, dir, L.reach), bl = Math.min(d === null ? L.beam : d, L.beam);
+    F.beam.position.copy(mz); F.beam.lookAt(_tfH.copy(mz).add(dir)); F.beam.rotateY(Math.PI); F.beam.scale.set(L.spread * bl, L.spread * bl, bl); F.beam.material.uniforms.uA.value = .03 + .23 * NIGHT_K; F.beam.visible = true;
+    F.lens.position.copy(mz); F.lens.visible = true;
+    if (d !== null) { const r = .15 + d * L.spread * .9, hp = _tfH.copy(mz).addScaledVector(dir, d), gk = aimDist.kind; let st = 1;
+      if (gk === "ground" || gk === "snow" || gk === "water") {   // on the ground: lie flat on it, stretched out the way the light comes in (a long oval when it skims the ground)
+        const n = gk === "water" ? _tfN.set(0, 1, 0) : _tfN.set(H(hp.x - .5, hp.z) - H(hp.x + .5, hp.z), 1, H(hp.x, hp.z - .5) - H(hp.x, hp.z + .5)).normalize();
+        const u = _tfU.copy(dir).addScaledVector(n, -dir.dot(n)); if (u.lengthSq() < 1e-6) u.set(1, 0, 0).addScaledVector(n, -n.x); u.normalize();
+        F.pool.quaternion.setFromRotationMatrix(_tfMx.makeBasis(u, _tfV.crossVectors(n, u), n)); st = Math.min(4, 1 / Math.max(.25, Math.abs(dir.dot(n))));
+        F.pool.position.copy(hp).addScaledVector(n, .06).addScaledVector(u, r * (st - 1) * .35); F.pool.scale.set(r * st, r, 1);
+      } else { F.pool.position.copy(hp).addScaledVector(dir, -Math.min(1.5, .2 + d * .03)); F.pool.lookAt(mz); F.pool.scale.setScalar(r); }
+      F.pool.material.opacity = nk * .9 * Math.pow(1 - d / L.reach, 1.3) * Math.min(1, 4 / Math.max(1, r)) / Math.sqrt(st); F.pool.visible = true; } else F.pool.visible = false;
+  } else if (kind === 2) {
+    F.beam.visible = F.pool.visible = F.lens.visible = false;
+    const d = (far ? null : aimDist(mz, dir, TOOL.LASER)), L = d === null ? (far ? 40 : TOOL.LASER) : d, cd = mz.distanceTo(camera.position), w = .0018 + cd * .00035;
+    F.laser.position.copy(mz).addScaledVector(dir, L / 2); F.laser.lookAt(_tfH.copy(mz).addScaledVector(dir, L)); F.laser.scale.set(w, w, L);
+    F.laser.material.opacity = .55 + .3 * NIGHT_K; F.laser.visible = true;
+    if (d !== null) { F.dot.position.copy(mz).addScaledVector(dir, d - .05); F.dot.material.size = .06 + d * .003; F.dot.visible = true; } else F.dot.visible = false;
+  } else toolFxHide(F);
+}
+function toolSight(G, S) {                                     // the SMG's thermal mini-sight: a little round screen on top, just in front of your eye
+  let M = G.userData.tsight;
+  if (!M) {
+    if (!TOOL.sight) { const N = 256, rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); rt.depthTexture.type = THREE.UnsignedIntType;
+      TOOL.sight = { rt, cam: new THREE.PerspectiveCamera(14, 1, .5, 1500), N,
+        mat: new THREE.ShaderMaterial({ uniforms: { uDepth: { value: rt.depthTexture }, uCol: { value: rt.texture }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 1500 }, uPx: { value: 1 / N }, uSpan: { value: .5 }, uLive: { value: 0 } },
+          vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+          fragmentShader: `uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx; uniform float uSpan; uniform float uLive; varying vec2 vUv;
+            ${THERM_FN}
+            void main(){ vec2 c = vUv - 0.5; float r = length(c); vec3 col = uLive > 0.5 ? thermal(c * 2.0 * uSpan) : vec3(0.05, 0.0, 0.0);
+              col = mix(col, vec3(1.0, 0.15, 0.08), smoothstep(0.03, 0.018, r)); col *= smoothstep(0.5, 0.43, r); gl_FragColor = vec4(col, 1.0); }` }) }; }
+    M = new THREE.Group(); const dark = new THREE.MeshLambertMaterial({ color: 0x1b1d20 });
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(.021, 28), TOOL.sight.mat); disc.position.z = .016; M.add(disc);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .034, 20, 1, true).rotateX(Math.PI / 2), dark); tube.material.side = THREE.DoubleSide; M.add(tube);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(.014, .03, .03), dark); foot.position.y = -.03; M.add(foot);
+    M.position.set(0, S.eye[1] + .01, S.eye[2] - .14); M.visible = false; G.add(M); G.userData.tsight = M;   // (a touch above the iron sights, so they don't block it)
+  }
+  return M;
+}
+function toolPrep() {                                          // before the frame is drawn: the mini-sight's thermal picture (30 times a second, only while it's near your eye)
+  const T = TOOL.sight, M = TOOL.sightM; if (!T || !M || !M.visible || state !== "play") return;
+  const disc = M.children[0], p = disc.getWorldPosition(_tfH), near = p.distanceTo(vr.head) < .5;
+  T.mat.uniforms.uLive.value = near ? 1 : 0; if (!near) return;
+  const now = performance.now(); if (now - TOOL.rtT < 33) return; TOOL.rtT = now;
+  const G = M.parent; T.cam.position.copy(p); G.getWorldQuaternion(T.cam.quaternion); T.cam.updateMatrixWorld(); thermRender(T.rt, T.cam); T.mat.uniforms.uTime.value = now / 1000;
+}
+function toolTick(off) {                                       // (each frame, in a game, after the hands are read)
+  const key = toolKey(), full = thermalLoaded();
+  if (full && TOOL.saidW !== world && state === "play") { TOOL.saidW = world; vrBanner("Red gear! X turns on your tools", 4, 2); }
+  if (off && edge("xtool", off.a) && key && state === "play") {
+    const sd = set.hand === "right" ? "L" : "R";
+    if (!full) { vrBanner(gameMode === "pvp" ? "Tools: all guns red, 10 grenades, full health + shield" : "Tools: all guns red + 10 grenades", 3, 1); buzz(sd, .15, 20); }
+    else { TOOL.on[key] = !TOOL.on[key]; gunFoley(TOOL.click[TOOL.on[key] ? "on" : "off"]); buzz(sd, .35, 25); vrBanner(TOOL.name[key] + (TOOL.on[key] ? " on" : " off"), 1.5, 1); }
+  }
+  const G = vr.gun && vr.gun.visible ? vr.gun : null, gk = G ? vr.gunKind : "", S = G && GUNSPOT[gk];
+  const fk = G && !vr.scoped && (gk === "ar" || gk === "pistol") && toolOn(gk) ? (gk === "ar" ? 1 : 2) : 0;
+  if (fk) { TOOL.fx = TOOL.fx || toolFxMake(); toolFxShow(TOOL.fx, fk, G, S.muzzle, false); } else toolFxHide(TOOL.fx);
+  if (TOOL.sightM && TOOL.sightM !== (G && G.userData.tsight)) TOOL.sightM.visible = false;
+  if (G && gk === "smg" && toolOn("smg")) { const M = toolSight(G, S); M.visible = true; TOOL.sightM = M; } else if (TOOL.sightM) TOOL.sightM.visible = false;
+}
+function toolNet() { const G = vr.gun && vr.gun.visible; return G && !vr.scoped && (vr.gunKind === "ar" || vr.gunKind === "pistol") && toolOn(vr.gunKind) ? (vr.gunKind === "ar" ? 1 : 2) : 0; }   // what the others see
+function toolRemote(R, s, G) {                                 // another player's flashlight or laser
+  if (!s || !s.alive || !s.g || !s.tl || !G) { toolFxHide(R.tfx); return; }
+  R.tfx = R.tfx || toolFxMake(); toolFxShow(R.tfx, s.tl, G, (GUNSPOT0[s.g.k] || GUNSPOT0.ar).muzzle, G.position.distanceTo(camera.position) > 250);
+}
+/* flaming arrows: a fire at the point, embers behind it, a little fire where it lands; a burning dinosaur takes a few more hits of damage */
+const FIRES = [];
+function fireMake(n, size) {
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3)); g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const p = new THREE.Points(g, flareDot(size)); p.frustumCulled = false; scene.add(p); return p;
+}
+function fireSpot(p, A, life, dps) {                           // a small fire: on the ground for a while, or riding on an animal while it burns
+  const pts = fireMake(16, .32), seed = []; for (let i = 0; i < 16; i++) seed.push([Math.random(), (Math.random() - .5) * .35, (Math.random() - .5) * .35, .6 + Math.random() * .8]);
+  FIRES.push({ pts, seed, p: p.clone(), A: A || null, off: A && A.root ? p.clone().sub(A.root.position) : null, t: 0, life, dps: dps || 0, tick: 1 });
+}
+function firesTick(dt) {
+  for (let i = FIRES.length - 1; i >= 0; i--) {
+    const F = FIRES[i]; F.t += dt;
+    if (F.A && F.A.root && F.off) F.p.copy(F.A.root.position).add(F.off);
+    if (F.dps && F.A && !F.A.dead && (F.tick -= dt) <= 0) { F.tick = 1; hitAnimal(F.A, 30, F.dps, false, null); }
+    const fade = Math.min(1, (F.life - F.t) / .8), pa = F.pts.geometry.attributes.position, ca = F.pts.geometry.attributes.color;
+    F.seed.forEach((q, k) => { const u = (q[0] + F.t * q[3]) % 1, f = (1 - u) * fade;   // each spark rises and fades, then starts again at the bottom
+      pa.setXYZ(k, F.p.x + q[1] * (1 - u * .6), F.p.y + u * .55, F.p.z + q[2] * (1 - u * .6)); ca.setXYZ(k, f, f * (.35 + .4 * (1 - u)), f * .08 * (1 - u)); });
+    pa.needsUpdate = ca.needsUpdate = true;
+    if (F.t >= F.life) { scene.remove(F.pts); F.pts.geometry.dispose(); F.pts.material.dispose(); FIRES.splice(i, 1); }
+  }
+}
+function firesClear() { for (const F of FIRES) { scene.remove(F.pts); F.pts.geometry.dispose(); F.pts.material.dispose(); } FIRES.length = 0; }
 
 /* ---- VR menus: the intro, the mode choice, the settings and the pause menu as curved panels around you.
         Point with either controller and pull the trigger. Before each map, a little model of it turns in front of you. ---- */
@@ -11813,8 +11954,10 @@ function bowShoot(rest, nockPt, f, mainSide, offSide) {
   const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));   // a light-blue streak, like the bullets' yellow one
   head.material.color.set("#bfeaff"); trail.material.color.set("#5cc8ff"); trail.material.opacity = .5; head.material.opacity = .85;
   head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
+  const fire = toolOn("bow"); let flame = null;                 // 2.68: flaming arrows (red gear, X)
+  if (fire) { head.material.color.set("#ffd27a"); trail.material.color.set("#ff5a12"); trail.material.opacity = .65; flame = fireMake(10, .22); }
   const p0 = rest.clone().addScaledVector(dir, .05);
-  ARROWS.push({ m, head, trail, p: p0, start: p0.clone(), gone: 0, v: dir.multiplyScalar(spd), from: new THREE.Vector3(P.x, P.y, P.z), t: 0, cs: { wet: 0, st: .25 }, f });
+  ARROWS.push({ m, head, trail, p: p0, start: p0.clone(), gone: 0, v: dir.multiplyScalar(spd), from: new THREE.Vector3(P.x, P.y, P.z), t: 0, cs: { wet: 0, st: .25 }, f, fire, flame });
   gunFoley(SFX_BOW.twang); buzz(mainSide, .8, 45); buzz(offSide, .6, 60);
 }
 function arrowsTick(dt) {
@@ -11828,6 +11971,7 @@ function arrowsTick(dt) {
         done = true; const spd = R.v.length();
         if (h.kind === "animal") arrowHit(h.animal, R, h.p, h.head, spd);
         else if (h.p.distanceTo(camera.position) < 30) gunFoley(SFX_BOW.thud);
+        if (R.fire && h.kind !== "water") fireSpot(h.p, null, 4);
         a.copy(h.p);
       } else a.copy(b);
     }
@@ -11837,6 +11981,11 @@ function arrowsTick(dt) {
     { const tail = a.clone().addScaledVector(dir, -.8), w = .012 + tail.distanceTo(camera.position) * .0009;   // the streak starts behind the fletching
       const put = (o, back, wd) => { const L = Math.max(.05, Math.min(back, R.gone - .8)); if (L <= .06) { o.visible = false; return; } const q = tail.clone().addScaledVector(dir, -L); o.position.lerpVectors(q, tail, .5); o.lookAt(tail); o.scale.set(wd, wd, L); o.visible = true; };
       put(R.head, 2.5, w); put(R.trail, 12, w * .55); }
+    if (R.flame) { const pa = R.flame.geometry.attributes.position, ca = R.flame.geometry.attributes.color;   // the burning point and a few embers falling behind it
+      for (let k = 0; k < 10; k++) { const b = k / 10 * Math.min(1.6, R.gone), j = .03 + b * .05, f = (1 - k / 10) * (.7 + .3 * Math.random());
+        pa.setXYZ(k, a.x - dir.x * b + (Math.random() - .5) * j, a.y - dir.y * b + (Math.random() - .5) * j + b * .05, a.z - dir.z * b + (Math.random() - .5) * j); ca.setXYZ(k, f, f * (.3 + .5 * (1 - k / 10)), f * .06); }
+      pa.needsUpdate = ca.needsUpdate = true; }
+    if (done && R.flame) { scene.remove(R.flame); R.flame.geometry.dispose(); R.flame.material.dispose(); }
     if (done) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); ARROWS.splice(i, 1); }
   }
 }
@@ -11846,12 +11995,13 @@ function arrowHit(A, R, p, head, spd) {
   for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
   if (!A.hpMax) {
     if (spd < 26 && !head) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // a weak arrow: it just runs
-    if (!head && BOW_BIG[A.kind] && Math.random() > BOW_TD[tier] * k / 2.2) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // 2.26: a big animal shrugs off a weak bow's body shot (a red bow nearly always drops it)
-    hitAnimal(A, dist, 0, head, null); return;
+    if (!head && !R.fire && BOW_BIG[A.kind] && Math.random() > BOW_TD[tier] * k / 2.2) { fleeFrom(A, R.from.x, R.from.z, A.run * 1.2, 10, 120); gunFoley(SFX_BOW.thud); return; }   // 2.26: a big animal shrugs off a weak bow's body shot (a red bow nearly always drops it)
+    if (R.fire) fireSpot(p, A, 3); hitAnimal(A, dist, 0, head, null); return;   // (2.68: a flaming arrow: even a big animal goes down)
   }
   hitAnimal(A, dist, Math.max(5, (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * k * BOW_TD[tier]), head, null);   // (2.26: the bow's own damage by stars)
+  if (R.fire && !A.dead) fireSpot(p, A, 3.2, Math.round(.15 * (A.hunter || A.kind === "trex" ? BOW_DMG.raptor : BOW_DMG.dino) * BOW_TD[tier]));   // 2.68: it burns: three more bites of damage
 }
-function arrowsClear() { for (const R of ARROWS) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); } ARROWS.length = 0; bowHide(); }
+function arrowsClear() { for (const R of ARROWS) { scene.remove(R.m, R.head, R.trail); R.head.material.dispose(); R.trail.material.dispose(); if (R.flame) { scene.remove(R.flame); R.flame.geometry.dispose(); R.flame.material.dispose(); } } ARROWS.length = 0; bowHide(); firesClear(); }
 function vrClearNades() {
   for (const N of NADES) scene.remove(N.m); NADES.length = 0;
   for (const B of BOOMS) scene.remove(B.m); BOOMS.length = 0;
@@ -12333,7 +12483,7 @@ const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : 
 const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.67";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+MP.netV = "2.68";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -13864,7 +14014,7 @@ function mpTrailTick(L, dt) {                                // 2.34: a soft str
 }
 function mpRemoteDrop(L) {
   if (!L) { for (const q of MP.links.values()) mpRemoteDrop(q); return; }
-  if (L.R) { scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); charDrop(L.R.C); L.R = null; } L.rx = [];
+  if (L.R) { toolFxDrop(L.R.tfx); L.R.tfx = null; scene.remove(L.R.S.group, L.R.S.shadow); for (const k in L.R.guns) scene.remove(L.R.guns[k]); disposeSoldier(L.R.S); charDrop(L.R.C); L.R = null; } L.rx = [];
 }
 const _mpA = new THREE.Vector3(), _mpB = new THREE.Vector3(), _mpQ = new THREE.Quaternion(), _mpQ2 = new THREE.Quaternion();
 const lerp7 = (a, b, k, out) => { _mpA.set(a[0], a[1], a[2]).lerp(_mpB.set(b[0], b[1], b[2]), k); _mpQ.set(a[3], a[4], a[5], a[6]).slerp(_mpQ2.set(b[3], b[4], b[5], b[6]), k); out.p.copy(_mpA); out.q.copy(_mpQ); return out; };
@@ -13882,7 +14032,7 @@ function mpSample(L, buf) {                                 // where they were a
   if (t > b.at && rx.length > 1 && b === rx[rx.length - 1]) { a = rx[rx.length - 2]; const sp = b.at - a.at; if (sp > 1) { kp = Math.min(1 + 120 / sp, (t - a.at) / sp); k = 1; } }   // late: carry on the way they were going (up to 120 ms)
   const mk = () => ({ p: new THREE.Vector3(), q: new THREE.Quaternion() });
   const lerp7 = (A, B, kk, out) => { lerp7q(A, B, kp, k, out); return out; };
-  const out = { h: lerp7(a.h, b.h, k, mk()), feet: a.f + (b.f - a.f) * k, alive: b.a, gl: b.gl, hp: b.hp, l: null, r: null, g: null, gp: b.gp | 0 };
+  const out = { h: lerp7(a.h, b.h, k, mk()), feet: a.f + (b.f - a.f) * k, alive: b.a, gl: b.gl, hp: b.hp, l: null, r: null, g: null, gp: b.gp | 0, tl: b.tl | 0 };
   if (a.l && b.l) out.l = lerp7(a.l, b.l, k, mk()); if (a.r && b.r) out.r = lerp7(a.r, b.r, k, mk());
   if (b.g && b.g.o) { out.g = { k: b.g.k, pose: a.g && a.g.o && a.g.k === b.g.k ? lerp7(a.g.p, b.g.p, k, mk()) : lerp7(b.g.p, b.g.p, 0, mk()) }; }
   return out;
@@ -13896,11 +14046,11 @@ function mpRemoteTick(L, dt) {
   if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); charDrop(R0.C); L.R = null; }   // they changed uniform
   if (!L.R) L.R = mpRemoteMake(L);
   const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
-  for (const k in R.guns) R.guns[k].visible = false;
+  for (const k in R.guns) R.guns[k].visible = false; toolFxHide(R.tfx);
   if (charOn() && charRemote(R, L, s, dt)) {                // 2.37: in VR they're a person (the soldier stays hidden underneath for their footsteps)
     const C = R.C; S.group.visible = false; S.shadow.visible = s.alive && C.top.visible && !s.gl; S.shadow.position.set(C.x, C.y + .03, C.z);
     if (s.alive && C.top.visible) { S.x = C.x; S.z = C.z; S.y = C.y; S.speed = C.speed; S.gliding = !!s.gl; S.crouchWant = Math.max(0, Math.min(1, (1.6 - (s.h.p.y - s.feet)) / .55)); mpStepTick(L, R, S, dt);
-      if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); } }
+      if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); G.updateMatrixWorld(); toolRemote(R, s, G); } }
     return;
   }
   if (R.C) { charDrop(R.C); R.C = null; }
@@ -13912,7 +14062,7 @@ function mpRemoteTick(L, dt) {
   R.deadT = 0; S.group.visible = S.shadow.visible = state === "play";
   if (!S.group.visible) return;
   mpPoseSoldier(S, s, dt); mpStepTick(L, R, S, dt);
-  if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); }
+  if (s.g) { const G = mpRemoteGun(R, s.g.k); G.visible = true; G.position.copy(s.g.pose.p); G.quaternion.copy(s.g.pose.q); G.updateMatrixWorld(); toolRemote(R, s, G); }
 }
 function mpPoseSoldier(S, s, dt) {                         // a player's body from their head and hands
   const f = _mpA.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
@@ -14029,7 +14179,7 @@ function mpTick(dt) {                                       // (also runs offlin
     MP.sendT = (vr.cl && vr.cl.air) || Math.hypot(sense.v || 0, P.vy || 0) > 14 ? 1 / 45 : P.gliding || sense.v > 6 ? 1 / 30 : .05; /* 2.34: 45 a second while flung */ const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (2.24: 30 a second while moving fast)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: pose7(I.head, I.headQ), l: Lh ? pose7(Lh.pos, Lh.q) : null, r: Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);
@@ -14352,6 +14502,7 @@ function addPuff(p, kind) {
 }
 function updateGun(dt) {
   if (ARROWS.length) arrowsTick(dt);
+  if (FIRES.length) firesTick(dt);
   GUN.cool = Math.max(0, GUN.cool - dt); GUN.kick = Math.max(0, GUN.kick - dt * 7);
   GUN.ads = Math.min(1, Math.max(0, (72 - camera.fov) / 40));
   const sway = 0;
@@ -14759,6 +14910,7 @@ function loop(now) {
     GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = vr.on ? 1.08 : .95;
     { const fl = vr.on ? NIGHT_K * (weather.storm ? .02 : weather.precip ? .014 : .009) : 0; GRADE.uFloor.value.setRGB(fl * .8, fl * .9, fl * 1.15); }
     if (world) { if (ENDLESS) endlessTick(dt); cullTiles(); updateGun(dt); }
+    if (vr.on && TOOL.sightM) toolPrep();                  // 2.68: the SMG's thermal mini-sight
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
   }

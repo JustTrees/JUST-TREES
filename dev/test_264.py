@@ -1,5 +1,5 @@
 """2.64: the thermal scope and the new sounds.
-Thermal: only with the red sniper up at your eye, every gun red (5 stars) and all 10 grenades; in PvP also full health and full shield
+Thermal (2.68: switched on with X): only with the red sniper up at your eye, every gun red (5 stars) and all 10 grenades; in PvP also full health and full shield
 (Hunting doesn't ask for those). The thermal picture: black with red outlines where the land and trees break, warm bodies (bots, animals,
 dinosaurs) glowing, and nothing glows through a solid wall. Sounds (served over http): each gun's two Free Firearm Library takes and the
 Kenney hit / kill sounds load and play; a gun picks one of its takes.
@@ -13,8 +13,9 @@ srv = subprocess.Popen([sys.executable, "-m", "http.server", "8797", "--bind", "
 JS = """async () => { const T = D.THREE, o = {}; window.FREEZE = true;
   D.setSeed(5); D.setVR(true); D.setMode('pvp'); Object.assign(D.set, { size: 'large', teams: 'solo', zone: 'off', capture: 'off', weather: 'clear', hour: 13, lat: 66, density: .3 }); D.generate(); D.state = 'play';
   // the rule
-  const V = D.vr, full = () => { V.own = { hunt: 5, ar: 5, smg: 5, pistol: 5 }; V.nades = 10; D.MP.hp = 100; D.MP.sh = 100; D.MP.dead = 0; V.scoped = true; V.gunKind = 'hunt'; };
+  const V = D.vr, full = () => { V.own = { hunt: 5, ar: 5, smg: 5, pistol: 5 }; V.nades = 10; D.MP.hp = 100; D.MP.sh = 100; D.MP.dead = 0; V.scoped = true; V.gunKind = 'hunt'; D.TOOL.on.hunt = true; };
   full(); o.okFull = D.thermalOk();
+  full(); D.TOOL.on.hunt = false; o.okSwitchedOff = D.thermalOk();   // 2.68: X turns it off
   full(); V.own.smg = 4; o.okGun4 = D.thermalOk();
   full(); V.nades = 9; o.okNades9 = D.thermalOk();
   full(); D.MP.sh = 60; o.okHurtPvp = D.thermalOk();
@@ -59,7 +60,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto("http://127.0.0.1:8797/dbg.html", timeout=120000); await pg.wait_for_timeout(800)
         r = await pg.evaluate(JS); print(json.dumps(r))
-        ok = r["okFull"] and not r["okGun4"] and not r["okNades9"] and not r["okHurtPvp"] and not r["okNotScoped"] and not r["okOtherGun"] and r["okHunt"] \
+        ok = r["okFull"] and not r["okSwitchedOff"] and not r["okGun4"] and not r["okNades9"] and not r["okHurtPvp"] and not r["okNotScoped"] and not r["okOtherGun"] and r["okHunt"] \
              and r.get("spot") and r["hot"] > 150 and r["hotBehindWall"] == 0 and r["gunsLoaded"] == 8 and r["fxLoaded"] == 13 and r["picks"] == ["ffl_sniper", "ffl_sniper_b"] and r["fxPlays"]
         print("PASS" if ok and not errs else "FAIL", errs or ""); await b.close()
         if not ok or errs: sys.exit(1)
