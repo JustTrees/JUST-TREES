@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.70";              // Just Trees 2.55
+const VERSION = "2.71";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4314,6 +4314,10 @@ function geoSave() {
   try { localStorage.setItem(geoKey, JSON.stringify(o)); } catch (_) {}
 }
 function geoNewPlanet() { try { localStorage.removeItem(geoKey); } catch (_) {} }
+function geoRestart() { const sv = geoLoad(); if (!sv) return; try { localStorage.setItem(geoKey, JSON.stringify({ seed: sv.seed })); } catch (_) {} }   // 2.71: the same planet from scratch (no caches found, a fresh start spot, score 0)
+const GEO_ASK = { k: "", t: 0 };                                // 2.71: the restart buttons ask for a second tap
+function geoAsk(k, go) { const now = performance.now(); if (GEO_ASK.k === k && now - GEO_ASK.t < 4000) { GEO_ASK.k = ""; go(); return; } GEO_ASK.k = k; GEO_ASK.t = now; }
+const geoAsking = k => GEO_ASK.k === k && performance.now() - GEO_ASK.t < 4000;
 function geoPlace() {                                          // the caches: the same 100 for this planet every time
   const G = GLOBE, R = G.R, rr = mulberry32(seed * 101 + 7), L = [], per = new Array(7).fill(0), cap = Math.ceil(GEO_N / 7) + 3;
   for (let t = 0; t < 40000 && L.length < GEO_N; t++) {
@@ -9566,7 +9570,7 @@ function vruiParts() {
     if (spawnPick()) uiLabel(g, lx, 1028, "Start apart");
     if (gameMode === "hike") { uiLabel(g, rx, 168, "Map"); note(g, rx, 304, set.hikeMap === "endless" ? "New land grows as you walk" : "The big 3 km island"); }
     else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : huntEndless() ? "Endless" : $("sizeVal").textContent);
-    if (geoMode()) { const sv = geoLoad(); note(g, rx + 330, 238, sv && sv.seed ? (sv.found || []).length + " of 100 caches found · you go on where you left off" : "A new planet: start anywhere, find all 100 caches"); note(g, rx, 318, "Hunt for food: your health runs down"); }
+    if (geoMode()) { const sv = geoLoad(); note(g, rx + 460, 238, geoAsking("re") ? "Tap again: start over" : geoAsking("new") ? "Tap again: new planet" : sv && sv.seed && !(sv.found || []).length && !isFinite(sv.lat) ? "This planet, fresh" : sv && sv.seed ? (sv.found || []).length + " of 100 found · carries on" : "A new planet · 100 caches"); note(g, rx, 318, "Hunt for food: your health runs down"); }
     else if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
     else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
@@ -9591,7 +9595,8 @@ function vruiParts() {
   MONTHS.forEach((m, i) => uiBtn(S2, lx + i * 75, 790, 69, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 24 }));   // 2.38: one row
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode === "hike" || geoMode(), fs: 30 }));
   uiBtn(S2, rx + 7 * 112, 196, 106, 62, "Endless", () => { set.huntMap = "endless"; }, { active: () => set.huntMap === "endless", hide: () => gameMode !== "hunt" || geoMode(), fs: 24 });   // 2.23
-  uiBtn(S2, rx, 196, 310, 62, "New planet", () => { geoNewPlanet(); }, { hide: () => !geoMode() || !geoLoad(), fs: 28 });   // 2.70: forget the saved planet
+  uiBtn(S2, rx, 196, 200, 62, "Restart", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Restart", hide: () => !geoMode() || !geoLoad() || !((geoLoad().found || []).length || isFinite(geoLoad().lat)), fs: 28 });   // 2.71: this planet from scratch
+  uiBtn(S2, rx + 210, 196, 230, 62, "New planet", () => geoAsk("new", geoNewPlanet), { labelFn: () => geoAsking("new") ? "Sure? Tap" : "New planet", hide: () => !geoMode() || !geoLoad(), fs: 28 });   // 2.70: forget the saved planet
   uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { set.hikeMap = "island"; }, { active: () => set.hikeMap !== "endless", hide: () => gameMode !== "hike" });   // 2.19
   uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { set.hikeMap = "endless"; }, { active: () => set.hikeMap === "endless", hide: () => gameMode !== "hike" });
   uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => gameMode === "hike" || huntEndless() });

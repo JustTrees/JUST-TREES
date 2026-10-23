@@ -67,13 +67,19 @@ async def main():
           const o = { seed: D.GLOBE && sv.seed === D.GLOBE.sv.seed, found: D.GEO.found.size, near: Math.round(D.glArc(D.GLOBE.p, D.glFromLL(sv.lat, sv.lon)) * D.GLOBE.R) };
           D.set.huntMap = 'endless'; D.generate(); D.state = 'play'; o.plain = [!!D.GLOBE, D.CURVE.x, D.GEO.on]; return o; }""")
         print("resume", json.dumps(res))
+        # 2.71: start this planet over (two taps), or a whole new planet
+        rs = await pg.evaluate("""() => { const o = {}; D.set.huntMap = 'globe'; D.generate(); D.state = 'play'; D.GEO.found.add(5); D.hunt.score = 40; D.geoSave(); const s0 = D.geoLoad().seed, n0 = D.geoLoad().found.length;
+          D.geoAsk('re', D.geoRestart); o.oneTap = D.geoLoad().found.length === n0 && n0 > 0; D.geoAsk('re', D.geoRestart); const sv = D.geoLoad(); o.afterTwo = [sv.seed === s0, (sv.found || []).length, sv.lat === undefined];
+          D.generate(); D.state = 'play'; o.fresh = [D.GEO.found.size, D.hunt.score];
+          D.geoAsk('new', D.geoNewPlanet); D.geoAsk('new', D.geoNewPlanet); o.gone = D.geoLoad() === null; return o; }""")
+        print("restart", json.dumps(rs))
         ok = o["on"] and r["caches"] == 100 and r["bands"] >= 6 and r["minGap"] >= 850 and r["curve"] and r["wheel"] \
              and abs(r["walkLat"] - r["walkExpect"]) < r["walkExpect"] * .08 and r["reanchors"] >= 1 and all(abs(j) < .02 for j in r["jumps"]) and r["stale"] == 0 \
              and all(abs(v) < .012 for v in r["squareBack"]) and r["east"][0] > 10 and abs(r["east"][1] - r["east"][0] / 15) < .02 \
              and pole["maxLat"] > 89.4 and pole["end"][0] < pole["maxLat"] and pole["lonFlip"] < 20 and pole["biome"] == "polar" \
              and g["found"][0] and g["found"][2] >= 25 and g["saved"] and (not g["animal"] or (g["food"] == 1 and g["ate"][0] > 50 and g["ate"][1] == 0)) \
              and 2.5 < g["hunger"] < 4.5 and not g["toolsHurt"] and g["toolsFull"] and g["faint"] >= 30 and g["gps"] \
-             and res["seed"] and res["found"] >= 1 and res["near"] < 400 and res["plain"] == [False, 0, False]
+             and res["seed"] and res["found"] >= 1 and res["near"] < 400 and res["plain"] == [False, 0, False] and rs["oneTap"] and rs["afterTwo"] == [True, 0, True] and rs["fresh"] == [0, 0] and rs["gone"]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
