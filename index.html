@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#13241B">
-<title>JUST TREES 2.66</title>
+<title>JUST TREES 2.67</title>
 <style>
 :root{--pine:#13241B;--panel:#1B3226;--line:#2D4A39;--text:#EAF2EC;--dim:#9DB3A5;--sun:#F2C14E}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.66";              // Just Trees 2.55
+const VERSION = "2.67";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -339,7 +339,7 @@ const RECOIL = { up: [0, .25, .3, .36, .42, .5, 1.6], ads: .85, max: 14, back: 1
 const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
-const TIER_ODDS = [.5, .78, .92, .98];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
+const TIER_ODDS = [.46, .74, .88, .95];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
 const PICK = { hp: 30, sh: 35, back: 40 };                 // green cross: + health; blue cross: + shield; seconds before a cross comes back
 const LOOT = { nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3, bigHead: 4 };   // (2.52: Big heads: how many times bigger)
@@ -12042,7 +12042,7 @@ function spawnPvpLoot() {                                   // seeded: everyone 
   if (auto) for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
     let sp = null; for (let k = 0; k < 14 && !sp; k++) { const x = gx + (R() - .5) * cell * .85, z = gz + (R() - .5) * cell * .85; if (okSpot(x, z)) sp = [x, z]; }
     if (!sp) continue;
-    const r = R(), kind = kinds[Math.floor(R() * kinds.length)], tier0 = Math.min(kind === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);   // red sniper: only one, up the tallest tree
+    const r = R(), kind = kinds[Math.floor(R() * kinds.length)], tier0 = Math.min(kind === "hunt" && gameMode === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);   // red sniper: only one, up the tallest tree
     const isBow = gameMode === "hunt" && R() < .16, tier = isBow ? Math.max(2, tier0) : tier0;   // 2.04: Hunting has bows lying about too (2 stars and up: you start with the 1-star one)
     if (isBow) { dropAdd({ id: "g" + (gi++), type: "gun", kind: "bow", tier, x: sp[0], z: sp[1] }); continue; }
     dropAdd({ id: "g" + (gi++), type: "gun", kind, tier, x: sp[0], z: sp[1] });
@@ -12333,7 +12333,7 @@ const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : 
 const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
 const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.61";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+MP.netV = "2.67";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -14249,14 +14249,16 @@ function sniperMul(d) {                                       // 2.61: sniper da
 }
 function shotDmg(t, head, at) { const m = t.gun === "hunt" ? sniperMul(t.from.distanceTo(at)) : 1; return Math.round(t.dmg * (head ? 2 : 1) * m); }   // what this bullet does where it hits
 function dmgTier(d) { return d >= 350 ? 3 : d >= 250 ? 2 : d >= 150 ? 1 : 0; }
+const tracerGeoR = new THREE.CylinderGeometry(.5, .5, 1, 10, 1, true).rotateX(Math.PI / 2);   // 2.67: round streaks (the headset's), same size rules as the box
+const TRACE = { head: 12, life: [.14, .3], ownLen: 70 };       // 2.67: head streak length (m); seen from .14 s, gone by .3 s after the shot; your own glow trails at most 70 m behind (out of the barrel for ~.08 s)
 function makeBullet(from, v, o) {
-  const head = new THREE.Mesh(tracerGeo, tracerMat(false)), trail = new THREE.Mesh(tracerGeo, tracerMat(true));
+  const head = new THREE.Mesh(tracerGeoR, tracerMat(false)), trail = new THREE.Mesh(tracerGeoR, tracerMat(true));
   trail.material.opacity = .35; head.frustumCulled = trail.frustumCulled = false; head.visible = trail.visible = false; scene.add(head, trail);
   head.material.color.set(NIGHT_K > .5 ? 0xffc870 : 0xffa020); head.material.toneMapped = false; trail.material.color.set(0xff9a3a); trail.material.toneMapped = false;
   if (!o.remote && !o.bot) {                                   // 2.65: your own shot: a glowing line from the barrel to the bullet, day and night (by day a solid glow: added light vanishes on a bright sky)
     trail.material.color.set(NIGHT_K > .5 ? 0xffb050 : 0xffa030); if (NIGHT_K <= .5) { trail.material.blending = THREE.NormalBlending; trail.material.needsUpdate = true; } }   // 2.62: orange by day, a glowing streak at night
   const t = { bot: o.bot || null, by: o.by || null, head, trail, live: true, from: from.clone(), p: from.clone(), v: v.clone(), gone: 0, age: o.age || 0, reach: o.reach, dmg: o.dmg || 0, gun: o.gun || null, online: !!o.online, remote: !!o.remote,
-              cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true };
+              cs: { wet: 0, st: .4 }, d: 1, len: 1, hit: {}, fade: 0, vr: true, born: performance.now() };
   tracers.push(t); return t;
 }
 function bulletStep(t, dt) {                                // move one frame along its falling path; true when it stops
@@ -14271,17 +14273,20 @@ function bulletStep(t, dt) {                                // move one frame al
   if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; const dm = shotDmg(t, rh.head, end); mpSendTo(rh.L, { t: "hit", d: dm, hd: rh.head }); myDmg(dm, t); hitTick(rh.head, t.gun === "hunt" ? dm : 0); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
-  const cd = pos.distanceTo(camera.position), vd = _bT.copy(t.v).normalize(), w = (.009 + cd * .0007) * 1.3;   // 2.63: back to the 2.55 size (2.62's was too thin to see)
+  const cd = pos.distanceTo(camera.position), vd = _bT.copy(t.v).normalize(), w = .006 + cd * .0005;   // 2.67: thinner (2.63 was (.009 + .0007·d)·1.3)
   const place = (m, back, wd) => { const q = pos.clone().addScaledVector(vd, -Math.max(.05, Math.min(back, t.gone))); m.position.lerpVectors(q, pos, .5); m.lookAt(pos); m.scale.set(wd, wd, Math.max(.05, q.distanceTo(pos))); m.visible = true; };
-  place(t.head, 20, w);                                    // 2.63: one long bright streak (no 70 m fading trail behind it)
-  if (!t.remote && !t.bot) {                                 // 2.65: your own shot: the glow runs all the way back to the barrel, thin up close and thicker far off, so you can follow it out
-    t.trail.position.lerpVectors(t.from, pos, .5); t.trail.lookAt(pos); const wl = .012 + Math.min(.06, t.from.distanceTo(pos) * .00025);
-    t.trail.scale.set(wl, wl, Math.max(.05, t.from.distanceTo(pos))); t.trail.visible = true; t.trail.material.opacity = t.tro = NIGHT_K > .5 ? .55 : .5;
-    t.head.scale.x *= 1.8; t.head.scale.y *= 1.8;            // and a fatter head, easy to spot far out
+  const life = (performance.now() - t.born) / 1000, fk = 1 - smooth(TRACE.life[0], TRACE.life[1], life);   // 2.67: every tracer fades out a third of a second after the shot (the bullet flies on): never a cloud of them
+  place(t.head, TRACE.head, w); t.head.material.opacity = fk;
+  if (!t.remote && !t.bot) {                                 // 2.65: your own shot: a glow straight out of the barrel (2.67: at most 70 m long, so it races out ahead of you)
+    const back = Math.min(TRACE.ownLen, t.gone), q0 = pos.clone().addScaledVector(vd, -back);
+    t.trail.position.lerpVectors(q0, pos, .5); t.trail.lookAt(pos); const wl = .007 + Math.min(.025, back * .0003);
+    t.trail.scale.set(wl, wl, Math.max(.05, back)); t.trail.visible = true; t.trail.material.opacity = (t.tro = NIGHT_K > .5 ? .45 : .42) * fk;
+    t.head.scale.x *= 1.4; t.head.scale.y *= 1.4;            // and a slightly fatter head, easy to spot far out
   } else {
-    t.trail.visible = NIGHT_K > .05; if (t.trail.visible) { place(t.trail, 21, w * 2.4); t.trail.material.opacity = t.tro = .3 * NIGHT_K; }   // someone else's: at night a soft glow round it
+    t.trail.visible = NIGHT_K > .05; if (t.trail.visible) { place(t.trail, TRACE.head + 1, w * 1.8); t.trail.material.opacity = (t.tro = .22 * NIGHT_K) * fk; }   // someone else's: at night a soft glow round it
     if (cd < 1.5) t.head.visible = t.trail.visible = false;  // (never right in your face)
   }
+  if (fk <= 0) t.head.visible = t.trail.visible = false;
   if (end) {
     if (!t.remote) {                                        // only the shooter's own game counts the hit
       if (h.kind === "animal") hitAnimal(h.animal, t.from.distanceTo(end), t.dmg, h.head, t.gun);
@@ -14378,7 +14383,7 @@ function updateGun(dt) {
       if (k >= 1 && t.hit.botHit) { t.hit.botHit = false; if (state === "play") hurt(BOT.hitDmg); }
       if (k >= 1 && t.hit.animal) { hitAnimal(t.hit.animal, t.hit.dist, 0, t.hit.head); t.hit.animal = null; t.hit.kind = null; }   // no blood: it just drops, and a bing
       if (k >= 1 && t.hit.kind) addPuff(t.end, t.hit.kind);
-    } else if (t.vr) { t.fade += dt; const k = Math.max(0, 1 - t.fade / .08); t.head.material.opacity = k; t.trail.material.opacity = (t.tro || 0) * k;   // 2.63: when it stops, it cuts out in 0.08 s
+    } else if (t.vr) { t.fade += dt; const k = Math.max(0, 1 - t.fade / .08); const fk = 1 - smooth(TRACE.life[0], TRACE.life[1], (performance.now() - t.born) / 1000); t.head.material.opacity = k * fk; t.trail.material.opacity = (t.tro || 0) * k * fk;   // 2.63: when it stops, it cuts out in 0.08 s
       if (k <= 0) { scene.remove(t.head, t.trail); t.head.material.dispose(); t.trail.material.dispose(); tracers.splice(i, 1); } }
     else {
       t.fade += dt;
