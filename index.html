@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.76";              // Just Trees 2.55
+const VERSION = "2.77";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3064,7 +3064,7 @@ function updateFly(dt) {
    Hiking in a headset has two maps: Island (always the 3 km map) or Endless (HIKEMAP). */
 let HIKEMAP = null, HIKE_FORCE = null;
 const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || set.huntMap === "globe");
-const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && !MP.code && DEV.ok;   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
+const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && !MP.code;   // (2.77: Treeocashing is live; always solo)   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
 const spawnPick = () => !!MP.code && (gameMode === "hike" ? set.hikeMap === "endless" : huntEndless());   // 2.24: online on endless land: how far apart everyone starts
 function enSpawnNear(hx, hz, d, k) {                         // a spot about d m from the host, each player in their own direction
   const a0 = (k || 0) * 2.39996 + seed * .37;
@@ -4359,7 +4359,7 @@ function geoStart(sv) {
   if (!GEO.found.size) {                                       // the very first cache is close by, so you're armed before long (the rest are wherever they are)
     let best = null, bd = 1e9; for (const c of GEO.caches) { const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
     if (best) for (let k = 0; k < 40; k++) { const a = k * 2.4, r = 60 + k * 2, x = P.x - Math.sin(P.yaw + a * .3) * r, z = P.z - Math.cos(P.yaw + a * .3) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; break; } }
-    vrBanner("Geocaching: you have nothing. Find caches for gear: the GPS is on your wheel", 6, 3);
+    vrBanner("Treeocashing: you have nothing. Find caches for gear: the GPS is on your wheel", 6, 3);
   }
 }
 function geoStop() { geoGearClear(); GEO.on = false; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; vr.gpsMode = false; if (GEO.gps) GEO.gps.visible = false; if (GEO.globe) GEO.globe.visible = false; }
@@ -4429,7 +4429,7 @@ function geoTick(dt) {
     o.userData.glint.material.size = .35 + .25 * Math.abs(Math.sin(performance.now() / 300 + id)) + d * .004;
     if (d < 2 && Math.abs(o.position.y - P.y) < 2.5) {
       GEO.found.add(id); scene.remove(o); GEO.objs.delete(id); hunt.score += 25; showHuntScore(); geoReward(GEO.found.size);   // 2.72: what's inside
-      if (GEO.found.size < JET_UNLOCK) vrBanner("Geocache found! " + GEO.found.size + " / " + GEO_N + "  (+25)", 2.5, 2); if (typeof fxPlay === "function") fxPlay("kill_3", .5); else bing();
+      if (GEO.found.size < JET_UNLOCK) vrBanner("Treeocache found! " + GEO.found.size + " / " + GEO_N + "  (+25)", 2.5, 2); if (typeof fxPlay === "function") fxPlay("kill_3", .5); else bing();
       for (const [k, n] of Object.entries(GEO_UNLOCK)) if (GEO.found.size === n) vrBanner("GPS unlocked: " + (k === "dist" ? "distance" : k === "arrow" ? "direction arrow" : "hot/cold beep"), 4, 3);
       geoTarget(); geoSave();
     }
@@ -10303,7 +10303,8 @@ function vruiParts() {
   // ---- 2.38: the main menu: Solo · Online, and your character, height and the rules ----
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
-  uiBtn(M, 90, 150, 1220, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); if (set.huntMap === "globe") set.huntMap = "endless"; renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
+  uiBtn(M, 900, 150, 410, 230, "Treeocashing", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "Solo · new planet, your level carries on", fs: 46, hide: () => !!MP.code, paintCol: "#6a5a2a" });   // 2.77: live
+  uiBtn(M, 90, 150, 790, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); if (set.huntMap === "globe") set.huntMap = "endless"; renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
   uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: hike, hunt or PvP together. Host a room or join one.", fs: 64 });
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
@@ -10357,7 +10358,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Geocaching" : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
     { const pv = gameMode === "pvp" && !mpGuest(); wAr.w = pv ? 210 : 250; wRnd.x = rx + (pv ? 444 : 262); wRnd.w = pv ? 210 : 250; wGo.x = rx + (pv ? 664 : 524); wGo.w = pv ? 236 : 376; }   // 2.48: room for Bots   // (2.46: an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
@@ -10371,7 +10372,7 @@ function vruiParts() {
     if (spawnPick()) uiLabel(g, lx, 1028, "Start apart");
     if (gameMode === "hike") { uiLabel(g, rx, 168, "Map"); note(g, rx, 304, set.hikeMap === "endless" ? "New land grows as you walk" : "The big 3 km island"); }
     else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : huntEndless() ? "Endless" : $("sizeVal").textContent);
-    if (geoMode()) { const sv = geoLoad(); note(g, rx + 260, 238, geoAsking("re") ? "Tap again: back to level 0" : sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
+    if (geoMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
     else if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
     else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
@@ -10396,7 +10397,7 @@ function vruiParts() {
   MONTHS.forEach((m, i) => uiBtn(S2, lx + i * 75, 790, 69, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 24 }));   // 2.38: one row
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode === "hike" || geoMode(), fs: 30 }));
   uiBtn(S2, rx + 7 * 112, 196, 106, 62, "Endless", () => { set.huntMap = "endless"; }, { active: () => set.huntMap === "endless", hide: () => gameMode !== "hunt" || geoMode(), fs: 24 });   // 2.23
-  uiBtn(S2, rx, 196, 240, 62, "Start over", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Start over", hide: () => !geoMode() || !(geoLoad() && geoLoad().n), fs: 28 });   // 2.76: back to level 0
+  if (0) uiBtn(S2, rx, 196, 240, 62, "Start over", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Start over", hide: () => !geoMode() || !(geoLoad() && geoLoad().n), fs: 28 });   // 2.76: back to level 0
   uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { set.hikeMap = "island"; }, { active: () => set.hikeMap !== "endless", hide: () => gameMode !== "hike" });   // 2.19
   uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { set.hikeMap = "endless"; }, { active: () => set.hikeMap === "endless", hide: () => gameMode !== "hike" });
   uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => gameMode === "hike" || huntEndless() });
@@ -10514,8 +10515,8 @@ function charPanel(name, yaw, side) {                          // the Character 
     uiLabel(g, x0, 486, "Skin"); uiLabel(g, x0, 598, "Hair"); uiLabel(g, x0, 710, "Hair colour"); uiLabel(g, x0, 822, "Beard");
     if (k.s) { g.textAlign = "left"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Men only", x0, 878); }
     if (pers) pers(g);
-    { const c = geoChar(); if (c && c.n) { g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#ffd65a"; g.fillText("Geocaching level " + c.n + " / " + GEO_N, VW[0], VW[1] + VW[3] + 36);   // 2.76: your Geocaching level lives with your character
-      g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Score " + Math.round(c.score || 0) + " · kills " + (c.kills || 0), VW[0], VW[1] + VW[3] + 74); } }
+    { const c = geoChar(); if (!side && c && c.n) { g.textAlign = "left"; g.font = "bold 30px sans-serif"; g.fillStyle = "#ffd65a"; g.fillText("Treeocashing level " + c.n + " / " + GEO_N, VW[0], 966);   // 2.76: your Treeocashing level lives with your character
+      g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Score " + Math.round(c.score || 0) + " · kills " + (c.kills || 0), VW[0], 1004); } }
   };
   const B = (x, y, w, l, on, act, ex) => uiBtn(Pn, x, y, w, 62, l, on, Object.assign({ active: act, fs: 30, personal: true }, ex || {}));
   B(x0, 166, 270, "Man", () => lookSet({ s: 0 }), () => !MP.look.s); B(x0 + 285, 166, 270, "Woman", () => lookSet({ s: 1 }), () => !!MP.look.s);
@@ -10526,6 +10527,7 @@ function charPanel(name, yaw, side) {                          // the Character 
   CH_HAIRCC.forEach((c, i) => B(x0 + i * 113, 726, 103, "", () => lookSet({ c: i }), () => MP.look.c === i, { paintCol: c }));
   B(x0, 838, 270, "None", () => lookSet({ b: 0 }), () => !MP.look.b, { hide: () => !!MP.look.s }); B(x0 + 285, 838, 270, "Beard", () => lookSet({ b: 1 }), () => !!MP.look.b, { hide: () => !!MP.look.s });
   uiBtn(Pn, VW[0], 852, VW[2], 66, "Random look", () => lookSet(lookRandom()), { fs: 32, personal: true });
+  if (!side) uiBtn(Pn, x0, 932, 270, 66, "Reset level", () => { geoAsk("re", geoRestart); uiDraw(Pn); }, { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Reset level", hide: () => !(geoChar() && geoChar().n), fs: 28, personal: true });   // 2.77: Treeocashing back to level 0 (two taps)
   if (side) {
     uiBtn(Pn, 50, 1076, 300, 76, "Main menu", () => vruiOpen("mode"), { personal: true, fs: 34, hide: () => !!MP.code });
     uiBtn(Pn, 370, 1076, 260, 76, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true, fs: 32, hide: () => !!MP.code });
@@ -10938,7 +10940,7 @@ function devPanels() {
   uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
   uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
   uiBtn(Dv, 720, 450, 590, 170, "Test tools", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
-  uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
+  if (0) uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
   // ---- the Workshop's panel, to the left of the creature

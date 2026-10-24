@@ -20,7 +20,7 @@ What the game is, where everything lives, how to build and test it, the design d
 
 ---
 
-## 2. The game now (v2.76)
+## 2. The game now (v2.77)
 
 ### Modes
 - **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR: solo against bots, or online with bots filling the room; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -245,6 +245,7 @@ What the game is, where everything lives, how to build and test it, the design d
 - **2.64** Thermal scope (secret: all guns red + 10 grenades, PvP also full health/shield; Hunting too). New gunshots (Free Firearm Library) and sniper hit/kill sounds (Kenney). Packs added to models/source (test_264).
 - **2.65** Your own shots: a glowing line from the barrel to the bullet, day and night; others' tracers unchanged.
 - **2.66** Thermal binoculars along with the thermal scope when fully loaded.
+- **2.77** Geocaching goes live as **Treeocashing**: its own tile on the main menu (next to Solo, hidden while you're in a room; always solo; `geoMode()` no longer needs Dev Mode; the Dev menu button is gone). To leave it, go back to the main menu (Solo resets the map choice). Player-facing names say Treeocashing. "Start over" moved off the setup screen to the Character screen as "Reset level" (two taps) beside "Treeocashing level n / 100".
 - **2.76** THE SEA AND LAKES WERE MISSING since 2.70 (Endless and Geocaching): a `//` comment swallowed `world.add(E.water)` — fixed. Geocaching: new planet each game, level/score saved with your character (Character screen), no banners after #50, map↔globe toggle and upright spinning globe, clear canteen you chug, tool reactions, respawn 4+ km away. Always-on meter low in view (Hunting: score; Geocaching: level/score + health/food/water; PvP: clock/kills + shield/health). PvP: a fallen player or bot drops a green-and-blue refill (`dropDead`, "hs": health + shield to 100, lasts 90 s, sent in the "die" message); taken guns come back after 45 s as a new gun (`dropReroll`, the same for everyone); crosses 45 s. Day tracers a richer yellow (test_276). Note: test_en_online fails on 2.75 too (ENDLESS null) — pre-existing.
 - **2.75** Geocaching (Dev menu): jet skis after 50 caches: parked at sea beaches (on the map), point + trigger to sit, both grips start it, trigger throttle, bars steer, zero view bobble, beaches only (test_275).
 - **2.74** Geocaching (Dev menu): machete chops bushes (bushes slow you), new fishing (fling cast, jerk to hook, reel with the other hand, tip meter, speed bar, pull up), thermal binoculars + thermal scope items (replace the binocular upgrade and fire starter), bear spray now cache #8, compass #44, campfire lights in 2 s (test_274).
