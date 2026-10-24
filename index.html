@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.72";              // Just Trees 2.55
+const VERSION = "2.73";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4392,10 +4392,10 @@ function geoTick(dt) {
   // 2.72: food and water run down as you travel (faster sprinting or flying, food faster in the cold); out of either and your health drops
   if (!(MP.dead > 0)) {
     geoBarsTick(dt);
-    if (MP.hp <= 0) { MP.hp = 35; GEO.food = Math.max(GEO.food, 40); GEO.water = Math.max(GEO.water, 40); GEO.warn = 50; hunt.score = Math.max(0, hunt.score - 10); showHuntScore();
-      const T = GEO.tent; if (T) { const xz = glFromSphere(T.p, [0, 0]); P.x = xz[0]; P.z = xz[1] + 2; P.vy = 0; enEnsure(P.x, P.z, 260); P.y = groundAt(P.x, P.z); vr.placeAt = true; }
-      vrBanner("You fainted (-10 points)" + (T ? ": you woke at your tent" : ""), 4, 3); buzz("L", 1, 300); buzz("R", 1, 300); geoSave(); }
+    if (MP.hp <= 0 && !(UW.drown > 0)) { GEO.killedBy = GEO.food <= 0 ? "Hunger" : GEO.water <= 0 ? "Thirst" : null; UW.drown = .001; UW.red = 0; vrBanner(GEO.food <= 0 ? "You starved" : "You collapsed", 3, 3); buzz("L", 1, 300); buzz("R", 1, 300); }   // 2.73: then you wake somewhere random (geoRespawn)
   }
+  if ((GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); }   // 2.73
+  geoHurtTick(dt);
   for (let i = GEO.foods.length - 1; i >= 0; i--) {
     const F = GEO.foods[i]; F.t += dt; F.obj.rotation.y += dt * 1.5; F.obj.position.y = F.y + .9 + Math.sin(F.t * 2) * .06;
     const d = Math.hypot(F.x - P.x, F.z - P.z);
@@ -4528,7 +4528,7 @@ const _giV = new THREE.Vector3(), _v3c = new THREE.Vector3();
 const GI_LIST = [
   ["canteen", "Canteen", "Hold it upright under a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
   ["pack1", "Small backpack", "6 slots for your gear", 0], ["compass", "Compass", "Your watch points to the next cache", 0], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
-  ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep: your wake-up spot", 1],
+  ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
   ["binos", "Binocular upgrade", "More zoom, and the distance", 0], ["rod", "Fishing rod", "Cast into water, pull when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Full speed through thick jungle", 0],
   ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light on your head: on by itself in the dark", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
@@ -4701,7 +4701,7 @@ function geoSpray(main) {
   if (GEO.spray <= 0) { vrBanner("Bear spray is empty (refills at caches)", 1.5, 0); return; }
   GEO.spray--; const o = main.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ).normalize(); let hit = 0;
   for (const A of beasts) { if (A.dead || A.gone) continue; const dx = A.x - o.x, dz = A.z - o.z, dist = Math.hypot(dx, dz); if (dist > 14 || (dx * d.x + dz * d.z) / (dist || 1) < .75) continue;
-    hit++; if (A.hunter && typeof dinoLeave === "function") dinoLeave(A); else if (A.rexOn && typeof rexGiveUp === "function") rexGiveUp(A); else fleeFrom(A, P.x, P.z, (A.run || 8) * 1.3, 12, 150); }
+    hit++; if (A.pred) predCalm(A, 60); if (A.hunter && typeof dinoLeave === "function") dinoLeave(A); else if (A.rexOn && typeof rexGiveUp === "function") rexGiveUp(A); else fleeFrom(A, P.x, P.z, (A.run || 8) * 1.3, 12, 150); }
   const pts = fireMake(30, .3); GEO.sprays.push({ pts, o: o.clone(), d: d.clone(), t: 0 }); gunFoley([[0, 3800, .5, .12], [0, 2400, .45, .08]]); buzz(set.hand === "right" ? "R" : "L", .5, 300);
   if (hit) vrBanner("Bear spray: it's running!", 1.5, 1);
 }
@@ -4840,6 +4840,122 @@ function geoGearClear() {
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.bob, GEO.rod && GEO.rod.line, GEO.nvM]) if (o) scene.remove(o);
   for (const S of GEO.sprays || []) scene.remove(S.pts); toolFxHide(GEO.lampFx);
   Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], nvM: null, nvK: 0, worn: new Set() });
+}
+/* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
+   at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
+   sight, growls, and pounces. Gators and crocodiles lunge from the water's edge. Lions charge if you walk up on the pride. Bear spray turns
+   any of them away. It gets wilder the more caches you've found. Killed (or drowned) you wake somewhere random on the planet. ---- */
+const PRED = { wolf: "pack", coyote: "pack", bear: "bear", polar: "bear", panther: "stalk", lion: "charge", gator: "lunge", crocodile: "lunge" };
+const PRED_BITE = { wolf: 12, coyote: 7, bear: 28, polar: 32, panther: 30, lion: 22, gator: 20, crocodile: 24 };
+const PRED_TOUGH = { bear: 4, polar: 5, lion: 2 };           // shots it takes (a sniper or a head shot counts double)
+const PRED_NAME = { wolf: "A wolf", coyote: "A coyote", bear: "A bear", polar: "A polar bear", panther: "A mountain lion", lion: "A lion", gator: "A gator", crocodile: "A crocodile" };
+const geoDanger = () => Math.min(1, .3 + GEO.found.size / 30);
+function predGo(A, st, extra) { A.pred = Object.assign({ st, t: 0 }, extra || {}); A.fleeT = 0; A.trek = false; A.mode = "walk"; A.timer = 99; A.steerT = 0; }
+function predCalm(A, secs) { A.pred = null; A.predCool = secs; A.mode = "idle"; A.timer = 1; }
+function predAnger(A) {                                       // shot at (and not dropped): bears and lions come for you, the rest bolt
+  const k = PRED[A.kind]; if (!k || !GEO.on) return;
+  if (k === "bear" || k === "charge") predGo(A, "charge"); else { predCalm(A, 40); fleeFrom(A, P.x, P.z, A.run * 1.2, 10, 120); }
+}
+function predGrowl(A, big) { gunFoley(big ? [[0, 90, .7, .3], [.05, 140, .6, .22]] : [[0, 160, .4, .22], [.08, 240, .3, .14]]); }
+function predBite(A) {
+  const d = PRED_BITE[A.kind] || 10; MP.hp = Math.max(0, MP.hp - d); GEO.hurt = Math.min(1, GEO.hurt + .45 + d / 60);
+  buzz("L", .9, 120); buzz("R", .9, 120); predGrowl(A, A.kind === "bear" || A.kind === "polar");
+  const now = performance.now(); if (now - (GEO.biteSaid || 0) > 4000) { GEO.biteSaid = now; vrBanner(PRED_NAME[A.kind] + " got you! (-" + d + ")", 2, 2); }
+  if (MP.hp <= 0) { GEO.killedBy = PRED_NAME[A.kind]; UW.drown = .001; UW.red = 1; vrBanner(PRED_NAME[A.kind] + " killed you", 3.5, 3); }
+}
+function predWatch() {                                        // twice a second: who starts hunting you
+  if (!GEO.on || state !== "play" || MP.dead > 0 || UW.drown > 0) return;
+  const dz = geoDanger(), night = NIGHT_K > .4, high = playerHigh(); let busy = 0;
+  for (const A of beasts) if (A.pred) busy++;
+  for (const A of beasts) {
+    const k = PRED[A.kind]; if (!k || A.dead || A.gone || A.net || A.pred) continue;
+    if (A.predCool > 0) { A.predCool -= .5; continue; }
+    const d = Math.hypot(A.x - P.x, A.z - P.z); if (d > 160) continue;
+    if (k === "pack") {
+      if (A.kind === "coyote" && !night) continue;
+      if (d > 110 || busy > 6 || Math.random() > (night ? .5 : .12) * dz) { A.predCool = 6; continue; }
+      const pack = beasts.filter(B => B.kind === A.kind && !B.dead && !B.pred && B.grp === A.grp && Math.hypot(B.x - A.x, B.z - A.z) < 70), a0 = Math.atan2(A.x - P.x, A.z - P.z);
+      pack.forEach((B, i) => predGo(B, "circle", { a: a0 + (i - (pack.length - 1) / 2) * .8, r: 24 + Math.random() * 10, dir: Math.random() < .5 ? 1 : -1, wait: 6 + i * 3 + Math.random() * 5, pack: pack.length }));
+      busy += pack.length; if (A.kind === "wolf") gunFoley([[0, 420, 1.4, .1], [.3, 560, 1.2, .08]]);   // (a howl, more or less)
+    } else if (k === "bear") { if (d < 20 + 10 * dz && !high) predGo(A, "charge"); else A.predCool = 2; }
+    else if (k === "charge") { if (d < 30 + 10 * dz && !high) { predGo(A, "charge"); busy++; } else A.predCool = 3; }
+    else if (k === "lunge") { if (d < 9 && !high) predGo(A, "lunge", { hx: A.x, hz: A.z }); else A.predCool = 1; }
+    else if (k === "stalk") { if (d < 150 && busy < 4 && Math.random() < .18 * dz) { predGo(A, "stalk"); busy++; } else A.predCool = 10; }
+  }
+}
+function predTick(A, dt) {                                    // sets where it's going and how fast; the normal walking does the rest
+  const S = A.pred; S.t += dt;
+  const dx = P.x - A.x, dz = P.z - A.z, d = Math.hypot(dx, dz) || 1, high = playerHigh(), ux = dx / d, uz = dz / d;
+  camera.getWorldDirection(_lf); const fl = Math.hypot(_lf.x, _lf.z) || 1, seen = (-dx * _lf.x - dz * _lf.z) / (d * fl) > .8 && d < 60;
+  const bite = () => { if (d < 2.3 && !high && Math.abs((A.y || 0) - P.y) < 2.5) { predBite(A); return true; } return false; };
+  const away = (secs) => { S.st = "retreat"; S.t = 0; S.secs = secs; };
+  A.mode = "walk";
+  if (S.st === "circle") {                                    // the pack rings you, turning slowly
+    S.a += S.dir * dt * .18; A.target = [P.x + Math.sin(S.a) * S.r, P.z + Math.cos(S.a) * S.r]; A.want = d > S.r + 15 ? A.run * .8 : A.walk * 1.4;
+    if (S.t > S.wait && !high) { S.st = "dart"; S.t = 0; }
+    if (S.t > 70 || d > 200) predCalm(A, 60);
+  } else if (S.st === "dart" || S.st === "charge") {           // straight in
+    A.target = [P.x, P.z]; A.want = A.run * (S.st === "dart" ? 1.05 : 1.15);
+    if (bite()) { if (S.st === "dart") away(3 + Math.random() * 3); else { S.st = "maul"; S.t = 0; S.n = 1; } }
+    if (S.t > 14 || high) { if (S.st === "dart") { S.st = "circle"; S.t = 0; S.wait = 4 + Math.random() * 6; } else predCalm(A, 30); }
+  } else if (S.st === "maul") {                                 // a bear, on you: another swipe, then it lets you be
+    A.target = [P.x, P.z]; A.want = A.walk * 1.5; A.mode = d > 2 ? "walk" : "idle";
+    if (S.t > 1.2) { S.t = 0; if (bite()) S.n++; if (S.n >= 2 || d > 6) { predCalm(A, 45); fleeFrom(A, P.x, P.z, A.run, 8, 60); } }
+  } else if (S.st === "stalk") {                                // the mountain lion: from behind, freezing when you look
+    if (seen) { S.st = "freeze"; S.t = 0; A.mode = "idle"; A.want = 0; return; }
+    camera.getWorldDirection(_lf); const bx = P.x - _lf.x / fl * 12, bz = P.z - _lf.z / fl * 12; A.target = [bx, bz]; A.want = d > 40 ? A.run * .7 : A.walk * 1.3;
+    if (d < 15 && !high) { predGrowl(A, true); S.st = "pounce"; S.t = 0; }
+    if (S.t > 90 || d > 220) predCalm(A, 120);
+  } else if (S.st === "freeze") {                               // caught looking: stares, then either slinks off or tries again
+    A.mode = "idle"; A.want = 0; A.yaw += angDiff(Math.atan2(dx, dz), A.yaw) * Math.min(1, dt * 4);
+    if (S.t > 2.5) { if (Math.random() < .5 || d < 25) { predCalm(A, 90); fleeFrom(A, P.x, P.z, A.run, 6, 80); } else { S.st = "stalk"; S.t = 0; } }
+  } else if (S.st === "pounce") {
+    A.target = [P.x, P.z]; A.want = A.run * 1.5;
+    if (bite()) { away(6); } else if (S.t > 5) predCalm(A, 60);
+  } else if (S.st === "lunge") {                                // out of the water and straight back
+    A.target = [P.x, P.z]; A.want = 9;
+    if (bite() || S.t > 1.4) { S.st = "back"; S.t = 0; }
+  } else if (S.st === "back") {
+    A.target = [S.hx, S.hz]; A.want = A.walk * 2; if (S.t > 4 || Math.hypot(A.x - S.hx, A.z - S.hz) < 1.5) predCalm(A, 12);
+  } else if (S.st === "retreat") {
+    A.target = [A.x - ux * 30, A.z - uz * 30]; A.want = A.run * .8;
+    if (S.t > S.secs) { if (PRED[A.kind] === "pack") { S.st = "circle"; S.t = 0; S.a = Math.atan2(A.x - P.x, A.z - P.z); S.wait = 5 + Math.random() * 8; } else predCalm(A, 60); }
+  }
+}
+function geoHurtTick(dt) {                                    // the red flash when something bites you
+  if (!(GEO.hurt > 0)) return; GEO.hurt = Math.max(0, GEO.hurt - dt * 1.4);
+  const hm = mpHurtMesh(); hm.material.color.set(0x9a0d0d); hm.material.opacity = GEO.hurt * .5; hm.visible = GEO.hurt > .01 && state === "play"; if (vr.I) hm.position.copy(vr.I.head);
+}
+// dying (or drowning): you wake somewhere random on the planet
+function geoRandomSpot() {
+  const G = GLOBE, R = G.R;
+  for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }
+  return G.p.slice();
+}
+function geoTeleport(p) {                                     // the land round you, built fresh at another spot on the planet (behind the dark)
+  const E = ENDLESS, G = GLOBE;
+  if (E.job && E.job.ch) { const sl = E.slice; E.slice = 1e9; while (!E.job.it.next().done); E.slice = sl; }
+  E.job = null; E.cur = null;
+  for (const ch of [...E.chunks.values()]) enUnload(ch);
+  E.want = []; E.solidQ.clear(); E.shQ.clear(); E.dropQ.clear();
+  for (let q = beasts.length - 1; q >= 0; q--) { const A = beasts[q]; if (!A.ptero && !A.net) enAnimDrop(A); }
+  E.acG.clear(); E.acB.clear(); for (const rec of E.acL.values()) enLootDrop(rec); E.acL.clear(); E.aQ = []; E.aInit = true;
+  for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear();
+  if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); GEO.fire = null; }
+  const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = P.x; G.oz = P.z; G.reN = (G.reN || 0) + 1; G.llT = 0;
+  enEnsure(P.x, P.z, 260);
+  let sx = P.x, sz = P.z; for (let k = 0; k < 200; k++) { const a = k * 2.4, r = k * 1.2, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (H(x, z) > water + 1 && slopeNy(x, z) > .85) { sx = x; sz = z; break; } }
+  P.x = sx; P.z = sz; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
+  E.farC0 = [1e9, 1e9]; E.shoreC = [1e9, 1e9]; MAPV.cx = 1e9; E.mapJob = null; E.scanT = 0; E.ambSig = "";
+  globeTick(0); geoTentRestore(); GEO.reAt = true; GEO.tT = 0; if (typeof enAmbient === "function") enAmbient(true);
+}
+function geoRespawn() {
+  const by = GEO.killedBy; GEO.killedBy = null;
+  hunt.score = Math.max(0, hunt.score - 10); showHuntScore();
+  MP.hp = 60; GEO.food = Math.max(GEO.food, 50); GEO.water = Math.max(GEO.water, 50); GEO.warn = 100; GEO.hurt = 0;
+  for (const A of beasts) if (A.pred) predCalm(A, 60);
+  geoTeleport(geoRandomSpot());
+  vrBanner((by ? by + " got you" : "You didn't make it") + ": you woke up somewhere else on the planet (-10)", 5, 3); geoSave();
 }
 /* ---------------- World generation ---------------- */
 let NIGHT_K = 0;
@@ -7080,6 +7196,8 @@ Object.assign(QSPEC, {
 function dinoBar(A) {}                                       // (1.78: no health bar — scarier without, and it cost frames)
 function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a grenade) reached an animal: most drop, dinosaurs take several
   if (!A || A.dead) return;
+  if (GEO.on && PRED[A.kind] && !A.hpMax) { const tough = PRED_TOUGH[A.kind];   // 2.73: Geocaching: a bear takes several shots, and comes for you
+    if (tough) { A.geoHp = (A.geoHp ?? tough) - (dmg >= 100 ? 3 : gun === "hunt" || head ? 2 : 1); if (A.geoHp > 0) { A.flinch = 1; hitTick(head); predAnger(A); return; } } }
   if (A.spook) { spookScare(A); return; }                    // 2.69: a spook isn't hurt, it just bolts
   if (A.net && mpNetGuest()) { mpSendHost({ t: "ah", n: A.nid, d: dist || 0, dmg: dmg || 0, hd: head ? 1 : 0, g: gun || null, ti: gun ? tierOf(gun) : 0 }); if (A.hpMax) { A.flinch = 1; hitTick(); } return; }
   if (!A.hpMax) { killAnimal(A, dist); return; }
@@ -8134,13 +8252,14 @@ function updateAnimals(dt) {
     A.timer -= dt; A.fleeT = Math.max(0, (A.fleeT || 0) - dt);
     const TH = beastThreat(A), TX = TH[0], TZ = TH[1], pd = TH[2];   // 2.00: whichever player is scaring it most (online, guests too)
     const sR = TH[3];                                       // the legends notice you from further off
-    if (sR > 0 && pd < sR && !A.hunter && A.kind !== "trex" && !A.spook && !A.swerve) {                               // you're moving and close enough: ease away, or bolt if you're near
+    if (sR > 0 && pd < sR && !A.hunter && A.kind !== "trex" && !A.spook && !A.swerve && !A.pred) {                               // you're moving and close enough: ease away, or bolt if you're near
       const k = 1 - pd / sR, sp = k > .55 ? A.run : A.walk * 1.5;
       if (A.trek && pd > 25) {}                                                      // already leaving for somewhere else
       else if (k > .55 && !(A.trek && A.fleeT > 0)) { if (!fleeFar(A, TX, TZ, sp, 70, 160)) fleeFrom(A, TX, TZ, sp, 3 + 4 * k, 18 + 45 * k); }   // bolting: off to another part of the map
       else if (!(A.fleeT > 0) || A.want < sp - .1) fleeFrom(A, TX, TZ, sp, 3 + 4 * k, 18 + 45 * k);
     }
-    if (A.spook) spookTick(A, dt);                                         // 2.53
+    if (A.pred && GEO.on) predTick(A, dt);                                 // 2.73: Geocaching: it's hunting you
+    else if (A.spook) spookTick(A, dt);                                    // 2.53
     else if (A.swerve) legendSwerve(A, dt);
     else if (A.hunter) mpAsTarget(A, DINO.tgt, () => huntTick(A, dt));          // (2.00: the raptor and the T. rex can be after another player)
     else if (A.kind === "trex") mpAsTarget(A, A.tgt, () => rexTick(A, dt));
@@ -9012,6 +9131,7 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
   if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
 function uwRespawn() {                                      // wake up somewhere random on dry ground
+  if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // 2.73: Geocaching: anywhere on the planet
   let s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
   for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30) && (k > 300 || vbFarFrom(x, z, Math.min(120, HALF * .4)))) s = [x, z]; }   // (2.48: not next to a bot)
   if (!s) s = [P.x, P.z];

@@ -56,7 +56,7 @@ async def main():
           if (A) { A.x = D.P.x + 1; A.z = D.P.z; D.killAnimal(A, 50); o.food = D.GEO.foods.length; D.GEO.food = 50; tick(3); o.ate = [Math.round(D.GEO.food), D.GEO.foods.length]; }
           D.GEO.food = 90; const h0 = D.GEO.food; for (let i = 0; i < 60; i++) D.geoTick(1); o.hunger = +(h0 - D.GEO.food).toFixed(2);   // (2.72: food is its own bar)
           const V = D.vr; V.own = { hunt: 5, ar: 5, smg: 5, pistol: 5 }; V.nades = 10; D.MP.hp = 80; o.toolsHurt = D.thermalLoaded(); D.MP.hp = 100; o.toolsFull = D.thermalLoaded();
-          D.MP.hp = 1; D.GEO.food = 0; D.geoTick(30); o.faint = Math.round(D.MP.hp);
+          D.MP.hp = 1; D.GEO.food = 0; D.geoTick(30); o.faint = D.UW.drown > 0 ? 1 : 0; D.uwRespawn(); D.UW.drown = 0; o.faint = o.faint ? Math.round(D.MP.hp) : 0;   // (2.73: you die, then wake somewhere random)
           D.geoSave(); sv = JSON.parse(localStorage.getItem('jt-geo')); o.save = [sv.seed, sv.found.length, +sv.lat.toFixed(3), +sv.lon.toFixed(3)];
           // the GPS on the wheel, the globe on the map
           D.pickGun('gps'); o.gps = D.vr.gpsMode; D.GEO.mz = 1; o.globeMap = (() => { const I = { head: new D.THREE.Vector3(D.P.x, D.P.y + 1.7, D.P.z) }; return true; })();
