@@ -47,7 +47,7 @@ async def main():
           // first aid
           D.geoHeld('aid'); D.MP.hp = 40; const ah = hand(head.clone().add(new T.Vector3(.2, -.4, -.3))); D.geoHeldTick(ib, ah, 1 / 72); ah.trig = 1; D.geoHeldTick(ib, ah, 1 / 72); ah.trig = 0; o.aid = [Math.round(D.MP.hp), D.GEO.aid];
           // a campfire: lit at once with the fire starter; meat eaten by it counts double
-          D.geoFirePlace(D.P.x + 2, D.P.z); o.fireLit = D.GEO.fire.lit; D.GEO.food = 20; D.geoEat(10); o.cooked = Math.round(D.GEO.food);
+          D.geoFirePlace(D.P.x + 2, D.P.z); D.geoFireTick(2.1); o.fireLit = D.GEO.fire.lit; D.GEO.food = 20; D.geoEat(10); o.cooked = Math.round(D.GEO.food);
           // the tent: sleeping at night brings the morning
           D.geoTentPlace(D.P.x + 3, D.P.z + 1); G.utc = ((22 - G.lon / 15) % 24 + 24) % 24; D.globeTick(0); D.geoSleep(); D.globeTick(0); o.slept = Math.round(D.hourNow * 10) / 10;
           // bear spray: an animal right in front of you runs
@@ -88,7 +88,7 @@ async def main():
           o.resume = [D.GEO.found.size, D.GEO.items.size, Object.keys(D.vr.own).filter(k => D.vr.own[k] > 0).sort().join(','), Math.round(D.GEO.food), Math.round(D.GEO.water)];
           return o; }""")
         print("world", json.dumps(w))
-        ok = r["startOwn"] == [] and r["startItems"] == 0 and r["first"] < 160 and r["order"] == ["pistol1", "canteen", "smg1", "campfire", "bow1", "hunt1", "pistol2", "ar5", "spray", "hunt5", "refill"] \
+        ok = r["startOwn"] == [] and r["startItems"] == 0 and r["first"] < 160 and r["order"] == ["pistol1", "canteen", "smg1", "campfire", "bow1", "hunt1", "pistol2", "ar5", "tscope", "hunt5", "refill"] \
              and r["at49"] == [True, 24] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 24 \
              and r["g48"][:6] == [24, 10, 12, 10, .42, 5] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \

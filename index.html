@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.73";              // Just Trees 2.55
+const VERSION = "2.74";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -515,7 +515,7 @@ let gameMode = "hike";                       // "hike", "hunt" or "pvp"
 let hourNow = 10;                            // the hour the world is lit for
 let GLOBE = null;                                              // 2.70: the Geocaching globe (see globeSetup)
 const GEO = { on: false, caches: [], found: new Set(), target: null, tT: 0, saveT: 0, mz: 0, foods: [], warn: 100, beepT: 0, objs: new Map(), gps: null, reAt: false,
-  items: new Set(), food: 100, water: 100, cant: 0, aid: 1, spray: 4, worn: new Set(), sprays: [], frT: 0, sipT: 0, nvK: 0, held: null, heldObj: null };   // (2.72: the gear)
+  items: new Set(), food: 100, water: 100, cant: 0, aid: 1, spray: 4, worn: new Set(), sprays: [], frT: 0, sipT: 0, nvK: 0, held: null, heldObj: null, leaves: [] };   // (2.72: the gear)
 const GEO_N = 100, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // 2.70: the globe: the sun where you really are
@@ -3145,10 +3145,10 @@ function enBlock(list) {
   return { m, c, n: list.length };
 }
 const enCellOf = (ch, x, z) => { const ci = Math.max(0, Math.min(1, Math.floor((x - ch.x0) / EN_CELL))), cj = Math.max(0, Math.min(1, Math.floor((z - ch.z0) / EN_CELL))); return enKey(ch.ix * 2 + ci, ch.iz * 2 + cj); };
-function enNearAdd(ch, it, list) {                           // this square's share of one shape's batch, cell by cell
+function enNearAdd(ch, it, list, mark) {                     // this square's share of one shape's batch, cell by cell
   if (!list.length) return;
   const per = new Map(); for (const t of list) { const k = enCellOf(ch, t.x, t.z); let a = per.get(k); if (!a) per.set(k, a = []); a.push(t); }
-  for (const [k, arr] of per) { it.blocks.set(k, enBlock(arr)); ch.near.push([it, k]); ch.cells.add(k); ENDLESS.cells.add(k); }
+  for (const [k, arr] of per) { it.blocks.set(k, enBlock(arr)); if (mark) arr.forEach((t, i) => { t._b = [it, k, i]; }); ch.near.push([it, k]); ch.cells.add(k); ENDLESS.cells.add(k); }
 }
 function enNearRebuild(NS, act) {
   for (const it of NS.items) {
@@ -4053,7 +4053,8 @@ function* enMake(ch) {
   const byV = new Map(); for (const t of trees) { const sl = t.K.sl[t.vi]; if (!byV.has(sl)) byV.set(sl, []); byV.get(sl).push(t); }
   for (const [sl, list] of byV) { enNearAdd(ch, sl.tree, list); enNearAdd(ch, sl.lo, list); }
   for (const [sl, list] of limbRecs) enNearAdd(ch, sl, list);
-  for (const [sl, list] of bushRecs) enNearAdd(ch, sl, list);
+  for (const [sl, list] of bushRecs) enNearAdd(ch, sl, list, !!GLOBE);
+  if (GLOBE) { const bg = ch.bgrid = new Map(); for (const list of bushRecs.values()) for (const t of list) { const k = Math.floor(t.x / 4) * 100003 + Math.floor(t.z / 4); let L = bg.get(k); if (!L) bg.set(k, L = []); L.push(t); } }   // 2.74: for the machete
   for (const [sl, list] of logRecs) enNearAdd(ch, sl, list);
   for (const [e, rr] of rrE) for (const k in RGr) enNearAdd(ch, e.slr[k], rr[k]);
   { const cm = cardMesh(trees.map(t => [t, t.K.cells[t.vi]]).filter(e => e[1]), lo); if (cm) ch.disp.push(cm.geometry, cm); }
@@ -4527,14 +4528,14 @@ const _giV = new THREE.Vector3(), _v3c = new THREE.Vector3();
    counts double) and fruit you pull off the trees. Run out of either and your health drops. ---- */
 const GI_LIST = [
   ["canteen", "Canteen", "Hold it upright under a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
-  ["pack1", "Small backpack", "6 slots for your gear", 0], ["compass", "Compass", "Your watch points to the next cache", 0], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
+  ["pack1", "Small backpack", "6 slots for your gear", 0], ["spray", "Bear spray", "Pull the trigger: a charging animal turns and runs", 1], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
-  ["binos", "Binocular upgrade", "More zoom, and the distance", 0], ["rod", "Fishing rod", "Cast into water, pull when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
-  ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Full speed through thick jungle", 0],
+  ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "Hold the trigger, fling and let go to cast; jerk up when it bites, reel with your other hand", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
+  ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
   ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light on your head: on by itself in the dark", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
-  ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["firestarter", "Fire starter", "Your campfire lights at once", 0],
-  ["filter", "Water filter", "Every drink counts double", 0], ["spray", "Bear spray", "Pull the trigger: a charging animal turns and runs", 1]
+  ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
+  ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0]
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
@@ -4571,6 +4572,7 @@ function geoReward(n) {                                       // a cache found: 
     GEO.items.add(r.item); const I = GI[r.item];
     if (r.item === "pouch1" || r.item === "pouch2") vr.nades = geoNadeCap();
     if (r.item === "flares") vr.flares = FLARE.N;
+    if (r.item === "tscope") TOOL.on.hunt = true; if (r.item === "tbinos") TOOL.on.binos = true;
     vrBanner(I.name + ": " + I.desc, 5, 3); geoShow({ item: r.item });
   } else vrBanner(r.last ? "All 100 found: the planet is yours!" : "Supplies refilled", 4, 3);
   if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
@@ -4589,7 +4591,7 @@ function giModel(k) {                                         // (about hand siz
     case "aid": P(giBox(.14, .1, .05), 0xd02a24, 0, 0, 0); P(giBox(.07, .02, .002), 0xffffff, 0, 0, .026); P(giBox(.02, .07, .002), 0xffffff, 0, 0, .026); P(giBox(.05, .012, .012), 0x222222, 0, .056, 0); break;
     case "boots": for (const s of [-1, 1]) { P(giBox(.07, .12, .09), 0x6a4a2a, s * .05, .03, -.01); P(giBox(.075, .03, .16), 0x2a2a2a, s * .05, -.04, .02); } break;
     case "tent": { const L = .26; for (const s of [-1, 1]) P(giBox(.002, .2, L), 0xe8742a, s * .06, .07, 0, 0, 0, s * .55); P(giBox(.14, .004, L), 0x8a5a2a, 0, -.02, 0); break; }
-    case "binos": for (const s of [-1, 1]) { P(giCyl(.022, .026, .11, 12), 0x23262a, s * .033, 0, 0, Math.PI / 2); P(giCyl(.02, .02, .004, 12), 0x5ab0ff, s * .033, 0, -.056, Math.PI / 2); } P(giBox(.03, .02, .05), 0xc8a050, 0, 0, 0); break;
+    case "tbinos": for (const s of [-1, 1]) { P(giCyl(.022, .026, .11, 12), 0x23262a, s * .033, 0, 0, Math.PI / 2); P(giCyl(.02, .02, .004, 12), 0xff6a2a, s * .033, 0, -.056, Math.PI / 2); } P(giBox(.03, .02, .05), 0x8a2a20, 0, 0, 0); break;
     case "rod": P(giCyl(.004, .008, .9, 6), 0x3a2a1a, 0, .45, 0); P(giCyl(.016, .016, .03, 10), 0x999999, .02, .1, 0, 0, 0, Math.PI / 2); P(giCyl(.012, .012, .14, 8), 0x2a2a2a, 0, .02, 0); break;
     case "snowshoes": for (const s of [-1, 1]) { const m = P(giCyl(.07, .07, .012, 12), 0x8a6a40, s * .08, 0, 0); m.scale.set(1, 1, 1.9); P(giBox(.06, .02, .06), 0x2a2a2a, s * .08, .015, 0); } break;
     case "pouch1": case "pouch2": { const s = k === "pouch2" ? 1.25 : 1; P(giBox(.16 * s, .1 * s, .05), 0x4a5a32, 0, 0, 0); for (let i = 0; i < (k === "pouch2" ? 4 : 3); i++) P(giBall(.022, 8), 0x3a4a2a, -.05 * s + i * .035 * s, .07 * s, 0); break; }
@@ -4600,7 +4602,7 @@ function giModel(k) {                                         // (about hand siz
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
     case "nvg": for (const s of [-1, 1]) P(giCyl(.02, .024, .07, 12), 0x23262a, s * .03, 0, -.03, Math.PI / 2); P(giBox(.1, .03, .04), 0x3a3a3a, 0, 0, 0); P(giCyl(.016, .016, .003, 12), 0x50ff70, .03, 0, -.067, Math.PI / 2); P(giCyl(.016, .016, .003, 12), 0x50ff70, -.03, 0, -.067, Math.PI / 2); break;
     case "satphone": P(giBox(.06, .13, .03), 0x2a2a2a, 0, 0, 0); P(giBox(.045, .05, .002), 0x7ad0ff, 0, .025, .016); P(giCyl(.008, .008, .08, 6), 0x111111, .02, .1, 0); break;
-    case "firestarter": P(giBox(.08, .015, .03), 0x9a9a9a, 0, 0, 0); P(giCyl(.008, .008, .07, 8), 0xe8b020, 0, .02, .02, Math.PI / 2); break;
+    case "tscope": P(giCyl(.022, .022, .26, 12), 0x23262a, 0, 0, 0, Math.PI / 2); P(giCyl(.03, .024, .05, 12), 0x23262a, 0, 0, -.14, Math.PI / 2); P(giCyl(.026, .026, .003, 12), 0xff6a2a, 0, 0, -.166, Math.PI / 2); P(giBox(.03, .03, .05), 0x8a2a20, 0, .03, .02); break;
     case "filter": P(giCyl(.028, .028, .14, 12), 0x3a7ac8, 0, 0, 0); P(giCyl(.01, .01, .06, 6), 0x222222, 0, .1, 0); break;
     case "spray": P(giCyl(.025, .025, .14, 12), 0xd04a1a, 0, 0, 0); P(giBox(.02, .02, .03), 0x222222, 0, .08, .01); break;
     default: P(giBox(.1, .1, .1), 0xff00ff, 0, 0, 0);
@@ -4654,13 +4656,13 @@ function geoAimGround(main, maxD) {                           // where the hand 
 function geoFirePlace(x, z) {
   if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); }
   const obj = giModel("campfire"); obj.scale.setScalar(4); const y = groundAt(x, z); obj.position.set(x, y + .05, z); scene.add(obj);
-  const pts = fireMake(18, .45); GEO.fire = { obj, pts, x, y, z, t: 0, lit: geoHas("firestarter"), lightT: geoHas("firestarter") ? 0 : 6, life: 240 };
+  const pts = fireMake(18, .45); GEO.fire = { obj, pts, x, y, z, t: 0, lit: false, lightT: 2, life: 240 };   // 2.74: lights in 2 s (no fire starter any more)
   vrBanner(GEO.fire.lit ? "Campfire lit" : "Campfire: lighting…", 2, 1);
 }
 function geoFireTick(dt) {
   const F = GEO.fire; if (!F) return; F.t += dt;
   if (!F.lit && (F.lightT -= dt) <= 0) { F.lit = true; vrBanner("Campfire lit: cook your food here", 2.5, 1); }
-  const pa = F.pts.geometry.attributes.position, ca = F.pts.geometry.attributes.color, k = F.lit ? 1 : .15 * Math.max(0, 1 - F.lightT / 6) + .05, fade = Math.min(1, (F.life - F.t) / 5);
+  const pa = F.pts.geometry.attributes.position, ca = F.pts.geometry.attributes.color, k = F.lit ? 1 : .15 * Math.max(0, 1 - F.lightT / 2) + .05, fade = Math.min(1, (F.life - F.t) / 5);
   for (let i = 0; i < 18; i++) { const u = (i / 18 + F.t * (.7 + (i % 5) * .13)) % 1, a = i * 2.4, r = .25 * (1 - u); pa.setXYZ(i, F.x + Math.cos(a) * r, F.y + .15 + u * 1.1 * k, F.z + Math.sin(a) * r); const f = (1 - u) * k * fade; ca.setXYZ(i, f, f * (.35 + .4 * (1 - u)), f * .06); }
   pa.needsUpdate = ca.needsUpdate = true;
   if (F.t > F.life) { scene.remove(F.obj); scene.remove(F.pts); GEO.fire = null; }
@@ -4679,22 +4681,146 @@ function geoSleep() {
 function geoTentRestore() {                                   // after re-laying the flat patch, the tent and fire stay where they are on the planet
   for (const T of [GEO.tent]) if (T) { const xz = glFromSphere(T.p, [0, 0]); T.x = xz[0]; T.z = xz[1]; T.obj.position.set(T.x, groundAt(T.x, T.z) + .2, T.z); }
 }
-// fishing
-function geoRodTick(main, dt, pressed) {
-  const R = GEO.rod || (GEO.rod = { st: "idle", t: 0, bob: null, line: null });
-  if (!R.bob) { R.bob = new THREE.Mesh(giBall(.05, 8), giMat(0xff3a2a)); R.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xeeeeee })); R.line.frustumCulled = false; scene.add(R.bob, R.line); }
-  const tip = GEO.heldObj.localToWorld(_giV.set(0, .9, 0));
-  if (R.st === "idle") { R.bob.visible = R.line.visible = false; if (pressed) { const d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ); d.y = 0; d.normalize(); const x = tip.x + d.x * 10, z = tip.z + d.z * 10;
-      if (H(x, z) < water - .3 && !(ENDLESS && enIcedAt(x, z))) { R.st = "wait"; R.t = 2 + Math.random() * 5; R.x = x; R.z = z; gunFoley([[0, 900, .08, .1]]); } else vrBanner("Cast it into water", 1.5, 0); } }
-  else {
-    R.bob.visible = R.line.visible = true; R.t -= dt; const dip = R.st === "bite" ? -.12 * Math.abs(Math.sin(R.t * 20)) : Math.sin(performance.now() / 400) * .02;
-    R.bob.position.set(R.x, water + .02 + dip, R.z); const pa = R.line.geometry.attributes.position; pa.setXYZ(0, tip.x, tip.y, tip.z); pa.setXYZ(1, R.x, water + .04, R.z); pa.needsUpdate = true;
-    if (R.st === "wait" && R.t <= 0) { R.st = "bite"; R.t = 1.6; buzz(set.hand === "right" ? "R" : "L", .9, 200); gunFoley([[0, 300, .1, .15]]); }
-    else if (R.st === "bite" && pressed) { R.st = "idle"; geoEat(25, "Caught a fish! +25 food"); bing(); }
-    else if (R.st === "bite" && R.t <= 0) { R.st = "wait"; R.t = 2 + Math.random() * 5; vrBanner("It got away", 1.2, 0); }
-    else if (pressed && R.st === "wait") R.st = "idle";
-    if (Math.hypot(R.x - P.x, R.z - P.z) > 30) R.st = "idle";
+// 2.74: fishing. Hold the trigger, fling the rod and let go: the lure flies the way you flung it. Nothing is sure: deeper water, the
+// right spot and dawn or dusk bite best. When it bites, jerk the rod up to set the hook. Then reel with your other hand (circle it by
+// the reel) while two gauges float by the rod: the round one shows which way the fish pulls (tip your rod that way), the bar shows how
+// fast to reel right now (too fast snaps the line, too slow and it shakes free). At 90% "Pull up!": lift, and the fish flies up out of
+// the water into your other hand.
+const FISH_KINDS = [["perch", .4, .9, 0x9ab040], ["trout", .7, 2.4, 0x8a9aa8], ["bass", 1, 3.2, 0x4a6a3a], ["pike", 2, 6, 0x6a7a4a], ["salmon", 2.5, 7, 0xc8a090]];
+const SEA_FISH = [["mackerel", .5, 1.4, 0x5a8ab0], ["snapper", 1, 4, 0xd05a4a], ["tuna", 4, 12, 0x3a4a6a]];
+function geoFishModel(col, kg) {
+  const g = new THREE.Group(), s = .22 + Math.min(.5, kg * .05), b = new THREE.Mesh(giBall(.5, 10), giMat(col)); b.scale.set(.32, .42, 1); g.add(b);
+  const t = new THREE.Mesh(new THREE.ConeGeometry(.22, .3, 4), giMat(col)); t.rotation.x = -Math.PI / 2; t.scale.set(.25, 1, 1); t.position.z = .58; g.add(t);
+  const e = new THREE.Mesh(giBall(.05, 6), giMat(0x111111)); e.position.set(.12, .05, -.32); g.add(e); const e2 = e.clone(); e2.position.x = -.12; g.add(e2);
+  g.scale.setScalar(s); return g;
+}
+function geoFishUI() {
+  if (GEO.fishM) return GEO.fishM;
+  const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  m.renderOrder = 997; m.frustumCulled = false; m.visible = false; m.userData.cv = cv; scene.add(m); GEO.fishM = m; return m;
+}
+function geoFishDraw(F) {
+  const m = geoFishUI(), g = m.userData.cv.getContext("2d"); g.clearRect(0, 0, 256, 256);
+  g.fillStyle = "rgba(10,20,26,.82)"; uiRound(g, 2, 2, 252, 252, 20); g.fill();
+  // the round meter: where the fish pulls (gold) and where your rod tips (white)
+  g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 5; g.beginPath(); g.arc(88, 110, 62, Math.PI, 2 * Math.PI); g.stroke();
+  const ang = v => Math.PI * 1.5 + Math.max(-1, Math.min(1, v)) * Math.PI / 2;
+  g.strokeStyle = "#ffd65a"; g.lineWidth = 16; g.beginPath(); g.arc(88, 110, 62, ang(F.pull) - .22, ang(F.pull) + .22); g.stroke();
+  g.strokeStyle = "#ffffff"; g.lineWidth = 5; g.beginPath(); g.moveTo(88, 110); g.lineTo(88 + Math.cos(ang(F.tilt)) * 70, 110 + Math.sin(ang(F.tilt)) * 70); g.stroke();
+  g.fillStyle = "#cfe8f0"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText("tip", 88, 140);
+  // the speed bar: the band to reel in, and how fast you're reeling
+  g.fillStyle = "rgba(255,255,255,.15)"; g.fillRect(196, 24, 34, 160);
+  const y = v => 184 - Math.max(0, Math.min(1, v)) * 160; g.fillStyle = "rgba(120,230,120,.75)"; g.fillRect(196, y(F.want + .15), 34, y(F.want - .15) - y(F.want + .15));
+  g.fillStyle = "#ffffff"; g.fillRect(190, y(F.reel) - 3, 46, 6); g.fillStyle = "#cfe8f0"; g.fillText("reel", 213, 206);
+  // how far in, and the line's strain
+  g.fillStyle = "rgba(255,255,255,.15)"; g.fillRect(20, 222, 216, 14); g.fillStyle = "#5ad0ff"; g.fillRect(20, 222, 216 * F.got, 14);
+  g.fillStyle = F.tense > .65 ? "#ff5a4a" : "#ffd65a"; g.fillRect(20, 160, 150 * Math.min(1, F.tense), 10); g.fillStyle = "#cfe8f0"; g.font = "16px sans-serif"; g.textAlign = "left"; g.fillText("strain", 20, 186);
+  if (F.got >= .9) { g.fillStyle = "#ffd65a"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText("PULL UP!", 100, 34); }
+  m.material.map.needsUpdate = true;
+}
+function geoRodReset(R) { R.st = "idle"; if (R.lure) R.lure.visible = false; if (R.line) R.line.visible = false; if (GEO.fishM) GEO.fishM.visible = false; }
+function geoRodTick(I, main, dt) {
+  const R = GEO.rod || (GEO.rod = { st: "idle", t: 0 }), rod = GEO.heldObj, ms = set.hand === "right" ? "R" : "L", os = ms === "R" ? "L" : "R", off = I.hands[set.hand === "right" ? "left" : "right"];
+  if (!R.lure) { R.lure = new THREE.Mesh(giBall(.045, 8), giMat(0xff3a2a)); R.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xeeeeee })); R.line.frustumCulled = false; R.lure.visible = R.line.visible = false; scene.add(R.lure, R.line); }
+  const tip = rod.localToWorld(_giV.set(0, .9, 0)).clone(), tv = R.tipP ? tip.clone().sub(R.tipP).divideScalar(Math.max(dt, 1e-3)) : new THREE.Vector3(); R.tipP = tip.clone();
+  R.tvS = R.tvS ? R.tvS.lerp(tv, .5) : tv.clone(); R.t += dt;
+  const line = (p) => { const pa = R.line.geometry.attributes.position; pa.setXYZ(0, tip.x, tip.y, tip.z); pa.setXYZ(1, p.x, p.y, p.z); pa.needsUpdate = true; R.line.visible = true; };
+  if (R.st === "idle") {                                       // hold the trigger and fling; let go to cast
+    if (main.trig > .6) { if (!R.arm) { R.arm = true; R.best = 0; R.bestV = new THREE.Vector3(); } const sp = R.tvS.length(); if (sp > R.best) { R.best = sp; R.bestV.copy(R.tvS); } }
+    else if (R.arm) { R.arm = false;
+      if (R.best < 1.2) { vrBanner("Fling the rod as you let go", 1.5, 0); return; }
+      const v = R.bestV.clone().normalize().multiplyScalar(Math.min(16, 4 + R.best * 2.2)); v.y = Math.max(v.y, 2);
+      R.st = "fly"; R.t = 0; R.p = tip.clone(); R.v = v; R.lure.visible = true; gunFoley([[0, 1400, .25, .08]]); buzz(ms, .3, 40); }
+    return;
   }
+  if (R.st === "fly") {                                        // the lure arcs out
+    R.v.y -= 9.8 * dt; R.p.addScaledVector(R.v, dt); R.lure.position.copy(R.p); line(R.p);
+    const g = H(R.p.x, R.p.z);
+    if (R.p.y <= water && g < water - .3 && !(ENDLESS && enIcedAt(R.p.x, R.p.z))) {   // in the water: wait for a bite
+      const depth = water - g, dawn = Math.min(Math.abs(hourNow - 6), Math.abs(hourNow - 18)) < 2 ? 1.6 : 1, spot = .6 + .4 * Math.abs(Math.sin(R.p.x * .013 + R.p.z * .017)), salt = geoSalty(R.p);
+      R.st = "wait"; R.t = 0; R.p.y = water; R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot; R.salt = salt; gunFoley([[0, 700, .1, .1]]);
+    } else if (R.p.y <= g + .05 || R.t > 4) { vrBanner("Cast it into the water", 1.5, 0); geoRodReset(R); }
+    return;
+  }
+  // the lure sits out there: reel in (pull the trigger) to bring it back
+  const bobY = R.st === "bite" ? water - .08 * Math.abs(Math.sin(R.t * 22)) : water + Math.sin(performance.now() / 400) * .015;
+  if (R.st !== "fight") { R.lure.position.set(R.p.x, bobY, R.p.z); line(R.lure.position); }
+  if (Math.hypot(R.p.x - P.x, R.p.z - P.z) > 40) { geoRodReset(R); return; }
+  if (R.st === "wait") {
+    if (edge("rodT", main.trig)) { geoRodReset(R); return; }   // (pull the trigger: wind the lure in to cast again)
+    if (R.t > 45) { vrBanner("Nothing's biting here", 1.5, 0); geoRodReset(R); return; }
+    if (Math.random() < R.rate * dt) { R.st = "bite"; R.t = 0; buzz(ms, 1, 220); gunFoley([[0, 300, .1, .14]]); }
+    return;
+  }
+  if (R.st === "bite") {                                       // jerk the rod up, quickly
+    if (R.tvS.y > 2) {
+      const L = R.salt ? SEA_FISH : FISH_KINDS, f = L[Math.floor(Math.random() * L.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
+      R.st = "fight"; R.t = 0; R.fish = { name: f[0], kg, col: f[3] }; R.F = { got: 0, tense: .2, slack: 0, pull: 0, pullT: 0, want: .5, wantT: 0, reel: 0, tilt: 0, str: .6 + kg / 8 };
+      vrBanner("Fish on! Reel it in", 1.5, 1); buzz(ms, .8, 120); geoFishUI().visible = true; R.ang = null;
+    } else if (R.t > 1.2) { R.st = "wait"; R.t = 0; vrBanner("Too slow: jerk the rod up when it bites", 1.8, 0); }
+    return;
+  }
+  if (R.st === "fight") {
+    const F = R.F, dir = _v2.copy(tip).sub(rod.position).normalize(), right = _v1.set(1, 0, 0).applyQuaternion(I.headQ);
+    // the reel: the other hand circling near it
+    const reelC = rod.localToWorld(new THREE.Vector3(.02, .1, 0)); let rate = 0;
+    if (off && off.pos.distanceTo(reelC) < .3) { const rel = off.pos.clone().sub(reelC), u = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > .95 ? right : _UPv).normalize(), w = new THREE.Vector3().crossVectors(dir, u), a = Math.atan2(rel.dot(w), rel.dot(u));
+      if (R.ang !== null) { let da = a - R.ang; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; rate = Math.abs(da) / Math.max(dt, 1e-3); } R.ang = a; } else R.ang = null;
+    F.reel += (Math.min(1, rate / (Math.PI * 4)) - F.reel) * Math.min(1, dt * 6);
+    F.tilt = Math.max(-1, Math.min(1, dir.dot(right) * 2.2));
+    if ((F.pullT -= dt) <= 0) { F.pullT = 1.5 + Math.random() * 2.5; F.pullTo = (Math.random() * 2 - 1) * (.5 + .5 * Math.min(1, F.str / 2)); } F.pull += ((F.pullTo || 0) - F.pull) * Math.min(1, dt * 1.5);
+    if ((F.wantT -= dt) <= 0) { F.wantT = 1 + Math.random() * 2; F.wantTo = .25 + Math.random() * .6; } F.want += ((F.wantTo || .5) - F.want) * Math.min(1, dt * 1.2);
+    const tipOk = Math.sign(F.tilt) === Math.sign(F.pull) && Math.abs(F.tilt) > .25 || Math.abs(F.pull) < .15, dv = F.reel - F.want;
+    if (Math.abs(dv) < .15) F.got = Math.min(1, F.got + dt * (tipOk ? .09 : .04) / F.str);
+    F.tense = Math.max(0, Math.min(1.2, F.tense + dt * ((dv > .2 ? (dv - .1) * 1.6 : -.25) + (tipOk ? -.15 : .45 * F.str))));
+    F.slack = Math.max(0, F.slack + dt * (dv < -.25 ? .35 : -.4));
+    const mx = 1 - F.got; R.lure.position.set(P.x + (R.p.x - P.x) * mx + F.pull * .8, water - .1, P.z + (R.p.z - P.z) * mx); line(R.lure.position);
+    if ((R.uiT = (R.uiT || 0) - dt) <= 0) { R.uiT = 1 / 15; geoFishDraw(F); }
+    const M = geoFishUI(); M.position.copy(rod.position).add(_v1.set(0, .3, 0)).addScaledVector(right, -.18); M.lookAt(I.head); M.visible = true;
+    if ((R.buzzT = (R.buzzT || 0) - dt) <= 0) { R.buzzT = .12; buzz(ms, .1 + .5 * F.tense, 20); }
+    if (F.tense >= 1) { vrBanner("Snap! The line broke (reeled too hard)", 2, 1); gunFoley([[0, 2600, .05, .14]]); geoRodReset(R); return; }
+    if (F.slack >= 1) { vrBanner("It shook free (keep the line tight)", 2, 1); geoRodReset(R); return; }
+    if (F.got >= .9 && R.tvS.y > 1.6) {                         // pull up: it flies out of the water into your hand
+      R.st = "land"; R.t = 0; GEO.fishM.visible = false; const fo = geoFishModel(R.fish.col, R.fish.kg); fo.position.copy(R.lure.position); scene.add(fo); R.fo = fo; R.from = R.lure.position.clone(); R.lure.visible = false; gunFoley([[0, 500, .3, .1]]);
+    }
+    return;
+  }
+  if (R.st === "land") {
+    const k = Math.min(1, R.t / .8), to = off ? off.pos : I.head.clone().add(_v1.set(0, -.3, -.3)), p = R.from.clone().lerp(to, k); p.y += Math.sin(k * Math.PI) * 2.2;
+    R.fo.position.copy(p); R.fo.rotation.set(k * 6, k * 3, 0); line(p);
+    if (k >= 1) { const food = Math.round(10 + R.fish.kg * 6); geoEat(food, "Caught a " + R.fish.kg.toFixed(1) + " kg " + R.fish.name + "! +" + food + " food"); bing(); buzz(os, .7, 120); scene.remove(R.fo); R.fo = null; geoRodReset(R); }
+  }
+}
+// 2.74: the machete: swing it through bushes to cut them down (and it bites into anything that comes for you)
+function geoMacheteTick(main, dt) {
+  const o = GEO.heldObj, tip = o.localToWorld(_giV.set(0, 0, -.36)).clone(), mid = o.localToWorld(new THREE.Vector3(0, 0, -.18));
+  const v = GEO.mTip ? tip.distanceTo(GEO.mTip) / Math.max(dt, 1e-3) : 0; GEO.mTip = tip; if (v < 2.2) return;
+  let cut = 0;
+  for (const p of [tip, mid]) for (const t of geoBushesNear(p.x, p.z, 1.2)) {
+    if (t.cut) continue; const r = Math.max(.35, t.s * .55), d = Math.hypot(t.x - p.x, t.z - p.z); if (d > r || p.y > t.y + t.s * 1.3 + .3 || p.y < t.y - .4) continue;
+    t.cut = true; cut++; const B = t._b; if (B) { const blk = B[0].blocks.get(B[1]); if (blk) { blk.m.fill(0, B[2] * 16, B[2] * 16 + 16); ENDLESS.nearDirty = true; } }
+    const pts = fireMake(14, .18), pa = pts.geometry.attributes.position, ca = pts.geometry.attributes.color;
+    for (let k = 0; k < 14; k++) { pa.setXYZ(k, t.x + (Math.random() - .5) * t.s, t.y + Math.random() * t.s, t.z + (Math.random() - .5) * t.s); ca.setXYZ(k, .25, .55, .2); }
+    pts.material.blending = THREE.NormalBlending; GEO.leaves.push({ pts, t: 0 });
+  }
+  if (cut) { gunFoley([[0, 1800, .06, .14], [.02, 700, .12, .1]]); buzz(set.hand === "right" ? "R" : "L", .5, 40); }
+  for (const A of beasts) { if (A.dead || A.gone || FLY[A.kind] || A.ptero) continue; if (Math.hypot(A.x - tip.x, A.z - tip.z) < 1.3 && tip.y < groundAt(A.x, A.z) + 2.2 && !(A.cutT > 0)) { A.cutT = .6; hitAnimal(A, 1, 60, false, null); buzz(set.hand === "right" ? "R" : "L", .8, 60); } }
+}
+function geoLeafTick(dt) {
+  for (const A of beasts) if (A.cutT > 0) A.cutT -= dt;
+  for (let i = GEO.leaves.length - 1; i >= 0; i--) { const L = GEO.leaves[i]; L.t += dt; const pa = L.pts.geometry.attributes.position; for (let k = 0; k < pa.count; k++) pa.setY(k, pa.getY(k) - dt * .8); pa.needsUpdate = true; L.pts.material.opacity = Math.max(0, 1 - L.t / 1.2);
+    if (L.t > 1.2) { scene.remove(L.pts); L.pts.geometry.dispose(); L.pts.material.dispose(); GEO.leaves.splice(i, 1); } }
+}
+function geoBushesNear(x, z, r) {                              // the bushes round a spot (each square keeps a 4 m grid of its own; a few sit just over its edge)
+  const E = ENDLESS, out = []; if (!E) return out;
+  for (let ci = Math.floor((x - r - 12) / EN_C); ci <= Math.floor((x + r + 12) / EN_C); ci++) for (let cj = Math.floor((z - r - 12) / EN_C); cj <= Math.floor((z + r + 12) / EN_C); cj++) {
+    const ch = E.chunks.get(enKey(ci, cj)); if (!ch || !ch.bgrid) continue;
+    for (let i = Math.floor((x - r) / 4); i <= Math.floor((x + r) / 4); i++) for (let j = Math.floor((z - r) / 4); j <= Math.floor((z + r) / 4); j++) { const L = ch.bgrid.get(i * 100003 + j); if (L) for (const t of L) out.push(t); } }
+  return out;
+}
+function geoBushTouch() {                                     // how many bushes you're pushing through (0, 1, 2+)
+  if (!GEO.on || !ENDLESS) return 0; let n = 0; for (const t of geoBushesNear(P.x, P.z, 1.6)) if (!t.cut && t.s > .5 && Math.hypot(t.x - P.x, t.z - P.z) < Math.max(.5, t.s * .6)) n++; return n;
 }
 // the bear spray
 function geoSpray(main) {
@@ -4723,7 +4849,7 @@ function geoWornTick(I) {
 function geoSpeedMul() {
   if (!GEO.on) return 1; let m = geoHas("boots") ? 1.15 : 1; const b = ENDLESS && ENDLESS.here && ENDLESS.here.b;
   if ((b === "polar" || (footEnv && footEnv.snow)) && !geoHas("snowshoes")) m *= .7;                 // deep snow
-  if ((b === "rainforest" || b === "tropical") && !geoHas("machete")) m *= .75;                     // thick jungle
+  const nb = geoBushTouch(); if (nb) m *= nb > 1 ? .65 : .8;                                        // 2.74: pushing through bushes (chop them with the machete)
   return m;
 }
 const geoSinkMul = () => !GEO.on ? 1 : geoHas("wings2") ? .42 : geoHas("wings") ? .67 : 1;
@@ -4780,7 +4906,7 @@ function geoPackDraw(sel) {
 }
 function geoHeld(k) {                                         // put something in your gun hand (null: hands free)
   if (GEO.heldObj) { scene.remove(GEO.heldObj); GEO.heldObj = null; }
-  if (GEO.rod && GEO.held === "rod") { GEO.rod.st = "idle"; if (GEO.rod.bob) GEO.rod.bob.visible = GEO.rod.line.visible = false; }
+  if (GEO.rod && GEO.held === "rod") { if (GEO.rod.fo) { scene.remove(GEO.rod.fo); GEO.rod.fo = null; } geoRodReset(GEO.rod); }
   GEO.held = k || null;
   if (k) { GEO.heldObj = giModel(k); scene.add(GEO.heldObj); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; }
 }
@@ -4829,17 +4955,18 @@ function geoHeldTick(I, main, dt) {                           // using what's in
   else if (k === "aid" && pressed) { if (GEO.aid > 0) { GEO.aid = 0; MP.hp = 100; vrBanner("Patched up: full health", 2, 1); bing(); } else vrBanner("First-aid kit used (refills at caches)", 1.5, 0); }
   else if (k === "campfire" && pressed) { const p = geoAimGround(main, 6); if (p) geoFirePlace(p[0], p[1]); else vrBanner("Not on water", 1.2, 0); }
   else if (k === "tent" && pressed) { if (GEO.tent && Math.hypot(GEO.tent.x - P.x, GEO.tent.z - P.z) < 5) geoSleep(); else { const p = geoAimGround(main, 7); if (p) geoTentPlace(p[0], p[1]); } }
-  else if (k === "rod") geoRodTick(main, dt, pressed);
+  else if (k === "rod") geoRodTick(I, main, dt);
+  else if (k === "machete") geoMacheteTick(main, dt);
   else if (k === "spray" && pressed) geoSpray(main);
 }
 function geoGearTick(I, main, off, dt) {                      // (each frame in a Geocaching game, after the hands are read)
   if (!GEO.on || state !== "play" || VRUI.on) { if (GEO.heldObj) GEO.heldObj.visible = false; if (GEO.packM) GEO.packM.visible = false; GEO.packOpen = false; return; }
-  geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt);
+  geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
-  for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.bob, GEO.rod && GEO.rod.line, GEO.nvM]) if (o) scene.remove(o);
-  for (const S of GEO.sprays || []) scene.remove(S.pts); toolFxHide(GEO.lampFx);
-  Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], nvM: null, nvK: 0, worn: new Set() });
+  for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
+  for (const S of (GEO.sprays || []).concat(GEO.leaves || [])) scene.remove(S.pts); toolFxHide(GEO.lampFx);
+  Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], leaves: [], fishM: null, nvM: null, nvK: 0, worn: new Set() });
 }
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
@@ -8444,7 +8571,7 @@ const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gun
   readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6, hOff: 0, hCal: false };
 try { const hs = parseFloat(localStorage.getItem("jt-height-off")); if (isFinite(hs)) vr.hOff = hs; } catch (_) {}
 const VR_SCOPE_FOV = [18, 9, 5, 3, 2], VR_BINO_FOV = [11, 7, 4.6, 3], VR_BINO_FOV2 = [11, 7, 4.6, 3, 1.8];
-const binoFovs = () => geoHas("binos") ? VR_BINO_FOV2 : VR_BINO_FOV;   // 2.72: the binocular upgrade (Geocaching): one more step   // VR sniper ≈ 4.6×, 9×, 17×, 28×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
+const binoFovs = () => geoHas("tbinos") ? VR_BINO_FOV2 : VR_BINO_FOV;   // 2.72: the binocular upgrade (Geocaching): one more step   // VR sniper ≈ 4.6×, 9×, 17×, 28×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
 const scopeFovs = () => vr.gunKind !== "hunt" ? ZOOM_FOV.pvp.slice(1) : lootMode() ? VR_SCOPE_FOV.slice(0, Math.max(1, Math.min(5, vr.own.hunt || 1))) : VR_SCOPE_FOV;   // better stars, more zoom steps (red = all 5)
 const XRV = { ok: false };
 renderer.xr.enabled = true;
@@ -9607,7 +9734,8 @@ function thermalLoaded() {                                     // 2.64: the secr
   if (gameMode === "hunt") return !GLOBE || MP.hp >= 99.5;     // (animals and dinosaurs glow; 2.70: Geocaching also needs full health)
   return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
 }
-function thermalOk() { return thermalLoaded() && ((vr.scoped && vr.gunKind === "hunt" && TOOL.on.hunt) || (vr.binos && !vr.scoped && TOOL.on.binos)); }   // 2.68: switched on with X   // the red sniper's scope, or the binoculars
+const geoTherm = k => GEO.on && ((k === "hunt" && geoHas("tscope")) || (k === "binos" && geoHas("tbinos")));   // 2.74: Geocaching: the thermal scope and binoculars are items
+function thermalOk() { const L = thermalLoaded(); return (vr.scoped && vr.gunKind === "hunt" && TOOL.on.hunt && (L || geoTherm("hunt"))) || (vr.binos && !vr.scoped && TOOL.on.binos && (L || geoTherm("binos"))); }   // 2.68: switched on with X   // the red sniper's scope, or the binoculars
 function thermHot() {                                          // the warm bodies: animals, bots, other players (looked up twice a second)
   const now = performance.now(); if (now - THERM.hotT < 500) return THERM.hot; THERM.hotT = now;
   for (const m of THERM.hot) m.layers.disable(THERM.lay);
@@ -9636,7 +9764,7 @@ function thermPrep(q, k, span = .51) {                         // (span: how far
 function vrZoomRender() {
   const xr = renderer.xr, k = vr.zoomK, q = zoomViewQ(vr.scoped && vr.gun ? vr.gun.quaternion : vr.binoQ);
   const ov = zoomOverlay(), U = ov.material.uniforms; U.uK.value = k; U.uMode.value = vr.scoped ? 0 : 1; U.uOpen.value = vr.zoomOpen;
-  const ro = vr.scoped && vr.gun && vr.gunKind === "hunt", bro = !vr.scoped && vr.binos && geoHas("binos"); U.uTxtOn.value = ro || bro ? 1 : 0; if (ro) U.uTxt.value = scopeReadout(); else if (bro) U.uTxt.value = binoReadout(q);   // 2.61 (2.72: the binoculars too, upgraded)
+  const ro = vr.scoped && vr.gun && vr.gunKind === "hunt", bro = !vr.scoped && vr.binos && geoHas("tbinos"); U.uTxtOn.value = ro || bro ? 1 : 0; if (ro) U.uTxt.value = scopeReadout(); else if (bro) U.uTxt.value = binoReadout(q);   // 2.61 (2.72: the binoculars too, upgraded)
   { const f = _v1.set(0, 0, -1).applyQuaternion(q), vu = _v2.set(0, 1, 0).applyQuaternion(q), vrt = new THREE.Vector3(1, 0, 0).applyQuaternion(q);   // how far the view is tilted from level
     const lu = new THREE.Vector3(0, 1, 0).addScaledVector(f, -f.y); U.uRoll.value = lu.lengthSq() > 1e-6 ? Math.atan2(lu.dot(vrt), lu.dot(vu)) : 0; }
   const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vr.meC && vr.meC.top, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh];
@@ -9750,7 +9878,7 @@ function toolTick(off) {                                       // (each frame, i
   if (full && TOOL.saidW !== world && state === "play") { TOOL.saidW = world; vrBanner("Red gear! X turns on your tools", 4, 2); }
   if (off && edge("xtool", off.a) && key && state === "play") {
     const sd = set.hand === "right" ? "L" : "R";
-    if (!full) { vrBanner(gameMode === "pvp" ? "Tools: all guns red, 10 grenades, full health + shield" : "Tools: all guns red + 10 grenades", 3, 1); buzz(sd, .15, 20); }
+    if (!full && !geoTherm(key)) { vrBanner(GEO.on ? "Tools: all guns red, 10 grenades, full health (or find the thermal scope and binoculars)" : gameMode === "pvp" ? "Tools: all guns red, 10 grenades, full health + shield" : "Tools: all guns red + 10 grenades", 3, 1); buzz(sd, .15, 20); }
     else { TOOL.on[key] = !TOOL.on[key]; gunFoley(TOOL.click[TOOL.on[key] ? "on" : "off"]); buzz(sd, .35, 25); vrBanner(TOOL.name[key] + (TOOL.on[key] ? " on" : " off"), 1.5, 1); }
   }
   const G = vr.gun && vr.gun.visible ? vr.gun : null, gk = G ? vr.gunKind : "", S = G && GUNSPOT[gk];
