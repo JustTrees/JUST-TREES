@@ -4519,19 +4519,19 @@ function geoMapTick(I, main, dt) {                              // (each frame w
   for (const c of geoMapCaches()) { pa.setXYZ(n, c.p[0] * .101, c.p[1] * .101, c.p[2] * .101); const t = c === GEO.target; ca.setXYZ(n, 1, t ? .9 : .78, t ? .3 : .2); n++; }
   U.cpts.geometry.setDrawRange(0, n); pa.needsUpdate = ca.needsUpdate = true;
 }
-const _giV = new THREE.Vector3();
+const _giV = new THREE.Vector3(), _v3c = new THREE.Vector3();
 /* ---- 2.72: Geocaching gear. You start with nothing; the Nth cache you find always gives the same thing: odd finds a weapon (every gun at
    1 star first, pistol, SMG, bow, assault rifle, sniper, then each one star better, all red at #49), even finds the next of 24 items. Things
    you use live in a backpack (reach over your gun-hand shoulder and squeeze the grip); the rest just work once you have them. Food and
    water are two bars now: drink at lakes and rivers (hand in the water) or from the canteen, eat what you hunt (cooked at your campfire it
    counts double) and fruit you pull off the trees. Run out of either and your health drops. ---- */
 const GI_LIST = [
-  ["canteen", "Canteen", "Dip it in water, raise it to your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
+  ["canteen", "Canteen", "Tip it over in a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
   ["pack1", "Small backpack", "6 slots for your gear", 0], ["compass", "Compass", "Your watch points to the next cache", 0], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep: your wake-up spot", 1],
   ["binos", "Binocular upgrade", "More zoom, and the distance", 0], ["rod", "Fishing rod", "Cast into water, pull when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Full speed through thick jungle", 0],
-  ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light on your head (take it out to switch)", 1], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
+  ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light on your head: on by itself in the dark", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["firestarter", "Fire starter", "Your campfire lights at once", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["spray", "Bear spray", "Pull the trigger: a charging animal turns and runs", 1]
@@ -4632,11 +4632,14 @@ function geoBarsTick(dt) {
   if (low > GEO.warn + 8) GEO.warn = low >= 58 ? 100 : low >= 33 ? 50 : 25;
 }
 // hands in the water: drink (and the canteen fills)
+const geoInWater = p => p.y < water - .02 && H(p.x, p.z) < water - .1 && !(ENDLESS && enIcedAt(p.x, p.z));
+function geoSalty(p) { if (!GLOBE) return false; const q = glToSphere(p.x, p.z, [0, 0, 0]), R = GLOBE.R; return GLOBE.contS(q, q[0] * R, q[1] * R, q[2] * R) < 0; }   // 2.72: the sea is salt: lakes only
+function geoSaltSay() { const now = performance.now(); if (now - (GEO.saltT || 0) > 4000) { GEO.saltT = now; vrBanner("Salt water: find a lake to drink", 2, 1); } }
 function geoWaterTick(I, dt) {
   for (const s of ["left", "right"]) { const h = I.hands[s]; if (!h) continue;
-    const inW = h.pos.y < water - .02 && H(h.pos.x, h.pos.z) < water - .1 && !(ENDLESS && enIcedAt(h.pos.x, h.pos.z));
-    if (!inW) continue;
-    if (GEO.held === "canteen" && s === set.hand) { if (GEO.cant < 4) { GEO.cant = 4; gunFoley([[0, 500, .25, .1], [.1, 380, .3, .08]]); vrBanner("Canteen filled (4 drinks)", 1.5, 0); } continue; }
+    if (!geoInWater(h.pos)) continue;
+    if (GEO.held === "canteen" && s === set.hand) continue;     // (the canteen fills by tipping it: geoHeldTick)
+    if (geoSalty(h.pos)) { geoSaltSay(); continue; }
     if ((GEO.sipT -= dt) <= 0 && geoDrink(18)) { GEO.sipT = .7; gunFoley([[0, 600, .12, .08]]); buzz(s === "left" ? "L" : "R", .2, 20); }
   }
 }
@@ -4709,7 +4712,7 @@ function geoSprayTick(dt) {
 }
 // worn things: the headlamp and the night-vision goggles
 function geoWornTick(I) {
-  const lamp = GEO.worn.has("headlamp");
+  const lamp = geoHas("headlamp") && NIGHT_K > .35;                // 2.72: it just comes on in the dark
   if (lamp) { const L = GEO.lampHold || (GEO.lampHold = new THREE.Object3D()); L.position.copy(I.head); L.quaternion.copy(I.headQ); L.updateMatrixWorld(); GEO.lampFx = GEO.lampFx || toolFxMake(); toolFxShow(GEO.lampFx, 1, L, [0, .06, -.08], false); }
   else toolFxHide(GEO.lampFx);
   const nv = GEO.worn.has("nvg"); GEO.nvK += ((nv ? 1 : 0) - GEO.nvK) * .2;
@@ -4781,6 +4784,10 @@ function geoHeld(k) {                                         // put something i
   GEO.held = k || null;
   if (k) { GEO.heldObj = giModel(k); scene.add(GEO.heldObj); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; }
 }
+function geoPackOpen(I) {                                     // the backpack opens in front of you (from the shoulder, or Pack on the wheel)
+  GEO.packOpen = true; const m = geoPackUI(); _v1.set(0, 0, -1).applyQuaternion(I.headQ); _v1.y = 0; if (_v1.lengthSq() < 1e-6) _v1.set(0, 0, -1); _v1.normalize();
+  m.position.copy(I.head).addScaledVector(_v1, .45).add(_v2.set(0, -.18, 0)); m.lookAt(I.head); m.visible = true; GEO.packSel = -1; geoPackDraw(-1); gunFoley([[0, 300, .15, .1], [.08, 220, .2, .08]]); buzz(set.hand === "right" ? "R" : "L", .3, 40);
+}
 function geoPackTick(I, main, off, dt) {
   const ms = set.hand === "right" ? "R" : "L";
   // open: either hand reaches over the gun-hand shoulder and squeezes
@@ -4788,8 +4795,7 @@ function geoPackTick(I, main, off, dt) {
     const back = (h.pos.x - I.head.x) * Math.sin(P.yaw) + (h.pos.z - I.head.z) * Math.cos(P.yaw);
     const k = h === main ? "pkM" : "pkO";
     if (edge(k, h.grip) && back > .02 && h.pos.y > I.head.y - .35 && h.pos.distanceTo(I.head) < .55 && !(vr.cl && vr.cl.hold)) {
-      if (GEO.packOpen) { GEO.packOpen = false; GEO.packM.visible = false; }
-      else { GEO.packOpen = true; const m = geoPackUI(); _v1.set(0, 0, -1).applyQuaternion(I.headQ); _v1.y = 0; _v1.normalize(); m.position.copy(I.head).addScaledVector(_v1, .45).add(_v2.set(0, -.18, 0)); m.lookAt(I.head); m.visible = true; GEO.packSel = -1; geoPackDraw(-1); gunFoley([[0, 300, .15, .1], [.08, 220, .2, .08]]); buzz(ms, .3, 40); }
+      if (GEO.packOpen) { GEO.packOpen = false; GEO.packM.visible = false; } else geoPackOpen(I);
     } }
   if (!GEO.packOpen) return;
   const m = GEO.packM; if (I.head.distanceTo(m.position) > 1.2) { GEO.packOpen = false; m.visible = false; return; }
@@ -4801,7 +4807,7 @@ function geoPackTick(I, main, off, dt) {
     const L = geoPackItems();
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
-    if (k === "headlamp" || k === "nvg") { if (GEO.worn.has(k)) GEO.worn.delete(k); else GEO.worn.add(k); vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
+    if (k === "nvg") { if (GEO.worn.has(k)) GEO.worn.delete(k); else GEO.worn.add(k); vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
 }
@@ -4809,7 +4815,17 @@ function geoHeldTick(I, main, dt) {                           // using what's in
   const k = GEO.held, o = GEO.heldObj; if (!k || !o || !main) { if (o) o.visible = false; return; }
   o.visible = true; o.quaternion.copy(main.rayQ); o.position.copy(main.pos).add(_v1.set(0, .02, -.05).applyQuaternion(main.rayQ)); if (k === "rod") o.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.0)); o.updateMatrixWorld(true);
   const pressed = edge("giT", main.trig) && !GEO.packOpen;
-  if (k === "canteen") { const mouth = _v2.copy(I.head).add(_giV.set(0, -.08, 0)); if (main.pos.distanceTo(mouth) < .17 && (GEO.sipT -= dt) <= 0 && GEO.cant > 0 && GEO.water < 99.5) { GEO.sipT = .9; GEO.cant--; geoDrink(25); gunFoley([[0, 520, .18, .1]]); buzz(set.hand === "right" ? "R" : "L", .25, 40); if (!GEO.cant) vrBanner("Canteen empty: dip it in water", 1.5, 0); } }
+  if (k === "canteen") {                                       // tip it over in a lake to fill it; tip it up at your mouth to drink
+    const up = _v2.set(0, 1, 0).applyQuaternion(o.quaternion), neck = o.localToWorld(_giV.set(0, .07, 0)), mouth = _v1.copy(I.head).add(_v3c.set(0, -.08, 0));
+    GEO.sipT -= dt;
+    if (geoInWater(neck) && up.y < .4) {                       // (tipped well over, under the surface)
+      if (geoSalty(neck)) geoSaltSay();
+      else if (GEO.cant < 4 && GEO.sipT <= 0) { GEO.sipT = .45; GEO.cant++; gunFoley([[0, 420 + GEO.cant * 60, .2, .1]]); buzz(set.hand === "right" ? "R" : "L", .2, 30); if (GEO.cant >= 4) vrBanner("Canteen full (4 drinks)", 1.5, 0); }
+    } else if (neck.distanceTo(mouth) < .2 && up.y < .75 && up.dot(_v3c.copy(I.head).sub(o.position).normalize()) > .25 && GEO.sipT <= 0) {   // tipped up at your face
+      if (GEO.cant > 0 && GEO.water < 99.5) { GEO.sipT = .9; GEO.cant--; geoDrink(25); gunFoley([[0, 520, .18, .1]]); buzz(set.hand === "right" ? "R" : "L", .25, 40); if (!GEO.cant) vrBanner("Canteen empty: fill it in a lake", 1.5, 0); }
+      else if (!GEO.cant) { GEO.sipT = 1.5; vrBanner("Empty: tip it into a lake to fill it", 1.5, 0); }
+    }
+  }
   else if (k === "aid" && pressed) { if (GEO.aid > 0) { GEO.aid = 0; MP.hp = 100; vrBanner("Patched up: full health", 2, 1); bing(); } else vrBanner("First-aid kit used (refills at caches)", 1.5, 0); }
   else if (k === "campfire" && pressed) { const p = geoAimGround(main, 6); if (p) geoFirePlace(p[0], p[1]); else vrBanner("Not on water", 1.2, 0); }
   else if (k === "tent" && pressed) { if (GEO.tent && Math.hypot(GEO.tent.x - P.x, GEO.tent.z - P.z) < 5) geoSleep(); else { const p = geoAimGround(main, 7); if (p) geoTentPlace(p[0], p[1]); } }
@@ -12167,7 +12183,7 @@ function boltSounds() {                        // lift, pull back, push forward,
 }
 /* ---------------- 1.22: VR Hunting arsenal: four guns, a gun wheel, magazines, reloading (ammo is unlimited since 1.85) ---------------- */
 const flareOk = () => (gameMode === "pvp" && VR_ON && ["large", "xl", "xxl", "xxxl"].includes(set.size) && (set.comms | 0) === 3) || geoHas("flares");   // 2.25: the flare gun (VR PvP, L and up); 2.32: only with Team · fist bump comms (silent teammates: flares find each other)
-const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"].concat(GEO.on ? ["gps"] : [], GEO.on && flareOk() && vr.flares > 0 ? ["flare"] : []) : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow (1.85)
+const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"].concat(GEO.on ? ["gps"] : [], GEO.on && geoPackItems().length ? ["pack"] : [], GEO.on && flareOk() && vr.flares > 0 ? ["flare"] : []) : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow (1.85)
 const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};
 function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.flares = flareOk() ? FLARE.N : 0; vr.flareMode = false; vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
@@ -12401,9 +12417,9 @@ function drawWheel(sel) {
   const m = vrWheel(), cv = m.userData.cv, g = cv.getContext("2d"); g.clearRect(0, 0, 512, 512);
   const WS = wstep();
   wheelKeys().forEach((k, i) => {
-    const a0 = -Math.PI / 2 + (i - .5) * WS, a1 = a0 + WS, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === "bow" ? !!vr.bowMode : k === "flare" ? !!vr.flareMode : k === "gps" ? !!vr.gpsMode : k === vr.weapon && !vr.nadeMode && !vr.bowMode && !vr.flareMode && !vr.gpsMode, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : k === "bow" ? { name: "Bow", col: "#e0a050" } : k === "flare" ? { name: "Flare", col: "#ff7a3a" } : k === "gps" ? { name: "GPS", col: "#ffb030" } : WEAP[k];
+    const a0 = -Math.PI / 2 + (i - .5) * WS, a1 = a0 + WS, on = i === sel, cur = k === "gren" ? vr.nadeMode : k === "bow" ? !!vr.bowMode : k === "flare" ? !!vr.flareMode : k === "gps" ? !!vr.gpsMode : k === "pack" ? !!GEO.held : k === vr.weapon && !vr.nadeMode && !vr.bowMode && !vr.flareMode && !vr.gpsMode && !GEO.held, Wk = k === "gren" ? { name: "Grenade", col: "#9be05a" } : k === "bow" ? { name: "Bow", col: "#e0a050" } : k === "flare" ? { name: "Flare", col: "#ff7a3a" } : k === "gps" ? { name: "GPS", col: "#ffb030" } : k === "pack" ? { name: "Pack", col: "#c89050" } : WEAP[k];
     g.beginPath(); g.arc(256, 256, 250, a0 + .03, a1 - .03); g.arc(256, 256, 70, a1 - .1, a0 + .1, true); g.closePath();
-    const lock = k !== "gren" && (k !== "bow" || GEO.on) && k !== "flare" && k !== "gps" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && k !== "flare" && k !== "gps" && lootMode();
+    const lock = k !== "gren" && (k !== "bow" || GEO.on) && k !== "flare" && k !== "gps" && k !== "pack" && lootMode() && !(vr.own[k] > 0), pv = k !== "gren" && k !== "flare" && k !== "gps" && k !== "pack" && lootMode();
     g.fillStyle = on && !lock ? "rgba(255,214,90,.92)" : lock ? "rgba(14,20,15,.45)" : "rgba(14,20,15,.82)"; g.fill();
     g.lineWidth = cur ? 8 : 3; g.strokeStyle = cur ? Wk.col : "rgba(255,255,255,.25)"; g.stroke();
     const am = (a0 + a1) / 2, cx = 256 + Math.cos(am) * 165, cy = 256 + Math.sin(am) * 165 - (pv ? 12 : 0), A = arms[k];
@@ -12411,7 +12427,7 @@ function drawWheel(sel) {
     if (pv && !lock) { const t = k === "bow" ? bowTier() : tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
       for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
     g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
-    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? GEO.found.size + " / " + GEO_N : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? GEO.found.size + " / " + GEO_N : k === "pack" ? (GEO.held ? GI[GEO.held].name : geoPackItems().length + " items") : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -12446,6 +12462,7 @@ function wheelTick(dt, main, I) {
   }
 }
 function pickGun(k) {
+  if (k === "pack") { if (vr.I) geoPackOpen(vr.I); return; }   // 2.72: Pack on the wheel: the backpack opens
   if (GEO.held) geoHeld(null);                                // (2.72: whatever you held goes back in the pack)
   if (GEO.on && k === "bow" && !(vr.own.bow > 0)) { gunFoley(SFX.dry); buzz(set.hand === "right" ? "R" : "L", .3, 40); return; }
   if (k === "gps") { vr.gpsMode = true; vr.flareMode = false; vr.nadeMode = false; vr.bowMode = false; vr.gunOut = false; gunFoley(SFX.swap); return; }   // 2.70: the GPS

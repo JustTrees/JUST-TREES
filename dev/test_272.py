@@ -59,8 +59,18 @@ async def main():
           o.lake = !!spot; if (spot) {
             const head = new T.Vector3(spot[0], D.water + 1.6, spot[1]), ib = { head, headQ: new T.Quaternion(), hands: {} }, inW = hand(new T.Vector3(spot[0], D.water - .2, spot[1]));
             D.GEO.water = 40; ib.hands.left = inW; for (let i = 0; i < 40; i++) D.geoGearTick(ib, null, null, 1 / 20); o.drank = Math.round(D.GEO.water);
-            D.geoHeld('canteen'); D.GEO.cant = 0; ib.hands = {}; ib.hands[D.set.hand] = inW; D.geoGearTick(ib, inW, null, 1 / 20); o.filled = D.GEO.cant;
-            D.GEO.water = 30; const mouth = hand(head.clone().add(new T.Vector3(0, -.08, -.05))); ib.hands = {}; for (let i = 0; i < 25; i++) D.geoGearTick(ib, mouth, null, 1 / 20); o.sipped = [Math.round(D.GEO.water), D.GEO.cant]; }
+            // the canteen: held upright in the lake it doesn't fill; tipped over it does; tipped up at your mouth you drink
+            D.geoHeld('canteen'); D.GEO.cant = 0; ib.hands = {}; const cw = hand(new T.Vector3(spot[0], D.water - .25, spot[1])); ib.hands[D.set.hand] = cw;
+            for (let i = 0; i < 30; i++) D.geoGearTick(ib, cw, null, 1 / 20); o.upright = D.GEO.cant;
+            cw.rayQ.setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI * .8); for (let i = 0; i < 60; i++) D.geoGearTick(ib, cw, null, 1 / 20); o.filled = D.GEO.cant;
+            D.GEO.water = 30; const mouth = hand(head.clone().add(new T.Vector3(0, -.06, -.12))); mouth.rayQ.setFromAxisAngle(new T.Vector3(1, 0, 0), .9); ib.hands = {};
+            for (let i = 0; i < 40; i++) D.geoGearTick(ib, mouth, null, 1 / 20); o.sipped = [Math.round(D.GEO.water), D.GEO.cant]; D.geoHeld(null); }
+          // the sea is salt: hands in it don't drink
+          { const G = D.GLOBE, R = G.R; let sea = null; for (let r = 20; r < 3000 && !sea; r += 40) for (let a = 0; a < 6.28 && !sea; a += .3) { const x = D.P.x + Math.cos(a) * r, z = D.P.z + Math.sin(a) * r, q = D.glToSphere(x, z, [0, 0, 0]); if (D.H(x, z) < D.water - 1 && G.contS(q, q[0] * R, q[1] * R, q[2] * R) < 0) sea = [x, z]; }
+            o.sea = !!sea; if (sea) { D.GEO.water = 40; const ib = { head: new T.Vector3(sea[0], D.water + 1.6, sea[1]), headQ: new T.Quaternion(), hands: { left: hand(new T.Vector3(sea[0], D.water - .2, sea[1])) } }; for (let i = 0; i < 40; i++) D.geoGearTick(ib, null, null, 1 / 20); o.seaDrink = Math.round(D.GEO.water); } }
+          { const xz = D.glFromSphere(D.GLOBE.basins[0].c, [0, 0]); o.saltSea = D.geoSalty(new T.Vector3(xz[0], -5, xz[1])); o.saltLake = spot ? D.geoSalty(new T.Vector3(spot[0], -1, spot[1])) : false; }
+          // Pack on the wheel
+          o.packWheel = D.wheelKeys().includes('pack'); D.vr.I = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} }; D.GEO.packOpen = false; D.pickGun('pack'); o.packFromWheel = D.GEO.packOpen; D.GEO.packOpen = false; if (D.GEO.packM) D.GEO.packM.visible = false;
           // fruit on the trees near you: a hand on one, squeezing, eats it
           D.GEO.frT = 0; D.geoGearTick({ head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} }, null, null, 1 / 72);
           let fr = null; for (const ch of E.chunks.values()) if (ch.fruit) for (const f of ch.fruit) if (f.obj && !fr) fr = f;
@@ -69,8 +79,8 @@ async def main():
           const A = D.beasts.find(B => !B.dead && !B.ptero && B.ecellB === undefined); o.animal = !!A;
           if (A) { A.x = D.P.x; A.z = D.P.z - 8; A.flee = 0; const sp = D.GEO.spray, h = hand(new T.Vector3(D.P.x, D.P.y + 1.3, D.P.z)); D.geoSpray(h); o.spray = [sp - D.GEO.spray, !!(A.fleeT > 0 || A.bolting || A.flee || A.mode === 'flee' || A.fleeX !== undefined)]; }
           // worn: the headlamp's light and the goggles; the rod casts only into water
-          D.GEO.worn.add('headlamp'); D.GEO.worn.add('nvg'); const hd = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} }; for (let i = 0; i < 20; i++) D.geoGearTick(hd, null, null, 1 / 72);
-          o.worn = [!!(D.GEO.lampFx && D.GEO.lampFx.beam.visible), +D.GEO.nvK.toFixed(2)]; D.GEO.worn.clear();
+          D.GEO.worn.add('nvg'); D.setLighting && 0; window.__nk = 0; const hd = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} }; for (let i = 0; i < 20; i++) D.geoGearTick(hd, null, null, 1 / 72);
+          o.worn = [+D.GEO.nvK.toFixed(2)]; D.GEO.worn.clear();
           D.geoHeld('rod'); const rh = hand(new T.Vector3(D.P.x, D.P.y + 1.3, D.P.z)); D.geoHeldTick(hd, rh, 1 / 72); rh.trig = 1; D.geoHeldTick(hd, rh, 1 / 72); o.rod = D.GEO.rod && D.GEO.rod.st; D.geoHeld(null);
           // the watch's compass draws; a save and a new game keep the count, the gear follows it
           D.drawWatch(600); D.GEO.found = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); D.GEO.food = 66; D.GEO.water = 55; D.geoSave(); D.generate(); D.state = 'play';
@@ -82,9 +92,9 @@ async def main():
              and r["g48"][:6] == [24, 10, 12, 10, .42, 5] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \
              and r["packOpen"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
-             and (not w["lake"] or (w["drank"] > 60 and w["filled"] == 4 and w["sipped"][0] > 50 and w["sipped"][1] < 4)) \
+             and (not w["lake"] or (w["drank"] > 60 and w["upright"] == 0 and w["filled"] == 4 and w["sipped"][0] > 50 and w["sipped"][1] < 4)) \
              and (not w["fruit"] or (w["ateFruit"][0] > 30 and w["ateFruit"][1])) and (not w["animal"] or w["spray"][0] == 1)
-        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 66 and w["resume"][4] == 55 and w["worn"][0] and w["worn"][1] > .9 and w["rod"] in ("idle", "wait")
+        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 66 and w["resume"][4] == 55 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["rod"] in ("idle", "wait")
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
