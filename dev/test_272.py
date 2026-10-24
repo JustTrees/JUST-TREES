@@ -6,7 +6,7 @@ Food and water are two bars: hands in a lake drink, the canteen fills there, mea
 Usage: python3 dev/test_272.py dbg.html"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
-GEN = """(sv) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { if (sv) localStorage.setItem('jt-geo', JSON.stringify(sv)); else localStorage.removeItem('jt-geo'); } catch (_) {}
+GEN = """(sv) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.removeItem('jt-geo'); if (sv) localStorage.setItem('jt-geochar', JSON.stringify(sv)); else localStorage.removeItem('jt-geochar'); } catch (_) {}
   D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;   // (2.72: Geocaching is in Dev Mode while it's tested)
   Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: 'globe', dino: false });
   D.generate(); D.state = 'play'; window.tick = n => { for (let i = 0; i < n; i++) { D.endlessTick(1 / 72); D.updateAnimals(1 / 72); D.geoTick(1 / 72); } };
@@ -64,7 +64,7 @@ async def main():
             cw.rayQ.setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI * .8); for (let i = 0; i < 30; i++) D.geoGearTick(ib, cw, null, 1 / 20); o.tipped = D.GEO.cant;
             cw.rayQ.identity(); for (let i = 0; i < 60; i++) D.geoGearTick(ib, cw, null, 1 / 20); o.filled = D.GEO.cant;
             D.GEO.water = 30; const mouth = hand(head.clone().add(new T.Vector3(0, -.06, -.12))); mouth.rayQ.setFromAxisAngle(new T.Vector3(1, 0, 0), .9); ib.hands = {};
-            for (let i = 0; i < 40; i++) D.geoGearTick(ib, mouth, null, 1 / 20); o.sipped = [Math.round(D.GEO.water), D.GEO.cant]; D.geoHeld(null); }
+            for (let i = 0; i < 80; i++) D.geoGearTick(ib, mouth, null, 1 / 20); o.sipped = [Math.round(D.GEO.water), D.GEO.cant]; D.geoHeld(null); }
           // the sea is salt: hands in it don't drink
           { const G = D.GLOBE, R = G.R; let sea = null; for (let r = 20; r < 3000 && !sea; r += 40) for (let a = 0; a < 6.28 && !sea; a += .3) { const x = D.P.x + Math.cos(a) * r, z = D.P.z + Math.sin(a) * r, q = D.glToSphere(x, z, [0, 0, 0]); if (D.H(x, z) < D.water - 1 && G.contS(q, q[0] * R, q[1] * R, q[2] * R) < 0) sea = [x, z]; }
             o.sea = !!sea; if (sea) { D.GEO.water = 40; const ib = { head: new T.Vector3(sea[0], D.water + 1.6, sea[1]), headQ: new T.Quaternion(), hands: { left: hand(new T.Vector3(sea[0], D.water - .2, sea[1])) } }; for (let i = 0; i < 40; i++) D.geoGearTick(ib, null, null, 1 / 20); o.seaDrink = Math.round(D.GEO.water); } }
@@ -93,9 +93,9 @@ async def main():
              and r["g48"][:6] == [24, 10, 12, 10, .42, 5] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \
              and r["packOpen"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
-             and (not w["lake"] or (w["drank"] > 60 and w["tipped"] == 0 and w["filled"] == 4 and w["sipped"][0] > 50 and w["sipped"][1] < 4)) \
+             and (not w["lake"] or (w["drank"] > 60 and w["tipped"] == 0 and w["filled"] == 4 and w["sipped"][0] > 60 and w["sipped"][1] < 3)) \
              and (not w["fruit"] or (w["ateFruit"][0] > 30 and w["ateFruit"][1])) and (not w["animal"] or w["spray"][0] == 1)
-        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 66 and w["resume"][4] == 55 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["noDev"] == [False, False] and w["rod"] in ("idle", "wait")
+        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 100 and w["resume"][4] == 100 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["noDev"] == [False, False] and w["rod"] in ("idle", "wait")
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())

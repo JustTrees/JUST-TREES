@@ -4,7 +4,7 @@ move up or down while the hull bobs; it slides up a sandy beach and stops; let g
 Usage: python3 dev/test_275.py dbg.html"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
-GEN = """(found) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.setItem('jt-geo', JSON.stringify({ seed: 4242, found: Array.from({ length: found }, (_, i) => i + 1) })); } catch (_) {}
+GEN = """(found) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.setItem('jt-geochar', JSON.stringify({ n: found, score: 0, kills: 0 })); } catch (_) {}
   D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true; D.set.hand = 'right';
   Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: 'globe', dino: false });
   D.generate(); D.state = 'play'; window.tick = n => { for (let i = 0; i < n; i++) { D.endlessTick(1 / 30); D.geoTick(1 / 30); } };

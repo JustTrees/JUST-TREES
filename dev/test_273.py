@@ -4,7 +4,7 @@ spray turns them away. Bites take health; killed (or drowned) you wake somewhere
 Usage: python3 dev/test_273.py dbg.html"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
-GEN = """(mode) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.removeItem('jt-geo'); } catch (_) {}
+GEN = """(mode) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.removeItem('jt-geo'); localStorage.removeItem('jt-geochar'); } catch (_) {}
   D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;
   Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: mode, dino: false });
   D.generate(); D.state = 'play'; window.tick = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); D.endlessTick(1 / 30); D.updateAnimals(1 / 30); if (D.GEO.on) D.geoTick(1 / 30); } };

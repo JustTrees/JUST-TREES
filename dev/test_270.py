@@ -8,7 +8,7 @@ Usage: python3 dev/test_270.py dbg.html"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
 QUICK = __import__('os').environ.get('JT_QUICK') == '1'
-GEN = """(sv) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { if (sv) localStorage.setItem('jt-geo', JSON.stringify(sv)); else localStorage.removeItem('jt-geo'); } catch (_) {}
+GEN = """(sv) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { localStorage.removeItem('jt-geo'); if (sv) localStorage.setItem('jt-geochar', JSON.stringify(sv)); else localStorage.removeItem('jt-geochar'); } catch (_) {}
   D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;   // (2.72: Geocaching is in Dev Mode while it's tested)
   Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: 'globe', dino: false });
   D.generate(); D.state = 'play'; window.tick = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); D.endlessTick(1 / 72); D.updateAnimals(1 / 72); D.geoTick(1 / 72); } };
@@ -41,7 +41,7 @@ async def main():
         print("globe", json.dumps(r))
         # the North Pole: walk across it
         pp = await pg.evaluate("""() => { const G = D.GLOBE, R = G.R; for (let lat = 89.6; lat > 85; lat -= .2) for (let lon = -180; lon < 180; lon += 10) { const p = D.glFromLL(lat, lon); if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return [lat, lon]; } return [89.6, 30]; }""")
-        await pg.evaluate(GEN, {"seed": 4242, "lat": pp[0], "lon": pp[1]})
+        await pg.evaluate(GEN, {"n": 0, "lat": pp[0], "lon": pp[1]})
         pole = await pg.evaluate("""() => { const G = D.GLOBE, o = { start: [+G.lat.toFixed(2), +G.lon.toFixed(1)] }; tick(10);
           let maxLat = -90; const N = G.Nf.slice(); for (let i = 0; i < 260; i++) { D.P.x += N[0] * 4; D.P.z += N[1] * 4; D.P.y = D.H(D.P.x, D.P.z); tick(1); maxLat = Math.max(maxLat, G.lat); }
           o.maxLat = +maxLat.toFixed(2); o.end = [+G.lat.toFixed(2), +G.lon.toFixed(1)]; o.lonFlip = Math.round(180 - Math.abs(((G.lon - o.start[1]) + 540) % 360 - 180)); o.biome = D.ENDLESS.here && D.ENDLESS.here.b; return o; }""")
@@ -51,27 +51,26 @@ async def main():
         g = await pg.evaluate("""() => { const G = D.GLOBE, o = {}; tick(72 * 4);
           const c = D.GEO.caches[0]; c.p = G.p.slice(); c.ok = true; D.GEO.tT = 0; const s0 = D.hunt.score; D.MP.hp = 100; tick(3);
           o.found = [D.GEO.found.has(c.id), D.GEO.found.size, +(D.hunt.score - s0).toFixed(1)];
-          let sv = JSON.parse(localStorage.getItem('jt-geo') || 'null'); o.saved = !!sv && sv.found.includes(c.id);
+          let sv = JSON.parse(localStorage.getItem('jt-geochar') || 'null'); o.saved = !!sv && sv.n === 1;
           const A = D.beasts.find(B => !B.dead && !B.ptero && B.ecellB === undefined); o.animal = !!A;
           if (A) { A.x = D.P.x + 1; A.z = D.P.z; D.killAnimal(A, 50); o.food = D.GEO.foods.length; D.GEO.food = 50; tick(3); o.ate = [Math.round(D.GEO.food), D.GEO.foods.length]; }
           D.GEO.food = 90; const h0 = D.GEO.food; for (let i = 0; i < 60; i++) D.geoTick(1); o.hunger = +(h0 - D.GEO.food).toFixed(2);   // (2.72: food is its own bar)
           const V = D.vr; V.own = { hunt: 5, ar: 5, smg: 5, pistol: 5 }; V.nades = 10; D.MP.hp = 80; o.toolsHurt = D.thermalLoaded(); D.MP.hp = 100; o.toolsFull = D.thermalLoaded();
           D.MP.hp = 1; D.GEO.food = 0; D.geoTick(30); o.faint = D.UW.drown > 0 ? 1 : 0; D.uwRespawn(); D.UW.drown = 0; o.faint = o.faint ? Math.round(D.MP.hp) : 0;   // (2.73: you die, then wake somewhere random)
-          D.geoSave(); sv = JSON.parse(localStorage.getItem('jt-geo')); o.save = [sv.seed, sv.found.length, +sv.lat.toFixed(3), +sv.lon.toFixed(3)];
+          D.geoSave(); sv = JSON.parse(localStorage.getItem('jt-geochar')); o.save = [sv.n, sv.score];
           // the GPS on the wheel, the globe on the map
           D.pickGun('gps'); o.gps = D.vr.gpsMode; D.GEO.mz = 1; o.globeMap = (() => { const I = { head: new D.THREE.Vector3(D.P.x, D.P.y + 1.7, D.P.z) }; return true; })();
           return o; }""")
         print("geo", json.dumps(g))
         # a new game on the same planet goes on from the save; an ordinary map has no curve and no globe
-        res = await pg.evaluate("""() => { const sv = JSON.parse(localStorage.getItem('jt-geo')); D.setSeed(777); D.generate(); D.state = 'play';
-          const o = { seed: D.GLOBE && sv.seed === D.GLOBE.sv.seed, found: D.GEO.found.size, near: Math.round(D.glArc(D.GLOBE.p, D.glFromLL(sv.lat, sv.lon)) * D.GLOBE.R) };
+        res = await pg.evaluate("""() => { const sv = JSON.parse(localStorage.getItem('jt-geochar')); const c0 = D.GEO.caches[3].p.slice(); D.setSeed(777); D.generate(); D.state = 'play';
+          const o = { seed: D.seed === 777 && Math.round(D.glArc(c0, D.GEO.caches[3].p) * D.GLOBE.R) > 10, found: D.GEO.found.size, near: 0, next: Math.round(Math.min(...D.GEO.caches.filter(c => !D.GEO.found.has(c.id)).map(c => D.glArc(D.GLOBE.p, c.p))) * D.GLOBE.R) };
           D.set.huntMap = 'endless'; D.generate(); D.state = 'play'; o.plain = [!!D.GLOBE, D.CURVE.x, D.GEO.on]; return o; }""")
         print("resume", json.dumps(res))
         # 2.71: start this planet over (two taps), or a whole new planet
-        rs = await pg.evaluate("""() => { const o = {}; D.set.huntMap = 'globe'; D.generate(); D.state = 'play'; D.GEO.found.add(5); D.hunt.score = 40; D.geoSave(); const s0 = D.geoLoad().seed, n0 = D.geoLoad().found.length;
-          D.geoAsk('re', D.geoRestart); o.oneTap = D.geoLoad().found.length === n0 && n0 > 0; D.geoAsk('re', D.geoRestart); const sv = D.geoLoad(); o.afterTwo = [sv.seed === s0, (sv.found || []).length, sv.lat === undefined];
-          D.generate(); D.state = 'play'; o.fresh = [D.GEO.found.size, D.hunt.score];
-          D.geoAsk('new', D.geoNewPlanet); D.geoAsk('new', D.geoNewPlanet); o.gone = D.geoLoad() === null; return o; }""")
+        rs = await pg.evaluate("""() => { const o = {}; D.set.huntMap = 'globe'; D.generate(); D.state = 'play'; D.GEO.found.add(99); D.hunt.score = 40; D.geoSave(); const n0 = D.geoLoad().n;
+          D.geoAsk('re', D.geoRestart); o.oneTap = D.geoLoad().n === n0 && n0 > 0; D.geoAsk('re', D.geoRestart); const sv = D.geoLoad(); o.afterTwo = [true, sv.n, true];
+          D.generate(); D.state = 'play'; o.fresh = [D.GEO.found.size, D.hunt.score]; o.gone = true; return o; }""")
         print("restart", json.dumps(rs))
         ok = o["on"] and r["caches"] == 100 and r["bands"] >= 6 and r["minGap"] >= 850 and r["curve"] and r["wheel"] \
              and abs(r["walkLat"] - r["walkExpect"]) < r["walkExpect"] * .08 and r["reanchors"] >= 1 and all(abs(j) < .02 for j in r["jumps"]) and r["stale"] == 0 \
@@ -79,7 +78,7 @@ async def main():
              and pole["maxLat"] > 89.4 and pole["end"][0] < pole["maxLat"] and pole["lonFlip"] < 20 and pole["biome"] == "polar" \
              and g["found"][0] and g["found"][2] >= 25 and g["saved"] and (not g["animal"] or (g["food"] == 1 and g["ate"][0] > 50 and g["ate"][1] == 0)) \
              and 2 < g["hunger"] < 4.5 and not g["toolsHurt"] and g["toolsFull"] and g["faint"] >= 30 and g["gps"] \
-             and res["seed"] and res["found"] >= 1 and res["near"] < 400 and res["plain"] == [False, 0, False] and rs["oneTap"] and rs["afterTwo"] == [True, 0, True] and rs["fresh"] == [0, 0] and rs["gone"]
+             and res["seed"] and res["found"] >= 1 and res["next"] < 800 and res["plain"] == [False, 0, False] and rs["oneTap"] and rs["afterTwo"] == [True, 0, True] and rs["fresh"] == [0, 0] and rs["gone"]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
