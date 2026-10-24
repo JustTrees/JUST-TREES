@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.77";              // Just Trees 2.55
+const VERSION = "2.78";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4942,13 +4942,11 @@ function geoPackOpen(I) {                                     // the backpack op
 }
 function geoPackTick(I, main, off, dt) {
   const ms = set.hand === "right" ? "R" : "L";
-  // open: either hand reaches over the gun-hand shoulder and squeezes
-  for (const h of [main, off]) { if (!h) continue;
-    const back = (h.pos.x - I.head.x) * Math.sin(P.yaw) + (h.pos.z - I.head.z) * Math.cos(P.yaw);
-    const k = h === main ? "pkM" : "pkO";
-    if (edge(k, h.grip) && back > .02 && h.pos.y > I.head.y - .35 && h.pos.distanceTo(I.head) < .55 && !(vr.cl && vr.cl.hold)) {
-      if (GEO.packOpen) { GEO.packOpen = false; GEO.packM.visible = false; } else geoPackOpen(I);
-    } }
+  // 2.78: hold X: the backpack opens; pick with the gun-hand trigger while X is held; let go of X and it closes (a quick tap of X still switches tools)
+  const now = performance.now(), xDown = !!off && off.a > .6;
+  if (xDown) { if (!GEO.xT0) GEO.xT0 = now; if (!GEO.xDone && now - GEO.xT0 > 350 && !GEO.packOpen) { GEO.xDone = true; GEO.packByX = true; geoPackOpen(I); } }
+  else { GEO.xT0 = 0; GEO.xDone = false; if (GEO.packByX) { GEO.packByX = false; if (GEO.packOpen) { GEO.packOpen = false; GEO.packM.visible = false; } } }
+  if (GEO.packOpen) GEO.trigLock = true; else if (!main || main.trig < .3) GEO.trigLock = false;   // (no shot while you choose, nor from the same squeeze after)
   if (!GEO.packOpen) return;
   const m = GEO.packM; if (I.head.distanceTo(m.position) > 1.2) { GEO.packOpen = false; m.visible = false; return; }
   const n = _giV.set(0, 0, 1).applyQuaternion(m.quaternion), d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ), den = d.dot(n); let sel = -1;
@@ -9324,14 +9322,14 @@ function vrTick(dt) {
       if (edge("drop", main.stickBtn) && A.phase !== 1) {                 // click the gun-hand stick: drop the magazine early (its rounds go back to your spare ammo)
         A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoleyK("magout", SFX.magOut); buzz(mainSide, .3, 25);
       }
-      if (main.trig > .6 && state === "play" && (pressed || W.auto)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoleyK("dry", SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
+      if (main.trig > .6 && state === "play" && (pressed || W.auto) && !(GEO.packOpen || GEO.trigLock)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoleyK("dry", SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
     } else {
       fireHeld = main.trig > .6 && state === "play";
       if (edge("trig", main.trig) && !GUN.auto) fire();
       if (edge("b", main.b)) placeMark(G.localToWorld(new THREE.Vector3(...S.muzzle)), _v1.set(0, 0, -1).applyQuaternion(G.quaternion).clone());
     }
   } else { fireHeld = false; vr.two = false; vr.scoped = false; vr.ads = false; vr.climb = 0; vr.gunInit = false; if (vr.rl) vr.rl.grab = null; if (vr.cross) vr.cross.visible = false; if (!huntV && main && edge("b", main.b)) placeMark(main.rayPos, _v1.set(0, 0, -1).applyQuaternion(main.rayQ).clone()); }
-  if (huntV && vr.nadeMode && main && state === "play" && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
+  if (huntV && vr.nadeMode && main && state === "play" && !(GEO.packOpen || GEO.trigLock) && !P.gliding && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide)) {
     nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
   } else nadeHide();
   if (vr.flareMode && main && state === "play" && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide) && vr.flares > 0) { flareHand(main); if (edge("trig", main.trig)) flareFire(); } else flareHand(null);   // 2.25: the flare gun
@@ -10070,10 +10068,16 @@ function toolPrep() {                                          // before the fra
   const now = performance.now(); if (now - TOOL.rtT < 33) return; TOOL.rtT = now;
   const G = M.parent; T.cam.position.copy(p); G.getWorldQuaternion(T.cam.quaternion); T.cam.updateMatrixWorld(); thermRender(T.rt, T.cam); T.mat.uniforms.uTime.value = now / 1000;
 }
+function xTap(off) {                                           // 2.78: X: in Treeocashing a quick tap (holding it opens the backpack); elsewhere a press
+  if (!GEO.on) return edge("xtool", off.a);
+  const down = off.a > .6, now = performance.now(); let tap = false;
+  if (down && !TOOL.xD) TOOL.xD = now; else if (!down && TOOL.xD) { tap = now - TOOL.xD < 350; TOOL.xD = 0; }
+  return tap;
+}
 function toolTick(off) {                                       // (each frame, in a game, after the hands are read)
   const key = toolKey(), full = thermalLoaded();
   if (full && TOOL.saidW !== world && state === "play") { TOOL.saidW = world; vrBanner("Red gear! X turns on your tools", 4, 2); }
-  if (off && edge("xtool", off.a) && key && state === "play") {
+  if (off && xTap(off) && key && state === "play") {
     const sd = set.hand === "right" ? "L" : "R";
     if (!full && !geoTherm(key)) { vrBanner(GEO.on ? "Tools: all guns red, 10 grenades, full health (or find the thermal scope and binoculars)" : gameMode === "pvp" ? "Tools: all guns red, 10 grenades, full health + shield" : "Tools: all guns red + 10 grenades", 3, 1); buzz(sd, .15, 20); }
     else { TOOL.on[key] = !TOOL.on[key]; gunFoley(TOOL.click[TOOL.on[key] ? "on" : "off"]); buzz(sd, .35, 25); vrBanner(TOOL.name[key] + (TOOL.on[key] ? " on" : " off"), 1.5, 1); }

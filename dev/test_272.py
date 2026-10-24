@@ -40,7 +40,7 @@ async def main():
           // the backpack: reach over the gun-hand shoulder and squeeze; point at a slot and pull the trigger
           const head = new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z); D.P.yaw = 0; const ib = { head, headQ: new T.Quaternion(), hands: {} };
           const behind = hand(head.clone().add(new T.Vector3(.12, -.05, .18))), front = hand(head.clone().add(new T.Vector3(.2, -.3, -.3)));
-          D.geoGearTick(ib, front, behind, 1 / 72); behind.grip = 1; D.geoGearTick(ib, front, behind, 1 / 72); o.packOpen = D.GEO.packOpen; o.packItems = D.geoPackItems();
+          D.geoGearTick(ib, front, behind, 1 / 72); behind.a = 1; D.geoGearTick(ib, front, behind, 1 / 72); o.xEarly = D.GEO.packOpen; D.GEO.xT0 -= 500; D.geoGearTick(ib, front, behind, 1 / 72); o.packOpen = D.GEO.packOpen; o.packItems = D.geoPackItems();
           const m = D.GEO.packM; m.updateMatrixWorld(true); const slot = m.localToWorld(new T.Vector3((24 + 73) / 640 * .4 - .2, .15 - (70 + 55) / 480 * .3, 0));   // the first slot
           const aim = hand(head.clone().add(new T.Vector3(0, -.2, -.1))); aim.rayQ.setFromUnitVectors(new T.Vector3(0, 0, -1), slot.clone().sub(aim.rayPos).normalize());
           D.geoGearTick(ib, aim, behind, 1 / 72); aim.trig = 1; D.geoGearTick(ib, aim, behind, 1 / 72); o.held = D.GEO.held; aim.trig = 0; D.geoGearTick(ib, aim, behind, 1 / 72);
@@ -92,7 +92,7 @@ async def main():
              and r["at49"] == [True, 24] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 24 \
              and r["g48"][:6] == [24, 10, 12, 10, .42, 5] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \
-             and r["packOpen"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
+             and r["packOpen"] and not r["xEarly"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
              and (not w["lake"] or (w["drank"] > 60 and w["tipped"] == 0 and w["filled"] == 4 and w["sipped"][0] > 60 and w["sipped"][1] < 3)) \
              and (not w["fruit"] or (w["ateFruit"][0] > 30 and w["ateFruit"][1])) and (not w["animal"] or w["spray"][0] == 1)
         ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 100 and w["resume"][4] == 100 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["noDev"] == [True, True] and w["rod"] in ("idle", "wait")
