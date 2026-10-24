@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.74";              // Just Trees 2.55
+const VERSION = "2.75";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4338,7 +4338,7 @@ function geoPlace() {                                          // the caches: th
   return L;
 }
 function geoStart(sv) {
-  GEO.on = true; GEO.caches = geoPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
+  GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
   for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = [];
   MP.hp = sv && sv.hp > 0 ? Math.max(30, sv.hp) : 100; MP.sh = 0; MP.dead = 0;
   if (sv) { hunt.score = sv.score || 0; hunt.kills = sv.kills || 0; showHuntScore(); }
@@ -4414,6 +4414,7 @@ function geoTick(dt) {
         o = geoCacheObj(); scene.add(o); GEO.objs.set(c.id, o); }
       o.position.set(out[0], groundAt(out[0], out[1]), out[1]); c.x = out[0]; c.z = out[1];
     }
+    jetsTick(dt);                                                // 2.75
     GEO.reAt = false;
   }
   for (const [id, o] of GEO.objs) {
@@ -4485,6 +4486,8 @@ function geoMapDraw(cv) {
   const tmp = GEO.tmpCv || (GEO.tmpCv = document.createElement("canvas")); tmp.width = tmp.height = N; tmp.getContext("2d").putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true; g.clearRect(0, 0, W, W); g.drawImage(tmp, 0, 0, W, W);
   const toMap = p => { const t = [p[0] - glDot(p, G.p) * G.p[0], p[1] - glDot(p, G.p) * G.p[1], p[2] - glDot(p, G.p) * G.p[2]], a = glArc(p, G.p), l = Math.hypot(t[0], t[1], t[2]) || 1, r = a * G.R; return [W / 2 + glDot(t, G.ax) / l * r / span * W, W / 2 + glDot(t, G.az) / l * r / span * W, a]; };
+  if (jetOn()) for (const J of JET.list) { if (J.dead) continue; const [mx, my, a] = toMap(J.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue;   // 2.75: the jet skis
+    g.fillStyle = "#3ad0ff"; g.strokeStyle = "#002030"; g.lineWidth = 2; g.beginPath(); g.moveTo(mx, my - 7); g.lineTo(mx + 5, my + 6); g.lineTo(mx - 5, my + 6); g.closePath(); g.fill(); g.stroke(); }
   for (const c of geoMapCaches()) { const [mx, my, a] = toMap(c.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue; g.fillStyle = c === GEO.target ? "#ffd65a" : "rgba(255,214,90,.6)"; g.beginPath(); g.arc(mx, my, c === GEO.target ? 7 : 4, 0, 6.283); g.fill(); }
   g.save(); g.translate(W / 2, W / 2); g.rotate(-P.yaw); const sz = W / 26; g.fillStyle = "#F2C14E"; g.strokeStyle = "#000"; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(0, -sz); g.lineTo(sz * .65, sz * .7); g.lineTo(0, sz * .35); g.lineTo(-sz * .65, sz * .7); g.closePath(); g.fill(); g.stroke(); g.restore();
@@ -4574,7 +4577,7 @@ function geoReward(n) {                                       // a cache found: 
     if (r.item === "flares") vr.flares = FLARE.N;
     if (r.item === "tscope") TOOL.on.hunt = true; if (r.item === "tbinos") TOOL.on.binos = true;
     vrBanner(I.name + ": " + I.desc, 5, 3); geoShow({ item: r.item });
-  } else vrBanner(r.last ? "All 100 found: the planet is yours!" : "Supplies refilled", 4, 3);
+  } else vrBanner(r.last ? "All 100 found: the planet is yours!" : n === JET_UNLOCK ? "Jet skis! They're parked on sea beaches: look on your map" : "Supplies refilled", n === JET_UNLOCK ? 6 : 4, 3);
   if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
 }
 // models: every item, low-poly, in plain colours
@@ -4961,13 +4964,178 @@ function geoHeldTick(I, main, dt) {                           // using what's in
 }
 function geoGearTick(I, main, off, dt) {                      // (each frame in a Geocaching game, after the hands are read)
   if (!GEO.on || state !== "play" || VRUI.on) { if (GEO.heldObj) GEO.heldObj.visible = false; if (GEO.packM) GEO.packM.visible = false; GEO.packOpen = false; return; }
+  if (JET.ride) jetHandsTick(I, main); else if (jetOn()) jetAimTick(I, main, off);   // 2.75: the jet skis
   geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
+  if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
   for (const S of (GEO.sprays || []).concat(GEO.leaves || [])) scene.remove(S.pts); toolFxHide(GEO.lampFx);
   Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], leaves: [], fishM: null, nvM: null, nvK: 0, worn: new Set() });
 }
+/* ---- 2.75: jet skis (Geocaching, once you've found 50 caches). A few are parked in the shallows of sea beaches round the planet (on your
+   map). Walk up and point at one: it glows; pull the trigger and you're sitting on it. Put your hands on the bars and squeeze both grips:
+   your hands stick to the bars and the engine starts. The trigger is the throttle, turn the bars to steer. It rides up onto sandy beaches
+   but stops dead at cliffs and rocks. The jet ski bobs on the waves; your view doesn't move at all. To get off, let go of the bars, point
+   at dry land close by and pull the trigger. ---- */
+const JET = { list: [], ride: null, aim: null, ring: null, snd: null };
+const JET_N = 8, JET_MAX = 20, JET_UNLOCK = 50, JET_SEAT = new THREE.Vector3(0, .78, .25), JET_GRIP = { L: new THREE.Vector3(-.34, .98, -.42), R: new THREE.Vector3(.34, .98, -.42) };
+const jetOn = () => GEO.on && !!GLOBE && GEO.found.size >= JET_UNLOCK;
+function jetPlace() {                                          // the spots: just off the sea coasts, far apart (the same ones for this planet)
+  const G = GLOBE, R = G.R, rr = mulberry32(seed * 313 + 9), L = [], step = 220 / R;
+  for (let t = 0; t < 80000 && L.length < JET_N; t++) {
+    const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .82) continue;   // (no ice seas)
+    const s = G.contS(p, p[0] * R, p[1] * R, p[2] * R); if (s >= 0 || s < -.08) continue;
+    if (L.some(j => glArc(j.p, p) * R < 3500)) continue;
+    const f = glFrame(p); let land = false;                    // land within a few hundred metres
+    for (let k = 0; k < 8 && !land; k++) { const a = k * .785, q = glNorm([p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * step, p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * step, p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * step]);
+      if (G.contS(q, q[0] * R, q[1] * R, q[2] * R) > .03) land = true; }
+    if (land) L.push({ id: L.length + 1, p, ok: false, dead: false, yaw: 0, x: 0, z: 0, obj: null });
+  }
+  return L;
+}
+function jetFindBeach(x0, z0) {                                // a sandy beach near a spot: shallow sea water with gentle dry land just behind it
+  for (let k = 0; k < 520; k++) {
+    const a = k * 2.4, r = k * 1.6, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r, h = H(x, z);
+    if (h > water - .7 || h < water - 1.8 || enIcedAt(x, z)) continue;
+    for (let d = 0; d < 8; d++) { const dx = Math.cos(d * .785), dz = Math.sin(d * .785), hm = H(x + dx * 8, z + dz * 8), hl = H(x + dx * 16, z + dz * 16);
+      if (hl < water + .15 || hl > water + 2.5 || hm > water + 1.2 || hm < water - 1.4 || slopeNy(x + dx * 12, z + dz * 12) < .9 || slopeNy(x + dx * 16, z + dz * 16) < .88) continue;
+      if ([10, 25, 45, 70, 100].some(r => H(x - dx * r, z - dz * r) > water - .9)) continue;   // (open sea out in front, not a lagoon)
+      if (!geoSalty({ x, z })) break;
+      return { x, z, yaw: Math.atan2(dx, dz) };                  // (facing out to sea: away from the land)
+    }
+  }
+  return null;
+}
+function jetModel() {
+  const g = new THREE.Group(), hull = new THREE.MeshLambertMaterial({ color: 0xf2f2ee }), trim = new THREE.MeshLambertMaterial({ color: 0xf2b21a }), dark = new THREE.MeshLambertMaterial({ color: 0x22252a });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); g.add(o); return o; };
+  const hullG = (w, len, d) => { const sh = new THREE.Shape(); sh.moveTo(0, -len); sh.quadraticCurveTo(w * .9, -len * .55, w, -len * .25); sh.lineTo(w, len * .55); sh.quadraticCurveTo(w, len * .7, w * .8, len * .7); sh.lineTo(-w * .8, len * .7);
+    sh.quadraticCurveTo(-w, len * .7, -w, len * .55); sh.lineTo(-w, -len * .25); sh.quadraticCurveTo(-w * .9, -len * .55, 0, -len);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 2, curveSegments: 8 }); g.rotateX(Math.PI / 2); g.translate(0, d, 0); return g; };
+  add(hullG(.5, 1.7, .14), trim, 0, -.06, 0);                                            // the yellow lower hull at the waterline
+  add(hullG(.52, 1.65, .3), hull, 0, .1, 0);                                              // the white deck
+  const seat = add(new THREE.CapsuleGeometry(.2, .85, 4, 10), dark, 0, .5, .45, Math.PI / 2); seat.scale.set(1.1, 1, .55);   // the seat
+  const hood = add(hullG(.36, .62, .16), trim, 0, .44, -.62); hood.scale.set(1, 1, .9);    // the hood
+  const bars = new THREE.Group(); bars.position.set(0, .86, -.5); g.add(bars);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .2, 8), dark); post.position.y = .02; bars.add(post);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .74, 8), dark); bar.rotation.z = Math.PI / 2; bar.position.set(0, .12, .08); bars.add(bar);
+  for (const s of [-1, 1]) { const gr = new THREE.Mesh(new THREE.CylinderGeometry(.024, .024, .13, 8), trim); gr.rotation.z = Math.PI / 2; gr.position.set(s * .31, .12, .08); bars.add(gr); }
+  g.userData = { bars, mats: [hull, trim] }; g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return g;
+}
+function jetGlow(J, on) { if (!J.obj) return; for (const m of J.obj.userData.mats) m.emissive.setHex(on ? 0x5a4410 : 0x000000); }
+function jetsTick(dt) {                                       // (in geoTick: the jet skis near you)
+  const G = GLOBE, R = G.R, out = [0, 0], on = jetOn();
+  if (on && !GEO.jetSaid) { GEO.jetSaid = true; }
+  for (const J of JET.list) {
+    if (JET.ride && JET.ride.J === J) { J.p = glToSphere(J.x, J.z, [0, 0, 0]); continue; }
+    const near = on && !J.dead && glArc(G.p, J.p) * R < 700;
+    if (!near) { if (J.obj) { scene.remove(J.obj); J.obj = null; } continue; }
+    glFromSphere(J.p, out);
+    if (!J.ok) { const b = jetFindBeach(out[0], out[1]); J.ok = true; if (!b) { J.dead = true; continue; } out[0] = b.x; out[1] = b.z; J.yaw = b.yaw; J.p = glToSphere(b.x, b.z, [0, 0, 0]); }
+    if (!J.obj) { J.obj = jetModel(); scene.add(J.obj); }
+    J.x = out[0]; J.z = out[1]; J.obj.position.set(J.x, Math.max(water, H(J.x, J.z)) - .05, J.z); J.obj.rotation.set(0, J.yaw, 0);
+  }
+}
+function jetBob(J, t, sp, steer) {                            // the hull on the waves (only the jet ski: never your view)
+  const o = J.obj, gnd = H(J.x, J.z), afloat = gnd < water - .3, k = afloat ? 1 : .15;
+  const y = Math.max(water, gnd) + (.06 * Math.sin(t * 1.7 + J.id) + .035 * Math.sin(t * 3.1) + (sp > 6 ? .05 * Math.sin(t * 9) * Math.min(1, sp / 15) : 0)) * k - .05;
+  o.position.set(J.x, y, J.z); o.rotation.set((.05 * Math.sin(t * 1.3 + J.id) * k) + Math.min(.09, sp / JET_MAX * .09), J.yaw, (.04 * Math.sin(t * 1.1) * k) + steer * .22 * Math.min(1, sp / 6), "YXZ");
+  o.userData.bars.rotation.y = -steer * .5; o.updateMatrixWorld(true);
+}
+function jetGripAt(side) { const Rd = JET.ride; return Rd && Rd.J.obj ? Rd.J.obj.localToWorld(JET_GRIP[side].clone()) : null; }
+function jetEngine(on, k, thr) {                               // a looped motor: higher and louder with speed and throttle
+  if (!SND.ctx) return; const c = SND.ctx;
+  if (on && !JET.snd) {
+    const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+    o.type = "sawtooth"; o2.type = "square"; o2.detune.value = 9; lp.type = "lowpass"; lp.frequency.value = 500; g.gain.value = 0;
+    const nb = c.createBufferSource(); nb.buffer = SND.noise; nb.loop = true; const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1400; bp.Q.value = .8; const ng = c.createGain(); ng.gain.value = 0;
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(SND.master); nb.connect(bp).connect(ng).connect(SND.master); o.start(); o2.start(); nb.start();
+    JET.snd = { o, o2, lp, g, nb, ng }; gunFoley([[0, 160, .25, .2], [.12, 220, .3, .16], [.25, 300, .2, .12]]);   // (it starts up)
+  }
+  const S = JET.snd; if (!S) return; const t = c.currentTime;
+  if (!on) { S.g.gain.setTargetAtTime(0, t, .15); S.ng.gain.setTargetAtTime(0, t, .15); const s = S; JET.snd = null; setTimeout(() => { try { s.o.stop(); s.o2.stop(); s.nb.stop(); } catch (_) {} }, 600); return; }
+  const f = 38 + 70 * k + 28 * thr; S.o.frequency.setTargetAtTime(f, t, .08); S.o2.frequency.setTargetAtTime(f * .5, t, .08); S.lp.frequency.setTargetAtTime(380 + 1400 * Math.max(k, thr), t, .1);
+  S.g.gain.setTargetAtTime(.05 + .09 * Math.max(k, thr), t, .1); S.ng.gain.setTargetAtTime(.06 * k, t, .1);
+}
+function jetMount(J) {
+  const Rd = JET.ride = { J, sp: 0, steer: 0, eng: false, grab: { L: false, R: false }, t: 0, floor: water + 1.55 - Math.max(1, Math.min(1.9, vr.headLocalY || 1.6)), beachT: 0, bumpT: 0, said: false };
+  jetGlow(J, false); geoHeld(null); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; vr.binos = vr.scoped = false;
+  jetBob(J, 0, 0, 0); const seat = J.obj.localToWorld(JET_SEAT.clone());
+  let d = J.yaw - P.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; Rd.turn0 = d;   // (you sit facing the front)
+  P.x = seat.x; P.z = seat.z; P.y = Rd.floor; P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined;
+  gunFoley([[0, 500, .2, .12], [.05, 900, .15, .08]]); buzz("L", .4, 60); buzz("R", .4, 60);
+  vrBanner("Hands on the bars and squeeze both grips to start", 3, 1);
+}
+function jetOff(x, z) {                                         // hop off (onto the land you pointed at)
+  const Rd = JET.ride; if (!Rd) return; JET.ride = null; jetEngine(false);
+  if (x !== undefined) { P.x = x; P.z = z; P.y = groundAt(x, z); P.vy = 0; P.onGround = true; gunFoley([[0, 300, .15, .12]]); }
+  if (JET.ring) JET.ring.visible = false;
+}
+function jetAimTick(I, main, off) {                            // not riding: point at a jet ski to make it glow; pull the trigger to get on
+  const gunUp = vr.gun && vr.gun.visible, h = gunUp ? off : main; let best = null;
+  if (h && !GEO.packOpen && !GEO.held) {
+    const o = h.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(h.rayQ);
+    for (const J of JET.list) { if (!J.obj) continue; const c = _v2.set(J.x, J.obj.position.y + .5, J.z), dd = Math.hypot(J.x - P.x, J.z - P.z); if (dd > 9) continue;
+      const toC = c.clone().sub(o), t = toC.dot(d); if (t < 0) continue; if (toC.lengthSq() - t * t < 1.6 * 1.6) { best = J; break; } }
+  }
+  if (best !== JET.aim) { if (JET.aim) jetGlow(JET.aim, false); if (best) { jetGlow(best, true); buzz(h === main ? (set.hand === "right" ? "R" : "L") : (set.hand === "right" ? "L" : "R"), .15, 15); } JET.aim = best; }
+  if (best && h && edge(h === main ? "jetM" : "jetO", h.trig)) { JET.aim = null; jetMount(best); }
+  else if (h) edge(h === main ? "jetM" : "jetO", h.trig);
+}
+function jetHandsTick(I, main) {                               // riding: the grips, and getting off
+  const Rd = JET.ride, J = Rd.J;
+  for (const [s, hn] of [["L", "left"], ["R", "right"]]) {
+    const h = I.hands[hn], gp = jetGripAt(s);
+    if (!Rd.grab[s] && h && gp && h.grip > .6 && h.pos.distanceTo(gp) < .3) { Rd.grab[s] = true; buzz(s, .3, 30); if (s === (set.hand === "right" ? "R" : "L")) vr.gunOut = false; }
+    else if (Rd.grab[s] && (!h || h.grip < .35)) Rd.grab[s] = false;
+  }
+  const both = Rd.grab.L && Rd.grab.R;
+  if (both && !Rd.eng) { Rd.eng = true; jetEngine(true, 0, 0); if (!Rd.said) { Rd.said = true; vrBanner("Trigger: throttle · turn the bars to steer", 3, 1); } }
+  else if (!both && Rd.eng) Rd.eng = false;
+  // off: hands off the bars, point at dry land close by, trigger
+  const free = !Rd.grab.L && !Rd.grab.R && !(vr.gun && vr.gun.visible) && main; let spot = null;
+  if (free) { const o = main.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ), ht = castShot(o, d.clone(), 14);
+    if (ht.kind && ht.kind !== "water" && H(ht.p.x, ht.p.z) > water + .1 && slopeNy(ht.p.x, ht.p.z) > .7) spot = ht.p; }
+  if (!JET.ring) { JET.ring = new THREE.Mesh(new THREE.RingGeometry(.35, .5, 24), new THREE.MeshBasicMaterial({ color: 0xffd65a, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, fog: false })); JET.ring.rotation.x = -Math.PI / 2; JET.ring.renderOrder = 5; scene.add(JET.ring); }
+  JET.ring.visible = !!spot; if (spot) JET.ring.position.set(spot.x, groundAt(spot.x, spot.z) + .06, spot.z);
+  if (main && edge("jetOff", main.trig) && spot) jetOff(spot.x, spot.z);
+}
+function jetRide(dt) {                                          // (instead of walking, while you're on it)
+  const Rd = JET.ride, J = Rd.J, I = vr.I; Rd.t += dt;
+  if (!J.obj) { J.obj = jetModel(); scene.add(J.obj); }
+  const L = I && I.hands.left, Rh = I && I.hands.right, both = Rd.eng && Rd.grab.L && Rd.grab.R && L && Rh;
+  const thr = both ? Math.max(L.trig || 0, Rh.trig || 0) : 0;
+  const fx = -Math.sin(J.yaw), fz = -Math.cos(J.yaw), rx = Math.cos(J.yaw), rz = -Math.sin(J.yaw);
+  let st = 0;
+  if (both) { const vx = Rh.pos.x - L.pos.x, vz = Rh.pos.z - L.pos.z, lx = vx * rx + vz * rz, back = -(vx * fx + vz * fz); st = Math.max(-1, Math.min(1, Math.atan2(back, Math.max(.05, lx)) / .55)); }   // right hand back: turn right
+  Rd.steer += (st - Rd.steer) * Math.min(1, dt * 8);
+  const want = thr * JET_MAX; Rd.sp += (want - Rd.sp) * Math.min(1, dt * (want > Rd.sp ? .8 : .45));
+  const turn = -Rd.steer * (.35 + 1.05 * Math.min(1, Math.abs(Rd.sp) / 7)) * dt * (Math.abs(Rd.sp) > .3 || both ? 1 : 0);
+  J.yaw += turn;
+  // where the nose would go: open water, a sandy beach (it slides up and stops), or a cliff / rocks (it bumps back)
+  let mv = Rd.sp * dt; const nfx = -Math.sin(J.yaw), nfz = -Math.cos(J.yaw);
+  if (mv > 0) {
+    const nx = J.x + nfx * (1.5 + mv), nz = J.z + nfz * (1.5 + mv), hn = H(nx, nz), rk = rockAround(nx, nz, .5, water, 1.2, .05);
+    if (hn > water - .35 || rk > water + .2) {
+      const gentle = rk < water + .2 && slopeNy(nx, nz) > .86 && H(nx + nfx * 3, nz + nfz * 3) - hn < 1.1 && hn < water + .9;
+      if (gentle) { Rd.sp *= Math.exp(-dt * 2.2); if (hn > water + .25) { mv = 0; Rd.sp = 0; } if (!Rd.beachT) { Rd.beachT = 1; vrBanner("Beach! Let go, point at the sand and pull the trigger to hop off", 3.5, 1); gunFoley([[0, 900, .3, .1]]); } }
+      else { if (Rd.bumpT <= 0) { gunFoley([[0, 140, .3, .3], [.03, 420, .15, .14]]); buzz("L", .9, 120); buzz("R", .9, 120); Rd.bumpT = .5; if (Rd.sp > 4) vrBanner("Too rocky to land here: find a sandy beach", 2.5, 0); } Rd.sp = -Math.min(2.5, Rd.sp * .3); mv = 0; }
+    } else Rd.beachT = 0;
+  } else if (mv < 0) { const bx = J.x - nfx * 1.4, bz = J.z - nfz * 1.4; if (H(bx, bz) > water - .2) { Rd.sp = 0; mv = 0; } }
+  Rd.bumpT -= dt;
+  const ox = J.x, oz = J.z; J.x += nfx * mv; J.z += nfz * mv;
+  // you ride along: turned with it about its middle, carried with it, and your eyes stay at exactly the same height
+  const px = P.x - ox, pz = P.z - oz, c = Math.cos(turn), s = Math.sin(turn);
+  P.x = J.x + px * c + pz * s; P.z = J.z - px * s + pz * c; P.y = Rd.floor; P.vy = 0; P.onGround = true; P.gliding = false; P.crouch = false;
+  vr.pendTurn = turn + (Rd.turn0 || 0); Rd.turn0 = 0;
+  jetBob(J, Rd.t, Math.abs(Rd.sp), Rd.steer);
+  if (Rd.eng) jetEngine(true, Math.min(1, Math.abs(Rd.sp) / JET_MAX), thr); else if (JET.snd) jetEngine(false);
+  if (both && (Rd.buzzT = (Rd.buzzT || 0) - dt) <= 0) { Rd.buzzT = .1; const k = .04 + .2 * thr; buzz("L", k, 15); buzz("R", k, 15); }
+  input.run = Rd.sp > 12;                                       // (hard riding makes you hungry like running)
+}
+function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; }   // (the spots stay: a new game makes new ones)
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
    sight, growls, and pounces. Gators and crocodiles lunge from the water's edge. Lions charge if you walk up on the pride. Bear spray turns
@@ -5069,6 +5237,7 @@ function geoTeleport(p) {                                     // the land round 
   E.acG.clear(); E.acB.clear(); for (const rec of E.acL.values()) enLootDrop(rec); E.acL.clear(); E.aQ = []; E.aInit = true;
   for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear();
   if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); GEO.fire = null; }
+  jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; }
   const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = P.x; G.oz = P.z; G.reN = (G.reN || 0) + 1; G.llT = 0;
   enEnsure(P.x, P.z, 260);
   let sx = P.x, sz = P.z; for (let k = 0; k < 200; k++) { const a = k * 2.4, r = k * 1.2, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (H(x, z) > water + 1 && slopeNy(x, z) > .85) { sx = x; sz = z; break; } }
@@ -9626,6 +9795,7 @@ function vrHands() {
     poseHand(H, .08 + .92 * g, onGun && isMain ? .35 + .45 * t : .08 + .92 * Math.max(g * .9, t), Math.max(g, t * .6));
     const glow = !!(C.was[side + "in"] || C.hold === side);          // inside something you can hold: the hand shows through it in x-ray blue
     for (const gp of H.ghostParts) gp.visible = glow;
+    const jg = JET.ride && JET.ride.grab[side] && jetGripAt(side); if (jg) { H.g.position.copy(jg); poseHand(H, 1, 1, 1); }   // 2.75: hands stuck to the jet ski's bars
   }
 }
 // the scope and binocular view: the whole headset view zooms in, black round the lens (one mono view, so it stays comfortable)
@@ -11578,6 +11748,7 @@ const GLIDE_SPEED = 11, GLIDE_SINK = 2.2, GLIDE_VR = 22;   // VR glides twice as
 const CLIMB = 1.5, CLIFF = 5.67;   // anything below eye level (1.5 m) can be walked up onto; walkable up to 80 degrees (tan 80)
 const keys = {};
 function update(dt) {
+  if (JET.ride && vr.on && state === "play") { jetRide(dt); return; }   // 2.75: riding a jet ski
   pcLavaTick(dt);
   let mx = input.jx, my = input.jy;
   if (keys.KeyW || keys.ArrowUp) my += 1; if (keys.KeyS || keys.ArrowDown) my -= 1;
