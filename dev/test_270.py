@@ -9,7 +9,7 @@ import sys, asyncio, json
 from playwright.async_api import async_playwright
 QUICK = __import__('os').environ.get('JT_QUICK') == '1'
 GEN = """(sv) => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { if (sv) localStorage.setItem('jt-geo', JSON.stringify(sv)); else localStorage.removeItem('jt-geo'); } catch (_) {}
-  D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;
+  D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;   // (2.72: Geocaching is in Dev Mode while it's tested)
   Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: 'globe', dino: false });
   D.generate(); D.state = 'play'; window.tick = (n, f) => { for (let i = 0; i < n; i++) { if (f) f(i); D.endlessTick(1 / 72); D.updateAnimals(1 / 72); D.geoTick(1 / 72); } };
   return { on: !!D.GLOBE, lat: D.GLOBE && D.GLOBE.lat, lon: D.GLOBE && D.GLOBE.lon }; }"""

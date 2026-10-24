@@ -3064,7 +3064,7 @@ function updateFly(dt) {
    Hiking in a headset has two maps: Island (always the 3 km map) or Endless (HIKEMAP). */
 let HIKEMAP = null, HIKE_FORCE = null;
 const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || set.huntMap === "globe");
-const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && !MP.code;   // 2.70: Geocaching (solo)
+const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && !MP.code && DEV.ok;   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
 const spawnPick = () => !!MP.code && (gameMode === "hike" ? set.hikeMap === "endless" : huntEndless());   // 2.24: online on endless land: how far apart everyone starts
 function enSpawnNear(hx, hz, d, k) {                         // a spot about d m from the host, each player in their own direction
   const a0 = (k || 0) * 2.39996 + seed * .37;
@@ -4526,7 +4526,7 @@ const _giV = new THREE.Vector3(), _v3c = new THREE.Vector3();
    water are two bars now: drink at lakes and rivers (hand in the water) or from the canteen, eat what you hunt (cooked at your campfire it
    counts double) and fruit you pull off the trees. Run out of either and your health drops. ---- */
 const GI_LIST = [
-  ["canteen", "Canteen", "Tip it over in a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
+  ["canteen", "Canteen", "Hold it upright under a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
   ["pack1", "Small backpack", "6 slots for your gear", 0], ["compass", "Compass", "Your watch points to the next cache", 0], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep: your wake-up spot", 1],
   ["binos", "Binocular upgrade", "More zoom, and the distance", 0], ["rod", "Fishing rod", "Cast into water, pull when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
@@ -4815,15 +4815,15 @@ function geoHeldTick(I, main, dt) {                           // using what's in
   const k = GEO.held, o = GEO.heldObj; if (!k || !o || !main) { if (o) o.visible = false; return; }
   o.visible = true; o.quaternion.copy(main.rayQ); o.position.copy(main.pos).add(_v1.set(0, .02, -.05).applyQuaternion(main.rayQ)); if (k === "rod") o.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.0)); o.updateMatrixWorld(true);
   const pressed = edge("giT", main.trig) && !GEO.packOpen;
-  if (k === "canteen") {                                       // tip it over in a lake to fill it; tip it up at your mouth to drink
+  if (k === "canteen") {                                       // hold it upright under a lake's surface to fill it; tip it up at your mouth to drink
     const up = _v2.set(0, 1, 0).applyQuaternion(o.quaternion), neck = o.localToWorld(_giV.set(0, .07, 0)), mouth = _v1.copy(I.head).add(_v3c.set(0, -.08, 0));
     GEO.sipT -= dt;
-    if (geoInWater(neck) && up.y < .4) {                       // (tipped well over, under the surface)
+    if (geoInWater(neck) && up.y > .6) {                       // (upright, the opening under the surface)
       if (geoSalty(neck)) geoSaltSay();
       else if (GEO.cant < 4 && GEO.sipT <= 0) { GEO.sipT = .45; GEO.cant++; gunFoley([[0, 420 + GEO.cant * 60, .2, .1]]); buzz(set.hand === "right" ? "R" : "L", .2, 30); if (GEO.cant >= 4) vrBanner("Canteen full (4 drinks)", 1.5, 0); }
     } else if (neck.distanceTo(mouth) < .2 && up.y < .75 && up.dot(_v3c.copy(I.head).sub(o.position).normalize()) > .25 && GEO.sipT <= 0) {   // tipped up at your face
-      if (GEO.cant > 0 && GEO.water < 99.5) { GEO.sipT = .9; GEO.cant--; geoDrink(25); gunFoley([[0, 520, .18, .1]]); buzz(set.hand === "right" ? "R" : "L", .25, 40); if (!GEO.cant) vrBanner("Canteen empty: fill it in a lake", 1.5, 0); }
-      else if (!GEO.cant) { GEO.sipT = 1.5; vrBanner("Empty: tip it into a lake to fill it", 1.5, 0); }
+      if (GEO.cant > 0 && GEO.water < 99.5) { GEO.sipT = .9; GEO.cant--; geoDrink(25); gunFoley([[0, 520, .18, .1]]); buzz(set.hand === "right" ? "R" : "L", .25, 40); if (!GEO.cant) vrBanner("Canteen empty: hold it under in a lake", 1.5, 0); }
+      else if (!GEO.cant) { GEO.sipT = 1.5; vrBanner("Empty: hold it upright under a lake to fill it", 1.5, 0); }
     }
   }
   else if (k === "aid" && pressed) { if (GEO.aid > 0) { GEO.aid = 0; MP.hp = 100; vrBanner("Patched up: full health", 2, 1); bing(); } else vrBanner("First-aid kit used (refills at caches)", 1.5, 0); }
@@ -9858,8 +9858,7 @@ function vruiParts() {
   // ---- 2.38: the main menu: Solo · Online, and your character, height and the rules ----
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
-  uiBtn(M, 90, 150, 760, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); if (set.huntMap === "globe") set.huntMap = "endless"; renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });
-  uiBtn(M, 870, 150, 440, 230, "Geocaching", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "A little planet: 100 caches to find", fs: 50, paintCol: "#6a5a2a" });   // 2.70
+  uiBtn(M, 90, 150, 1220, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); if (set.huntMap === "globe") set.huntMap = "endless"; renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
   uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: hike, hunt or PvP together. Host a room or join one.", fs: 64 });
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
@@ -10493,6 +10492,7 @@ function devPanels() {
   uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
   uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
   uiBtn(Dv, 720, 450, 590, 170, "Test tools", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
+  uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
   // ---- the Workshop's panel, to the left of the creature
