@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.95";              // Just Trees 2.55
+const VERSION = "2.96";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4626,7 +4626,7 @@ const GI_LIST = [
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
   ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "Hold the trigger, fling and let go to cast; jerk up when it bites, reel with your other hand", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
-  ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light on your head: on by itself in the dark", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
+  ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0]
@@ -4949,7 +4949,7 @@ function geoSprayTick(dt) {
 }
 // worn things: the headlamp and the night-vision goggles
 function geoWornTick(I) {
-  const lamp = geoHas("headlamp") && NIGHT_K > .35;                // 2.72: it just comes on in the dark
+  const lamp = false;                                              // 2.96: the headlamp is a placeholder for now: never on (2.72: it came on by itself in the dark)
   if (lamp) { const L = GEO.lampHold || (GEO.lampHold = new THREE.Object3D()); L.position.copy(I.head); L.quaternion.copy(I.headQ); L.updateMatrixWorld(); GEO.lampFx = GEO.lampFx || toolFxMake(); toolFxShow(GEO.lampFx, 1, L, [0, .06, -.08], false); }
   else toolFxHide(GEO.lampFx);
   const nv = GEO.worn.has("nvg"); GEO.nvK += ((nv ? 1 : 0) - GEO.nvK) * .2;
