@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.99";              // Just Trees 2.55
+const VERSION = "3.00";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -978,7 +978,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   if (uDream.x > 0.001) {                                             // 2.88: the dream sight: dark, everything traced in light
     vec3 dv = vFogW - uCamP; float dd = max(length(dv), 0.001); float t = uDream.y;
     vec3 dn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
-    float lum = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), mist = smoothstep(180.0, 1000.0, dd);
+    float lum = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), mist = smoothstep(450.0, 2400.0, dd);
     float dFl = smoothstep(0.55, 0.93, abs(dn.y));
     float rim = smoothstep(0.45, 0.97, 1.0 - abs(dot(dn, dv / dd))) * mix(1.0, 0.15, dFl);   // surfaces turned away from you glow: trunk sides, rock edges, ridges (the flat ground, softly)
     float edge = smoothstep(0.03, 0.12, fwidth(lum)) * mix(1.0, 0.35, dFl);                  // where the light changes sharply: shapes, shadows, detail, sketched in
@@ -3387,7 +3387,7 @@ function enEnsureHere() { if (ENDLESS) { enEnsure(P.x, P.z, 260); if (ENDLESS.ac
 function endlessTick(dt) {                                   // every frame: build what's missing near you, let go of what's far, keep the water, map and far ground with you
   const E = ENDLESS; if (!E) return;
   if (GLOBE) globeTick(dt);                                  // 2.70
-  const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), FC = GLOBE ? geoFocus() : P, px = FC.x, pz = FC.z;   // (2.87: dreaming, the land grows round your spirit)
+  const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (GEO.sleep && GEO.sleep.view ? 2 : 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), FC = GLOBE ? geoFocus() : P, px = FC.x, pz = FC.z;   // (2.87: dreaming, the land grows round your spirit)
   E.slice = play ? 1.4 : 5;
   if (E.water) E.water.position.set(px, water, pz);
   if ((E.ambT = (E.ambT || 0) - dt) <= 0) {                   // 2.20: the weather, sky and footsteps of the regions round you; the lava nearest you
@@ -5534,7 +5534,7 @@ function gunLabPanel() {
    left stick flies you where you look, the right stick up and down, up to 1.2 km from your body. Anything coming for your body (a
    predator, an animal right there, a player within 60 m, a hit) warns you and snaps you back awake. B wakes you any time. Your body stays
    in the hammock for everyone else to see. ---- */
-const HAMMOCK = { min: 1.2, max: 14, tether: 1e9, speed: 32, climb: 16, near: 60, top: 800 };   // (2.87: the whole planet; up to 800 m above the ground)
+const HAMMOCK = { min: 1.2, max: 14, tether: 1e9, speed: 25, climb: 14, near: 60, top: 250, vmax: 55, cmax: 28 };   // (2.87: the whole planet; 3.00: up to 250 m above the ground, and never faster than the land can grow in)
 const giNm = k => geoNet() && k === "tent" ? "Hammock" : GI[k].name, giDesc = k => geoNet() && k === "tent" ? "Touch a tree trunk, then another 3–5 m away, to hang it; sleep in it at night" : GI[k].desc;
 const sleepNight = () => hourNow >= 21 || hourNow < 5;
 function hamTrunk(p) {                                             // the tree trunk your hand is at (from the trees' footprints)
@@ -5691,9 +5691,9 @@ function sleepBody() {                                                // your bo
 function sleepMove(dt) {                                             // (instead of walking, while you're out of your body)
   const S = GEO.sleep; if (!S || !S.view || S.st !== "ghost" && !(S.st === "warn" && S.pre === "ghost")) return;
   const hl0 = vr.headLocalY || 1.6, up0 = S.view.y + hl0 - Math.max(groundAt(S.view.x, S.view.z), water);
-  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = HAMMOCK.speed + Math.max(0, up0) * .45;   // (2.87: high up you fly much faster)
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = Math.min(HAMMOCK.vmax, HAMMOCK.speed + Math.max(0, up0) * .15);   // (2.87: high up you fly much faster)
   S.view.x += (fx * input.jy + rx * input.jx) * sp * dt; S.view.z += (fz * input.jy + rz * input.jx) * sp * dt;
-  const m = vr.main; if (m && Math.abs(m.sy) > .2) S.view.y += -m.sy * (HAMMOCK.climb + Math.max(0, up0) * .15) * dt;
+  const m = vr.main; if (m && Math.abs(m.sy) > .2) S.view.y += -m.sy * Math.min(HAMMOCK.cmax, HAMMOCK.climb + Math.max(0, up0) * .1) * dt;
   const dx = S.view.x - S.body.x, dz = S.view.z - S.body.z, d = Math.hypot(dx, dz);   // tied to your body
   if (d > HAMMOCK.tether) { S.view.x = S.body.x + dx / d * HAMMOCK.tether; S.view.z = S.body.z + dz / d * HAMMOCK.tether; if ((S.tetherT = (S.tetherT || 0) - dt) <= 0) { S.tetherT = 4; vrBanner("You can't drift further from your body", 1.5, 0); } }
   const hl = vr.headLocalY || 1.6, g = groundAt(S.view.x, S.view.z); S.view.y = Math.max(Math.max(g, water) + .8 - hl, Math.min(Math.max(g, water) + HAMMOCK.top, S.view.y));
@@ -17359,7 +17359,7 @@ function cullTiles() {
   PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
   const pf = PERF(), lodD = pf.lod * Math.max(1, vr.on ? Math.min(vr.zoomK, pf.zoomLod) : 72 / camera.fov);   // full-detail trees nearby (and further out through a scope, but not all the way to the horizon)
   const NC = NCELL * NCELL, fT = cullFT, fS = cullFS, fM = cullFM, fL = cullFL; fT.length = fS.length = fM.length = fL.length = NC;
-  const zk = lodD / pf.lod, [a0, a1, b0, b1] = FADE_D();     // a scope pushes every distance out together
+  const zk = lodD / pf.lod, [a0, a1, b0q, b1q] = FADE_D(), dk = GEO.ghostK > .5 ? 1.7 : 1, b0 = b0q * dk, b1 = b1q * dk;     // a scope pushes every distance out together (3.00: dreaming, the trees reach much further out)
   FADE.uFA.value.set(a0 * zk, a1 * zk); FADE.uFB.value.set(b0 * zk, b1 * zk); FADE.uHead.value.copy(camera.position);
   for (let i = 0; i < tiles.length; i++) {
     const t = tiles[i], d = Math.hypot(camera.position.x - t.cx, camera.position.z - t.cz);
@@ -17429,6 +17429,7 @@ function loop(now) {
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(4.5, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
     if (UNDER.on && UNDER.cur) { scene.fog.near = UNDER.cur.fog[0]; scene.fog.far = UNDER.cur.fog[1]; }   // 2.90
+    else if (GEO.ghostK > 0) { scene.fog.near *= 1 + 2 * GEO.ghostK; scene.fog.far *= 1 + 1.5 * GEO.ghostK; }   // 3.00: dreaming, you see much further
     zoneFog();
   }
   updateBirds(now);
