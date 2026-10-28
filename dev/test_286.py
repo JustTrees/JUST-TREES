@@ -27,7 +27,7 @@ async def main():
           const at = t => new T.Vector3(t.x + t.tr + .1, D.groundAt(t.x, t.z) + 1.2, t.z), press = () => { M.trig = 1; tick(1); M.trig = 0; tick(1); };
           M.pos.copy(head()); press(); o.notTree = !D.GEO.hmA;
           M.pos.copy(at(A)); press(); o.tied = !!D.GEO.hmA; o.glow = (D.GEO.hmGlow || []).length;   // 2.90: the trees that fit glow; the same tree again unties it
-          M.pos.copy(at(A)); press(); o.untied = !D.GEO.hmA && !(D.GEO.hmGlow || []).length; M.pos.copy(at(A)); press(); M.pos.copy(at(B)); press(); o.hung = !!D.GEO.hm && !(D.GEO.hmGlow || []).length;
+          M.pos.copy(at(A)); press(); o.untied = !D.GEO.hmA && !(D.GEO.hmGlow || []).length; M.pos.copy(at(A)); press(); const B2 = D.GEO.hmB; o.nearest = !!B2; M.pos.copy(at(B2 || B)); press(); o.hung = !!D.GEO.hm && !(D.GEO.hmGlow || []).length;
           // daytime: no sleep; night: in you go
           D.glabTime(12); D.globeTick(0); M.pos.copy(D.GEO.hm.mid); press(); o.day = !D.GEO.sleep;
           D.glabTime(23); D.globeTick(0); D.geoHeld(null); M.pos.copy(D.GEO.hm.mid); press(); o.slept = !!D.GEO.sleep;
@@ -55,7 +55,7 @@ async def main():
           return o; }""")
         print(json.dumps(r))
         ok = r.get("pair") and r["notTree"] and r["tied"] and r["hung"] and r["day"] and r["slept"] and r["phases"].startswith("settle,blink,dark,rise,ghost") and r["lifted"] >= 3 and r["ghostK"] > .9 \
-             and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["once"] and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1] and r["glow"] > 0 and r["untied"] and r["beacon"] and r["dream"][0] > .9 and r["dream"][1] > 5 and r["dreamOff"][0] < .05 and r["dreamOff"][1] == 0 and r["rested"] == 100 and r["morning"][0] and r["morning"][1] <= 50
+             and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["once"] and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1] and r["glow"] == 1 and r["nearest"] and r["untied"] and r["beacon"] and r["dream"][0] > .9 and r["dream"][1] > 5 and r["dreamOff"][0] < .05 and r["dreamOff"][1] == 0 and r["rested"] == 100 and r["morning"][0] and r["morning"][1] <= 50
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())

@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.96";              // Just Trees 2.55
+const VERSION = "2.97";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5504,7 +5504,7 @@ function gunLabPanel() {
    left stick flies you where you look, the right stick up and down, up to 1.2 km from your body. Anything coming for your body (a
    predator, an animal right there, a player within 60 m, a hit) warns you and snaps you back awake. B wakes you any time. Your body stays
    in the hammock for everyone else to see. ---- */
-const HAMMOCK = { min: 3, max: 5, tether: 1e9, speed: 32, climb: 16, near: 60, top: 800 };   // (2.87: the whole planet; up to 800 m above the ground)
+const HAMMOCK = { min: 1.2, max: 14, tether: 1e9, speed: 32, climb: 16, near: 60, top: 800 };   // (2.87: the whole planet; up to 800 m above the ground)
 const giNm = k => geoNet() && k === "tent" ? "Hammock" : GI[k].name, giDesc = k => geoNet() && k === "tent" ? "Touch a tree trunk, then another 3–5 m away, to hang it; sleep in it at night" : GI[k].desc;
 const sleepNight = () => hourNow >= 21 || hourNow < 5;
 function hamTrunk(p) {                                             // the tree trunk your hand is at (from the trees' footprints)
@@ -5515,7 +5515,8 @@ function hamTrunk(p) {                                             // the tree t
 }
 function hamMesh(a, b) {                                            // the hammock: a sagging cloth between the trunks, ropes to each
   const g = new THREE.Group(), ga = groundAt(a.x, a.z), gb = groundAt(b.x, b.z), dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L;
-  const A = new THREE.Vector3(a.x + ux * a.tr, ga + 1.55, a.z + uz * a.tr), B = new THREE.Vector3(b.x - ux * b.tr, gb + 1.55, b.z - uz * b.tr);
+  const A0 = new THREE.Vector3(a.x + ux * a.tr, ga + 1.55, a.z + uz * a.tr), B0 = new THREE.Vector3(b.x - ux * b.tr, gb + 1.55, b.z - uz * b.tr);
+  const C0 = A0.clone().lerp(B0, .5), hh = Math.min(1.6, A0.distanceTo(B0) / 2), A = C0.clone().addScaledVector(new THREE.Vector3(-ux, 0, -uz), hh), B = C0.clone().addScaledVector(new THREE.Vector3(ux, 0, uz), hh);   // (2.97: the cloth is hammock-sized; long ropes take up the rest)
   const N = 16, pos = [], idx = [], W = .42, px = -uz * W, pz = ux * W, mid = new THREE.Vector3();
   for (let i = 0; i <= N; i++) { const t = i / N, s = Math.sin(t * Math.PI), q = A.clone().lerp(B, t); q.y -= s * .75; const w = .25 + .75 * Math.sqrt(s);
     pos.push(q.x - px * w, q.y + s * .08, q.z - pz * w, q.x + px * w, q.y + s * .08, q.z + pz * w); if (i === N / 2) mid.copy(q);
@@ -5529,15 +5530,16 @@ function hamMesh(a, b) {                                            // the hammo
 }
 const HAM_GLOW = { mat: null };
 function hamGlowOff() { for (const m of GEO.hmGlow || []) { scene.remove(m); m.geometry.dispose(); } GEO.hmGlow = []; }
-function hamUntie() { if (GEO.hmRing) scene.remove(GEO.hmRing); GEO.hmRing = null; GEO.hmA = null; hamGlowOff(); }
+function hamUntie() { if (GEO.hmRing) scene.remove(GEO.hmRing); GEO.hmRing = null; GEO.hmA = null; GEO.hmB = null; hamGlowOff(); }
 function hamGlow(A) {                                               // 2.90: once it's tied, every trunk the right distance away glows
   hamGlowOff(); const M = HAM_GLOW.mat || (HAM_GLOW.mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uT: { value: 0 } },
     vertexShader: "varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: "uniform float uT; varying vec2 vU; void main(){ float a = (0.35 + 0.25 * sin(uT * 3.0 - vU.y * 6.0)) * smoothstep(0.0, 0.25, vU.y) * smoothstep(1.0, 0.6, vU.y); gl_FragColor = vec4(vec3(1.0, 0.8, 0.45) * a, a); }" }));
-  const cx = Math.floor(A.x / 8), cz = Math.floor(A.z / 8);
+  const cx = Math.floor(A.x / 8), cz = Math.floor(A.z / 8); let best = null, bd = 1e9;   // 2.97: the nearest other tree is the one (not too close, not far)
   for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const L = obstacles.get((cx + i) + "," + (cz + j)); if (!L) continue;
-    for (const o of L) { if (!(o.tr > .1) || o === A) continue; const d = Math.hypot(o.x - A.x, o.z - A.z) - o.tr - A.tr; if (d < HAMMOCK.min + .05 || d > HAMMOCK.max - .05) continue;
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(o.tr + .1, o.tr + .1, 2.6, 14, 1, true), M); m.position.set(o.x, groundAt(o.x, o.z) + 1.3, o.z); m.renderOrder = 3; scene.add(m); GEO.hmGlow.push(m); } }
+    for (const o of L) { if (!(o.tr > .1) || o === A || o.soft) continue; const d = Math.hypot(o.x - A.x, o.z - A.z), gap = d - o.tr - A.tr; if (gap < HAMMOCK.min || d > HAMMOCK.max) continue; if (d < bd) { bd = d; best = o; } } }
+  GEO.hmB = best; if (!best) return;
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(best.tr + .12, best.tr + .12, 3.2, 14, 1, true), M); m.position.set(best.x, groundAt(best.x, best.z) + 1.6, best.z); m.renderOrder = 3; scene.add(m); GEO.hmGlow.push(m);
 }
 function hamClear() { hamGlowOff(); if (GEO.hm) scene.remove(GEO.hm.g); if (GEO.hmRing) scene.remove(GEO.hmRing); GEO.hm = null; GEO.hmA = null; GEO.hmRing = null; }
 function hamTick(I, main, off, dt) {                                // hanging it, getting in, packing it up
@@ -5558,12 +5560,10 @@ function hamTick(I, main, off, dt) {                                // hanging i
   if (!o) { vrBanner("Touch a tree trunk with the hammock", 1.5, 0); return; }
   if (GEO.hmA === o) { hamUntie(); vrBanner("Untied", 1.5, 0); gunFoley([[0, 900, .12, .08]]); return; }   // 2.90: the same tree again: untie it
   if (!GEO.hmA) { GEO.hmA = o; hamGlow(o); if (GEO.hmRing) scene.remove(GEO.hmRing); const r = GEO.hmRing = new THREE.Mesh(new THREE.TorusGeometry(o.tr + .03, .025, 5, 14), new THREE.MeshLambertMaterial({ color: 0xd8c8a0 })); r.rotation.x = Math.PI / 2; r.position.set(o.x, groundAt(o.x, o.z) + 1.6, o.z); scene.add(r);
-    vrBanner(GEO.hmGlow && GEO.hmGlow.length ? "Tied! Now one of the glowing trees (trigger here again to untie)" : "Tied, but no tree is the right distance from this one: trigger here again to untie", 3, 1); gunFoley([[0, 1200, .12, .1], [.1, 900, .12, .08]]); buzz(ms, .3, 40); return; }
-  const d = Math.hypot(o.x - GEO.hmA.x, o.z - GEO.hmA.z) - o.tr - GEO.hmA.tr;
-  if (d < HAMMOCK.min) { vrBanner("Too close: find trees " + HAMMOCK.min + "–" + HAMMOCK.max + " m apart", 2, 0); return; }
-  if (d > HAMMOCK.max) { vrBanner("Too far: find trees " + HAMMOCK.min + "–" + HAMMOCK.max + " m apart", 2, 0); return; }
+    vrBanner(GEO.hmGlow && GEO.hmGlow.length ? "Tied! Now the glowing tree (squeeze here again to untie)" : "Tied, but there's no other tree close enough: squeeze here again to untie", 4, 2); gunFoley([[0, 1200, .12, .1], [.1, 900, .12, .08]]); buzz(ms, .3, 40); return; }
+  if (o !== GEO.hmB) { vrBanner(GEO.hmB ? "Not that one: the glowing tree" : "No other tree close enough: squeeze the tied one to untie", 2.5, 1); buzz(ms, .2, 30); return; }   // 2.97
   if (GEO.hmRing) { scene.remove(GEO.hmRing); GEO.hmRing = null; } hamGlowOff();
-  GEO.hm = hamMesh(GEO.hmA, o); GEO.hm.a = { p: glToSphere(GEO.hmA.x, GEO.hmA.z, [0, 0, 0]), tr: GEO.hmA.tr }; GEO.hm.b = { p: glToSphere(o.x, o.z, [0, 0, 0]), tr: o.tr }; GEO.hmA = null; geoPop(GEO.hm.mid, 0xc8643a, 14, "smoke"); gunFoley([[0, 1000, .15, .1], [.15, 300, .3, .14]]); buzz(ms, .5, 80);
+  GEO.hm = hamMesh(GEO.hmA, o); GEO.hm.a = { p: glToSphere(GEO.hmA.x, GEO.hmA.z, [0, 0, 0]), tr: GEO.hmA.tr }; GEO.hm.b = { p: glToSphere(o.x, o.z, [0, 0, 0]), tr: o.tr }; GEO.hmA = null; GEO.hmB = null; geoPop(GEO.hm.mid, 0xc8643a, 14, "smoke"); gunFoley([[0, 1000, .15, .1], [.15, 300, .3, .14]]); buzz(ms, .5, 80);
   vrBanner(sleepNight() ? "Hammock up: pull the trigger at it to lie down" : "Hammock up. Come back at night (9 pm – 5 am) to sleep", 3, 1);
 }
 // sleeping and dreaming

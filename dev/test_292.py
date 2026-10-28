@@ -21,7 +21,7 @@ async def main():
           const hang = () => { for (let k = 0; k < 120; k++) D.endlessTick(dt); const ts = []; for (const l of D.obstacles.values()) for (const t of l) if (t.tr > .12 && Math.hypot(t.x - P.x, t.z - P.z) < 300) ts.push(t);
             let pr = null; for (const a of ts) { for (const c of ts) { const d = Math.hypot(a.x - c.x, a.z - c.z) - a.tr - c.tr; if (a !== c && d > 3.4 && d < 4.6) { pr = [a, c]; break; } } if (pr) break; } if (!pr) return false;
             const [A, B] = pr; P.x = (A.x + B.x) / 2 + 1.5; P.z = (A.z + B.z) / 2; P.y = D.groundAt(P.x, P.z); D.geoHeld('tent');
-            for (const t of [A, B]) { M.pos.set(t.x + t.tr + .1, D.groundAt(t.x, t.z) + 1.2, t.z); press(); } D.geoHeld(null); return !!D.GEO.hm; };
+            for (const t0 of [A, B]) { const t = t0 === B && D.GEO.hmB ? D.GEO.hmB : t0; M.pos.set(t.x + t.tr + .1, D.groundAt(t.x, t.z) + 1.2, t.z); press(); } D.geoHeld(null); return !!D.GEO.hm; };
           o.hung = hang(); if (!o.hung) return o; const home = D.glToSphere(P.x, P.z, [0, 0, 0]);
           D.glabTime(23); D.globeTick(0); M.pos.copy(D.GEO.hm.mid); press(); tick(30); M.b = 1; tick(1); M.b = 0; tick(40); M.pos.copy(D.GEO.hm.mid); press(); tick(5); o.once = !D.GEO.sleep && !!D.GEO.hm;   // one sleep a night
           D.GEO.sleptNight = false; const hp0 = D.MP.hp = 50; M.pos.copy(D.GEO.hm.mid); press(); const st = []; for (let i = 0; i < 30 * 9; i++) { tick(1); const s = D.GEO.sleep && D.GEO.sleep.st; if (s && st[st.length - 1] !== s) st.push(s); }
