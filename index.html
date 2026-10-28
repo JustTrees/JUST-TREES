@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.86";              // Just Trees 2.55
+const VERSION = "2.87";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3357,7 +3357,7 @@ function enEnsureHere() { if (ENDLESS) { enEnsure(P.x, P.z, 260); if (ENDLESS.ac
 function endlessTick(dt) {                                   // every frame: build what's missing near you, let go of what's far, keep the water, map and far ground with you
   const E = ENDLESS; if (!E) return;
   if (GLOBE) globeTick(dt);                                  // 2.70
-  const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), px = P.x, pz = P.z;
+  const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), FC = GLOBE ? geoFocus() : P, px = FC.x, pz = FC.z;   // (2.87: dreaming, the land grows round your spirit)
   E.slice = play ? 1.4 : 5;
   if (E.water) E.water.position.set(px, water, pz);
   if ((E.ambT = (E.ambT || 0) - dt) <= 0) {                   // 2.20: the weather, sky and footsteps of the regions round you; the lava nearest you
@@ -4288,8 +4288,12 @@ function globeStart(sv) {
   const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = 0; G.oz = 0;     // flat -z = north at the start
 }
 function globeReanchor() {                                     // lay the flat patch again where you stand (lined up with the old one at your feet)
-  const G = GLOBE, E = ENDLESS, A = glAxes(P.x, P.z);
-  G.c = A.p; G.e = A.ax; G.n = A.az; G.ox = P.x; G.oz = P.z; G.reN = (G.reN || 0) + 1;
+  const G = GLOBE, E = ENDLESS, F = geoFocus(), A = glAxes(F.x, F.z), keep = [];
+  const hold = o => keep.push([o, glToSphere(o.x, o.z, [0, 0, 0])]);   // (2.87: what isn't at the centre is carried over exactly: your sleeping body, the animals)
+  if (F !== P) hold(P); for (const B of beasts) if (B.x !== undefined && !B.ptero) hold(B);
+  G.c = A.p; G.e = A.ax; G.n = A.az; G.ox = F.x; G.oz = F.z; G.reN = (G.reN || 0) + 1;
+  { const out = [0, 0]; for (const [o, sp] of keep) { glFromSphere(sp, out); o.x = out[0]; o.z = out[1]; } }
+  if (GEO.sleep) { GEO.sleep.body.x = P.x; GEO.sleep.body.z = P.z; } hamRestore();
   for (const ch of E.chunks.values()) ch.stale = true;
   if (E.job) E.job.staleOnDone = true;
   E.farC0 = [1e9, 1e9]; E.shoreC = [1e9, 1e9]; MAPV.cx = 1e9; E.mapJob = null; E.scanT = 0; E.ambSig = "";
@@ -4316,12 +4320,12 @@ function globeTick(dt) {                                       // every frame on
   if (state === "play") G.utc = (G.utc + dt / 60) % 24;
   if ((G.llT -= dt) <= 0 || G.reDone !== G.reN) {
     G.llT = .2; G.reDone = G.reN;
-    const A = glAxes(P.x, P.z), f = glFrame(A.p), ll = glLatLon(A.p);
+    const F0 = geoFocus(), A = glAxes(F0.x, F0.z), f = glFrame(A.p), ll = glLatLon(A.p);   // (2.87: dreaming, where your spirit is)
     G.p = A.p; G.lat = ll[0]; G.lon = ll[1]; G.ax = A.ax; G.az = A.az;
     if (Math.abs(A.p[1]) < .999999) { G.Nf = [glDot(f.N, A.ax), glDot(f.N, A.az)]; G.Ef = [glDot(f.E, A.ax), glDot(f.E, A.az)]; } else if (!G.Nf) { G.Nf = [0, -1]; G.Ef = [1, 0]; }   // (right on the pole north is everywhere: keep the last)
   }
   hourNow = ((G.utc + G.lon / 15) % 24 + 24) % 24;
-  if (state === "play" && Math.hypot(P.x - G.ox, P.z - G.oz) > GLB.RE) globeReanchor();
+  { const F1 = geoFocus(); if (state === "play" && Math.hypot(F1.x - G.ox, F1.z - G.oz) > GLB.RE) globeReanchor(); }
 }
 // the planet picture (painted once at the start): ice, forest, desert, jungle, ocean, islands — for the globe on your map
 function* globePaintGen() {
@@ -4446,6 +4450,7 @@ function geoTick(dt) {
     geoBarsTick(dt);
     if (MP.hp <= 0 && !(UW.drown > 0)) { GEO.killedBy = GEO.food <= 0 ? "Hunger" : GEO.water <= 0 ? "Thirst" : null; UW.drown = .001; UW.red = 0; vrBanner(GEO.food <= 0 ? "You starved" : "You collapsed", 3, 3); buzz("L", 1, 300); buzz("R", 1, 300); }   // 2.73: then you wake somewhere random (geoRespawn)
   }
+  geoOrbTick(dt);                                              // 2.87: dreamers, as orbs
   if ((GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); geoNetNear(); }   // 2.73
   geoHurtTick(dt);
   for (let i = GEO.foods.length - 1; i >= 0; i--) {
@@ -5306,7 +5311,7 @@ function geoNetIn(o) {                                          // their positio
     if (A.length >= 7) { const sh = Math.sin(t / 2), ch = Math.cos(t / 2), x = A[3], y = A[4], z = A[5], w = A[6];   // (turned by the difference in the two layouts)
       A[3] = ch * x + sh * z; A[4] = ch * y + sh * w; A[5] = ch * z - sh * x; A[6] = ch * w - sh * y; } };
   const vec = (V, x, z) => { if (!Array.isArray(V)) return; const t = turn(x, z), c = Math.cos(t), sn = Math.sin(t), vx = V[0], vz = V[2]; V[0] = vx * c + vz * sn; V[2] = -vx * sn + vz * c; };
-  if (o.t === "s") { const x = o.h ? o.h[0] : 0, z = o.h ? o.h[2] : 0; for (const A of [o.h, o.l, o.r, o.g && o.g.p]) if (A) { turn(x, z); pose(A); } }
+  if (o.t === "s") { const x = o.h ? o.h[0] : 0, z = o.h ? o.h[2] : 0; for (const A of [o.h, o.l, o.r, o.g && o.g.p, o.gh]) if (A) { turn(x, z); pose(A); } }
   else if ((o.t === "f" || o.t === "g") && Array.isArray(o.o)) { const x = o.o[0], z = o.o[2]; vec(o.v, x, z); pose(o.o); }
   else if (o.t === "mk") { const q = conv(o.x, o.z); o.x = q[0]; o.z = q[1]; }
 }
@@ -5456,7 +5461,7 @@ function gunLabPanel() {
    left stick flies you where you look, the right stick up and down, up to 1.2 km from your body. Anything coming for your body (a
    predator, an animal right there, a player within 60 m, a hit) warns you and snaps you back awake. B wakes you any time. Your body stays
    in the hammock for everyone else to see. ---- */
-const HAMMOCK = { min: 3, max: 5, tether: 1200, speed: 32, climb: 12, near: 60 };
+const HAMMOCK = { min: 3, max: 5, tether: 1e9, speed: 32, climb: 16, near: 60, top: 800 };   // (2.87: the whole planet; up to 800 m above the ground)
 const giNm = k => geoNet() && k === "tent" ? "Hammock" : GI[k].name, giDesc = k => geoNet() && k === "tent" ? "Touch a tree trunk, then another 3–5 m away, to hang it; sleep in it at night" : GI[k].desc;
 const sleepNight = () => hourNow >= 21 || hourNow < 5;
 function hamTrunk(p) {                                             // the tree trunk your hand is at (from the trees' footprints)
@@ -5500,10 +5505,11 @@ function hamTick(I, main, off, dt) {                                // hanging i
   if (d < HAMMOCK.min) { vrBanner("Too close: find trees " + HAMMOCK.min + "–" + HAMMOCK.max + " m apart", 2, 0); return; }
   if (d > HAMMOCK.max) { vrBanner("Too far: find trees " + HAMMOCK.min + "–" + HAMMOCK.max + " m apart", 2, 0); return; }
   if (GEO.hmRing) { scene.remove(GEO.hmRing); GEO.hmRing = null; }
-  GEO.hm = hamMesh(GEO.hmA, o); GEO.hmA = null; geoPop(GEO.hm.mid, 0xc8643a, 14, "smoke"); gunFoley([[0, 1000, .15, .1], [.15, 300, .3, .14]]); buzz(ms, .5, 80);
+  GEO.hm = hamMesh(GEO.hmA, o); GEO.hm.a = { p: glToSphere(GEO.hmA.x, GEO.hmA.z, [0, 0, 0]), tr: GEO.hmA.tr }; GEO.hm.b = { p: glToSphere(o.x, o.z, [0, 0, 0]), tr: o.tr }; GEO.hmA = null; geoPop(GEO.hm.mid, 0xc8643a, 14, "smoke"); gunFoley([[0, 1000, .15, .1], [.15, 300, .3, .14]]); buzz(ms, .5, 80);
   vrBanner(sleepNight() ? "Hammock up: pull the trigger at it to lie down" : "Hammock up. Come back at night (9 pm – 5 am) to sleep", 3, 1);
 }
 // sleeping and dreaming
+const _ghC = new THREE.Color();
 function sleepFx() {                                                // the blink (black) and the dream tint (blue grey), round your eyes
   if (GEO.sfx) return GEO.sfx;
   const mk = (blend, ord) => { const m = new THREE.Mesh(new THREE.SphereGeometry(.24, 20, 12), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false, blending: blend }));
@@ -5512,7 +5518,7 @@ function sleepFx() {                                                // the blink
   const cv = document.createElement("canvas"); cv.width = 512; cv.height = 96;
   const hint = new THREE.Mesh(new THREE.PlaneGeometry(.3, .056), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
   hint.renderOrder = 1003; hint.frustumCulled = false; hint.visible = false; hint.userData.cv = cv; scene.add(hint);
-  const sp = fireMake(40, .06); sp.visible = false; const seeds = []; for (let i = 0; i < 40; i++) seeds.push([Math.random() * 6.283, Math.random() * 2 - 1, .6 + Math.random() * 1.6, Math.random()]);
+  const sp = fireMake(110, .15); sp.visible = false; const seeds = []; for (let i = 0; i < 110; i++) seeds.push([Math.random() * 6.283, Math.random() * 2 - 1, .6 + Math.random() * 1.6, Math.random()]);
   return GEO.sfx = { black: mk(THREE.NormalBlending, 1002), tint, hint, sp, seeds, hintTxt: "" };
 }
 function sleepHint(I, txt) {
@@ -5530,7 +5536,7 @@ function sleepWake(why, now) {                                      // back into
   if (why === "danger") { gunFoley([[0, 120, .3, .3], [.05, 2600, .2, .12]]); buzz("L", 1, 200); buzz("R", 1, 200); }
 }
 function sleepTick(I, main, dt) {
-  const S = GEO.sleep, F = sleepFx(); if (!S) { F.black.visible = F.tint.visible = F.hint.visible = F.sp.visible = false; GEO.ghostK = Math.max(0, (GEO.ghostK || 0) - dt); return; }
+  const S = GEO.sleep, F = sleepFx(); if (!S) { F.black.visible = F.tint.visible = F.hint.visible = F.sp.visible = false; if (GEO.veil) GEO.veil.visible = false; GEO.ghostK = Math.max(0, (GEO.ghostK || 0) - dt); return; }
   S.t += dt; const Hm = GEO.hm, hy = Hm ? Hm.mid.y : P.y + 1;
   if (main && edge("wakeB", main.b) && S.st !== "yank" && S.st !== "out") sleepWake("you");
   // what's coming for your body
@@ -5552,15 +5558,18 @@ function sleepTick(I, main, dt) {
   else if (S.st === "rise") { black = Math.max(0, 1 - S.t / .9); const k = Math.min(1, S.t / 2), e = k * k * (3 - 2 * k); S.view.y = S.y0 + 3.2 * e; if (S.t > 2) { S.st = "ghost"; S.t = 0; } }
   else if (S.st === "warn") { MP.hurt = Math.max(MP.hurt, .35 + .25 * Math.sin(S.t * 9)); if ((S.beatT -= dt) <= 0) { S.beatT = .55; gunFoley([[0, 70, .12, .3], [.18, 60, .12, .22]]); buzz("L", .4, 60); buzz("R", .4, 60); }
     if ((S.warnT -= dt) <= 0) sleepWake("danger"); }
-  else if (S.st === "yank") { black = Math.min(1, S.t / .3); if (S.t > .3 && !S.back) { S.back = true; S.view = null; const sx = Hm ? Hm.mid.x - Math.sin(Hm.yaw + Math.PI / 2) * 1.2 : S.body.x, sz = Hm ? Hm.mid.z - Math.cos(Hm.yaw + Math.PI / 2) * 1.2 : S.body.z;
+  else if (S.st === "yank") { black = Math.min(1, S.t / .3); if (S.t > .3 && !S.back) { S.back = true; const far = S.view && Math.hypot(S.view.x - P.x, S.view.z - P.z) > 1200; S.view = null;
+      if (far) { geoTeleport(glToSphere(P.x, P.z, [0, 0, 0])); hamRestore(); }   // (2.87: back from across the planet: the ground round your body again)
+      const Hm = GEO.hm; const sx = Hm ? Hm.mid.x - Math.sin(Hm.yaw + Math.PI / 2) * 1.2 : S.body.x, sz = Hm ? Hm.mid.z - Math.cos(Hm.yaw + Math.PI / 2) * 1.2 : S.body.z;
       P.x = sx; P.z = sz; P.y = groundAt(sx, sz); P.vy = 0; P.onGround = true; vr.placeAt = true; } if (S.t > .3) black = Math.max(0, 1 - (S.t - .3) / .5); if (S.t > .85) S.st = "out"; }
   else if (S.st === "out") { GEO.sleep = null; F.black.visible = false; F.hint.visible = false; return; }
   const ghost = S.st === "rise" || S.st === "ghost" || (S.st === "warn" && S.pre && S.pre !== "settle" && S.pre !== "blink");
   GEO.ghostK = Math.max(0, Math.min(1, (GEO.ghostK || 0) + (ghost ? dt / 1.5 : -dt / .6)));
   F.black.visible = black > .001; F.black.material.opacity = Math.min(1, black); F.black.position.copy(I.head);
-  const k = GEO.ghostK; F.tint.visible = k > .01; F.tint.position.copy(I.head); F.tint.material.color.setRGB(1 - .45 * k, 1 - .3 * k, 1);
+  const k = GEO.ghostK; F.tint.visible = k > .01; F.tint.position.copy(I.head); F.tint.material.color.setRGB(1 - .12 * k, 1 - .22 * k, 1);
+  const V = dreamVeil(); V.visible = k > .01; V.position.copy(I.head); V.material.uniforms.uK.value = k; V.material.uniforms.uT.value = performance.now() / 1000; V.material.uniforms.uFwd.value.set(0, 0, -1).applyQuaternion(I.headQ);
   F.sp.visible = k > .05; if (F.sp.visible) { const pa = F.sp.geometry.attributes.position, ca = F.sp.geometry.attributes.color, t = performance.now() / 1000;
-    F.seeds.forEach((q, i) => { const a = q[0] + t * .15, r = q[2]; pa.setXYZ(i, I.head.x + Math.cos(a) * r, I.head.y + q[1] * 1.2 + Math.sin(t * .7 + i) * .1, I.head.z + Math.sin(a) * r); const f = k * (.4 + .6 * Math.abs(Math.sin(t * 1.3 + q[3] * 6))); ca.setXYZ(i, .5 * f, .7 * f, f); });
+    F.seeds.forEach((q, i) => { const a = q[0] + t * .15, r = q[2]; pa.setXYZ(i, I.head.x + Math.cos(a) * r, I.head.y + q[1] * 1.2 + Math.sin(t * .7 + i) * .1, I.head.z + Math.sin(a) * r); const f = k * (.5 + .5 * Math.abs(Math.sin(t * 1.3 + q[3] * 6))), hc = (q[3] + t * .05) % 1; _ghC.setHSL(.42 + hc * .42, 1, .5); ca.setXYZ(i, _ghC.r * f * .8, _ghC.g * f * .8, _ghC.b * f * .8); });
     pa.needsUpdate = ca.needsUpdate = true; }
   sleepHint(I, S.st === "ghost" || S.st === "warn" && ghost ? "B: wake up  ·  left stick: fly  ·  right stick: up / down" : "B: wake up");
 }
@@ -5570,12 +5579,52 @@ function sleepBody() {                                                // your bo
 }
 function sleepMove(dt) {                                             // (instead of walking, while you're out of your body)
   const S = GEO.sleep; if (!S || !S.view || S.st !== "ghost" && !(S.st === "warn" && S.pre === "ghost")) return;
-  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = HAMMOCK.speed;
+  const hl0 = vr.headLocalY || 1.6, up0 = S.view.y + hl0 - Math.max(groundAt(S.view.x, S.view.z), water);
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = HAMMOCK.speed + Math.max(0, up0) * .45;   // (2.87: high up you fly much faster)
   S.view.x += (fx * input.jy + rx * input.jx) * sp * dt; S.view.z += (fz * input.jy + rz * input.jx) * sp * dt;
-  const m = vr.main; if (m && Math.abs(m.sy) > .2) S.view.y += -m.sy * HAMMOCK.climb * dt;
+  const m = vr.main; if (m && Math.abs(m.sy) > .2) S.view.y += -m.sy * (HAMMOCK.climb + Math.max(0, up0) * .15) * dt;
   const dx = S.view.x - S.body.x, dz = S.view.z - S.body.z, d = Math.hypot(dx, dz);   // tied to your body
   if (d > HAMMOCK.tether) { S.view.x = S.body.x + dx / d * HAMMOCK.tether; S.view.z = S.body.z + dz / d * HAMMOCK.tether; if ((S.tetherT = (S.tetherT || 0) - dt) <= 0) { S.tetherT = 4; vrBanner("You can't drift further from your body", 1.5, 0); } }
-  const hl = vr.headLocalY || 1.6, g = groundAt(S.view.x, S.view.z); S.view.y = Math.max(Math.max(g, water) + .8 - hl, Math.min(S.body.y + 400, S.view.y));
+  const hl = vr.headLocalY || 1.6, g = groundAt(S.view.x, S.view.z); S.view.y = Math.max(Math.max(g, water) + .8 - hl, Math.min(Math.max(g, water) + HAMMOCK.top, S.view.y));
+}
+// 2.87: the dream, more beautiful: aurora veils round your view (purple, green, blue), the sky's aurora out, a violet-teal world, bright
+// drifting motes; and the others see a dreamer as a strange glowing orb wandering the sky, changing colour, like the UFO stories
+const geoFocus = () => GEO.sleep && GEO.sleep.view ? GEO.sleep.view : P;   // where the land is built and the sky is worked out (your spirit, when you're out of your body)
+function dreamVeil() {
+  if (GEO.veil) return GEO.veil;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(.26, 32, 20), new THREE.ShaderMaterial({ transparent: true, depthTest: false, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
+    uniforms: { uK: { value: 0 }, uT: { value: 0 }, uFwd: { value: new THREE.Vector3(0, 0, -1) } },
+    vertexShader: "varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform float uK; uniform float uT; uniform vec3 uFwd; varying vec3 vD;
+      void main(){ vec3 d = normalize(vD); float n = sin(d.x * 5.0 + uT * .55) * sin(d.y * 7.0 - uT * .4) + sin(d.z * 6.0 + d.y * 3.0 + uT * .35) + .5 * sin((d.x + d.z) * 13.0 - uT * .9);
+        vec3 pu = vec3(.62, .28, 1.0), gr = vec3(.2, 1.0, .62), bl = vec3(.25, .62, 1.0);
+        vec3 c = mix(mix(pu, gr, .5 + .5 * sin(n * 1.7 + uT * .25)), bl, .5 + .5 * cos(n * 1.1 - uT * .2));
+        float edge = smoothstep(.15, .95, 1.0 - dot(d, uFwd)), curtain = .55 + .45 * sin(d.y * 18.0 + n * 2.5 + uT * .8);
+        float a = uK * (.09 + .75 * edge * curtain) * (.75 + .25 * sin(n * 3.0 + uT));
+        gl_FragColor = vec4(c * a, a); }` }));
+  m.renderOrder = 1001; m.frustumCulled = false; m.visible = false; scene.add(m); return GEO.veil = m;
+}
+const ORB_TEX = (() => { let t = null; return () => { if (t) return t; const cv = document.createElement("canvas"); cv.width = cv.height = 128; const g = cv.getContext("2d"), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.18, "rgba(255,255,255,.9)"); r.addColorStop(.45, "rgba(255,255,255,.28)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 128, 128); return t = new THREE.CanvasTexture(cv); }; })();
+function geoOrbTick(dt) {                                         // the others' spirits, as glowing orbs
+  const now = performance.now(), t = now / 1000;
+  for (const L of MP.links.values()) {
+    const on = geoNet() && L.open && L.gh && now - (L.ghT || 0) < 1500;
+    if (!on) { if (L.orb) { scene.remove(L.orb.g); L.orb = null; } continue; }
+    if (!L.orb) { const g = new THREE.Group(), core = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, toneMapped: false }));
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0x9a6aff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .85, fog: false, toneMapped: false }));
+      core.scale.setScalar(2.2); halo.scale.setScalar(9); g.add(halo, core); g.position.set(L.gh[0], L.gh[1], L.gh[2]); scene.add(g); L.orb = { g, core, halo, ph: Math.random() * 6 }; }
+    const O = L.orb, k = Math.min(1, dt * 3); O.g.position.x += (L.gh[0] - O.g.position.x) * k; O.g.position.y += (L.gh[1] - O.g.position.y) * k; O.g.position.z += (L.gh[2] - O.g.position.z) * k;
+    O.g.position.y += Math.sin(t * 1.7 + O.ph) * .02; O.g.position.x += Math.sin(t * 2.9 + O.ph) * .015;   // (a little hover and drift)
+    const hue = (t * .06 + O.ph) % 1, d = O.g.position.distanceTo(camera.position), s = Math.max(1, d / 140), pulse = 1 + .2 * Math.sin(t * 3.3 + O.ph);
+    O.halo.material.color.setHSL(.72 + .2 * Math.sin(hue * 6.283), .95, .6); O.core.material.color.setHSL((hue + .4) % 1, .5, .85);
+    O.core.scale.setScalar(2.2 * s * pulse); O.halo.scale.setScalar(9 * s * (1.1 - .1 * pulse));
+  }
+}
+function hamRestore() {                                             // after the ground is laid again: the hammock back where it hangs on the planet
+  const Hm = GEO.hm; if (!Hm || !Hm.a) return; scene.remove(Hm.g); const out = [0, 0];
+  const pt = s => { glFromSphere(s.p, out); return { x: out[0], z: out[1], tr: s.tr }; };
+  const n = hamMesh(pt(Hm.a), pt(Hm.b)); n.a = Hm.a; n.b = Hm.b; GEO.hm = n;
 }
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
@@ -6725,8 +6774,9 @@ function setLighting(lat, biome, topMix) {
     HFOG.uHFogCol.value.setRGB(g, g * 1.01, g * 1.03).lerp(scene.fog.color, .15); }      // ground fog: grey-white, never pink
   if (weather.blizzard) scene.fog.color.lerp(C("#e8edf2"), .25 * smooth(-6, 4, el));
   if (GEO.ghostK > 0) { const k = GEO.ghostK;                          // 2.86: dreaming: the world goes ghostly, grey and blue, stars out
-    GRADE.uSat.value *= 1 - .85 * k; GRADE.uLtTint.value.lerp(new THREE.Color(.8, .9, 1.25), .6 * k); GRADE.uShTint.value.lerp(new THREE.Color(.62, .78, 1.3), .6 * k);
-    scene.fog.color.lerp(C("#2a3a66"), .55 * k); starMat.uniforms.uOp.value = Math.max(starMat.uniforms.uOp.value, .9 * k); }
+    GRADE.uSat.value *= 1 - .5 * k; GRADE.uLtTint.value.lerp(new THREE.Color(1.1, .8, 1.35), .8 * k); GRADE.uShTint.value.lerp(new THREE.Color(.5, 1.1, 1.25), .8 * k);   // (2.87: violet light, teal shadows)
+    scene.fog.color.lerp(C("#2c1f52"), .55 * k); starMat.uniforms.uOp.value = Math.max(starMat.uniforms.uOp.value, .95 * k);
+    U.uAur.value = Math.max(U.uAur.value, 1.3 * k); U.uAurA.value.lerp(new THREE.Color(.25, 1, .6), k); U.uAurB.value.lerp(new THREE.Color(.7, .3, 1), k); U.uNight.value = Math.max(U.uNight.value, .8 * k); }
   renderer.setClearColor(scene.fog.color);
   starMat.uniforms.uOp.value = (1 - smooth(-12, -2, el)) * (1 - cloudAmt * .6) * (1 - oc);
   {                              // sun: strong direction, low fill, so hills and trees get shadow sides; moon: dimmer and bluer, twilight colour in the fill (2.85: blended, never switched)
@@ -14103,6 +14153,7 @@ async function mpMic() {
   return MP.mic;
 }
 function mpDropLink(L) {
+  if (L.orb) { scene.remove(L.orb.g); L.orb = null; }   // 2.87
   try { if (L.conn) L.conn.close(); } catch (e) {} try { if (L.call) L.call.close(); } catch (e) {}
   mpRemoteDrop(L); try { if (L.vsrc) L.vsrc.disconnect(); } catch (e) {} if (L.audioEl) L.audioEl.srcObject = null;
   if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
@@ -14628,7 +14679,7 @@ function mpRecv(o, L) {
   if (o.t === "hr") { if (!MP.host && GLOBE && typeof o.u === "number") { const d = ((o.u - GLOBE.utc + 36) % 24) - 12; GLOBE.utc = Math.abs(d) > .1 ? o.u : (GLOBE.utc + d * .5 + 24) % 24; } else if (!MP.host && ENDLESS) enClockSet(o.h); return; }
   if (o.t === "s" && ENDLESS && !GLOBE && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
-  if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (2.48: the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (2.48: or the host's bot)
   if (o.t === "die") { if (Array.isArray(o.dd) && o.dd.length === 4) dropDead(String(o.dd[0]), +o.dd[1], +o.dd[2], +o.dd[3]); if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
@@ -15969,7 +16020,7 @@ function mpTick(dt) {                                       // (also runs offlin
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // 2.86: asleep, the others see your body in the hammock (not where your spirit is)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: SB ? SB.h : pose7(I.head, I.headQ), l: SB ? SB.l : Lh ? pose7(Lh.pos, Lh.q) : null, r: SB ? SB.r : Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);

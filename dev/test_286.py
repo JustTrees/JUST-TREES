@@ -34,10 +34,15 @@ async def main():
           o.phases = st.join(','); const S = D.GEO.sleep, body = [P.x, P.z]; o.lifted = S && S.view ? +(S.view.y - S.body.y).toFixed(1) : null; o.ghostK = +(D.GEO.ghostK || 0).toFixed(2);
           // fly 3 s forward, then far: the body stays; the tether holds
           D.input.jy = 1; D.input.jx = 0; const v0 = [S.view.x, S.view.z]; for (let i = 0; i < 90; i++) D.update(dt); o.flew = Math.round(Math.hypot(S.view.x - v0[0], S.view.z - v0[1])); o.bodyStill = Math.hypot(P.x - body[0], P.z - body[1]) < .01;
-          for (let i = 0; i < 30 * 50; i++) D.update(dt); o.tether = Math.round(Math.hypot(S.view.x - S.body.x, S.view.z - S.body.z)); D.input.jy = 0;
+          const bs0 = D.glToSphere(P.x, P.z, [0, 0, 0]); M.sy = -1; for (let i = 0; i < 30 * 20; i++) { D.update(dt); D.endlessTick(dt); } M.sy = 0; for (let i = 0; i < 30 * 40; i++) { D.update(dt); D.endlessTick(dt); }
+          o.far = [Math.round(D.glArc(D.glToSphere(S.view.x, S.view.z, [0, 0, 0]), bs0) * D.GLOBE.R), D.GLOBE.reN > 0, Math.round(D.glArc(D.glToSphere(P.x, P.z, [0, 0, 0]), bs0) * D.GLOBE.R * 100) / 100]; D.input.jy = 0;
+          o.orb = (() => { const L = { id: 'x', open: true, gh: [S.view.x, S.view.y + 1.6, S.view.z - 20], ghT: performance.now(), links: 0 }; D.MP.links.set('x', L); D.geoOrbTick(dt); const r = !!L.orb; D.MP.links.delete('x'); if (L.orb) D.scene.remove(L.orb.g); return r; })();
+          // back from far away: B, and you're by the hammock again, the ground round you rebuilt
+          M.b = 1; tick(1); M.b = 0; for (let i = 0; i < 40; i++) tick(1); o.farWake = [!D.GEO.sleep, Math.round(Math.hypot(P.x - D.GEO.hm.mid.x, P.z - D.GEO.hm.mid.z) * 10) / 10, Math.round(D.glArc(D.glToSphere(P.x, P.z, [0, 0, 0]), bs0) * D.GLOBE.R)];
+          M.pos.copy(D.GEO.hm.mid); press(); for (let i = 0; i < 30 * 9; i++) tick(1); const S2 = D.GEO.sleep; o.again = S2 && S2.st;
           o.netBody = (() => { const sb = D.sleepBody(); return Math.round(Math.hypot(sb.h[0] - D.GEO.hm.mid.x, sb.h[2] - D.GEO.hm.mid.z) * 10) / 10; })();
           // a bear comes for the body: a warning, then you're snapped back, standing by the hammock
-          S.view.x = S.body.x; S.view.z = S.body.z; const bear = D.addGround('bear', S.body.x + 30, S.body.z); D.predGo(bear, 'charge');
+          const S3 = D.GEO.sleep; S3.view.x = S3.body.x; S3.view.z = S3.body.z; const bear = D.addGround('bear', S3.body.x + 30, S3.body.z), _x = 0; D.predGo(bear, 'charge');
           const st2 = []; for (let i = 0; i < 30 * 4; i++) { tick(1); const s = D.GEO.sleep && D.GEO.sleep.st; if (s && st2[st2.length - 1] !== s) st2.push(s); }
           o.danger = [st2.join(','), !D.GEO.sleep, Math.round(Math.hypot(P.x - D.GEO.hm.mid.x, P.z - D.GEO.hm.mid.z) * 10) / 10]; bear.gone = true; bear.x += 9000; D.predCalm(bear, 99);
           // B: wake up any time
@@ -45,7 +50,7 @@ async def main():
           return o; }""")
         print(json.dumps(r))
         ok = r.get("pair") and r["notTree"] and r["tied"] and r["hung"] and r["day"] and r["slept"] and r["phases"].startswith("settle,blink,dark,rise,ghost") and r["lifted"] >= 3 and r["ghostK"] > .9 \
-             and 80 < r["flew"] < 110 and r["bodyStill"] and r["tether"] == 1200 and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1]
+             and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
