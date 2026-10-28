@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.89";              // Just Trees 2.55
+const VERSION = "2.90";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -2893,6 +2893,7 @@ let soundEnv = { day: 1, cold: false, season: "summer", biome: "temperate" };
 function soundTick(dt) {
   if (!SND.ctx || SND.ctx.state !== "running") return;
   const t = SND.ctx.currentTime, T = SND.t, alt = Math.max(0, P.y - water);
+  if (UNDER.on) { for (const g of [SND.wind, SND.rustle, SND.rain, SND.water]) if (g) g.gain.setTargetAtTime(0, t, .3); return; }   // 2.90: underground
   T.near -= dt;
   if (T.near < 0) {                                   // look around: trees nearby, water nearby
     T.near = .4; let trees = 0;
@@ -4472,8 +4473,9 @@ function geoTick(dt) {
     if (MP.hp <= 0 && !(UW.drown > 0)) { GEO.killedBy = GEO.food <= 0 ? "Hunger" : GEO.water <= 0 ? "Thirst" : null; UW.drown = .001; UW.red = 0; vrBanner(GEO.food <= 0 ? "You starved" : "You collapsed", 3, 3); buzz("L", 1, 300); buzz("R", 1, 300); }   // 2.73: then you wake somewhere random (geoRespawn)
   }
   geoOrbTick(dt);                                              // 2.87: dreamers, as orbs
-  if ((GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); geoNetNear(); }   // 2.73
+  if (!UNDER.on && (GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); geoNetNear(); }   // 2.73
   geoHurtTick(dt);
+  if (UNDER.on || UNDER.go) return;                                 // 2.90: underground
   for (let i = GEO.foods.length - 1; i >= 0; i--) {
     const F = GEO.foods[i]; F.t += dt; F.obj.rotation.y += dt * 1.5; F.obj.position.y = F.y + .9 + Math.sin(F.t * 2) * .06;
     const d = Math.hypot(F.x - P.x, F.z - P.z);
@@ -5060,12 +5062,15 @@ function geoHeldTick(I, main, dt) {                           // using what's in
 }
 function geoGearTick(I, main, off, dt) {                      // (each frame in a Geocaching game, after the hands are read)
   if (!GEO.on || state !== "play" || VRUI.on) { if (GEO.heldObj) GEO.heldObj.visible = false; if (GEO.packM) GEO.packM.visible = false; GEO.packOpen = false; return; }
+  ugTick(I, dt); if (!UNDER.on) ugPortalTick(I, dt);              // 2.90: the Underworld
+  if (UNDER.on) { geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWornTick(I); geoShowTick(dt); return; }
   if (geoNet()) hamTick(I, main, off, dt); sleepTick(I, main, dt);   // 2.86: the hammock, and dreaming
   if (GEO.sleep) { geoFireTick(dt); geoSprayTick(dt); geoLeafTick(dt); return; }
   if (JET.ride) jetHandsTick(I, main); else if (jetOn()) jetAimTick(I, main, off);   // 2.75: the jet skis
   geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
+  if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
   hamClear(); GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -5290,7 +5295,7 @@ function glabPanel() {
   const B = (x, y, w, l, f, o) => uiBtn(Pn, x, y, w, 72, l, () => { f(); uiDraw(Pn); }, Object.assign({ fs: 28, personal: true }, o || {}));
   [["Go to a lake", glabLake], ["Go to a sea beach + jet ski", glabSea], ["Jet ski at the nearest beach", glabJet], ["Next cache 25 m ahead", glabCache], ["Fish bites now", glabBite],
    ["Bear", () => glabPred("bear")], ["Wolf pack", () => glabPred("wolf")], ["Mountain lion", () => glabPred("panther")], ["Midday", () => glabTime(12)], ["Night", () => glabTime(23)],
-   ["Hungry + thirsty", () => { GEO.food = GEO.water = 20; glabSay("Food and water at 20"); }], ["Refill everything", glabRefill]].forEach(([l, f], i) => {
+   ["Hungry + thirsty", () => { GEO.food = GEO.water = 20; glabSay("Food and water at 20"); }], ["Refill everything", glabRefill], ["Underworld door / down", glabPortal]].forEach(([l, f], i) => {
     const half = i >= 5, col = half ? (i - 5) % 2 : 0, row = half ? 5 + Math.floor((i - 5) / 2) : i, w = half ? 275 : 560;
     B(lx + col * 285, 180 + row * 86, w, l, f); });
   for (let i = 0; i < per; i++) {
@@ -5310,7 +5315,7 @@ const geoNet = () => GEO.on && !!MP.code && !!set.geoNet;
 const GEO_DIRS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
 function geoNetNear() {                                         // 2.83: no markers anywhere: just a heads-up at 1 km (which way), and their voice from 500 m
   if (!geoNet() || !GLOBE || !GLOBE.p) return;
-  for (const L of mpOpen()) { if (!L.R || !L.R.cur || !L.R.alive) continue; const h = L.R.head, d = Math.hypot(h.x - P.x, h.z - P.z);
+  for (const L of mpOpen()) { if (!L.R || !L.R.cur || !L.R.alive || L.ugAway) continue; const h = L.R.head, d = Math.hypot(h.x - P.x, h.z - P.z);
     if (d < 1000 && !L.n1k) { L.n1k = true; const q = glToSphere(h.x, h.z, [0, 0, 0]), p = GLOBE.p, f = glFrame(p), t = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
       const b = Math.atan2(glDot(t, f.E), glDot(t, f.N)), k = Math.round(((b / (2 * Math.PI)) * 8 + 8)) % 8;
       vrBanner("There's another player about " + (d > 850 ? "1 km" : Math.round(d / 100) * 100 + " m") + " to your " + GEO_DIRS[k], 5, 2); buzz("L", .3, 60); buzz("R", .3, 60); gunFoley([[0, 900, .2, .1], [.15, 1300, .2, .08]]); }
@@ -5693,6 +5698,502 @@ function dreamWisps(I, on, dt) {
     w.m.position.addScaledVector(w.v, dt); w.m.rotation.y += dt * .03; w.m.material.uniforms.uT.value = t; w.m.material.uniforms.uK.value = k;
     if (!on && k <= .01) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); W.splice(i, 1); } }
 }
+/* ---- 2.90: the Underworld (online Treeocashing, from level 50; built only when someone goes in). Here and there on the planet a tree
+   has a doorway of glowing haze on its trunk; only players at the level see it. Walk through and you're at the top of a stairwell: 100 m
+   down at 50 degrees, lamps on the walls, a left turn, 100 m more. At the bottom: an empty shopping mall, and round it a maze of rooms,
+   halls, odd half walls and dead ends (the Backrooms). Far from the stairs there's a door: through it, it slams behind you and you're
+   in a steel and stone military bunker. At its far end a blast door, and through that the hellscape: a lava cavern round a pit near
+   the centre of the world. Each one smaller than the one above. Everything comes from the planet's seed, so everyone in the room finds
+   the same underworld; it's built the moment someone goes in. Underground you're out of the land above (and the others only see you
+   if they're down on the same level). ---- */
+const UG_LEVEL = 50, UG_RATE = .05, UG_X = 20000, UG_Z = 20000, UG_Y = [0, -3000, -3700, -4300];   // where each level sits (far off, far down: out of the way of the land)
+const UNDER = { on: false, idx: 0, cur: null, L: [], surf: null, fade: 0, go: null, snd: null, pt: new Map(), scanT: 0, labP: null, seen: false, keep: null };
+const ugOK = () => vr.on && (geoNet() || GEO.lab);
+const ugSees = () => GEO.lab || DEV.ok || (GEO.found ? GEO.found.size : 0) >= UG_LEVEL;
+// a little value noise
+const ugH = (x, z, s) => { const h = Math.sin(x * 127.1 + z * 311.7 + s * 74.7) * 43758.5453; return h - Math.floor(h); };
+function ugN(x, z, s = 0) { const i = Math.floor(x), j = Math.floor(z), fx = x - i, fz = z - j, u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  return (ugH(i, j, s) * (1 - u) + ugH(i + 1, j, s) * u) * (1 - v) + (ugH(i, j + 1, s) * (1 - u) + ugH(i + 1, j + 1, s) * u) * v; }
+const ugF = (x, z, s = 0) => ugN(x, z, s) * .55 + ugN(x * 2.1, z * 2.1, s + 3) * .3 + ugN(x * 4.3, z * 4.3, s + 7) * .15;
+/* ---- the look of the walls and floors: small painted textures ---- */
+const UG_TEX = {};
+function ugTex(k) {
+  if (UG_TEX[k]) return UG_TEX[k];
+  const S = 256, cv = document.createElement("canvas"); cv.width = cv.height = S; const g = cv.getContext("2d"), R = mulberry32(strHash(k) + 7);
+  const fill = c => { g.fillStyle = c; g.fillRect(0, 0, S, S); };
+  const speck = (n, a, sz = 2, dark = .5) => { for (let i = 0; i < n; i++) { const d = R() < dark; g.fillStyle = d ? `rgba(0,0,0,${a * R()})` : `rgba(255,255,255,${a * R()})`; g.fillRect(R() * S, R() * S, sz, sz); } };
+  const blot = (n, col, r0, r1) => { for (let i = 0; i < n; i++) { const x = R() * S, y = R() * S, r = r0 + R() * (r1 - r0), G = g.createRadialGradient(x, y, 0, x, y, r); G.addColorStop(0, col); G.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = G; g.fillRect(x - r, y - r, r * 2, r * 2); } };
+  if (k === "paper") { fill("#c7b464"); for (let x = 0; x < S; x += 32) { g.fillStyle = "rgba(120,98,36,.10)"; g.fillRect(x, 0, 4, S); g.fillStyle = "rgba(255,240,170,.08)"; g.fillRect(x + 14, 0, 2, S); }
+    g.strokeStyle = "rgba(105,88,30,.16)"; g.lineWidth = 2; for (let y = 0; y < S; y += 32) for (let x = 0; x < S; x += 32) { g.beginPath(); g.moveTo(x + 9, y + 20); g.lineTo(x + 16, y + 11); g.lineTo(x + 23, y + 20); g.stroke(); }
+    speck(2500, .05); blot(4, "rgba(110,90,30,.18)", 20, 60); }
+  else if (k === "carpet") { fill("#8f7d45"); speck(9000, .14, 2, .6); blot(5, "rgba(60,45,15,.22)", 18, 70); }
+  else if (k === "ceil") { fill("#d9d3b4"); speck(4000, .06); g.fillStyle = "rgba(90,85,60,.45)"; for (let i = 0; i <= S; i += 128) { g.fillRect(i - 2, 0, 4, S); g.fillRect(0, i - 2, S, 4); } blot(3, "rgba(140,120,60,.25)", 15, 45); }
+  else if (k === "mall") { fill("#b9b6ae"); for (let y = 0; y < S; y += 128) for (let x = 0; x < S; x += 128) { g.fillStyle = (x + y) % 256 ? "#c4c1b9" : "#aeaba3"; g.fillRect(x, y, 128, 128); }
+    g.fillStyle = "rgba(60,60,55,.5)"; for (let i = 0; i <= S; i += 128) { g.fillRect(i - 1, 0, 2, S); g.fillRect(0, i - 1, S, 2); } speck(2000, .05); }
+  else if (k === "stone") { fill("#5b5955"); speck(8000, .18, 2); g.fillStyle = "rgba(20,20,20,.5)"; for (let y = 0; y < S; y += 64) { g.fillRect(0, y, S, 3); for (let x = (y / 64 % 2) * 64; x < S; x += 128) g.fillRect(x, y, 3, 64); } blot(4, "rgba(30,25,20,.3)", 20, 60); }
+  else if (k === "bunker") { fill("#6d706f"); speck(6000, .12); g.fillStyle = "rgba(25,25,25,.55)"; for (let x = 0; x < S; x += 128) g.fillRect(x, 0, 3, S * .62);
+    g.fillStyle = "#4b4844"; g.fillRect(0, S * .62, S, S * .38); g.fillStyle = "rgba(15,15,15,.5)"; for (let y = S * .62; y < S; y += 32) { g.fillRect(0, y, S, 2); for (let x = (Math.round(y / 32) % 2) * 32; x < S; x += 64) g.fillRect(x, y, 2, 32); }
+    g.fillStyle = "#2a2b2c"; g.fillRect(0, S * .6, S, 8); blot(5, "rgba(70,40,20,.25)", 10, 40); }
+  else if (k === "bfloor") { fill("#55585a"); speck(7000, .14); g.strokeStyle = "rgba(20,20,20,.45)"; g.lineWidth = 3; g.strokeRect(2, 2, S - 4, S - 4); blot(6, "rgba(20,15,10,.3)", 10, 50); }
+  else if (k === "steel") { fill("#4d5459"); speck(3000, .08); g.fillStyle = "rgba(0,0,0,.4)"; g.fillRect(0, 0, S, 4); g.fillRect(0, 0, 4, S); g.fillStyle = "rgba(255,255,255,.18)"; for (let i = 16; i < S; i += 48) { g.fillRect(12, i, 5, 5); g.fillRect(S - 18, i, 5, 5); } blot(3, "rgba(90,50,20,.3)", 15, 40); }
+  else if (k === "hazard") { fill("#c9a21a"); g.fillStyle = "#151515"; for (let x = -S; x < S * 2; x += 64) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 32, 0); g.lineTo(x + 32 - S, S); g.lineTo(x - S, S); g.fill(); } speck(2000, .1); }
+  else if (k === "rock") { fill("#2b211e"); speck(12000, .2, 3, .55); blot(8, "rgba(10,5,5,.5)", 20, 70); g.strokeStyle = "rgba(255,90,20,.35)"; g.lineWidth = 2;
+    for (let i = 0; i < 9; i++) { let x = R() * S, y = R() * S; g.beginPath(); g.moveTo(x, y); for (let k2 = 0; k2 < 6; k2++) { x += (R() - .5) * 50; y += (R() - .5) * 50; g.lineTo(x, y); } g.stroke(); } }
+  else if (k === "conc") { fill("#77736b"); speck(8000, .12); blot(3, "rgba(40,35,25,.12)", 15, 50); g.fillStyle = "rgba(20,20,20,.25)"; g.fillRect(0, 0, S, 3); }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return UG_TEX[k] = t;
+}
+const UG_MAT = {};
+function ugMat(k) { return UG_MAT[k] || (UG_MAT[k] = new THREE.MeshBasicMaterial({ map: ugTex(k === "paperD" ? "paper" : k), vertexColors: true, side: THREE.DoubleSide })); }
+/* ---- light baked into the corners of every surface (cheap in a headset: no real lights at all) ---- */
+function ugLights(L) { L.lights = []; L.lb = new Map(); }
+function ugLight(L, x, y, z, c, i, r) { const o = { x, y, z, c, i, r }; L.lights.push(o); const k = Math.floor(x / 12) + "," + Math.floor(z / 12); if (!L.lb.has(k)) L.lb.set(k, []); L.lb.get(k).push(o); }
+function ugShade(L, x, y, z, nx, ny, nz, out) {
+  let r = L.amb[0], g = L.amb[1], b = L.amb[2]; const bi = Math.floor(x / 12), bj = Math.floor(z / 12);
+  for (let i = bi - 1; i <= bi + 1; i++) for (let j = bj - 1; j <= bj + 1; j++) { const l = L.lb.get(i + "," + j); if (!l) continue;
+    for (const o of l) { const dx = o.x - x, dy = o.y - y, dz = o.z - z, d = Math.sqrt(dx * dx + dy * dy + dz * dz) + 1e-4; if (d > o.r * 3) continue;
+      const nd = (dx * nx + dy * ny + dz * nz) / d, w = o.i * (.25 + .75 * Math.max(0, nd)) / (1 + (d / o.r) * (d / o.r)) * (1 - d / (o.r * 3)); r += o.c[0] * w; g += o.c[1] * w; b += o.c[2] * w; } }
+  if (L.shade) L.shade(x, y, z, nx, ny, nz, out); else { out[0] = 0; out[1] = 0; out[2] = 0; }
+  out[0] += r; out[1] += g; out[2] += b;
+}
+/* ---- building the meshes: quads, sorted by material and by 48 m block so the far ones can be switched off ---- */
+function ugBuilder(L) { return { L, m: new Map(), c: [0, 0, 0] }; }
+function ugQ(B, mat, a, b, c, d, n, us, vs) {               // a quad a-b-c-d (each [x,y,z]); uv scale: us metres per texture across, vs up (or uv given per corner)
+  const cx = (a[0] + c[0]) / 2, cz = (a[2] + c[2]) / 2, key = mat + "|" + Math.floor(cx / 48) + "," + Math.floor(cz / 48);
+  let A = B.m.get(key); if (!A) { A = { mat, p: [], u: [], c: [], i: [], cx: Math.floor(cx / 48) * 48 + 24, cz: Math.floor(cz / 48) * 48 + 24 }; B.m.set(key, A); }
+  const base = A.p.length / 3, flat = Math.abs(n[1]) > .7;
+  for (const v of [a, b, c, d]) { A.p.push(v[0], v[1], v[2]); ugShade(B.L, v[0], v[1], v[2], n[0], n[1], n[2], B.c); const mu = B.mul || 1; A.c.push(B.c[0] * mu, B.c[1] * mu, B.c[2] * mu);
+    if (flat) A.u.push(v[0] / us, v[2] / us); else { const t = Math.abs(n[0]) > .5 ? v[2] : v[0]; A.u.push(t / us, v[1] / vs); } }
+  A.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+function ugGlow(B, mat, a, b, c, d) {                          // a lamp's lit face (not shaded)
+  const key = "glow:" + mat; let A = B.m.get(key); if (!A) { A = { glow: mat, p: [], u: [], c: [], i: [], cx: 0, cz: 0 }; B.m.set(key, A); }
+  const base = A.p.length / 3; for (const v of [a, b, c, d]) { A.p.push(v[0], v[1], v[2]); A.u.push(0, 0); A.c.push(1, 1, 1); } A.i.push(base, base + 1, base + 2, base, base + 2, base + 3);
+}
+const UG_GLOW = { panel: [1.5, 1.45, 1.2], sconce: [1.6, 1.0, .55], cool: [1.2, 1.35, 1.5], red: [1.8, .15, .08], sky: [1.3, 1.3, 1.2], flick: [1.5, 1.45, 1.2] };
+function ugFinish(B, group) {
+  const blocks = [];
+  for (const A of B.m.values()) {
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(A.p, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(A.u, 2)); g.setAttribute("color", new THREE.Float32BufferAttribute(A.c, 3)); g.setIndex(A.i); g.computeBoundingSphere();
+    const m = A.glow ? new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(...UG_GLOW[A.glow]), side: THREE.DoubleSide, fog: false, toneMapped: false })) : new THREE.Mesh(g, ugMat(A.mat));
+    m.matrixAutoUpdate = false; m.updateMatrix(); group.add(m); if (A.glow === "flick") B.L.flick = m; if (!A.glow) { m.userData.c = [A.cx, A.cz]; blocks.push(m); } }
+  B.L.blocks = blocks;
+}
+// a box (for crates, racks, pillars, door frames)
+function ugBox(B, mat, x0, y0, z0, x1, y1, z1, us = 1.5) {
+  ugQ(B, mat, [x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], us, us);
+  ugQ(B, mat, [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], us, us); ugQ(B, mat, [x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], us, us);
+  ugQ(B, mat, [x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], us, us); ugQ(B, mat, [x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], us, us);
+}
+/* ---- a level laid out on a grid: open cells, thin walls on the edges between them (full, half, a door) ---- */
+function ugGrid(N, M, C, x0, z0) { return { N, M, C, x0, z0, open: new Uint8Array(N * M), ceil: new Float32Array(N * M).fill(3), kind: new Uint8Array(N * M), eV: new Uint8Array((N + 1) * M), eH: new Uint8Array(N * (M + 1)) }; }
+const ugCell = (G, i, j) => i >= 0 && j >= 0 && i < G.N && j < G.M ? G.open[i + j * G.N] : 0;
+function ugGridMesh(L, B) {
+  const G = L.g, { N, M, C, x0, z0 } = G, y = L.fy, T = .07;
+  const mats = L.mats;                                         // (i, j) -> {floor, ceil, wall}
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) {
+    const k = i + j * N, xa = x0 + i * C, za = z0 + j * C, xb = xa + C, zb = za + C;
+    if (G.open[k] === 1) { const m = mats(i, j), h = y + G.ceil[k];
+      ugQ(B, m.floor, [xa, y, za], [xb, y, za], [xb, y, zb], [xa, y, zb], [0, 1, 0], m.fs || 2, 2);
+      ugQ(B, m.ceil, [xa, h, zb], [xb, h, zb], [xb, h, za], [xa, h, za], [0, -1, 0], m.cs || 1.2, 1.2);
+      if (L.cellExtra) L.cellExtra(B, i, j, xa, za, xb, zb, h); }
+    else if (G.open[k] === 2) { const m = mats(i, j), h = y + (L.propH || 2.3), p = .25; ugBox(B, m.prop || "steel", xa + p, y, za + p, xb - p, h, zb - p, 1.2); }
+  }
+  const wallFace = (m, ax, az, bx, bz, h0, h1, n) => ugQ(B, m, [ax, h0, az], [bx, h0, bz], [bx, h1, bz], [ax, h1, az], n, m === "bunker" ? 4 : 1.5, m === "bunker" ? 4 : 1.5);
+  const doorHole = (m, ax, az, bx, bz, h0, h1, n, D) => {     // a wall with a door-sized gap in the middle
+    const L2 = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L2, uz = (bz - az) / L2, w = D.w / 2, mid = L2 / 2;
+    wallFace(m, ax, az, ax + ux * (mid - w), az + uz * (mid - w), h0, h1, n); wallFace(m, ax + ux * (mid + w), az + uz * (mid + w), bx, bz, h0, h1, n);
+    if (h1 > h0 + D.h) wallFace(m, ax + ux * (mid - w), az + uz * (mid - w), ax + ux * (mid + w), az + uz * (mid + w), h0 + D.h, h1, n);
+  };
+  const edge = (e, ca, cb, ka, kb, ax, az, bx, bz, nx, nz, D) => {   // the edge between cell a (on the -n side) and cell b (on the +n side)
+    if ((ca === 2 && cb === 1) || (cb === 2 && ca === 1)) return;      // (a crate: its own box)
+    const ha = ca ? y + G.ceil[ka] : 0, hb = cb ? y + G.ceil[kb] : 0, ma = ca ? mats(ka % N, Math.floor(ka / N)).wall : null, mb = cb ? mats(kb % N, Math.floor(kb / N)).wall : null;
+    if (ca === 1 && cb === 1) {
+      if (e === 0) { if (Math.abs(ha - hb) > .01) { if (ha > hb) wallFace(ma, ax, az, bx, bz, hb, ha, [-nx, 0, -nz]); else wallFace(mb, ax, az, bx, bz, ha, hb, [nx, 0, nz]); } return; }
+      const top = e === 2 ? y + 1.1 : null;
+      if (e === 3 && D) { doorHole(ma, ax - nx * T, az - nz * T, bx - nx * T, bz - nz * T, y, ha, [-nx, 0, -nz], D); doorHole(mb, ax + nx * T, az + nz * T, bx + nx * T, bz + nz * T, y, hb, [nx, 0, nz], D); return; }
+      wallFace(ma, ax - nx * T, az - nz * T, bx - nx * T, bz - nz * T, y, top || ha, [-nx, 0, -nz]); wallFace(mb, ax + nx * T, az + nz * T, bx + nx * T, bz + nz * T, y, top || hb, [nx, 0, nz]);
+      if (top) ugQ(B, ma, [ax - nx * T, top, az - nz * T], [bx - nx * T, top, bz - nz * T], [bx + nx * T, top, bz + nz * T], [ax + nx * T, top, az + nz * T], [0, 1, 0], 1.5, 1.5);
+      else { if (ha > hb) wallFace(ma, ax, az, bx, bz, hb, ha, [-nx, 0, -nz]); }
+      return; }
+    if (ca === 1 && cb !== 1) { if (e === 3 && D) doorHole(ma, ax, az, bx, bz, y, ha, [-nx, 0, -nz], D); else wallFace(ma, ax, az, bx, bz, y, ha, [-nx, 0, -nz]); }
+    else if (cb === 1 && ca !== 1) { if (e === 3 && D) doorHole(mb, ax, az, bx, bz, y, hb, [nx, 0, nz], D); else wallFace(mb, ax, az, bx, bz, y, hb, [nx, 0, nz]); }
+  };
+  const doorAt = new Map(); for (const D of L.doors) if (D.edge) doorAt.set(D.edge, D);
+  for (let j = 0; j < M; j++) for (let i = 0; i <= N; i++) { const a = ugCell(G, i - 1, j), b = ugCell(G, i, j), e = G.eV[i + j * (N + 1)], x = x0 + i * C;
+    if ((a !== 1 && b !== 1) || L.gap === i + "," + j) continue; edge(e, a, b, i - 1 + j * N, i + j * N, x, z0 + (j + 1) * C, x, z0 + j * C, 1, 0, doorAt.get("v" + i + "," + j)); }
+  for (let j = 0; j <= M; j++) for (let i = 0; i < N; i++) { const a = ugCell(G, i, j - 1), b = ugCell(G, i, j), e = G.eH[i + j * N], z = z0 + j * C;
+    if (a !== 1 && b !== 1) continue; edge(e, a, b, i + (j - 1) * N, i + j * N, x0 + i * C, z, x0 + (i + 1) * C, z, 0, 1, doorAt.get("h" + i + "," + j)); }
+}
+function ugReach(G, si, sj) {                                  // flood from a cell; every open cell made reachable (a wall knocked through where needed)
+  const N = G.N, M = G.M, R = new Int32Array(N * M).fill(-1), Q = [si + sj * N]; R[Q[0]] = 0; const rr = mulberry32(seed * 31 + 5);
+  const step = (k, i, j) => { const out = [];
+    if (i > 0 && G.open[k - 1] === 1 && !G.eV[i + j * (N + 1)]) out.push(k - 1); if (i < N - 1 && G.open[k + 1] === 1 && !G.eV[i + 1 + j * (N + 1)]) out.push(k + 1);
+    if (j > 0 && G.open[k - N] === 1 && !G.eH[i + j * N]) out.push(k - N); if (j < M - 1 && G.open[k + N] === 1 && !G.eH[i + (j + 1) * N]) out.push(k + N); return out; };
+  for (let guard = 0; guard < 4000; guard++) {
+    while (Q.length) { const k = Q.shift(), i = k % N, j = (k - i) / N; for (const n of step(k, i, j)) if (R[n] < 0) { R[n] = R[k] + 1; Q.push(n); } }
+    const fr = []; for (let k = 0; k < N * M; k++) { if (R[k] < 0 || G.open[k] !== 1) continue; const i = k % N, j = (k - i) / N;
+      if (i > 0 && G.open[k - 1] === 1 && R[k - 1] < 0) fr.push([k, k - 1, "v", i, j]); if (i < N - 1 && G.open[k + 1] === 1 && R[k + 1] < 0) fr.push([k, k + 1, "v", i + 1, j]);
+      if (j > 0 && G.open[k - N] === 1 && R[k - N] < 0) fr.push([k, k - N, "h", i, j]); if (j < M - 1 && G.open[k + N] === 1 && R[k + N] < 0) fr.push([k, k + N, "h", i, j + 1]); }
+    if (!fr.length) break;
+    for (let q = 0; q < Math.max(1, fr.length / 40); q++) { const f = fr[Math.floor(rr() * fr.length)]; if (R[f[1]] >= 0) continue; if (f[2] === "v") G.eV[f[3] + f[4] * (N + 1)] = 0; else G.eH[f[3] + f[4] * N] = 0; R[f[1]] = R[f[0]] + 1; Q.push(f[1]); }
+  }
+  return R;
+}
+/* ---- level 1: the stairs, the mall, the Backrooms ---- */
+const UG_STAIR = { W: 3, L: 100 * Math.cos(50 * Math.PI / 180), D: 100 * Math.sin(50 * Math.PI / 180) };
+function ugBackrooms() {
+  const { W, L: SL, D } = UG_STAIR, hw = W / 2, rr = mulberry32(seed * 7919 + 11), L = { idx: 1, Y: UG_Y[1], fy: -2 * D, amb: [.035, .032, .025], fogC: 0x2a2614, fog: [6, 70], step: "grass", doors: [], rects: [], name: "backrooms" };
+  ugLights(L);
+  // the stairs: a landing at the top (the haze you came through behind you), 100 m down, a landing, left, 100 m down, a landing, a short hall
+  const xE = -hw - SL - W - 6, zA = -SL - W, zB = -SL;
+  L.rects.push({ x0: -hw, x1: hw, z0: 0, z1: 4, f: () => 0 }, { x0: -hw, x1: hw, z0: -SL, z1: 0, f: (x, z) => z * D / SL, stair: 1 }, { x0: -hw, x1: hw, z0: zA, z1: zB, f: () => -D },
+    { x0: -hw - SL, x1: -hw, z0: zA, z1: zB, f: x => -D + (x + hw) * D / SL, stair: 1 }, { x0: xE - .01, x1: -hw - SL, z0: zA, z1: zB, f: () => -2 * D });
+  // the grid: 100 x 100 cells of 3 m; the hall from the stairs comes in through its east wall
+  const N = 100, M = 100, C = 3, jd = 50, G = L.g = ugGrid(N, M, C, xE - N * C, zA - jd * C); G.open.fill(1);
+  for (let j = 0; j < M; j++) { G.eV[j * (N + 1)] = 1; G.eV[N + j * (N + 1)] = 1; } for (let i = 0; i < N; i++) { G.eH[i] = 1; G.eH[i + M * N] = 1; }
+  G.eV[N + jd * (N + 1)] = 0; L.gap = N + "," + jd;                 // (the way in)
+  const room = new Int16Array(N * M).fill(-1), dark = [], setE = (t, i, j, v) => { if (t === "v") { if (i > 0 && i < N) G.eV[i + j * (N + 1)] = v; } else if (j > 0 && j < M) G.eH[i + j * N] = v; };
+  // the mall: a big tall hall with square columns, shopfronts round its sides
+  const mi0 = N - 26, mj0 = jd - 9, mw = 26, mh = 18;
+  const inMall = (i, j) => i >= mi0 && i < mi0 + mw && j >= mj0 && j < mj0 + mh;
+  for (let j = mj0; j < mj0 + mh; j++) for (let i = mi0; i < mi0 + mw; i++) { G.ceil[i + j * N] = 9; G.kind[i + j * N] = 1; if ((i - mi0) % 5 === 2 && (j - mj0) % 5 === 2 && i < N - 2) G.open[i + j * N] = 0; }
+  for (let i = mi0; i < mi0 + mw; i++) { setE("h", i, mj0, 1); setE("h", i, mj0 + mh, 1); } for (let j = mj0; j < mj0 + mh; j++) setE("v", mi0, j, 1);
+  for (let s = 0; s < 14; s++) { const side = Math.floor(rr() * 3), len = 1 + Math.floor(rr() * 3);   // shopfront openings
+    if (side < 2) { const i = mi0 + 1 + Math.floor(rr() * (mw - 4)); for (let q = 0; q < len; q++) setE("h", i + q, side ? mj0 : mj0 + mh, 0); } else { const j = mj0 + 1 + Math.floor(rr() * (mh - 4)); for (let q = 0; q < len; q++) setE("v", mi0, j + q, 0); } }
+  // the maze: rooms laid over each other (so the shapes come out strange), doorways, long halls cut through, half walls, odd posts
+  for (let r = 0; r < 520; r++) {
+    const w = 2 + Math.floor(rr() * rr() * 9), h = 2 + Math.floor(rr() * rr() * 9), i0 = Math.floor(rr() * (N - w)), j0 = Math.floor(rr() * (M - h));
+    if (i0 + w > mi0 - 1 && j0 + h > mj0 - 1 && j0 < mj0 + mh + 1) continue;
+    for (let i = i0; i < i0 + w; i++) { setE("h", i, j0, 1); setE("h", i, j0 + h, 1); } for (let j = j0; j < j0 + h; j++) { setE("v", i0, j, 1); setE("v", i0 + w, j, 1); }
+    const doors = 1 + Math.floor(rr() * 3); for (let d = 0; d < doors; d++) { const s = Math.floor(rr() * 4); if (s < 2) setE("h", i0 + Math.floor(rr() * w), s ? j0 : j0 + h, 0); else setE("v", s === 2 ? i0 : i0 + w, j0 + Math.floor(rr() * h), 0); }
+    const c = rr(), ch = c < .1 ? 2.5 : c < .17 ? 5.5 : 3, dk = rr() < .12;
+    for (let j = j0; j < j0 + h; j++) for (let i = i0; i < i0 + w; i++) { G.ceil[i + j * N] = ch; room[i + j * N] = r; if (dk) G.kind[i + j * N] = 2; else if (G.kind[i + j * N] === 2) G.kind[i + j * N] = 0; }
+  }
+  for (let h = 0; h < 40; h++) {                               // long halls straight through
+    const vert = rr() < .5, len = 12 + Math.floor(rr() * 30), a = Math.floor(rr() * (vert ? N : M)), b = Math.floor(rr() * ((vert ? M : N) - len));
+    for (let q = 0; q < len; q++) { const i = vert ? a : b + q, j = vert ? b + q : a; if (inMall(i, j)) break; G.ceil[i + j * N] = 3; if (G.kind[i + j * N] === 2) G.kind[i + j * N] = 0; if (vert) setE("h", i, j + 1, q < len - 1 ? 0 : G.eH[i + (j + 1) * N]); else setE("v", i + 1, j, q < len - 1 ? 0 : G.eV[i + 1 + j * (N + 1)]); }
+  }
+  for (let h = 0; h < 160; h++) {                              // half walls and loose wall pieces
+    const vert = rr() < .5, len = 1 + Math.floor(rr() * 4), i = 1 + Math.floor(rr() * (N - 6)), j = 1 + Math.floor(rr() * (M - 6)), v = rr() < .45 ? 2 : 1;
+    for (let q = 0; q < len; q++) { if (inMall(i + (vert ? 0 : q), j + (vert ? q : 0))) break; if (vert) setE("v", i, j + q, v); else setE("h", i + q, j, v); }
+  }
+  for (let k = 0; k < N * M; k++) if (rr() < .012 && G.kind[k] !== 1) G.open[k] = 0;   // posts
+  G.open[N - 1 + jd * N] = 1; G.open[N - 2 + jd * N] = 1;
+  const R = ugReach(G, N - 1, jd); for (let k = 0; k < N * M; k++) if (G.open[k] === 1 && R[k] < 0) G.open[k] = 0;
+  // the door down: in an outside wall, as far from the stairs as the maze goes
+  let best = null; for (let j = 1; j < M - 1; j++) for (const i of [0, N - 1]) { const k = i + j * N; if (G.open[k] === 1 && R[k] > (best ? best.d : 0) && !inMall(i, j)) best = { d: R[k], i, j, t: "v", ei: i === 0 ? 0 : N, ej: j, nx: i === 0 ? 1 : -1, nz: 0 }; }
+  for (let i = 1; i < N - 1; i++) for (const j of [0, M - 1]) { const k = i + j * N; if (G.open[k] === 1 && R[k] > (best ? best.d : 0)) best = { d: R[k], i, j, t: "h", ei: i, ej: j === 0 ? 0 : M, nx: 0, nz: j === 0 ? 1 : -1 }; }
+  { const b = best, k = b.i + b.j * N; G.ceil[k] = Math.max(G.ceil[k], 3); if (G.kind[k] === 2) G.kind[k] = 0;
+    const x = b.t === "v" ? G.x0 + b.ei * C : G.x0 + (b.ei + .5) * C, z = b.t === "v" ? G.z0 + (b.ej + .5) * C : G.z0 + b.ej * C;
+    if (b.t === "v") G.eV[b.ei + b.ej * (N + 1)] = 3; else G.eH[b.ei + b.ej * N] = 3;
+    L.doors.push({ id: "down", x, z, y: L.fy, nx: b.nx, nz: b.nz, w: 1.1, h: 2.2, kind: "metal", to: [2, "up"], edge: b.t + b.ei + "," + b.ej, slam: true }); L.far = b.d; }
+  L.doors.push({ id: "up", x: 0, z: 4, y: 0, nx: 0, nz: -1, w: 1.5, h: 2.4, kind: "haze", to: [0, "surf"] });
+  L.arrive = { top: { x: 0, z: 1.6, y: 0, yaw: 0 } };
+  // lamps: a panel in the ceiling of every other cell (the dark rooms have none, a few flicker); skylights over the mall; sconces down the stairs
+  const flick = [];
+  for (let j = 0; j < M; j++) for (let i = 0; i < N; i++) { const k = i + j * N; if (G.open[k] !== 1) continue; const cx = G.x0 + (i + .5) * C, cz = G.z0 + (j + .5) * C, h = L.fy + G.ceil[k];
+    if (G.kind[k] === 1) { if ((i + j) % 2 === 0) ugLight(L, cx, h - .1, cz, [1, .97, .85], .42, 6); }
+    else if (G.kind[k] !== 2 && (i + j) % 2 === 0) { if (rr() < .03) flick.push(k); else ugLight(L, cx, h - .05, cz, [1, .95, .7], .8, 3.2); } }
+  L.flickK = new Set(flick);
+  const lamp = (x, y, z, nx, nz) => ugLight(L, x + nx * .3, y, z + nz * .3, [1, .62, .3], 1.4, 4);
+  for (let s = 4; s < 100; s += 7) { const f = s / 100, side = (s / 7 | 0) % 2 ? 1 : -1;
+    lamp(side * hw, -f * D + 1.9, -f * SL, -side, 0); lamp(-hw - f * SL, -D - f * D + 1.9, side > 0 ? zB : zA, 0, side > 0 ? -1 : 1); }
+  ugLight(L, 0, 2.6, 2.5, [.8, .7, 1], .7, 3); ugLight(L, 0, -D + 2.2, zA + 1.5, [1, .62, .3], 1.3, 4); ugLight(L, -hw - SL - 1.5, -2 * D + 2.2, zA + 1.5, [1, .62, .3], 1.3, 4); ugLight(L, xE + 3, -2 * D + 2.2, zA + 1.5, [1, .62, .3], 1.3, 4);
+  L.doors[0] && ugLight(L, L.doors[0].x + L.doors[0].nx * 1.5, L.fy + 2.4, L.doors[0].z + L.doors[0].nz * 1.5, [1, .9, .6], .8, 3);
+  L.mats = (i, j) => { const kd = G.kind[i + j * N]; return kd === 1 ? { floor: "mall", ceil: "ceil", wall: "paper", fs: 2 } : { floor: "carpet", ceil: "ceil", wall: "paper", fs: 2 }; };
+  L.cellExtra = (B, i, j, xa, za, xb, zb, h) => { const k = i + j * N; if (G.kind[k] === 2 || (i + j) % 2) return; const cx = (xa + xb) / 2, cz = (za + zb) / 2, y = h - .02, w = G.kind[k] === 1 ? 1.2 : .6, l = G.kind[k] === 1 ? 2.4 : 1.2;
+    ugGlow(B, L.flickK.has(k) ? "flick" : G.kind[k] === 1 ? "sky" : "panel", [cx - w / 2, y, cz - l / 2], [cx + w / 2, y, cz - l / 2], [cx + w / 2, y, cz + l / 2], [cx - w / 2, y, cz + l / 2]); };
+  return L;
+}
+function ugStairMesh(L, B) {                                   // the stairwell: steps, walls, sloped ceiling, the wall lamps
+  const { W, L: SL, D } = UG_STAIR, hw = W / 2, n = Math.round(D / .25), rise = D / n, run = SL / n, H = 3.4, zA = -SL - W, zB = -SL, xE = -hw - SL - W - 6;
+  const wall = "conc", fl = "conc";
+  // top landing
+  ugQ(B, fl, [-hw, 0, 4], [hw, 0, 4], [hw, 0, 0], [-hw, 0, 0], [0, 1, 0], 2, 2); ugQ(B, wall, [-hw, H, 0], [hw, H, 0], [hw, H, 4], [-hw, H, 4], [0, -1, 0], 2, 2);
+  ugQ(B, wall, [hw, 0, 4], [hw, 0, 0], [hw, H, 0], [hw, H, 4], [-1, 0, 0], 2, 2); ugQ(B, wall, [-hw, 0, 0], [-hw, 0, 4], [-hw, H, 4], [-hw, H, 0], [1, 0, 0], 2, 2);
+  ugQ(B, wall, [hw, 0, 4], [-hw, 0, 4], [-hw, H, 4], [hw, H, 4], [0, 0, -1], 2, 2);
+  // flight 1 (towards -z) and flight 2 (towards -x): the steps
+  for (let s = 0; s < n; s++) { const y0 = -s * rise, y1 = y0 - rise;
+    { const za = -s * run, zb = za - run; B.mul = .5; ugQ(B, fl, [-hw, y0, za], [hw, y0, za], [hw, y1, za], [-hw, y1, za], [0, 0, -1], 2, 2); B.mul = 1; ugQ(B, fl, [-hw, y1, za], [hw, y1, za], [hw, y1, zb], [-hw, y1, zb], [0, 1, 0], 2, 2); }
+    { const yb = -D, xa = -hw - s * run, xb = xa - run; B.mul = .5; ugQ(B, fl, [xa, yb + y0, zB], [xa, yb + y0, zA], [xa, yb + y1, zA], [xa, yb + y1, zB], [-1, 0, 0], 2, 2); B.mul = 1; ugQ(B, fl, [xa, yb + y1, zB], [xa, yb + y1, zA], [xb, yb + y1, zA], [xb, yb + y1, zB], [0, 1, 0], 2, 2); } }
+  // walls and ceilings, in 2 m pieces down the slope
+  const seg = 24;
+  for (let s = 0; s < seg; s++) { const f0 = s / seg, f1 = (s + 1) / seg, y0 = -f0 * D, y1 = -f1 * D, za = -f0 * SL, zb = -f1 * SL;
+    ugQ(B, wall, [hw, y0 - .4, za], [hw, y1 - .4, zb], [hw, y1 + H, zb], [hw, y0 + H, za], [-1, 0, 0], 2, 2); ugQ(B, wall, [-hw, y1 - .4, zb], [-hw, y0 - .4, za], [-hw, y0 + H, za], [-hw, y1 + H, zb], [1, 0, 0], 2, 2);
+    ugQ(B, wall, [-hw, y0 + H, za], [hw, y0 + H, za], [hw, y1 + H, zb], [-hw, y1 + H, zb], [0, -1, 0], 2, 2);
+    const yb = -D, xa = -hw - f0 * SL, xb = -hw - f1 * SL;
+    ugQ(B, wall, [xa, yb + y0 - .4, zB], [xb, yb + y1 - .4, zB], [xb, yb + y1 + H, zB], [xa, yb + y0 + H, zB], [0, 0, -1], 2, 2); ugQ(B, wall, [xb, yb + y1 - .4, zA], [xa, yb + y0 - .4, zA], [xa, yb + y0 + H, zA], [xb, yb + y1 + H, zA], [0, 0, 1], 2, 2);
+    ugQ(B, wall, [xa, yb + y0 + H, zA], [xa, yb + y0 + H, zB], [xb, yb + y1 + H, zB], [xb, yb + y1 + H, zA], [0, -1, 0], 2, 2); }
+  // the first landing (turn left) and the bottom landing and hall
+  const yL = -D; ugQ(B, fl, [-hw, yL, zB], [hw, yL, zB], [hw, yL, zA], [-hw, yL, zA], [0, 1, 0], 2, 2); ugQ(B, wall, [-hw, yL + H, zA], [hw, yL + H, zA], [hw, yL + H, zB], [-hw, yL + H, zB], [0, -1, 0], 2, 2);
+  ugQ(B, wall, [hw, yL - .4, zB], [hw, yL - .4, zA], [hw, yL + H, zA], [hw, yL + H, zB], [-1, 0, 0], 2, 2); ugQ(B, wall, [hw, yL - .4, zA], [-hw, yL - .4, zA], [-hw, yL + H, zA], [hw, yL + H, zA], [0, 0, 1], 2, 2);
+  const yB = -2 * D, x1 = -hw - SL; ugQ(B, fl, [x1, yB, zB], [x1, yB, zA], [xE, yB, zA], [xE, yB, zB], [0, 1, 0], 2, 2); ugQ(B, wall, [x1, yB + H, zA], [x1, yB + H, zB], [xE, yB + H, zB], [xE, yB + H, zA], [0, -1, 0], 2, 2);
+  ugQ(B, wall, [x1, yB - .4, zB], [xE, yB - .4, zB], [xE, yB + H, zB], [x1, yB + H, zB], [0, 0, -1], 2, 2); ugQ(B, wall, [xE, yB - .4, zA], [x1, yB - .4, zA], [x1, yB + H, zA], [xE, yB + H, zA], [0, 0, 1], 2, 2);
+  { const G = L.g, yC = L.fy + G.ceil[G.N - 1 + 50 * G.N]; if (yC > yB + H) ugQ(B, "paper", [xE, yB + H, zB], [xE, yB + H, zA], [xE, yC, zA], [xE, yC, zB], [-1, 0, 0], 1.5, 1.5); }
+  // the lamps: little glowing boxes on the walls
+  for (let s = 4; s < 100; s += 7) { const f = s / 100, side = (s / 7 | 0) % 2 ? 1 : -1, y = -f * D + 1.9;
+    { const x = side * hw - side * .06, z = -f * SL; ugGlow(B, "sconce", [x, y - .12, z - .15], [x, y - .12, z + .15], [x, y + .12, z + .15], [x, y + .12, z - .15]); }
+    { const z = (side > 0 ? zB : zA) + (side > 0 ? -.06 : .06), x = -hw - f * SL, y2 = -D - f * D + 1.9; ugGlow(B, "sconce", [x - .15, y2 - .12, z], [x + .15, y2 - .12, z], [x + .15, y2 + .12, z], [x - .15, y2 + .12, z]); } }
+}
+/* ---- level 2: the bunker ---- */
+function ugBunker() {
+  const rr = mulberry32(seed * 6151 + 23), L = { idx: 2, Y: UG_Y[2], fy: 0, amb: [.03, .032, .036], fogC: 0x0d0f12, fog: [5, 55], step: "rock", doors: [], rects: [], name: "bunker", propH: 2.4 };
+  ugLights(L);
+  const N = 50, M = 50, C = 4, G = L.g = ugGrid(N, M, C, -N * C / 2, -M * C / 2), rooms = [];
+  const carve = (i, j, h, kd) => { if (i < 1 || j < 1 || i >= N - 1 || j >= M - 1) return; const k = i + j * N; if (G.open[k] === 1 && G.ceil[k] >= h) return; G.open[k] = 1; G.ceil[k] = h; G.kind[k] = kd; };
+  rooms.push({ i: 2, j: M / 2 - 2, w: 4, h: 4, c: 4.5 });       // where you come in
+  rooms.push({ i: 18, j: 16, w: 10, h: 8, c: 11, hall: true });  // a great hall
+  for (let t = 0; t < 400 && rooms.length < 26; t++) { const w = 2 + Math.floor(rr() * 5), h = 2 + Math.floor(rr() * 5), i = 2 + Math.floor(rr() * (N - w - 4)), j = 2 + Math.floor(rr() * (M - h - 4));
+    if (rooms.some(r => i < r.i + r.w + 1 && i + w + 1 > r.i && j < r.j + r.h + 1 && j + h + 1 > r.j)) continue; rooms.push({ i, j, w, h, c: rr() < .3 ? 6 : 4.5 }); }
+  for (const r of rooms) for (let j = r.j; j < r.j + r.h; j++) for (let i = r.i; i < r.i + r.w; i++) carve(i, j, r.c, r.hall ? 3 : 1);
+  const ctr = r => [r.i + (r.w >> 1), r.j + (r.h >> 1)], corr = (a, b) => { const [ai, aj] = ctr(a), [bi, bj] = ctr(b), hf = rr() < .5;
+    let i = ai, j = aj; const go = (ti, tj) => { while (i !== ti || j !== tj) { carve(i, j, 3.6, 0); if (i !== ti) i += Math.sign(ti - i); else j += Math.sign(tj - j); } carve(i, j, 3.6, 0); };
+    if (hf) { go(bi, aj); go(bi, bj); } else { go(ai, bj); go(bi, bj); } };
+  const order = rooms.slice(1).sort((a, b) => a.i - b.i); let prev = rooms[0]; for (const r of order) { corr(prev, r); prev = r; }
+  for (let e = 0; e < 7; e++) corr(rooms[Math.floor(rr() * rooms.length)], rooms[Math.floor(rr() * rooms.length)]);
+  // crates and racks in the rooms, never in the way
+  for (const r of rooms) { if (r.hall || r === rooms[0]) continue; for (let j = r.j + 1; j < r.j + r.h - 1; j += 2) for (let i = r.i + 1; i < r.i + r.w - 1; i += 2) if (rr() < .4) G.open[i + j * N] = 2; }
+  const ent = rooms[0], [ei, ej] = [ent.i, ent.j + 2], R = ugReach(G, ei, ej);
+  for (let k = 0; k < N * M; k++) if (G.open[k] === 1 && R[k] < 0) G.open[k] = 0;
+  // the door you came through (in the west wall of the first room); the blast door down, in the far wall of the furthest room
+  const dIn = { id: "up", x: G.x0 + ent.i * C, z: G.z0 + (ej + .5) * C, y: 0, nx: 1, nz: 0, w: 1.1, h: 2.2, kind: "metal", to: [1, "down"], edge: "v" + ent.i + "," + ej, slam: true }; L.doors.push(dIn); G.eV[ent.i + ej * (N + 1)] = 3;
+  let best = null; for (let k = 0; k < N * M; k++) { if (G.open[k] !== 1 || R[k] < 0) continue; const i = k % N, j = (k - i) / N;
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (G.open[(i + di) + (j + dj) * N] === 0 && R[k] > (best ? best.d : 0) && G.ceil[k] >= 3.6) best = { d: R[k], i, j, di, dj }; }
+  { const b = best, k = b.i + b.j * N; G.ceil[k] = Math.max(G.ceil[k], 4.5); const v = b.di !== 0, ei2 = b.i + (b.di > 0 ? 1 : 0), ej2 = b.j + (b.dj > 0 ? 1 : 0);
+    const x = v ? G.x0 + ei2 * C : G.x0 + (b.i + .5) * C, z = v ? G.z0 + (b.j + .5) * C : G.z0 + ej2 * C;
+    L.doors.push({ id: "down", x, z, y: 0, nx: -b.di, nz: -b.dj, w: 2.4, h: 3.2, kind: "blast", to: [3, "up"], edge: (v ? "v" : "h") + ei2 + "," + ej2 }); L.far = b.d;
+    if (v) G.eV[ei2 + b.j * (N + 1)] = 3; else G.eH[b.i + ej2 * N] = 3; }
+  // lights: caged lamps down the halls, big ones in the hall, red warning lamps, a red light over the blast door
+  for (let k = 0; k < N * M; k++) { if (G.open[k] !== 1) continue; const i = k % N, j = (k - i) / N, cx = G.x0 + (i + .5) * C, cz = G.z0 + (j + .5) * C, h = G.ceil[k];
+    if (G.kind[k] === 3) { if (i % 3 === 0 && j % 3 === 0) ugLight(L, cx, h - .3, cz, [.85, .92, 1], 1.6, 9); }
+    else if ((i + j) % 2 === 0) { if (rr() < .1) ugLight(L, cx, h - .3, cz, [1, .12, .06], 1.3, 4.5); else if (rr() < .85) ugLight(L, cx, h - .2, cz, [.8, .9, 1], 1, 3.6); } }
+  const dn = L.doors[1]; ugLight(L, dn.x + dn.nx * 1, 3.6, dn.z + dn.nz * 1, [1, .1, .05], 2.4, 5); ugLight(L, dIn.x + 1, 2.6, dIn.z, [1, .85, .6], .9, 3);
+  L.mats = (i, j) => G.kind[i + j * N] === 3 ? { floor: "bfloor", ceil: "conc", wall: "stone", fs: 4, cs: 4, prop: "steel" } : { floor: "bfloor", ceil: "conc", wall: "bunker", fs: 4, cs: 4, prop: "steel" };
+  L.cellExtra = (B, i, j, xa, za, xb, zb, h) => { const k = i + j * N; if ((i + j) % 2 && G.kind[k] !== 3) return; const cx = (xa + xb) / 2, cz = (za + zb) / 2;
+    const lit = L.lb.get(Math.floor(cx / 12) + "," + Math.floor(cz / 12)); const me = lit && lit.find(o => Math.abs(o.x - cx) < .1 && Math.abs(o.z - cz) < .1); if (!me) return;
+    const red = me.c[1] < .5, s = G.kind[k] === 3 ? .5 : .22, y = me.y; ugGlow(B, red ? "red" : "cool", [cx - s, y, cz - s], [cx + s, y, cz - s], [cx + s, y, cz + s], [cx - s, y, cz + s]); };
+  L.arrive = {}; return L;
+}
+/* ---- level 3: the hellscape (a lava cavern round a pit; the smallest of them) ---- */
+const UG_HR = 75, UG_LAVA = 0;
+function ugHellH(x, z) {                                      // the cavern floor
+  const r = Math.hypot(x, z); let h = 1.4 + (ugF(x * .045, z * .045, 3) - .5) * 7;
+  const c = Math.abs(ugF(x * .013 + 9, z * .013 - 4, 5) - .5); if (c < .07) h -= (1 - c / .07) * 6;   // lava rivers
+  h -= smooth(24, 13, r) * 30;                                   // the pit
+  h += smooth(UG_HR - 20, UG_HR, r) * (40 + ugF(x * .1, z * .1, 8) * 20);   // the walls of the cavern
+  const pw = Math.abs(z - Math.sin(x * .08) * 4); if (x > 25 && x < UG_HR - 6) h = Math.max(h, lerp(1.5, h, smooth(2.5, 5, pw)));   // a path in from the door
+  if (r > 24 && r < 30) h = Math.max(h, 1.2 + (ugF(x * .2, z * .2, 2) - .5));                        // a ledge round the pit
+  if (x > UG_HR - 26 && Math.abs(z) < 6.5) h = lerp(1.5, h, smooth(3.5, 6.5, Math.abs(z)));                            // a flat way in at the door
+  return h;
+}
+function ugHell() {
+  const rr = mulberry32(seed * 3301 + 41), L = { idx: 3, Y: UG_Y[3], fy: 0, amb: [.05, .012, .006], fogC: 0x1f0603, fog: [8, 95], step: "rock", doors: [], rects: [], name: "hell", hell: true, pil: [] };
+  ugLights(L);
+  for (let k = 0; k < 7; k++) { const a = rr() * 6.283, r = 36 + rr() * 22; if (Math.abs(Math.sin(a)) * r < 8 && Math.cos(a) > 0) continue; L.pil.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, r: 3 + rr() * 3 }); }
+  L.falls = []; for (let k = 0; k < 6; k++) { const a = (k / 6) * 6.283 + rr() * .6 + .4; L.falls.push({ x: Math.cos(a) * (UG_HR - 17), z: Math.sin(a) * (UG_HR - 17), a }); }
+  L.shade = (x, y, z, nx, ny, nz, out) => {                     // the light of the lava below: bright low down, the pit glowing up the spire and the roof
+    const low = Math.max(0, 1 - (y - UG_LAVA) / 7), r = Math.hypot(x, z), pit = Math.max(0, 1 - r / 45) * .5, up = Math.max(0, -ny) * .35;
+    let k = low * low * .9 + pit + up * Math.max(0, 1 - (y - 20) / 60); for (const f of L.falls) { const d = Math.hypot(x - f.x, z - f.z); k += Math.max(0, 1 - d / 14) * .6; }
+    out[0] = k * 1.0; out[1] = k * .3; out[2] = k * .06; };
+  L.doors.push({ id: "up", x: UG_HR - 7, z: 0, y: 1.5, nx: -1, nz: 0, w: 2.4, h: 3.2, kind: "blast", to: [2, "down"] });
+  L.arrive = {}; L.mats = null; return L;
+}
+function ugHellMesh(L, B, group) {
+  const n = 76, S = (UG_HR + 6) * 2 / n, o = -(UG_HR + 6);
+  const hf = new Float32Array((n + 1) * (n + 1)); for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) hf[i + j * (n + 1)] = ugHellH(o + i * S, o + j * S);
+  const nrm = (i, j) => { const a = hf[Math.max(0, i - 1) + j * (n + 1)], b = hf[Math.min(n, i + 1) + j * (n + 1)], c = hf[i + Math.max(0, j - 1) * (n + 1)], d = hf[i + Math.min(n, j + 1) * (n + 1)]; const v = new THREE.Vector3(a - b, 2 * S, c - d).normalize(); return [v.x, v.y, v.z]; };
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const x0 = o + i * S, z0 = o + j * S; if (Math.hypot(x0 + S / 2, z0 + S / 2) > UG_HR + 4) continue;
+    const p = (a, b) => [o + (i + a) * S, hf[i + a + (j + b) * (n + 1)], o + (j + b) * S], nn = nrm(i, j); ugQ(B, "rock", p(0, 1), p(1, 1), p(1, 0), p(0, 0), nn, 4, 4); }
+  // the roof: a low dome of rock with spikes hanging down
+  const roof = (x, z) => 62 - Math.pow(Math.hypot(x, z) / UG_HR, 2) * 50 + (ugF(x * .05, z * .05, 11) - .5) * 14;
+  for (let j = 0; j < n; j += 2) for (let i = 0; i < n; i += 2) { const x0 = o + i * S, z0 = o + j * S, s = 2 * S; if (Math.hypot(x0 + s / 2, z0 + s / 2) > UG_HR + 4) continue;
+    ugQ(B, "rock", [x0, roof(x0, z0), z0], [x0 + s, roof(x0 + s, z0), z0], [x0 + s, roof(x0 + s, z0 + s), z0 + s], [x0, roof(x0, z0 + s), z0 + s], [0, -1, 0], 6, 6); }
+  const rr = mulberry32(seed * 811 + 3), spike = (x, z, r, h, up, top) => { const k = 7, y0 = top; for (let q = 0; q < k; q++) { const a0 = q / k * 6.283, a1 = (q + 1) / k * 6.283;
+      const A = [x + Math.cos(a0) * r, y0, z + Math.sin(a0) * r], Bp = [x + Math.cos(a1) * r, y0, z + Math.sin(a1) * r], T = [x, y0 + (up ? h : -h), z], nm = [Math.cos((a0 + a1) / 2), up ? .3 : -.3, Math.sin((a0 + a1) / 2)];
+      ugQ(B, "rock", A, Bp, T, T, nm, 3, 3); } };
+  for (let q = 0; q < 70; q++) { const a = rr() * 6.283, r = 8 + rr() * (UG_HR - 12), x = Math.cos(a) * r, z = Math.sin(a) * r; spike(x, z, .8 + rr() * 2.2, 4 + rr() * 14, false, roof(x, z) + 1); }
+  for (let q = 0; q < 40; q++) { const a = rr() * 6.283, r = 30 + rr() * (UG_HR - 40), x = Math.cos(a) * r, z = Math.sin(a) * r, g = ugHellH(x, z); if (g < UG_LAVA + .5 || (x > 20 && Math.abs(z) < 9)) continue; spike(x, z, .4 + rr() * 1.1, 1.5 + rr() * 5, true, g - .3); }
+  for (const p of L.pil) { const k = 10, top = roof(p.x, p.z) + 2; for (let s = 0; s < 8; s++) { const y0 = -4 + s * (top + 4) / 8, y1 = -4 + (s + 1) * (top + 4) / 8, w0 = p.r * (1 + .25 * Math.sin(s * 1.7 + p.x)), w1 = p.r * (1 + .25 * Math.sin((s + 1) * 1.7 + p.x));
+      for (let q = 0; q < k; q++) { const a0 = q / k * 6.283, a1 = (q + 1) / k * 6.283; ugQ(B, "rock", [p.x + Math.cos(a0) * w0, y0, p.z + Math.sin(a0) * w0], [p.x + Math.cos(a1) * w0, y0, p.z + Math.sin(a1) * w0], [p.x + Math.cos(a1) * w1, y1, p.z + Math.sin(a1) * w1], [p.x + Math.cos(a0) * w1, y1, p.z + Math.sin(a0) * w1], [Math.cos((a0 + a1) / 2), 0, Math.sin((a0 + a1) / 2)], 4, 4); } } }
+  // the spire: a black blade rising out of the pit, cut with glowing lines
+  { const k = 6, top = 46, base = -24; for (let s = 0; s < 10; s++) { const y0 = base + s * (top - base) / 10, y1 = base + (s + 1) * (top - base) / 10, w0 = 5 * (1 - s / 10) + .2, w1 = 5 * (1 - (s + 1) / 10) + .2, tw = s * .12;
+      for (let q = 0; q < k; q++) { const a0 = q / k * 6.283 + tw, a1 = (q + 1) / k * 6.283 + tw; ugQ(B, "steel", [Math.cos(a0) * w0, y0, Math.sin(a0) * w0], [Math.cos(a1) * w0, y0, Math.sin(a1) * w0], [Math.cos(a1 + .12) * w1, y1, Math.sin(a1 + .12) * w1], [Math.cos(a0 + .12) * w1, y1, Math.sin(a0 + .12) * w1], [Math.cos((a0 + a1) / 2), .1, Math.sin((a0 + a1) / 2)], 3, 3);
+        if (s % 2 === 0) { const r = w0 + .03, ya = y0 + 1, yb = ya + .25; ugGlow(B, "red", [Math.cos(a0) * r, ya, Math.sin(a0) * r], [Math.cos(a1) * r, ya, Math.sin(a1) * r], [Math.cos(a1) * r, yb, Math.sin(a1) * r], [Math.cos(a0) * r, yb, Math.sin(a0) * r]); } } } }
+  // the lava (moving, glowing) and the lava falls
+  const lavaM = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 } }, side: THREE.DoubleSide,
+    vertexShader: "varying vec3 vW; void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz - vec3(" + UG_X.toFixed(1) + ", 0.0, " + UG_Z.toFixed(1) + "); gl_Position = projectionMatrix * viewMatrix * w; }",
+    fragmentShader: `uniform float uT; varying vec3 vW;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }
+      void main(){ vec2 p = vW.xz * 0.12; float a = n(p + vec2(uT * 0.05, uT * 0.03)) * 0.6 + n(p * 2.3 - vec2(uT * 0.08, -uT * 0.02)) * 0.4;
+        float c = smoothstep(0.3, 0.85, a); vec3 col = mix(vec3(0.35, 0.03, 0.0), vec3(1.5, 0.5, 0.06), c) + vec3(1.4, 1.0, 0.45) * pow(c, 7.0); gl_FragColor = vec4(col, 1.0); }` });
+  const lava = new THREE.Mesh(new THREE.CircleGeometry(UG_HR + 4, 48).rotateX(-Math.PI / 2), lavaM); lava.position.y = UG_LAVA; group.add(lava); L.lavaM = lavaM;
+  const fallM = new THREE.ShaderMaterial({ uniforms: { uT: { value: 0 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    vertexShader: "varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform float uT; varying vec2 vU; void main(){ float s = 0.5 + 0.5 * sin(vU.y * 40.0 + uT * 6.0 + sin(vU.x * 9.0) * 2.0); float e = sin(vU.x * 3.14159);
+      vec3 c = mix(vec3(1.0, 0.25, 0.02), vec3(1.6, 0.8, 0.2), s); gl_FragColor = vec4(c * e, e); }` });
+  for (const f of L.falls) { const top = roof(f.x, f.z), m = new THREE.Mesh(new THREE.PlaneGeometry(3, top + 2), fallM); m.position.set(f.x, (top - 2) / 2, f.z); m.rotation.y = -f.a + Math.PI / 2; group.add(m); }
+  L.fallM = fallM;
+  // the door back up, set in the rock
+  L.hf = { n, S, o, hf };
+}
+function ugHellFloor(L, x, z) { const H = L.hf, fi = (x - H.o) / H.S, fj = (z - H.o) / H.S, i = Math.max(0, Math.min(H.n - 1, Math.floor(fi))), j = Math.max(0, Math.min(H.n - 1, Math.floor(fj))), u = fi - i, v = fj - j, n1 = H.n + 1;
+  return (H.hf[i + j * n1] * (1 - u) + H.hf[i + 1 + j * n1] * u) * (1 - v) + (H.hf[i + (j + 1) * n1] * (1 - u) + H.hf[i + 1 + (j + 1) * n1] * u) * v; }
+/* ---- doors: a plain metal door, a blast door, the haze you came in through ---- */
+function ugHazeMat() {
+  return new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, uniforms: { uT: { value: 0 }, uOpen: { value: 1 } },
+    vertexShader: "varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform float uT; uniform float uOpen; varying vec2 vU;
+      void main(){ vec2 p = (vU - 0.5) * vec2(2.0, 2.0); float r = length(p * vec2(1.0, 0.55)) / max(uOpen, 0.001);
+        float a = atan(p.y, p.x), sw = 0.5 + 0.5 * sin(a * 3.0 + r * 9.0 - uT * 2.2) * sin(r * 5.0 + uT * 1.3 + p.y * 3.0);
+        float e = smoothstep(1.0, 0.35, r) * uOpen; vec3 c = mix(vec3(0.55, 0.25, 1.0), vec3(0.2, 0.95, 0.85), sw); c = mix(c, vec3(1.0, 0.95, 1.0), smoothstep(0.45, 0.0, r) * 0.6);
+        float al = e * (0.35 + 0.65 * sw); gl_FragColor = vec4(c * al, al); }` });
+}
+function ugDoorMesh(L, D, group) {
+  const g = new THREE.Group(); g.position.set(D.x, D.y, D.z); g.rotation.y = Math.atan2(D.nx, D.nz); group.add(g); D.g = g; D.open = 0; D.want = 0;
+  if (D.kind === "haze") { const m = new THREE.Mesh(new THREE.PlaneGeometry(D.w, D.h), ugHazeMat()); m.position.set(0, D.h / 2 + .05, .06); g.add(m); D.haze = m; return; }
+  const steel = new THREE.MeshBasicMaterial({ map: ugTex("steel"), color: D.kind === "blast" ? 0x8a8a84 : 0x6f8070 }), dark = new THREE.MeshBasicMaterial({ color: 0x1a1c1d });
+  const fr = .14, fw = D.w + fr * 2; for (const [w, h, x, y] of [[fr, D.h, -D.w / 2 - fr / 2, D.h / 2], [fr, D.h, D.w / 2 + fr / 2, D.h / 2], [fw, fr, 0, D.h + fr / 2]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, .22), dark); b.position.set(x, y, 0); g.add(b); }
+  const hinge = new THREE.Group(); hinge.position.set(-D.w / 2, 0, 0); g.add(hinge); D.hinge = hinge;
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(D.w, D.h, D.kind === "blast" ? .3 : .06), steel); panel.position.set(D.w / 2, D.h / 2, 0); hinge.add(panel);
+  const knob = new THREE.Mesh(new THREE.BoxGeometry(.04, .2, .14), dark); knob.position.set(D.w - .15, 1.05, 0); hinge.add(knob);
+  if (D.kind === "blast") { const st = new THREE.MeshBasicMaterial({ map: ugTex("hazard") }); for (const y of [.25, D.h - .25]) { const s = new THREE.Mesh(new THREE.BoxGeometry(D.w, .22, .32), st); s.position.set(D.w / 2, y, 0); hinge.add(s); }
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(.5, .16, .16), new THREE.MeshBasicMaterial({ color: new THREE.Color(2, .15, .05), toneMapped: false })); lamp.position.set(0, D.h + .45, .1); g.add(lamp); D.lamp = lamp; }
+  if (L.hell && D.kind === "blast") { const rock = new THREE.MeshBasicMaterial({ map: ugTex("rock"), color: 0xc06040 }); for (const [w, h, x, y] of [[3, 9, -D.w / 2 - 1.6, 4.5], [3, 9, D.w / 2 + 1.6, 4.5], [D.w + 6, 5, 0, D.h + 2.5]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 3), rock); b.position.set(x, y - .5, -1.4); g.add(b); } }
+}
+/* ---- building a level, going in and out ---- */
+function ugBuild(idx) {
+  const L = idx === 1 ? ugBackrooms() : idx === 2 ? ugBunker() : ugHell(), group = new THREE.Group(), B = ugBuilder(L);
+  group.position.set(UG_X, L.Y, UG_Z);
+  if (L.g) ugGridMesh(L, B); if (idx === 1) ugStairMesh(L, B); if (idx === 3) ugHellMesh(L, B, group);
+  ugFinish(B, group); for (const D of L.doors) ugDoorMesh(L, D, group);
+  for (const D of L.doors) if (!L.arrive[D.id]) L.arrive[D.id] = { x: D.x + D.nx * 2.4, z: D.z + D.nz * 2.4, y: D.y, yaw: Math.atan2(-D.nx, -D.nz) };
+  if (idx === 3) { const E = fireMake(180, .14); E.visible = false; group.add(E); E.position.set(-UG_X, -L.Y, -UG_Z); L.emb = E; L.embS = []; for (let i = 0; i < 180; i++) L.embS.push([Math.random() * 6.283, Math.random() * 30, Math.random() * 20, Math.random()]); }
+  L.group = group; scene.add(group); group.visible = false; return L;
+}
+function ugLocal(x, z) { return [x - UG_X, z - UG_Z]; }
+function ugIn(L, x, z) {                                       // what's underfoot at a point (null: solid)
+  for (const r of L.rects) if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return r;
+  const G = L.g; if (G) { const i = Math.floor((x - G.x0) / G.C), j = Math.floor((z - G.z0) / G.C); if (ugCell(G, i, j) === 1) return G; }
+  return null;
+}
+const UG_PROBE = [[1, 0], [-1, 0], [0, 1], [0, -1], [.7, .7], [.7, -.7], [-.7, .7], [-.7, -.7]];
+function ugBlocked(L, x, z, rad = .3, y) {
+  if (L.hell) { if (Math.hypot(x, z) > UG_HR - 6.6) return true;
+    for (const p of L.pil) if (Math.hypot(x - p.x, z - p.z) < p.r + rad + .4) return true;
+    if (y !== undefined && ugHellFloor(L, x, z) - y > 1.25) return true; return false; }
+  const c = ugIn(L, x, z); if (!c) return true; const G = L.g;
+  for (const [ox, oz] of UG_PROBE) { const sx = x + ox * rad, sz = z + oz * rad, s = ugIn(L, sx, sz); if (!s) return true;
+    if (s === G && c === G) { const C = G.C, i0 = Math.floor((x - G.x0) / C), j0 = Math.floor((z - G.z0) / C), i1 = Math.floor((sx - G.x0) / C), j1 = Math.floor((sz - G.z0) / C);
+      if (i1 !== i0) { const ei = Math.max(i0, i1); if (G.eV[ei + j0 * (G.N + 1)] || G.eV[ei + j1 * (G.N + 1)]) return true; }
+      if (j1 !== j0) { const ej = Math.max(j0, j1); if (G.eH[i0 + ej * G.N] || G.eH[i1 + ej * G.N]) return true; } } }
+  return false;
+}
+function ugFloor(L, x, z) { if (L.hell) return Math.max(ugHellFloor(L, x, z), UG_LAVA - .8); const c = ugIn(L, x, z); return c && c.f ? c.f(x, z) : L.fy; }
+const ugHB = (x, y, z) => { const L = UNDER.cur; if (!L) return false; const [lx, lz] = ugLocal(x, z); return ugBlocked(L, lx, lz, .12); };
+function ugMove(dt) {                                         // walking underground (instead of the land's own walking)
+  const L = UNDER.cur; if (!L || UNDER.go) { P.vy = 0; return; }
+  let mx = input.jx, my = input.jy, mag = Math.hypot(mx, my); if (mag > 1) { mx /= mag; my /= mag; mag = 1; }
+  const [lx, lz] = ugLocal(P.x, P.z), on = ugIn(L, lx, lz), stair = on && on.stair;
+  const speed = (input.run ? VR_FOOT.run : VR_FOOT.walk) * geoSpeedMul() * mag * (stair ? .55 : 1) * (L.hell && P.y - L.Y < UG_LAVA - .05 ? .45 : 1);
+  if (mag > .02) { const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw), dx = (-sy * my + cy * mx) * speed * dt, dz = (-cy * my - sy * mx) * speed * dt, y = P.y - L.Y;
+    if (!ugBlocked(L, lx + dx, lz + dz, .3, y)) { P.x += dx; P.z += dz; } else if (!ugBlocked(L, lx + dx, lz, .3, y)) P.x += dx; else if (!ugBlocked(L, lx, lz + dz, .3, y)) P.z += dz;
+    P.stepT = (P.stepT || 0) + dt * (input.run ? 2.7 : 2) * Math.min(1, .55 + speed / 9); if (P.stepT >= 1) { P.stepT -= 1; footstep(L.step, 1); } }
+  const [nx, nz] = ugLocal(P.x, P.z); P.y = L.Y + ugFloor(L, nx, nz); P.vy = 0; P.onGround = true; P.gliding = false; P.climb = false;
+}
+function ugBlack() {
+  if (UNDER.blk) return UNDER.blk;
+  const m = new THREE.Mesh(new THREE.SphereGeometry(.22, 16, 10), new THREE.MeshBasicMaterial({ color: 0, transparent: true, opacity: 0, side: THREE.BackSide, depthTest: false, depthWrite: false, fog: false }));
+  m.renderOrder = 1004; m.frustumCulled = false; m.visible = false; scene.add(m); return UNDER.blk = m;
+}
+function ugSound(kind) {                                      // the hum of each place
+  if (UNDER.snd) { const t = SND.ctx.currentTime; for (const n of UNDER.snd) { try { if (n.gain) n.gain.setTargetAtTime(0, t, .2); if (n.stop) n.stop(t + 1); } catch (_) {} } UNDER.snd = null; }
+  if (!kind || !SND.ctx || !SND.on) return; const c = SND.ctx, t = c.currentTime, L = [];
+  const osc = (type, f, v, ft) => { const o = c.createOscillator(); o.type = type; o.frequency.value = f; const g = c.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(v, t, .8);
+    if (ft) { const b = c.createBiquadFilter(); b.type = "bandpass"; b.frequency.value = ft; b.Q.value = 1.5; o.connect(b); b.connect(g); } else o.connect(g); g.connect(SND.master); o.start(); L.push(o, g); };
+  const noise = (lp, v) => { const s = c.createBufferSource(); s.buffer = SND.noise; s.loop = true; const b = c.createBiquadFilter(); b.type = "lowpass"; b.frequency.value = lp; const g = c.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(v, t, .8); s.connect(b); b.connect(g); g.connect(SND.master); s.start(); L.push(s, g); };
+  if (kind === "backrooms") { osc("sawtooth", 120, .012, 240); osc("sine", 60, .018); osc("sawtooth", 240, .004, 1800); }
+  else if (kind === "bunker") { osc("sine", 46, .04); osc("triangle", 92, .008); noise(380, .05); }
+  else if (kind === "hell") { noise(110, .22); osc("sine", 31, .06); noise(900, .02); }
+  UNDER.snd = L;
+}
+function ugGo(idx, at) { if (UNDER.go) return; UNDER.go = { idx, at, t: 0, did: false };
+  if (idx > (UNDER.idx || 0)) gunFoley(idx === 1 ? [[0, 180, 1.2, .35], [.1, 90, 1.4, .3], [.3, 600, .8, .08]] : [[0, 400, .25, .12]]); else gunFoley([[0, 700, .5, .15], [.1, 1400, .4, .08]]); }
+function ugEnter(idx, at) {
+  if (idx === 0) { ugLeave(UNDER.surf); return; }
+  if (!UNDER.on) { UNDER.on = true; UNDER.keep = { hf: HFOG.uHFog.value.z, hi: hemi.intensity, hc: hemi.color.clone(), hg: hemi.groundColor.clone(), si: sunL.intensity };
+    if (world) world.visible = false; sky.visible = false; stars.visible = false; HFOG.uHFog.value.z = 0; if (GEO.globe) GEO.globe.visible = false; }
+  const L = UNDER.L[idx] || (UNDER.L[idx] = ugBuild(idx));
+  for (const o of UNDER.L) if (o) o.group.visible = o === L; if (L.emb) L.emb.visible = true;
+  UNDER.idx = idx; UNDER.cur = L;
+  const A = L.arrive[at] || L.arrive.top || Object.values(L.arrive)[0];
+  P.x = UG_X + A.x; P.z = UG_Z + A.z; P.y = L.Y + ugFloor(L, A.x, A.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false;
+  const d = A.yaw - P.yaw; vr.yaw += d; P.yaw += d; vr.placeAt = true; vr.goodX = undefined;
+  const D = L.doors.find(o => o.id === at); if (D && D.slam) { D.open = 1; D.want = 0; D.slamT = .25; }
+  hemi.intensity = .25; hemi.color.setHex(idx === 3 ? 0xff7040 : idx === 2 ? 0xa0b0c0 : 0xd8c890); hemi.groundColor.setHex(0x101010); sunL.intensity = 0;
+  scene.fog.color.setHex(L.fogC); renderer.setClearColor(L.fogC); ugSound(L.name);
+}
+function ugLeave(to) {
+  if (!UNDER.on) return; UNDER.on = false; UNDER.cur = null; UNDER.idx = 0; UNDER.go = null;
+  for (const o of UNDER.L) if (o) o.group.visible = false;
+  if (world) world.visible = true; sky.visible = true; stars.visible = true; const K = UNDER.keep; if (K) { HFOG.uHFog.value.z = K.hf; hemi.intensity = K.hi; hemi.color.copy(K.hc); hemi.groundColor.copy(K.hg); sunL.intensity = K.si; }
+  if (ENDLESS) ENDLESS.lightT = 0; ugSound(null); if (UNDER.blk) UNDER.blk.visible = false;
+  if (to) { P.x = to.x; P.z = to.z; P.y = groundAt(to.x, to.z); P.vy = 0; P.onGround = true; const d = to.yaw - P.yaw; vr.yaw += d; P.yaw += d; vr.placeAt = true; vr.goodX = undefined; }
+}
+function ugTick(I, dt) {                                      // each frame in Treeocashing: the way in, the fades, the doors, the lamps
+  const blk = ugBlack(), G = UNDER.go;
+  if (G) { G.t += dt; const out = .45, inT = .8;
+    if (!G.did && G.t >= out) { G.did = true; ugEnter(G.idx, G.at); }
+    const a = G.did ? 1 - (G.t - out) / inT : G.t / out; blk.visible = true; blk.material.opacity = Math.max(0, Math.min(1, a)); blk.position.copy(I.head);
+    if (G.did && G.t > out + inT) { UNDER.go = null; blk.visible = false; } }
+  if (!UNDER.on) return;
+  const L = UNDER.cur, t = performance.now() / 1000, [hx, hz] = ugLocal(I.head.x, I.head.z); scene.fog.color.setHex(L.fogC); renderer.setClearColor(L.fogC);
+  for (const m of L.blocks) { const c = m.userData.c; m.visible = Math.hypot(c[0] - hx, c[1] - hz) < 110; }
+  if (L.flick) { const f = Math.sin(t * 23) * Math.sin(t * 7.1) > .15 || Math.sin(t * 1.3) > .7; L.flick.visible = f; }
+  if (L.lavaM) L.lavaM.uniforms.uT.value = t; if (L.fallM) L.fallM.uniforms.uT.value = t;
+  if (L.emb) { const pa = L.emb.geometry.attributes.position, ca = L.emb.geometry.attributes.color;   // embers rising round you
+    L.embS.forEach((q, i) => { const a = q[0] + t * .05, r = 2 + q[2], yy = ((q[1] + t * (1.2 + q[3] * 2)) % 30) - 4; pa.setXYZ(i, I.head.x + Math.cos(a) * r, I.head.y + yy, I.head.z + Math.sin(a) * r);
+      const f = .5 + .5 * Math.sin(t * 3 + q[3] * 9); ca.setXYZ(i, 1 * f, .35 * f, .05 * f); }); pa.needsUpdate = ca.needsUpdate = true; }
+  if (L.hell) { const y = P.y - L.Y; if (y < UG_LAVA - .05 && !(MP.dead > 0)) { MP.hp -= 30 * dt; MP.hurt = Math.max(MP.hurt, .6); if ((UNDER.burnT = (UNDER.burnT || 0) - dt) <= 0) { UNDER.burnT = .5; buzz("L", .5, 80); buzz("R", .5, 80); gunFoley([[0, 300, .3, .2]]); if (MP.hp < 0) GEO.killedBy = "The lava"; } } }
+  if (L.name === "hell" && (UNDER.roarT = (UNDER.roarT || 6) - dt) <= 0) { UNDER.roarT = 8 + Math.random() * 12; gunFoley([[0, 70, 2.4, .35], [.3, 110, 2, .2], [.5, 50, 2.6, .3]]); }
+  for (const D of L.doors) {                                    // doors open as you come up to them; through one and you're on the next level
+    const dx = hx - D.x, dz = hz - D.z, d = Math.hypot(dx, dz), front = dx * D.nx + dz * D.nz;
+    if (D.haze) { D.haze.material.uniforms.uT.value = t; D.haze.material.uniforms.uOpen.value = .85 + .15 * Math.sin(t * 1.7); }
+    else { D.want = d < 2 && front > 0 && !D.slamT ? 1 : 0; if (D.slamT) { D.slamT -= dt; if (D.slamT <= 0) { D.slamT = 0; D.open = 0; gunFoley([[0, 70, .6, .7], [0, 140, .4, .5], [.01, 1100, .12, .25], [.05, 2400, .08, .12]]); buzz("L", .9, 120); buzz("R", .9, 120); } }
+      else D.open += (D.want - D.open) * Math.min(1, dt * 5); if (D.hinge) D.hinge.rotation.y = D.open * 1.5;
+      if (D.lamp) D.lamp.material.color.setRGB(Math.sin(t * 6) > 0 ? 2.2 : .5, .1, .05); }
+    if (!UNDER.go && d < .75 && Math.abs(P.y - (L.Y + D.y)) < 3 && (D.haze || D.open > .6)) ugGo(D.to[0], D.to[1]);
+  }
+}
+/* ---- the doorways on the trees, up on the land ---- */
+function ugPortalMake(p) {
+  const g = new THREE.Group(), m = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 2.1), ugHazeMat()); g.add(m);
+  const dx = Math.cos(p.a), dz = Math.sin(p.a), gy = groundAt(p.x + dx * (p.tr + .3), p.z + dz * (p.tr + .3));
+  g.position.set(p.x + dx * (p.tr + .08), gy + 1.1, p.z + dz * (p.tr + .08)); g.rotation.y = Math.atan2(dx, dz); scene.add(g); return { g, m, p, open: 0 };
+}
+function ugPortalTick(I, dt) {
+  if (!ugOK() || UNDER.on || UNDER.go) { if (!UNDER.on) for (const [k, M] of UNDER.pt) { scene.remove(M.g); M.m.material.dispose(); UNDER.pt.delete(k); } return; }
+  const E = ENDLESS; if (!E) return; const see = ugSees();
+  if ((UNDER.scanT -= dt) <= 0) { UNDER.scanT = .5;
+    for (const ch of E.chunks.values()) if (ch.ugP === undefined && ch.tile && ch.obs) { const R = mulberry32(enHash(seed * 577 + 31, ch.ix, ch.iz)); ch.ugP = null;
+      if (R() < UG_RATE) { const T = ch.obs.filter(o => o.tr > .2 && !o.soft); if (T.length) { const o = T[Math.floor(R() * T.length)]; ch.ugP = { x: o.x, z: o.z, tr: o.tr, a: R() * 6.283 }; } } }
+    const want = new Map(); if (see) { for (const ch of E.chunks.values()) if (ch.ugP && E.chunks.get(ch.key) === ch && Math.hypot(ch.ugP.x - P.x, ch.ugP.z - P.z) < 180) want.set(ch.key, ch.ugP);
+      if (UNDER.labP) want.set("lab", UNDER.labP); }
+    for (const [k, M] of UNDER.pt) if (!want.has(k) || want.get(k) !== M.p) { scene.remove(M.g); M.m.material.dispose(); UNDER.pt.delete(k); }
+    for (const [k, p] of want) if (!UNDER.pt.has(k)) UNDER.pt.set(k, ugPortalMake(p)); }
+  const t = performance.now() / 1000;
+  for (const M of UNDER.pt.values()) { const d = Math.hypot(M.g.position.x - I.head.x, M.g.position.z - I.head.z);
+    M.open += ((d < 14 ? 1 : .25) - M.open) * Math.min(1, dt * 1.5); M.m.material.uniforms.uT.value = t; M.m.material.uniforms.uOpen.value = M.open * (.9 + .1 * Math.sin(t * 2));
+    if (d < 40 && !UNDER.seen) { UNDER.seen = true; vrBanner("Something is humming in the trees nearby…", 4, 1); }
+    if (d < .8 && M.open > .7 && Math.abs(I.head.y - M.g.position.y) < 2) { const a = M.p.a; UNDER.surf = { x: M.p.x + Math.cos(a) * (M.p.tr + 1.6), z: M.p.z + Math.sin(a) * (M.p.tr + 1.6), yaw: Math.atan2(-Math.cos(a), -Math.sin(a)) }; ugGo(1, "top"); } }
+}
+function glabPortal() {                                         // (Gear Lab) a doorway on the nearest tree; underground, the next level down
+  if (UNDER.on) { const n = UNDER.idx + 1; if (n <= 3) { ugGo(n, "up"); glabSay("Down to level " + n); } else glabSay("This is the bottom"); vruiResume(); return; }
+  let best = null, bd = 60; const c = Math.floor(P.x / 8), cz = Math.floor(P.z / 8);
+  for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) { const l = obstacles.get((c + i) + "," + (cz + j)); if (l) for (const o of l) if (o.tr > .15 && !o.soft) { const d = Math.hypot(o.x - P.x, o.z - P.z); if (d < bd) { bd = d; best = o; } } }
+  if (!best) { glabSay("No tree near you"); return; }
+  UNDER.labP = { x: best.x, z: best.z, tr: best.tr, a: Math.atan2(P.z - best.z, P.x - best.x) }; UNDER.scanT = 0; glabSay("A doorway on the tree " + Math.round(bd) + " m away"); vruiResume();
+}
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
    sight, growls, and pounces. Gators and crocodiles lunge from the water's edge. Lions charge if you walk up on the pride. Bear spray turns
@@ -5805,6 +6306,7 @@ function geoTeleport(p) {                                     // the land round 
 const G0p = () => GLOBE && GLOBE.p ? GLOBE.p.slice() : null;
 function geoRespawn() {
   const by = GEO.killedBy; GEO.killedBy = null;
+  if (UNDER.on) ugLeave(null);                                      // 2.90
   hunt.score = Math.max(0, hunt.score - 10); showHuntScore();
   MP.hp = 60; GEO.food = Math.max(GEO.food, 50); GEO.water = Math.max(GEO.water, 50); GEO.warn = 100; GEO.hurt = 0;
   for (const A of beasts) if (A.pred) predCalm(A, 60);
@@ -9922,8 +10424,9 @@ function vrAfterMove(dt) {                                // carry the play spac
   const I = vr.I; if (!I) return;
   { // your face stops at trunks, limbs and boulders: the world slides back instead of letting you see inside
     const hy = P.y + vr.headLocalY;
-    if (!GEO.sleep && vr.goodX !== undefined && headBlocked(P.x, hy, P.z) && !headBlocked(vr.goodX, hy, vr.goodZ)) {
-      if (!headBlocked(vr.goodX, hy, P.z)) P.x = vr.goodX; else if (!headBlocked(P.x, hy, vr.goodZ)) P.z = vr.goodZ; else { P.x = vr.goodX; P.z = vr.goodZ; }
+    const HB = UNDER.on ? ugHB : headBlocked;   // (2.90: underground, the walls)
+    if (!GEO.sleep && vr.goodX !== undefined && HB(P.x, hy, P.z) && !HB(vr.goodX, hy, vr.goodZ)) {
+      if (!HB(vr.goodX, hy, P.z)) P.x = vr.goodX; else if (!HB(P.x, hy, vr.goodZ)) P.z = vr.goodZ; else { P.x = vr.goodX; P.z = vr.goodZ; }
     }
     vr.goodX = P.x; vr.goodZ = P.z;
   }
@@ -10016,7 +10519,7 @@ function uwAudio(under, dt) {
 function uwTick(dt, I) {                                     // runs after you've moved this frame
   if (!scene.fog) return;                                    // (2.51: Map Lab and the Workshop have no fog)
   const ov = uwOverlay(), headY = P.y + vr.headLocalY;
-  const under = !iced && state === "play" && headY < water - .05 && (!edgeShape.island || true);
+  const under = !iced && state === "play" && headY < water - .05 && !UNDER.on && (!edgeShape.island || true);
   if (under && !UW.under) { UW.fogC.copy(scene.fog.color); UW.fogN = scene.fog.near; }
   if (!under && UW.under) { scene.fog.color.copy(UW.fogC); scene.fog.near = UW.fogN; }
   UW.under = under;
@@ -12332,7 +12835,8 @@ const CLIMB = 1.5, CLIFF = 5.67;   // anything below eye level (1.5 m) can be wa
 const keys = {};
 function update(dt) {
   if (JET.ride && vr.on && state === "play") { jetRide(dt); return; }
-  if (GEO.sleep && vr.on && state === "play") { sleepMove(dt); return; }   // 2.86: in the hammock / out of your body   // 2.75: riding a jet ski
+  if (GEO.sleep && vr.on && state === "play") { sleepMove(dt); return; }
+  if ((UNDER.on || UNDER.go) && vr.on && state === "play") { if (UNDER.on) ugMove(dt); return; }   // 2.90: the Underworld   // 2.86: in the hammock / out of your body   // 2.75: riding a jet ski
   pcLavaTick(dt);
   let mx = input.jx, my = input.jy;
   if (keys.KeyW || keys.ArrowUp) my += 1; if (keys.KeyS || keys.ArrowDown) my -= 1;
@@ -14348,7 +14852,7 @@ function mpVoice(L, stream) {                               // each player's voi
     src.connect(g); g.connect(SND.master); L.vsrc = src; L.vg = g;
   } catch (e) {}
 }
-function mpSendTo(L, o) { if (GLOBE && (o.t === "s" || o.t === "f" || o.t === "g" || o.t === "mk") && !o.gf) o.gf = geoFrameArr(); if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
+function mpSendTo(L, o) { if (GLOBE && (o.t === "s" || o.t === "f" || o.t === "g" || o.t === "mk") && !o.gf) { o.gf = geoFrameArr(); if (UNDER.on) o.ug = UNDER.idx; } if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
 function mpSend(o) { for (const L of MP.links.values()) mpSendTo(L, o); }
 function mpSendHost(o) { mpSendTo(MP.links.get(mpHostId()), o); }
 function mpSet() { const s = { mode: gameMode }; for (const k of MP_SET) s[k] = set[k]; return s; }
@@ -14715,6 +15219,8 @@ function mpGuestStart(o) {
 }
 function mpRecv(o, L) {
   if (!o || !o.t) return;
+  if (o.gf) { const me = UNDER.on ? UNDER.idx : 0, th = o.ug | 0; L.ugAway = me !== th;   // 2.90: the Underworld: the same level, where it really is; another level, out of sight
+    if (L.ugAway) { if (o.t !== "s") return; for (const A of [o.h, o.l, o.r, o.g && o.g.p]) if (Array.isArray(A)) A[1] -= 1e5; o.gh = undefined; delete o.gf; } else if (th) delete o.gf; }
   if (o.gf) geoNetIn(o);                                       // 2.80: from their layout of the planet into mine
   L.lastRx = performance.now();
   if (o.t === "ping") return;
@@ -16769,7 +17275,7 @@ let last = performance.now(), infoT = 0, mapT = 0;
 function loop(now) {
   fpsTick((now - last) / 1000);
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
-  if (state === "play" || state === "fly") { updatePrecip(dt, now); soundTick(dt); }
+  if (state === "play" || state === "fly") { if (!UNDER.on) updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
   if (MP.peer || (vr.on && gameMode === "pvp")) mpTick(dt);
   if (VB.shown && state !== "play" && state !== "pause") vbHide();      // 2.48
@@ -16779,7 +17285,7 @@ function loop(now) {
     if (vr.on) vrAfterMove(dt);
     updateZone(dt);
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
-    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); updateAnimals(dt);
+    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); if (!UNDER.on) updateAnimals(dt);
     if (vr.on && gameMode === "pvp") vbTick(dt);                            // 2.48: bots
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
@@ -16816,6 +17322,7 @@ function loop(now) {
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(4.5, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
+    if (UNDER.on && UNDER.cur) { scene.fog.near = UNDER.cur.fog[0]; scene.fog.far = UNDER.cur.fog[1]; }   // 2.90
     zoneFog();
   }
   updateBirds(now);
@@ -16823,7 +17330,7 @@ function loop(now) {
   if (world || (vr.on && VRUI.on)) {
     GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = (vr.on ? 1.08 : .95) * (1 + GEO.nvK * (.6 + 3 * NIGHT_K)) * (1 + (GEO.ghostK || 0) * .1);   // (2.72: night-vision goggles; 2.86: a spirit sees in the dark)
     { const fl = vr.on ? NIGHT_K * (weather.storm ? .02 : weather.precip ? .014 : .009) : 0; GRADE.uFloor.value.setRGB(fl * .8, fl * .9, fl * 1.15); }
-    if (world) { if (ENDLESS) endlessTick(dt); cullTiles(); updateGun(dt); }
+    if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); }
     if (vr.on && TOOL.sightM) toolPrep();                  // 2.68: the SMG's thermal mini-sight
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
