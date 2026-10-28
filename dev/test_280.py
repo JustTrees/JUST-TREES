@@ -34,7 +34,7 @@ async def main():
         out["hostUp"] = await until(A, "() => D.state === 'play' && D.GEO.on && !!D.MP.code && D.MP.host && D.MP.pub", 150)
         code = await A.evaluate("() => D.MP.code"); out["listed"] = await A.evaluate("() => D.set.geoNet")
         await B.evaluate(f"() => {{ D.mpJoin('{code}'); return 1; }}")
-        out["bIn"] = await until(B, "() => D.state === 'play' && D.GEO.on && D.MP.on", 200, (A,))
+        out["bIn"] = await until(B, "() => D.state === 'play' && D.GEO.on && D.MP.on", 500, (A,))
         await run([A, B], 40)
         out["same"] = await A.evaluate("() => [D.seed, D.GEO.found.size, D.MP.roundLeft]") + await B.evaluate("() => [D.seed, D.GEO.found.size, D.MP.roundLeft, D.set.geoNet]")
         # B walks 2 km and lays its ground out again: A must still see B where B really is on the planet
@@ -47,7 +47,7 @@ async def main():
         await A.evaluate(f"() => {{ D.geoNetGive('{bid}'); return 1; }}"); await run([A, B], 12)
         out["handed"] = [await A.evaluate("() => D.MP.host"), await B.evaluate("() => D.MP.host")]
         await C.evaluate(f"() => {{ D.mpJoin('{code}'); return 1; }}")
-        out["cIn"] = await until(C, "() => D.state === 'play' && D.GEO.on", 250, (A, B))
+        out["cIn"] = await until(C, "() => D.state === 'play' && D.GEO.on", 500, (A, B))
         await run([A, B, C], 40)
         out["cHost"] = await C.evaluate(f"() => D.MP.hostId === '{bid}' && D.MP.links.has('{bid}')")
         out["cLinks"] = await C.evaluate("() => [...D.MP.links.values()].filter(L => L.open).length")

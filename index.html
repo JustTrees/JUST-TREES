@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.80";              // Just Trees 2.55
+const VERSION = "2.81";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4144,19 +4144,38 @@ function globeSetup(E, rnd) {
   const G = GLOBE, R = G.R, r0 = mulberry32(seed * 7 + 101), nz = () => glNoise3(r0);
   const nc = nz(), n1 = nz(), n2 = nz(), n3b = nz(), n4 = nz(), n5 = nz(), n6 = nz(), nI = nz(), nB = nz(), nW = nz(), nW2 = nz(), nV = nz(), nV2 = nz(), nR = nz(), nS = nz(), sn = nz(), dn = nz(), bn = nz(), nBig = nz(), nCoast = nz();
   const OX = r0() * 3000 - 1500, OY = r0() * 3000 - 1500, OZ = r0() * 3000 - 1500;
-  // the oceans: two basins (each well under half the planet, so the land always goes round them), each with a big island somewhere in it
-  const basins = [];
-  for (let t = 0; t < 400 && basins.length < 2; t++) {
-    const lat = (r0() * 2 - 1) * 42, lon = r0() * 360 - 180, c = glFromLL(lat, lon), a = basins.length ? .36 + r0() * .1 : .5 + r0() * .1;
-    if (basins.some(B => glArc(B.c, c) < B.a + a + .45)) continue;
-    const bd = glFrame(c), ang = r0() * 6.283, off = a * (.25 + r0() * .35), bc = glNorm([c[0] + (bd.N[0] * Math.cos(ang) + bd.E[0] * Math.sin(ang)) * Math.tan(off), c[1] + (bd.N[1] * Math.cos(ang) + bd.E[1] * Math.sin(ang)) * Math.tan(off), c[2] + (bd.N[2] * Math.cos(ang) + bd.E[2] * Math.sin(ang)) * Math.tan(off)]);
-    basins.push({ c, a, bc, ba: .07 + r0() * .04 });
+  // 2.81: the oceans: 2 to 4 of them (together about as big as the old two round ones), each built from several overlapping lobes strung
+  // along a spine, with gulfs reaching into the land, peninsulas pushing out into the water and a big island somewhere in it
+  const basins = [], nOc = 2 + Math.floor(r0() * 3), share = []; for (let i = 0; i < nOc; i++) share.push(.6 + r0());
+  const shTot = share.reduce((x, y) => x + y, 0), AREA = .21;
+  const away = (c, ang, d) => { const f = glFrame(c), t = Math.tan(d); return glNorm([c[0] + (f.N[0] * Math.cos(ang) + f.E[0] * Math.sin(ang)) * t, c[1] + (f.N[1] * Math.cos(ang) + f.E[1] * Math.sin(ang)) * t, c[2] + (f.N[2] * Math.cos(ang) + f.E[2] * Math.sin(ang)) * t]); };
+  for (let i = 0; i < nOc; i++) {
+    const a = Math.acos(1 - AREA * share[i] / shTot); let c = null;
+    for (let t = 0; t < 800 && !c; t++) { const q = glFromLL((r0() * 2 - 1) * 46, r0() * 360 - 180); if (!basins.some(B => glArc(B.c, q) < B.a + a + .32)) c = q; }
+    if (!c) continue;
+    const spine = r0() * 6.283, nl = 3 + Math.floor(r0() * 4), lobes = [], gulfs = [], pens = [];
+    for (let k = 0; k < nl; k++) { const t = nl > 1 ? (k / (nl - 1)) * 2 - 1 : 0, d = Math.abs(t) * a * (.8 + r0() * .4);
+      lobes.push({ c: d > 1e-4 ? away(c, spine + (t < 0 ? Math.PI : 0) + (r0() - .5) * 1.5, d) : c, r: a * (.45 + r0() * .35) * (1 - .2 * Math.abs(t)) }); }
+    const ng = 1 + Math.floor(r0() * 3);                         // gulfs and seas: a chain of narrowing pieces going out into the land
+    for (let k = 0; k < ng; k++) { const L = lobes[Math.floor(r0() * lobes.length)], ang = r0() * 6.283; let r = .06 + r0() * .07, d = L.r * .85;
+      for (let q = 0; q < 4; q++) { gulfs.push({ c: away(L.c, ang + (r0() - .5) * .5 * q, d), r }); d += r * 1.25; r *= .78; } }
+    const np = Math.floor(r0() * 3);                             // peninsulas: land pushing in from the edge
+    for (let k = 0; k < np; k++) { const L = lobes[Math.floor(r0() * lobes.length)], ang = r0() * 6.283, r = .05 + r0() * .06;
+      for (let q = 0; q < 3; q++) pens.push({ c: away(L.c, ang, L.r * (1.05 - q * .2)), r: r * (1 - q * .2) }); }
+    let bound = 0; for (const L of lobes.concat(gulfs)) bound = Math.max(bound, glArc(c, L.c) + L.r + .16);
+    const bc = away(c, r0() * 6.283, a * (.2 + r0() * .35));
+    basins.push({ c, a, lobes, gulfs, pens, bound, cosB: Math.cos(Math.min(Math.PI, bound)), bc, ba: .05 + r0() * .04 });
   }
   G.basins = basins;
   const contS = (p, X, Y, Z) => {                              // > 0 land, < 0 sea (unit p; X, Y, Z the same point in metres)
     let s = .3 + f3(nc, X, Y, Z, 1 / 9000, 4) * 1.15, oc = 0, big = 0;
     const wob = f3(nCoast, X, Y, Z, 1 / 2600, 3) * .13 + n3(nCoast, X, Y, Z, 1 / 700, 5) * .025;   // (ragged shores, not circles)
-    for (const B of basins) { const d = glArc(p, B.c) + wob; if (d > B.a + .14) continue; oc = Math.max(oc, smooth(B.a + .12, B.a - .14, d));
+    const wob2 = wob + f3(nCoast, X, Y, Z, 1 / 7500, 2, 41) * .1;   // (2.81: big bays and capes as well)
+    for (const B of basins) { if (glDot(p, B.c) < B.cosB) continue; let o = 0;
+      for (const L of B.lobes) { const d = glArc(p, L.c) + wob2; if (d < L.r + .12) o = Math.max(o, smooth(L.r + .1, L.r - .12, d)); }
+      for (const L of B.gulfs) { const d = glArc(p, L.c) + wob * .45; if (d < L.r + .04) o = Math.max(o, smooth(L.r + .035, L.r - .045, d)); }
+      for (const L of B.pens) { const d = glArc(p, L.c) + wob * .45; if (d < L.r + .03) o = Math.min(o, smooth(L.r - .05, L.r + .025, d)); }
+      oc = Math.max(oc, o);
       big = Math.max(big, smooth(B.ba, B.ba * .3, glArc(p, B.bc) + n3(nBig, X, Y, Z, 1 / 900) * .02)); }
     if (oc > 0) { let ch = 1 - Math.abs(f3(nI, X, Y, Z, 1 / 1700, 2)); ch = ch * ch * ch * ch * ch; const bl = smooth(-.05, .45, f3(nB, X, Y, Z, 1 / 520, 2));
       s += oc * (-1.5 + ch * bl * 2.1 + big * 2.2); }
