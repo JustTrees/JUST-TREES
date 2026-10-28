@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.84";              // Just Trees 2.55
+const VERSION = "2.85";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6573,14 +6573,17 @@ function setLighting(lat, biome, topMix) {
   const lt = new THREE.Color(1, 1, 1), shT = new THREE.Color(1, 1, 1), mid = smooth(20, 45, el) * (1 - oc);
   lt.lerp(new THREE.Color(1.03, 1.02, .97), mid); shT.lerp(new THREE.Color(.95, 1, 1.07), mid);
   lt.lerp(new THREE.Color(1.09, 1.0, .84), glow * .9); shT.lerp(new THREE.Color(.84, .95, 1.14), glow * .9);
-  lt.lerp(new THREE.Color(1.04, .92, 1.0), twi * .5 * (el < 2 ? 1 : 0)); shT.lerp(new THREE.Color(.98, .86, 1.12), twi * .7 * (el < 2 ? 1 : 0));
+  const dusk = twi * smooth(4, 0, el);                                                // (2.85: the plum dusk tint fades in, it doesn't switch on)
+  lt.lerp(new THREE.Color(1.04, .92, 1.0), dusk * .5); shT.lerp(new THREE.Color(.98, .86, 1.12), dusk * .7);
   lt.lerp(new THREE.Color(.9, 1.02, 1.12), night); shT.lerp(new THREE.Color(.8, .96, 1.16), night);
   const keepLum = c => c.multiplyScalar(1 / (c.r * .3 + c.g * .59 + c.b * .11));   // tints shift colour, never darken
   GRADE.uLtTint.value.copy(keepLum(lt)); GRADE.uShTint.value.copy(keepLum(shT)); GRADE.uSat.value = 1.0 + .03 * day * (1 - oc) + .1 * glow - .12 * night;
   // light through leaves when the sun is low; soft shadows tinted by the sky, faint by moonlight
-  GRADE.uSunW.value.copy(el > -4 ? sp.dir : moonDir); GRADE.uSunC.value.copy(el > -4 ? sunCol : C("#9ab0e0")).multiplyScalar(el > -4 ? 1 : .25);
-  GRADE.uTrans.value = (.3 + .9 * glow) * (el > -4 ? smooth(-2, 4, el) : U.moonVis.value * .5) * (1 - oc * .8);
-  const shK = (el > -4 ? smooth(1, 8, el) * lerp(.45, 1, smooth(4, 15, el)) : (ENDLESS && ENDLESS.clock ? 0 : U.moonVis.value * .35)) * (1 - oc * .9) * weather.dim;   // very long low-sun shadows are softer
+  // 2.85: the sun hands over to the moon over about 9 degrees of the sun going down (it used to switch in one frame at -4°: the world snapped to blue)
+  const sw = smooth(-9, -1, el), mw = 1 - sw;
+  GRADE.uSunW.value.copy(sp.dir).multiplyScalar(sw).addScaledVector(moonDir, mw).normalize(); GRADE.uSunC.value.copy(sunCol).lerp(C("#9ab0e0").multiplyScalar(.25), mw);
+  GRADE.uTrans.value = (.3 + .9 * glow) * lerp(U.moonVis.value * .5, smooth(-2, 4, el), sw) * (1 - oc * .8);
+  const shK = lerp(ENDLESS && ENDLESS.clock ? 0 : U.moonVis.value * .35, smooth(1, 8, el) * lerp(.45, 1, smooth(4, 15, el)), sw) * (1 - oc * .9) * weather.dim;   // very long low-sun shadows are softer
   const tint = top.clone(), mx = Math.max(tint.r, tint.g, tint.b, .001); tint.multiplyScalar(1 / mx);
   const sc = new THREE.Color(1, 1, 1).lerp(tint, .45), lum = sc.r * .3 + sc.g * .59 + sc.b * .11; sc.multiplyScalar(.66 / lum);   // about a third darker at most, never black
   GRADE.uShadowCol.value.setRGB(1, 1, 1).lerp(sc, shK);
@@ -6593,21 +6596,19 @@ function setLighting(lat, biome, topMix) {
   if (weather.blizzard) scene.fog.color.lerp(C("#e8edf2"), .25 * smooth(-6, 4, el));
   renderer.setClearColor(scene.fog.color);
   starMat.uniforms.uOp.value = (1 - smooth(-12, -2, el)) * (1 - cloudAmt * .6) * (1 - oc);
-  if (el > -4) {                 // sun: strong direction, low fill, so hills and trees get shadow sides
-    sunL.color.copy(sunCol); sunL.intensity = (.45 + .77 * smooth(-3, 32, el)) * weather.dim * (1 - oc * .45);
-    sunL.position.copy(sp.dir).multiplyScalar(100);
-    hemi.color.copy(top).lerp(C("#ffffff"), .4).lerp(glowCol, glow * .25); hemi.groundColor.set("#3a3428");
-    hemi.intensity = Math.max(.16 + .26 * day + .12 * glow, .62 * (1 - smooth(25, 45, el))) * (1 + oc * .45) * Math.sqrt(weather.dim);   // brightness floor at dawn and dusk
-    liftLum(hemi.color, .66);
-  } else {                       // moon: same idea, dimmer and bluer, with twilight colour in the fill
-    sunL.color.set("#9ab0e0"); sunL.intensity = .62 * (1 - oc * .6);
-    sunL.position.copy(moonDir).multiplyScalar(100);
-    hemi.color.set("#3a5090").lerp(hor, twi * .5); liftLum(hemi.color, .38); hemi.groundColor.set("#141a28"); hemi.intensity = .4 + twi * .12;   // moonlit, never pitch black
+  {                              // sun: strong direction, low fill, so hills and trees get shadow sides; moon: dimmer and bluer, twilight colour in the fill (2.85: blended, never switched)
+    const sCol = sunCol.clone(), sI = (.45 + .77 * smooth(-3, 32, el)) * weather.dim * (1 - oc * .45);
+    const hS = top.clone().lerp(C("#ffffff"), .4).lerp(glowCol, glow * .25); liftLum(hS, .66);
+    const hSi = Math.max(.16 + .26 * day + .12 * glow, .62 * (1 - smooth(25, 45, el))) * (1 + oc * .45) * Math.sqrt(weather.dim);   // brightness floor at dawn and dusk
+    const hM = C("#3a5090").lerp(hor, twi * .5); liftLum(hM, .38); const hMi = .4 + twi * .12;   // moonlit, never pitch black
+    sunL.color.copy(sCol).lerp(C("#9ab0e0"), mw); sunL.intensity = lerp(.62 * (1 - oc * .6), sI, sw);
+    sunL.position.copy(sp.dir).multiplyScalar(sw).addScaledVector(moonDir, mw).normalize().multiplyScalar(100);
+    hemi.color.copy(hM).lerp(hS, sw); hemi.groundColor.set("#141a28").lerp(C("#3a3428"), sw); hemi.intensity = lerp(hMi, hSi, sw);
   }
   baseHemi = hemi.intensity; SUNB.i = sunL.intensity; SUNB.p.copy(sunL.position); SUNB.c.copy(sunL.color);
   WATER_U.uSky.value.copy(top); WATER_U.uHor.value.copy(hor); liftLum(WATER_U.uSky.value, .05);
-  if (el > -4) { WATER_U.uSunDir.value.copy(sp.dir); WATER_U.uSunCol.value.copy(sunCol); WATER_U.uSunVis.value = smooth(-3, 2, el) * (1 - oc * .9); }
-  else { WATER_U.uSunDir.value.copy(moonDir); WATER_U.uSunCol.value.set("#c8d4f0"); WATER_U.uSunVis.value = U.moonVis.value * .7; }
+  WATER_U.uSunDir.value.copy(sp.dir).multiplyScalar(sw).addScaledVector(moonDir, mw).normalize(); WATER_U.uSunCol.value.copy(sunCol).lerp(C("#c8d4f0"), mw);   // (2.85: blended too)
+  WATER_U.uSunVis.value = lerp(U.moonVis.value * .7, smooth(-3, 2, el) * (1 - oc * .9), sw);
   if (fogBanks) fogBanks.material.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
   fogBase = (VR_ON ? 1200 : isTouch ? 550 : 950) * weather.fogMul; if (!ENDLESS || !ENDLESS.clock) scene.fog.far = fogBase;   /* 2.25: on endless land the frame's own fog (with its headset adjustments) is left alone — resetting it flashed the view */   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
 }
