@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.91";              // Just Trees 2.55
+const VERSION = "2.92";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5520,18 +5520,18 @@ function hamGlow(A) {                                               // 2.90: onc
 function hamClear() { hamGlowOff(); if (GEO.hm) scene.remove(GEO.hm.g); if (GEO.hmRing) scene.remove(GEO.hmRing); GEO.hm = null; GEO.hmA = null; GEO.hmRing = null; }
 function hamTick(I, main, off, dt) {                                // hanging it, getting in, packing it up
   if (GEO.sleep) return;
-  const hold = GEO.held === "tent", ms = set.hand === "right" ? "R" : "L";
+  const hold = GEO.held === "tent", ms = set.hand === "right" ? "R" : "L", tp = !!main && edge("hmT", main.trig);   // (2.92: read every frame, so a squeeze is never missed)
   if (GEO.hm) {                                                      // at the hammock: pull the trigger to lie down; hold it to pack it up
     for (const [h, key] of [[main, "hmM"], [off, "hmO"]]) { if (!h) continue; const near = Math.hypot(h.pos.x - GEO.hm.mid.x, h.pos.z - GEO.hm.mid.z) < 1.2 && Math.abs(h.pos.y - GEO.hm.mid.y) < 1.2;
       if (h === main && vr.gun && vr.gun.visible) continue;
       if (near && h.trig > .6) { GEO.hmHold = (GEO.hmHold || 0) + dt; if (GEO.hmHold > 1.2) { GEO.hmHold = -99; hamClear(); vrBanner("Hammock packed up", 1.5, 0); gunFoley([[0, 400, .2, .12]]); return; } }
-      if (edge(key, h.trig) && near) { if (sleepNight()) sleepStart(); else vrBanner("Too bright to sleep: hammock time is 9 pm to 5 am (hold the trigger to pack it)", 2.5, 1); return; }
+      if (edge(key, h.trig) && near) { if (sleepNight() && GEO.sleptNight) vrBanner("You've already slept tonight", 2, 1); else if (sleepNight()) sleepStart(); else vrBanner("Too bright to sleep: hammock time is 9 pm to 5 am (hold the trigger to pack it)", 2.5, 1); return; }
       if (h.trig < .3 && h === main) GEO.hmHold = 0; }
     return;
   }
   if (HAM_GLOW.mat) HAM_GLOW.mat.uniforms.uT.value = performance.now() / 1000;
   if (GEO.hmA && !hold) { hamUntie(); return; }                      // (put the hammock away and the knot goes with it)
-  if (!hold || !main || !edge("hmT", main.trig)) return;
+  if (!hold || !main || !tp) return;
   const o = hamTrunk(main.pos);
   if (!o) { vrBanner("Touch a tree trunk with the hammock", 1.5, 0); return; }
   if (GEO.hmA === o) { hamUntie(); vrBanner("Untied", 1.5, 0); gunFoley([[0, 900, .12, .08]]); return; }   // 2.90: the same tree again: untie it
@@ -5564,19 +5564,20 @@ function sleepHint(I, txt) {
 }
 function sleepStart() {
   const H0 = GEO.hm; if (!H0) return; geoHeld(null); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = vr.binos = vr.scoped = false; GEO.packOpen = false; if (GEO.packM) GEO.packM.visible = false;
-  GEO.sleep = { st: "settle", t: 0, hp0: MP.hp, body: { x: P.x, y: P.y, z: P.z }, view: null, warnT: 0, beatT: 0, chkT: 0, wakeWhy: "" };
+  GEO.sleptNight = true; GEO.sleep = { st: "settle", t: 0, hp0: MP.hp, body: { x: P.x, y: P.y, z: P.z }, view: null, warnT: 0, beatT: 0, chkT: 0, wakeWhy: "" };
   gunFoley([[0, 300, .3, .1], [.2, 250, .3, .08]]); buzz("L", .2, 80); buzz("R", .2, 80);
 }
 function sleepWake(why, now) {                                      // back into your body (and out of the hammock)
-  const S = GEO.sleep; if (!S || S.st === "yank" || S.st === "out") return; S.st = "yank"; S.t = 0; S.wakeWhy = why;
+  const S = GEO.sleep; if (!S || S.st === "yank" || S.st === "out" || S.st === "trip" || S.st === "tripIn") return; S.st = "yank"; S.t = 0; S.wakeWhy = why;
   if (why === "danger") { gunFoley([[0, 120, .3, .3], [.05, 2600, .2, .12]]); buzz("L", 1, 200); buzz("R", 1, 200); }
 }
 function sleepTick(I, main, dt) {
-  const S = GEO.sleep, F = sleepFx(); if (!S) { F.black.visible = F.tint.visible = F.hint.visible = F.sp.visible = false; if (GEO.veil) GEO.veil.visible = false; GEO.ghostK = Math.max(0, (GEO.ghostK || 0) - dt); HFOG.uDream.value.x = GEO.ghostK; if (GEO.beacon) GEO.beacon.visible = false; if (GEO.wisps && GEO.wisps.length) { dreamWisps(I, false, dt); dreamSouls(I, false); } return; }
+  const S = GEO.sleep, F = sleepFx(); if (!S && !sleepNight()) GEO.sleptNight = false;   // (2.92: a new night, a new sleep)
+  if (!S) { F.black.visible = F.tint.visible = F.hint.visible = F.sp.visible = false; if (GEO.veil) GEO.veil.visible = false; GEO.ghostK = Math.max(0, (GEO.ghostK || 0) - dt); HFOG.uDream.value.x = GEO.ghostK; if (GEO.beacon) GEO.beacon.visible = false; if (GEO.wisps && GEO.wisps.length) { dreamWisps(I, false, dt); dreamSouls(I, false); } return; }
   S.t += dt; const Hm = GEO.hm, hy = Hm ? Hm.mid.y : P.y + 1;
-  if (main && edge("wakeB", main.b) && S.st !== "yank" && S.st !== "out") sleepWake("you");
+  if (main && edge("wakeB", main.b) && S.st !== "yank" && S.st !== "out" && S.st !== "trip" && S.st !== "tripIn") sleepWake("you");
   // what's coming for your body
-  if ((S.chkT -= dt) <= 0 && S.st !== "yank" && S.st !== "out") { S.chkT = .25; let why = "";
+  if ((S.chkT -= dt) <= 0 && S.st !== "yank" && S.st !== "out" && S.st !== "trip" && S.st !== "tripIn") { S.chkT = .25; let why = "";
     if (MP.hp < S.hp0 - .5) { sleepWake("danger"); vrBanner("Something hurt you! You're awake", 2.5, 2); }
     for (const A of beasts) { if (A.dead || A.gone || FLY[A.kind]) continue; const d = Math.hypot(A.x - S.body.x, A.z - S.body.z); if ((A.pred && d < 70) || d < 12) { why = A.pred ? (PRED_NAME[A.kind] || "Something") + " is coming for your body!" : "Something is right by your body!"; break; } }
     if (!why) for (const L of mpOpen()) if (L.R && L.R.cur && Math.hypot(L.R.head.x - S.body.x, L.R.head.z - S.body.z) < HAMMOCK.near) { why = "Someone is near your body!"; break; }
@@ -5590,7 +5591,9 @@ function sleepTick(I, main, dt) {
   else if (S.st === "blink") {                                       // blink… blink… blink, slower each time
     const B = [[.6, .35, .5], [1.6, .5, .7], [2.9, .8, 0]]; for (const [at, dn, up] of B) { const u = S.t - at; if (u > 0 && u < dn) black = Math.max(black, u / dn); else if (u >= dn && up && u < dn + up) black = Math.max(black, 1 - (u - dn) / up); else if (!up && u >= dn) black = 1; }
     if (S.t > 3.7) { S.st = "dark"; S.t = 0; } }
-  else if (S.st === "dark") { black = 1; if (S.t > 1) { S.st = "rise"; S.t = 0; S.y0 = S.view.y; vrBanner("You've left your body", 2.5, 1); } }
+  else if (S.st === "dark") { black = 1; if (S.t > 1) { if (!hamDreams()) { S.st = "trip"; S.t = 0; } else { S.st = "rise"; S.t = 0; S.y0 = S.view.y; vrBanner("You've left your body", 2.5, 1); } } }
+  else if (S.st === "trip") { black = 1; if (!S.went) { S.went = true; hamTrip(); } if (S.t > 1.2) { S.st = "tripIn"; S.t = 0; } }   // 2.92: below level 30: off to the island (and back)
+  else if (S.st === "tripIn") { black = Math.max(0, 1 - S.t); if (S.t > 1) { GEO.sleep = null; F.black.visible = false; F.hint.visible = false; return; } }
   else if (S.st === "rise") { S.rested = true; black = Math.max(0, 1 - S.t / .9); const k = Math.min(1, S.t / 2), e = k * k * (3 - 2 * k); S.view.y = S.y0 + 3.2 * e; if (S.t > 2) { S.st = "ghost"; S.t = 0; } }
   else if (S.st === "warn") { MP.hurt = Math.max(MP.hurt, .35 + .25 * Math.sin(S.t * 9)); if ((S.beatT -= dt) <= 0) { S.beatT = .55; gunFoley([[0, 70, .12, .3], [.18, 60, .12, .22]]); buzz("L", .4, 60); buzz("R", .4, 60); }
     if ((S.warnT -= dt) <= 0) sleepWake("danger"); }
@@ -5607,7 +5610,27 @@ function sleepTick(I, main, dt) {
   F.black.visible = black > .001; F.black.material.opacity = Math.min(1, black); F.black.position.copy(I.head);
   const k = GEO.ghostK; F.tint.visible = F.sp.visible = false; if (GEO.veil) GEO.veil.visible = false;   // (2.88: the sight itself changes instead)
   HFOG.uDream.value.set(k, performance.now() / 1000); dreamWisps(I, k > .01, dt); dreamSouls(I, k > .3); dreamBeacon(k);
-  sleepHint(I, S.st === "ghost" || S.st === "warn" && ghost ? "B: wake up  ·  left stick: fly  ·  right stick: up / down" : "B: wake up");
+  sleepHint(I, S.st === "trip" || S.st === "tripIn" ? "" : S.st === "ghost" || S.st === "warn" && ghost ? "B: wake up  ·  left stick: fly  ·  right stick: up / down" : "B: wake up");
+}
+const HAM_DREAM = 30;                                                 // 2.92: from level 30 you dream; below it the hammock takes you to the island
+const hamDreams = () => GEO.found && GEO.found.size >= HAM_DREAM;
+function geoIsland() {                                               // one big island on the planet, the same for everyone (from the seed)
+  if (GEO.isle && GEO.isle.seed === seed) return GEO.isle.p;
+  const G = GLOBE, R = G.R, rr = mulberry32(seed * 2027 + 9), land = p => G.landAt(p) > 1.5;
+  const at = (p, d, a) => { const f = glFrame(p), k = Math.tan(d / R); return glNorm([p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * k, p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * k, p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * k]); };
+  let best = null, bs = 0;
+  for (let t = 0; t < 1400; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .8 || !land(p)) continue;
+    let enc = 0, ext = 0; for (let d = 150; d <= 1500; d += 150) { let n = 0; for (let q = 0; q < 10; q++) if (land(at(p, d, q / 10 * 6.283))) n++; if (n >= 5) ext = d; if (n === 0) { enc = d; break; } }
+    if (enc && ext >= 300 && ext > bs) { bs = ext; best = p; } }
+  if (!best) best = geoRandomSpot();
+  GEO.isle = { seed, p: best }; return best;
+}
+function hamTrip() {                                                 // asleep (below level 30): to the island, or back to where you came from
+  const back = GEO.onIsle && GEO.isleFrom, to = back ? GEO.isleFrom : geoIsland();
+  if (!back) GEO.isleFrom = glToSphere(P.x, P.z, [0, 0, 0]);
+  hamClear(); if (GEO.sleep) GEO.sleep.view = null; geoTeleport(to); GEO.onIsle = !back; if (back) GEO.isleFrom = null;
+  MP.hp = Math.min(100, MP.hp + 30); GEO.food = Math.max(0, GEO.food - 8); GEO.water = Math.max(0, GEO.water - 10);
+  vrBanner(back ? "You wake up back where you were" : "You wake up on the island", 4, 2); geoSave();
 }
 function sleepBody() {                                                // your body lying in the hammock, for the others
   const m = GEO.hm.mid, q = new THREE.Quaternion().setFromAxisAngle(_UPv, GEO.hm.yaw + Math.PI / 2), sx = Math.cos(GEO.hm.yaw), sz = -Math.sin(GEO.hm.yaw);
@@ -5674,9 +5697,10 @@ function dreamSouls(I, on) {                                       // animals an
       if (!A.soul) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xffc98a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, toneMapped: false })); scene.add(s); A.soul = s; }
       const big = A.kind === "bear" || A.kind === "polar" || A.kind === "moose" || A.kind === "bison" || A.kind === "elk" || A.hpMax ? 2.4 : A.kind === "rabbit" || A.kind === "bird" || FLY[A.kind] ? .7 : 1.5;
       A.soul.position.set(A.x, (A.y || groundAt(A.x, A.z)) + big * .55, A.z); A.soul.scale.set(big * 4, big * 3, 1); A.soul.material.opacity = .85 + .15 * Math.sin(performance.now() / 400 + A.x); }
-    for (const L of mpOpen()) { if (!L.R || !L.R.cur) continue; keep.add(L);
-      if (!L.soul) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xfff2d8, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, toneMapped: false })); scene.add(s); L.soul = s; }
-      L.soul.position.copy(L.R.head).add(_v1.set(0, -.7, 0)); L.soul.scale.set(1.6, 3.2, 1); }
+    for (const L of mpOpen()) { if (!L.R || !L.R.cur || Math.hypot(L.R.head.x - V.x, L.R.head.z - V.z) > 4000) continue; keep.add(L);   // (2.92: other players stand out, from far away)
+      if (!L.soul) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xffffff, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, transparent: true, fog: false, toneMapped: false })); s.renderOrder = 6; scene.add(s); L.soul = s; }
+      const sc = Math.max(1, L.R.head.distanceTo(camera.position) / 90), pu = 1 + .15 * Math.sin(performance.now() / 300);
+      L.soul.position.copy(L.R.head).add(_v1.set(0, -.7, 0)); L.soul.scale.set(2.4 * sc * pu, 4 * sc * pu, 1); }
   }
   for (const A of beasts) if (A.soul && !keep.has(A)) { scene.remove(A.soul); A.soul.material.dispose(); A.soul = null; }
   for (const L of MP.links.values()) if (L.soul && !keep.has(L)) { scene.remove(L.soul); L.soul.material.dispose(); L.soul = null; }
@@ -5835,6 +5859,7 @@ function geoRespawn() {
   hunt.score = Math.max(0, hunt.score - 10); showHuntScore();
   MP.hp = 60; GEO.food = Math.max(GEO.food, 50); GEO.water = Math.max(GEO.water, 50); GEO.warn = 100; GEO.hurt = 0;
   for (const A of beasts) if (A.pred) predCalm(A, 60);
+  GEO.onIsle = false; GEO.isleFrom = null;                          // 2.92
   const p0 = G0p(), p1 = geoRandomSpot(); geoTeleport(p1);
   const km = p0 ? Math.round(glArc(p0, p1) * GLOBE.R / 100) / 10 : 0, ll = glLatLon(p1);
   vrBanner((by ? by + " got you" : "You didn't make it") + ": you woke up " + km + " km away, at " + geoFmt(ll[0], "N", "S") + " " + geoFmt(ll[1], "E", "W") + " (-10)", 6, 3); geoSave();
