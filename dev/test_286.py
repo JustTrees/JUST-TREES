@@ -26,12 +26,13 @@ async def main():
           D.geoGearApply(14, true); D.geoHeld('tent'); o.name = D.GEO.held;
           const at = t => new T.Vector3(t.x + t.tr + .1, D.groundAt(t.x, t.z) + 1.2, t.z), press = () => { M.trig = 1; tick(1); M.trig = 0; tick(1); };
           M.pos.copy(head()); press(); o.notTree = !D.GEO.hmA;
-          M.pos.copy(at(A)); press(); o.tied = !!D.GEO.hmA; M.pos.copy(at(B)); press(); o.hung = !!D.GEO.hm;
+          M.pos.copy(at(A)); press(); o.tied = !!D.GEO.hmA; o.glow = (D.GEO.hmGlow || []).length;   // 2.90: the trees that fit glow; the same tree again unties it
+          M.pos.copy(at(A)); press(); o.untied = !D.GEO.hmA && !(D.GEO.hmGlow || []).length; M.pos.copy(at(A)); press(); M.pos.copy(at(B)); press(); o.hung = !!D.GEO.hm && !(D.GEO.hmGlow || []).length;
           // daytime: no sleep; night: in you go
           D.glabTime(12); D.globeTick(0); M.pos.copy(D.GEO.hm.mid); press(); o.day = !D.GEO.sleep;
           D.glabTime(23); D.globeTick(0); D.geoHeld(null); M.pos.copy(D.GEO.hm.mid); press(); o.slept = !!D.GEO.sleep;
           const st = []; for (let i = 0; i < 30 * 9; i++) { tick(1); const s = D.GEO.sleep && D.GEO.sleep.st; if (s && st[st.length - 1] !== s) st.push(s); }
-          o.phases = st.join(','); const S = D.GEO.sleep, body = [P.x, P.z]; o.lifted = S && S.view ? +(S.view.y - S.body.y).toFixed(1) : null; o.ghostK = +(D.GEO.ghostK || 0).toFixed(2); o.dream = [+D.HFOG.uDream.value.x.toFixed(2), (D.GEO.wisps || []).length];   // 2.88: the dream sight on, wisps about
+          o.phases = st.join(','); const S = D.GEO.sleep, body = [P.x, P.z]; o.lifted = S && S.view ? +(S.view.y - S.body.y).toFixed(1) : null; o.ghostK = +(D.GEO.ghostK || 0).toFixed(2); o.dream = [+D.HFOG.uDream.value.x.toFixed(2), (D.GEO.wisps || []).length]; o.beacon = !!(D.GEO.beacon && D.GEO.beacon.visible) || !D.GEO.target;   // 2.88: the dream sight on, wisps about
           // fly 3 s forward, then far: the body stays; the tether holds
           D.input.jy = 1; D.input.jx = 0; const v0 = [S.view.x, S.view.z]; for (let i = 0; i < 90; i++) D.update(dt); o.flew = Math.round(Math.hypot(S.view.x - v0[0], S.view.z - v0[1])); o.bodyStill = Math.hypot(P.x - body[0], P.z - body[1]) < .01;
           const bs0 = D.glToSphere(P.x, P.z, [0, 0, 0]); M.sy = -1; for (let i = 0; i < 30 * 20; i++) { D.update(dt); D.endlessTick(dt); } M.sy = 0; for (let i = 0; i < 30 * 40; i++) { D.update(dt); D.endlessTick(dt); }
@@ -50,7 +51,7 @@ async def main():
           return o; }""")
         print(json.dumps(r))
         ok = r.get("pair") and r["notTree"] and r["tied"] and r["hung"] and r["day"] and r["slept"] and r["phases"].startswith("settle,blink,dark,rise,ghost") and r["lifted"] >= 3 and r["ghostK"] > .9 \
-             and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1] and r["dream"][0] > .9 and r["dream"][1] > 5 and r["dreamOff"][0] < .05 and r["dreamOff"][1] == 0
+             and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1] and r["glow"] > 0 and r["untied"] and r["beacon"] and r["dream"][0] > .9 and r["dream"][1] > 5 and r["dreamOff"][0] < .05 and r["dreamOff"][1] == 0
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
