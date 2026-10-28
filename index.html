@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.79";              // Just Trees 2.55
+const VERSION = "2.80";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3035,7 +3035,8 @@ function toggleMap(on) {
 function startFly() {
   if (vr.on) {                                                  // in VR: a little model of the map turns in front of you, then you drop in
     fly = null; reveal(); drawMap($("miniMap")); vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined;
-    vruiOpen("preview"); return;
+    vruiOpen("preview"); if (set.geoNet && MP.code) VRUI.fadeGo = () => { enEnsureHere(); vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };   // 2.80: online Treeocashing: straight onto the planet
+    return;
   }
   const ex = P.x, ez = P.z, ey = P.y + EYE, fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw);
   let peak = water;
@@ -3080,7 +3081,7 @@ function updateFly(dt) {
    Hiking in a headset has two maps: Island (always the 3 km map) or Endless (HIKEMAP). */
 let HIKEMAP = null, HIKE_FORCE = null;
 const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || set.huntMap === "globe");
-const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && !MP.code;   // (2.77: Treeocashing is live; always solo)   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
+const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && (!MP.code || !!set.geoNet);   // (2.80: online too, on its own button)   // (2.77: Treeocashing is live; always solo)   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
 const spawnPick = () => !!MP.code && (gameMode === "hike" ? set.hikeMap === "endless" : huntEndless());   // 2.24: online on endless land: how far apart everyone starts
 function enSpawnNear(hx, hz, d, k) {                         // a spot about d m from the host, each player in their own direction
   const a0 = (k || 0) * 2.39996 + seed * .37;
@@ -3424,7 +3425,7 @@ function endlessTick(dt) {                                   // every frame: bui
   // 2.21: a whole day in 24 minutes, the same clock for everyone online; the light follows it, the tree shadows turn with the sun
   if (E.clock && play && !GLOBE) {                           // (the globe keeps its own clock: globeTick)
     hourNow = (hourNow + dt / 60) % 24;
-    if (MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow }); }
+    if (MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow, u: GLOBE ? +GLOBE.utc.toFixed(4) : undefined }); }
   }
   if (E.clock && (E.lightT = (E.lightT || 0) - dt) <= 0) { E.lightT = .1; enLight(); }   // (2.25: 10 small steps a second)
   enShadowSun(dt);
@@ -4112,12 +4113,12 @@ function glNoise3(rand) {                                    // Perlin's improve
 const n3 = (n, X, Y, Z, f, a = 0) => n(X * f + a, Y * f + a * .7, Z * f - a * .3);
 const f3 = (n, X, Y, Z, f, oct, a = 0) => { let s = 0, w = 1, t = 0, ff = f; for (let i = 0; i < oct; i++) { s += n(X * ff + a + i * 17.3, Y * ff + a * .7 - i * 9.1, Z * ff - a * .3 + i * 5.7) * w; t += w; w *= .5; ff *= 2.03; } return s / t; };
 // the chart: flat (x, z) <-> a point on the unit sphere. Centre c, flat +x along e, flat +z along n (all unit, at right angles), (ox, oz) the centre's flat spot
-function glToSphere(x, z, out) {
-  const G = GLOBE, u = x - G.ox, v = z - G.oz, t2 = (u * u + v * v) / (4 * G.R * G.R), k = 1 / (1 + t2), a = (1 - t2) * k, b = k / G.R, c = G.c, e = G.e, n = G.n;
+function glToSphere(x, z, out, F) {
+  const G = F || GLOBE, u = x - G.ox, v = z - G.oz, t2 = (u * u + v * v) / (4 * G.R * G.R), k = 1 / (1 + t2), a = (1 - t2) * k, b = k / G.R, c = G.c, e = G.e, n = G.n;
   out[0] = a * c[0] + b * (u * e[0] + v * n[0]); out[1] = a * c[1] + b * (u * e[1] + v * n[1]); out[2] = a * c[2] + b * (u * e[2] + v * n[2]); return out;
 }
-function glFromSphere(p, out) {
-  const G = GLOBE, c = G.c, d = Math.max(1e-6, 1 + p[0] * c[0] + p[1] * c[1] + p[2] * c[2]), k = 2 * G.R / d;
+function glFromSphere(p, out, F) {
+  const G = F || GLOBE, c = G.c, d = Math.max(1e-6, 1 + p[0] * c[0] + p[1] * c[1] + p[2] * c[2]), k = 2 * G.R / d;
   out[0] = G.ox + k * (p[0] * G.e[0] + p[1] * G.e[1] + p[2] * G.e[2]); out[1] = G.oz + k * (p[0] * G.n[0] + p[1] * G.n[1] + p[2] * G.n[2]); return out;
 }
 const glLatLon = p => [Math.asin(Math.max(-1, Math.min(1, p[1]))) * 180 / Math.PI, Math.atan2(p[0], p[2]) * 180 / Math.PI];
@@ -4704,7 +4705,7 @@ function geoTentPlace(x, z, quiet) {
 }
 function geoSleep() {
   const G = GLOBE, h = hourNow, night = sunPos(0, set.month, hourNow).el < 2;
-  if (night) { const ahead = ((7 - h) + 24) % 24; G.utc = (G.utc + ahead) % 24; }
+  if (night && !MP.code) { const ahead = ((7 - h) + 24) % 24; G.utc = (G.utc + ahead) % 24; }   // (2.80: online, the clock is everyone's: you just rest)
   MP.hp = Math.min(100, MP.hp + 30); GEO.food = Math.max(0, GEO.food - 8); GEO.water = Math.max(0, GEO.water - 10);
   vrBanner(night ? "You slept till morning" : "A good rest", 3, 2); buzz("L", .3, 80); buzz("R", .3, 80); geoSave();
 }
@@ -5243,6 +5244,59 @@ function glabPanel() {
   B(rx + 210, 1020, 200, "Page ▶", () => { GLAB.page = (GLAB.page + 1) % Math.ceil(TUNE_DEF.length / per); });
   B(rx + 420, 1020, 260, "Reset tweaks", () => { for (const [k, , d0] of TUNE_DEF) TUNE[k] = d0; tuneSave(); glabSay("Tweaks back to the game's values"); });
   B(lx, 1020, 270, "Back to it", () => vruiResume(), { primary: true }); B(lx + 290, 1020, 270, "Main menu", () => vruiOpen("mode"));
+}
+/* ---- 2.80: Online Treeocashing (Dev menu while it's built): one button and you're on a shared planet with up to 7 others. It finds a
+   public Treeocashing room with room for you and drops you in, or opens a new one that the next player lands in. Each of you keeps your
+   own level and caches; you see, hear and can shoot each other; the animals are each your own. Everyone's world is laid out round
+   themselves, so positions travel as points on the planet (each message carries the sender's layout, the receiver turns them into its
+   own). The host can hand the planet to someone else; if the host leaves, the next player takes over and the room carries on. ---- */
+const geoNet = () => GEO.on && !!MP.code && !!set.geoNet;
+function geoFrameArr() {                                        // my layout of the planet, for the others to read my positions with
+  const G = GLOBE; if (!G) return null; const key = G.reN + "|" + G.ox + "|" + G.oz;
+  if (G.fKey !== key) { G.fKey = key; const r = v => +v.toFixed(8); G.fArr = [...G.c.map(r), ...G.e.map(r), ...G.n.map(r), +G.ox.toFixed(3), +G.oz.toFixed(3)]; }
+  return G.fArr;
+}
+function geoNetIn(o) {                                          // their positions, from their layout into mine
+  const a = o.gf; if (!GLOBE || !Array.isArray(a) || a.length !== 11) return;
+  const F = { R: GLOBE.R, c: a.slice(0, 3), e: a.slice(3, 6), n: a.slice(6, 9), ox: a[9], oz: a[10] }, s = [0, 0, 0], out = [0, 0];
+  const conv = (x, z) => { glToSphere(x, z, s, F); glFromSphere(s, out); return [out[0], out[1]]; };
+  let th = null; const turn = (x, z) => { if (th === null) { const p0 = conv(x, z), p1 = conv(x + 1, z); th = Math.atan2(-(p1[1] - p0[1]), p1[0] - p0[0]); } return th; };
+  const pose = A => { if (!Array.isArray(A) || A.length < 3) return; const t = turn(A[0], A[2]), q = conv(A[0], A[2]); A[0] = q[0]; A[2] = q[1];
+    if (A.length >= 7) { const sh = Math.sin(t / 2), ch = Math.cos(t / 2), x = A[3], y = A[4], z = A[5], w = A[6];   // (turned by the difference in the two layouts)
+      A[3] = ch * x + sh * z; A[4] = ch * y + sh * w; A[5] = ch * z - sh * x; A[6] = ch * w - sh * y; } };
+  const vec = (V, x, z) => { if (!Array.isArray(V)) return; const t = turn(x, z), c = Math.cos(t), sn = Math.sin(t), vx = V[0], vz = V[2]; V[0] = vx * c + vz * sn; V[2] = -vx * sn + vz * c; };
+  if (o.t === "s") { const x = o.h ? o.h[0] : 0, z = o.h ? o.h[2] : 0; for (const A of [o.h, o.l, o.r, o.g && o.g.p]) if (A) { turn(x, z); pose(A); } }
+  else if ((o.t === "f" || o.t === "g") && Array.isArray(o.o)) { const x = o.o[0], z = o.o[2]; vec(o.v, x, z); pose(o.o); }
+  else if (o.t === "mk") { const q = conv(o.x, o.z); o.x = q[0]; o.z = q[1]; }
+}
+async function geoNetGo() {                                     // the button: a planet with room for you, or a new one
+  if (!MP.tag) { VRUI.tagNext = "geonet"; vruiOpen("tag"); return; }
+  MP.status = "Finding a planet…"; vruiOpen("mp");
+  let rooms = []; try { const o = await (await fetch((MP.roomsUrl || ROOMS_URL) + "?v=" + encodeURIComponent(MP.netV), { cache: "no-store" })).json(); rooms = o && Array.isArray(o.rooms) ? o.rooms : []; } catch (_) {}
+  const r = rooms.filter(q => q.v === MP.netV && q.map === "Treeocashing" && (q.n || 1) < MP_MAX && !(MP.kicked && MP.kicked.has(q.code))).sort((a, b) => (b.n || 0) - (a.n || 0))[0];
+  if (r) { await mpJoin(r.code); vruiOpen("lobby"); return; }
+  await mpHost(); setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; MP.pub = true; MP.pubKey = ""; MP.pubT = 0; renderSetup(); startNew();
+}
+function geoNetSetHost(id) {                                    // who runs the room now (everyone agrees)
+  MP.hostId = id; const me = id === mpMyId(), was = MP.host; MP.host = me;
+  if (me) { MP.pub = true; MP.pubKey = ""; MP.pubT = 0; geoDoorOpen(); if (!was) vrBanner("You're the host of this planet now", 3, 1); }
+  else { geoDoorClose(); const L = MP.links.get(id); vrBanner(((L && L.tag) || "Someone") + " is the host now", 2.5, 0); }
+}
+function geoNetGive(id) { if (!MP.host || !MP.links.get(id)) return; mpSend({ t: "host", id }); geoNetSetHost(id); }
+function geoNetElect() { const ids = [mpMyId(), ...mpOpen().map(L => L.id)].filter(Boolean).sort(); if (ids.length) geoNetSetHost(ids[0]); }
+function geoDoorOpen() {                                        // the room's code answers newcomers: "the host is over there"
+  const doorId = MP_PREFIX + MP.code; if (!MP.host || !MP.code || mpMyId() === doorId || MP.door) return;
+  const p = mpNewPeer(doorId); if (!p) return; MP.door = p; const code = MP.code;
+  p.on("error", e => { if (MP.door !== p) return; MP.door = null; try { p.destroy(); } catch (_) {} if (e.type === "unavailable-id") setTimeout(() => { if (MP.host && MP.code === code) geoDoorOpen(); }, 5000); });   // (still taken: whoever holds it sends people on)
+  p.on("connection", c => c.on("open", () => { try { c.send({ t: "hostis", id: mpMyId() }); } catch (_) {} setTimeout(() => { try { c.close(); } catch (_) {} }, 1500); }));
+}
+function geoDoorClose() { if (MP.door) { try { MP.door.destroy(); } catch (_) {} MP.door = null; } }
+function geoHostPanel() {                                        // the host: give the planet to someone else
+  const Pn = uiPanel("ghost", 1100, 1000, 1.7, 58, 1.4);
+  Pn.paint = (g, P) => { uiBg(g, P, "Hand over the host"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText("They'll run the planet; you stay and keep playing", 550, 150); };
+  for (let i = 0; i < 7; i++) uiBtn(Pn, 110, 190 + i * 96, 880, 84, "", () => { const L = mpOpen()[i]; if (L) { geoNetGive(L.id); vruiResume(); } },
+    { labelFn: () => { const L = mpOpen()[i]; return L ? (L.tag || "Player") : ""; }, hide: () => !mpOpen()[i], fs: 36, personal: true });
+  uiBtn(Pn, 110, 880, 880, 90, "Back", () => vruiOpen("pause"), { fs: 36, personal: true });
 }
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
@@ -9607,7 +9661,7 @@ function vrFire() {
     const ms = set.hand === "right" ? "R" : "L"; buzz(ms, 1, 120);
   }
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
-  const online = gameMode === "pvp" && MP.on && !!W;
+  const online = (gameMode === "pvp" || geoNet()) && MP.on && !!W;
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, gun: W ? vr.gunKind : null, online });
   legendShot(from, v.clone().normalize(), vr.scoped ? 3200 : W ? W.reach : 900, v.length());
   if (MP.on && W) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
@@ -10401,7 +10455,7 @@ function vruiParts() {
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
   uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
   uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
-  devPanels(); glabPanel(); labPanel(); arenasPanel(); vbPanel();
+  devPanels(); glabPanel(); geoHostPanel(); labPanel(); arenasPanel(); vbPanel();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -10555,6 +10609,7 @@ function vruiParts() {
     if (state === "play") { g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText("The game keeps going for everyone while this is open", 550, 184); } };   // 2.38: online, only you stop
   [["Resume", () => vruiResume(), { primary: true, personal: true }],
    ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],
+   ["Hand over the host", () => vruiOpen("ghost"), { personal: true, hide: () => !(MP.host && set.geoNet && mpOpen().length) }],   // 2.80
    ["Gear Lab tools", () => vruiOpen("glab"), { personal: true, hide: () => !(GEO.on && GEO.lab) }],   // 2.79   // 2.46: a test walk
    ["Set height", () => vrHeightCheck("pause"), { personal: true }],                                                                    // 2.38
    ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() || LAB.testing }],
@@ -11030,6 +11085,7 @@ function devPanels() {
   uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
   uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
   uiBtn(Dv, 720, 450, 590, 170, "Gear Lab", () => { GEO.labWant = true; setMode("hunt"); set.huntMap = "globe"; renderSetup(); startNew(); }, { sub: "Every Treeocashing item to try and tweak", fs: 46 });   // 2.79
+  uiBtn(Dv, 90, 640, 1220, 120, "Online Treeocashing (testing)", () => geoNetGo(), { sub: "A shared planet, up to 8: drops you into one with room, or opens a new one", fs: 44, paintCol: "#6a5a2a" });   // 2.80
   if (0) uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
@@ -11577,7 +11633,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");   // 2.45 / 2.46
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -13699,7 +13755,7 @@ function pvpHud(I, dt) {
   const g = VHUD.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 512, 190);
   const bar = (y, v, col, label) => { g.fillStyle = "rgba(255,255,255,.12)"; uiRound(g, 26, y, 460, 26, 9); g.fill(); if (v > 0) { g.fillStyle = col; uiRound(g, 26, y, Math.max(18, 460 * v / 100), 26, 9); g.fill(); }
     g.fillStyle = "#fff"; g.font = "bold 22px sans-serif"; g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(label + " " + Math.round(v), 478, y + 14); g.textAlign = "left"; };
-  if (gameMode === "hunt" && !MP.code) {                        // 2.76: Hunting on your own: the score; Geocaching: your health, food and water as well
+  if (GEO.on || (gameMode === "hunt" && !MP.code)) {            // 2.76: Hunting on your own: the score; Geocaching: your health, food and water as well
     g.fillStyle = "rgba(8,12,10,.62)"; uiRound(g, 4, 4, 504, GEO.on ? 178 : 64, 22); g.fill();
     g.textAlign = "center"; g.textBaseline = "middle"; g.font = "bold 30px sans-serif"; g.fillStyle = "#f2f6ec";
     g.fillText(GEO.on ? "Level " + GEO.found.size + " · Score " + Math.round(hunt.score) : "Score " + hunt.score.toFixed(1) + " · " + hunt.kills + (hunt.kills === 1 ? " kill" : " kills"), 256, 36);
@@ -13745,8 +13801,8 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill", "bigHead"];   // (2.46: the arena travels with the settings)
-const mpHostId = () => MP_PREFIX + MP.code, mpMyId = () => (MP.peer && MP.peer.id) || "";
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill", "bigHead", "geoNet"];   // (2.46: the arena travels with the settings)
+const mpHostId = () => MP.hostId || (MP_PREFIX + MP.code), mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (2.00: online in every mode)
 function mpOnUpdate() { MP.on = mpOpen().length > 0; }
@@ -13763,11 +13819,13 @@ function mpDropLink(L) {
   if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
 }
 function mpLeave() {
+  if (MP.host && set.geoNet && mpOpen().length) { const nx = mpOpen().map(L => L.id).sort()[0]; mpSend({ t: "host", id: nx }); }   // 2.80: the planet goes on without you
   vbLeave();                                                 // 2.48
   if (MP.host && MP.pub && MP.code) roomsPost({ op: "gone", code: MP.code }); MP.pub = false; MP.pubKey = "";   // 2.28: off the list
   mpSend({ t: "bye" });
   for (const L of [...MP.links.values()]) mpDropLink(L);
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
+  geoDoorClose(); MP.hostId = ""; set.geoNet = false;
   MP.peer = null; MP.links.clear(); MP.on = false; MP.code = ""; MP.entry = ""; MP.idx = 0; MP.revealT = 0; MP.reveal = MP.pendingReveal = null; MP.lastSet = "";
 }
 const MP_TURN_URL = "https://just-trees-online.ron-bb2.workers.dev/turn";   // our own Cloudflare relay (1.83): the Worker keeps the key, hands out 6-hour passes
@@ -13849,7 +13907,7 @@ function mpWire(c, out) {
     pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && L.conn === c) { try { c.close(); } catch (e) {} } }); };
   watchIce();
   c.on("open", () => { clearTimeout(stuck); L.lastRx = performance.now(); L.open = true; mpOnUpdate(); if (!MP.host && id === mpHostId()) { MP.kills = MP.deaths = 0; }
-    try { c.send({ t: "hi", v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); } catch (e) {} });
+    try { c.send({ t: "hi", door: out && id === MP_PREFIX + MP.code && !MP.host ? 1 : 0, v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); } catch (e) {} });
   c.on("data", o => mpRecv(o, L));
   c.on("close", () => { if (L.conn === c) mpLinkGone(L, false); });
   c.on("error", () => {});
@@ -13860,6 +13918,7 @@ function mpLinkGone(L, lost) {
   if (wasHost) {
     vbLeave();                                               // (the host's bots go with the host)
     mpNetLocal();
+    if (set.geoNet && state === "play" && MP.on) { geoNetElect(); return; }   // 2.80: the next one takes over
     if (state === "play" && MP.on) { mpStatus("The host left. You can keep playing with the others."); return; }
     mpFail(lost ? "Lost the connection to the host." : "The host left the game"); if (VRUI.on && VRUI.stage !== "mp" && VRUI.stage !== "mode") vruiOpen("mp"); return;
   }
@@ -13880,7 +13939,7 @@ function mpVoice(L, stream) {                               // each player's voi
     src.connect(g); g.connect(SND.master); L.vsrc = src; L.vg = g;
   } catch (e) {}
 }
-function mpSendTo(L, o) { if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
+function mpSendTo(L, o) { if (GLOBE && (o.t === "s" || o.t === "f" || o.t === "g" || o.t === "mk") && !o.gf) o.gf = geoFrameArr(); if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
 function mpSend(o) { for (const L of MP.links.values()) mpSendTo(L, o); }
 function mpSendHost(o) { mpSendTo(MP.links.get(mpHostId()), o); }
 function mpSet() { const s = { mode: gameMode }; for (const k of MP_SET) s[k] = set[k]; return s; }
@@ -13911,8 +13970,8 @@ const mpColOf = L => L ? Math.max(0, L.idx) : MP.idx;           // your player c
 const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : (L ? Math.max(0, L.idx) : MP.idx) % 5; };   // your uniform
 const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
-const mpNetGuest = () => { if (!MP.code || MP.host || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.70";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+const mpNetGuest = () => { if (!MP.code || MP.host || GLOBE || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
+MP.netV = "2.80";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -14049,7 +14108,7 @@ function mpOnlineTick(dt, playing) {
   if (MP.host && (VB.fitT -= dt) <= 0) { VB.fitT = .5; vbFit(); }   // 2.48: the bots keep up with who's in the room
   for (const L of MP.links.values()) if (L.mark && L.mark.visible && ((L.markT -= dt) <= 0 || !playing || !L.open)) { L.mark.visible = false; drawMap($("miniMap")); }
   if (playing && (set.comms | 0) === 3 && vr.I && MP.on) mpBumpTick();
-  if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing) mpBeastSend(dt);
+  if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing && !GLOBE) mpBeastSend(dt);
   roomsBeat(dt);                                             // 2.28: a Public room stays on the list
   if (mpNetGuest() && (MP.pruneT = (MP.pruneT || 0) - dt) <= 0) {   // animals the host stopped sending (too far now, or gone)
     MP.pruneT = 1;
@@ -14060,7 +14119,7 @@ function mpOnlineTick(dt, playing) {
 /* ---- 2.28: open games. A Public room checks in with our Cloudflare Worker every 30 s (and when it changes); "Find a game" reads the list every 5 s. ---- */
 const ROOMS_URL = "https://just-trees-online.ron-bb2.workers.dev/rooms";
 const roomAt = i => MP.rooms && MP.rooms[(MP.roomPg || 0) * 6 + i] || null;
-function roomMapName() { const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Endless"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
+function roomMapName() { if (set.geoNet && gameMode === "hunt" && set.huntMap === "globe") return "Treeocashing"; const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Endless"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
 function roomsPost(o) { try { fetch(MP.roomsUrl || ROOMS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), keepalive: true }).catch(() => {}); } catch (e) {} }
 function roomsSetPublic(on) { if (!MP.host) return; MP.pub = !!on; MP.pubKey = ""; MP.pubT = 0; if (!on && MP.code) roomsPost({ op: "gone", code: MP.code }); mpLobSync(true); mpLobbyDraw(); }
 function roomsBeat(dt) {                                      // host: keep a Public room on the list
@@ -14096,6 +14155,7 @@ function mpTagDone() {                                       // the keyboard's O
   try { localStorage.setItem("jt-tag", MP.tag); } catch (_) {}
   if (nx === "host") { mpHost(); vruiOpen("lobby"); }
   else if (nx && nx.startsWith("join:")) { mpJoin(nx.slice(5)); vruiOpen("lobby"); }
+  else if (nx === "geonet") geoNetGo();
   else { mpSendMe(); vruiOpen(MP.code ? "lobby" : "mp"); }
 }
 function mpLobbyPanels() {
@@ -14221,13 +14281,13 @@ function mpRevealEnd() {                                    // into the real map
   MP.revealT = 0; MP.reveal = null; pvpRoundStart();
   VRUI.fadeGo = () => { enEnsureHere(); vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };
 }
-function mpSendStart() { MP.roundLeft = MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
+function mpSendStart() { MP.roundLeft = set.geoNet ? 0 : MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
 function mpSendStartTo(L) {                                 // straight into a game that's already going
   const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
   mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft, hr: hourNow });
 }
 function mpGuestStart(o) {
-  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = o.left || (set.roundMin || 10) * 60;
+  mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = set.geoNet ? 0 : o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
     generate(); if (ENDLESS && typeof o.hr === "number") { hourNow = o.hr; enLight(); } reveal(); drawMap($("miniMap"));
@@ -14236,7 +14296,8 @@ function mpGuestStart(o) {
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
     { const as = arenaSpawnFar(far); if (as) { P.x = as[0]; P.z = as[1]; P.y = groundAt(P.x, P.z); } }   // 2.47: an arena: your side's start point
-    if (ENDLESS) { const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.21: joining endless land: near the host (2.24: as far as chosen)
+    if (GLOBE) { const a = Math.random() * 6.283, r = 20 + Math.random() * 60; for (let k = 0; k < 30; k++) { const x = Math.cos(a + k) * r, z = Math.sin(a + k) * r; if (H(x, z) > water + .5) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } } }   // 2.80: the planet's start, a little apart
+    else if (ENDLESS) { const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.21: joining endless land: near the host (2.24: as far as chosen)
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
     if (vr.on && VRUI.root) VRUI.fadeGo = () => { enEnsureHere(); vruiClose(); vr.placeAt = true; state = "play"; showHud(true); }; else { enEnsureHere(); vr.placeAt = true; state = "play"; }   // joining late keeps the clock the host sent
@@ -14244,6 +14305,7 @@ function mpGuestStart(o) {
 }
 function mpRecv(o, L) {
   if (!o || !o.t) return;
+  if (o.gf) geoNetIn(o);                                       // 2.80: from their layout of the planet into mine
   L.lastRx = performance.now();
   if (o.t === "ping") return;
   if (o.t === "hi") {
@@ -14258,10 +14320,12 @@ function mpRecv(o, L) {
       mpSendTo(L, { t: "welcome", idx: L.idx, peers: mpOpen().filter(q => q !== L).map(q => q.id) });
       mpStatus(mpWaitText() + (state === "play" ? "" : " Choose the game."));
       mpTeamFix(); mpSyncTo(L); mpLobSync(true); mpLobbyDraw();
-    }
+    } else if (o.door && MP.hostId && MP.hostId !== mpMyId()) mpSendTo(L, { t: "hostis", id: MP.hostId });   // 2.80: I hold the code, but the host is someone else now
     return;
   }
   if (L.bad) return;
+  if (o.t === "hostis") { if (!MP.host && o.id && o.id !== mpMyId()) { MP.hostId = String(o.id); mpMeet(MP.hostId); } return; }   // 2.80
+  if (o.t === "host") { if (o.id) geoNetSetHost(String(o.id)); return; }
   if (o.t === "welcome") { MP.idx = o.idx; for (const id of o.peers || []) mpMeet(id); mpStatus("Joined! The host is setting up the game…"); mpLobbyDraw(); return; }
   if (mpRecv2(o, L)) return;
   if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
@@ -14271,8 +14335,8 @@ function mpRecv(o, L) {
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
   if (o.t === "take") { dropTake(o.id, true); return; }
-  if (o.t === "hr") { if (!MP.host && ENDLESS) enClockSet(o.h); return; }
-  if (o.t === "s" && ENDLESS && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
+  if (o.t === "hr") { if (!MP.host && GLOBE && typeof o.u === "number") { const d = ((o.u - GLOBE.utc + 36) % 24) - 12; GLOBE.utc = Math.abs(d) > .1 ? o.u : (GLOBE.utc + d * .5 + 24) % 24; } else if (!MP.host && ENDLESS) enClockSet(o.h); return; }
+  if (o.t === "s" && ENDLESS && !GLOBE && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // 2.19: the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
   if (o.t === "s") { L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (2.48: the bots hear it)
@@ -15581,6 +15645,9 @@ function mpTakeHit(d, head, noShield) {
   MP.lastHitHead = !!head;
   const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
+  if (MP.hp <= 0 && GEO.on) {                                // 2.80: on the planet: the dark, then you wake somewhere far off
+    MP.deaths++; mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0 }); GEO.killedBy = mpTagOf(MP.lastHitBy) || "Someone"; if (!(UW.drown > 0)) { UW.drown = .001; UW.red = 1; } return;
+  }
   if (MP.hp <= 0) {
     MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; const did = "dd" + mpMyId() + "_" + MP.deaths; dropDead(did, P.x, P.y, P.z);
     mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0, dd: [did, +P.x.toFixed(2), +P.y.toFixed(2), +P.z.toFixed(2)] });
