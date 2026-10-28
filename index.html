@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.94";              // Just Trees 2.55
+const VERSION = "2.95";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -11423,8 +11423,8 @@ function vruiParts() {
   // ---- 2.38: the main menu: Solo · Online, and your character, height and the rules ----
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
-  uiBtn(M, 900, 150, 410, 230, "Treeocashing", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "Solo · new planet, your level carries on", fs: 46, hide: () => !!MP.code, paintCol: "#6a5a2a" });   // 2.77: live
-  uiBtn(M, 90, 150, 790, 230, "Solo", () => { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
+  // (2.95: Treeocashing is online only now: Online → Treeocashing)
+  uiBtn(M, 90, 150, 1220, 230, "Solo", () => { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
   uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64 });
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
