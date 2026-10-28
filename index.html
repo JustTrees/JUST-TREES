@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.90";              // Just Trees 2.55
+const VERSION = "2.91";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5581,7 +5581,7 @@ function sleepTick(I, main, dt) {
     for (const A of beasts) { if (A.dead || A.gone || FLY[A.kind]) continue; const d = Math.hypot(A.x - S.body.x, A.z - S.body.z); if ((A.pred && d < 70) || d < 12) { why = A.pred ? (PRED_NAME[A.kind] || "Something") + " is coming for your body!" : "Something is right by your body!"; break; } }
     if (!why) for (const L of mpOpen()) if (L.R && L.R.cur && Math.hypot(L.R.head.x - S.body.x, L.R.head.z - S.body.z) < HAMMOCK.near) { why = "Someone is near your body!"; break; }
     if (why && S.st !== "warn") { S.pre = S.st; S.st = "warn"; S.warnT = 1.4; vrBanner(why, 2.5, 2); }
-    MP.hp = Math.min(100, MP.hp + .25 * .6); S.hp0 = MP.hp; if (!sleepNight() && S.st === "ghost") { sleepWake("morning"); vrBanner("Morning: you wake up", 2, 1); } }
+    MP.hp = Math.min(100, MP.hp + .25 * .6); S.hp0 = MP.hp; if (!sleepNight() && S.st === "ghost") sleepWake("morning"); }
   let black = 0;
   const lie = () => { S.view = S.view || { x: 0, y: 0, z: 0 }; S.view.x = Hm.mid.x; S.view.z = Hm.mid.z; S.view.y = hy + .3 - (vr.headLocalY || 1.6); };
   if (S.st === "settle") {                                           // a quick fade, and you're lying in it, looking up
@@ -5591,10 +5591,13 @@ function sleepTick(I, main, dt) {
     const B = [[.6, .35, .5], [1.6, .5, .7], [2.9, .8, 0]]; for (const [at, dn, up] of B) { const u = S.t - at; if (u > 0 && u < dn) black = Math.max(black, u / dn); else if (u >= dn && up && u < dn + up) black = Math.max(black, 1 - (u - dn) / up); else if (!up && u >= dn) black = 1; }
     if (S.t > 3.7) { S.st = "dark"; S.t = 0; } }
   else if (S.st === "dark") { black = 1; if (S.t > 1) { S.st = "rise"; S.t = 0; S.y0 = S.view.y; vrBanner("You've left your body", 2.5, 1); } }
-  else if (S.st === "rise") { black = Math.max(0, 1 - S.t / .9); const k = Math.min(1, S.t / 2), e = k * k * (3 - 2 * k); S.view.y = S.y0 + 3.2 * e; if (S.t > 2) { S.st = "ghost"; S.t = 0; } }
+  else if (S.st === "rise") { S.rested = true; black = Math.max(0, 1 - S.t / .9); const k = Math.min(1, S.t / 2), e = k * k * (3 - 2 * k); S.view.y = S.y0 + 3.2 * e; if (S.t > 2) { S.st = "ghost"; S.t = 0; } }
   else if (S.st === "warn") { MP.hurt = Math.max(MP.hurt, .35 + .25 * Math.sin(S.t * 9)); if ((S.beatT -= dt) <= 0) { S.beatT = .55; gunFoley([[0, 70, .12, .3], [.18, 60, .12, .22]]); buzz("L", .4, 60); buzz("R", .4, 60); }
     if ((S.warnT -= dt) <= 0) sleepWake("danger"); }
-  else if (S.st === "yank") { black = Math.min(1, S.t / .3); if (S.t > .3 && !S.back) { S.back = true; const far = S.view && Math.hypot(S.view.x - P.x, S.view.z - P.z) > 1200; S.view = null;
+  else if (S.st === "yank") { black = Math.min(1, S.t / .3); if (S.t > .3 && !S.back) { S.back = true;
+      if (S.wakeWhy === "morning") { MP.hp = Math.min(MP.hp, 50); vrBanner("You dreamed into the day: you wake up worn out (half health)", 3.5, 2); }   // 2.91: cut off by the sun
+      else if (S.wakeWhy === "you" && S.rested) MP.hp = 100;   /* waking yourself in the night: rested */
+      const far = S.view && Math.hypot(S.view.x - P.x, S.view.z - P.z) > 1200; S.view = null;
       if (far) { geoTeleport(glToSphere(P.x, P.z, [0, 0, 0])); hamRestore(); }   // (2.87: back from across the planet: the ground round your body again)
       const Hm = GEO.hm; const sx = Hm ? Hm.mid.x - Math.sin(Hm.yaw + Math.PI / 2) * 1.2 : S.body.x, sz = Hm ? Hm.mid.z - Math.cos(Hm.yaw + Math.PI / 2) * 1.2 : S.body.z;
       P.x = sx; P.z = sz; P.y = groundAt(sx, sz); P.vy = 0; P.onGround = true; vr.placeAt = true; } if (S.t > .3) black = Math.max(0, 1 - (S.t - .3) / .5); if (S.t > .85) S.st = "out"; }
