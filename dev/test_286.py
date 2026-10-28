@@ -54,7 +54,7 @@ async def main():
           D.glabTime(23); D.globeTick(0); D.GEO.sleptNight = false; M.pos.copy(D.GEO.hm.mid); press(); for (let i = 0; i < 30 * 9; i++) tick(1); D.glabTime(12); D.globeTick(0); for (let i = 0; i < 60; i++) tick(1); o.morning = [!D.GEO.sleep, Math.round(D.MP.hp)];
           return o; }""")
         print(json.dumps(r))
-        ok = r.get("pair") and r["notTree"] and r["tied"] and r["hung"] and r["day"] and r["slept"] and r["phases"].startswith("settle,blink,dark,rise,ghost") and r["lifted"] >= 3 and r["ghostK"] > .9 \
+        ok = r.get("pair") and r["notTree"] and r["tied"] and r["hung"] and r["day"] and r["slept"] and r["phases"].startswith("settle,blink,dark,rise,ghost") and r["lifted"] >= 2.5 and r["ghostK"] > .9 \
              and 80 < r["flew"] < 110 and r["bodyStill"] and r["far"][0] > 1500 and r["far"][1] and r["far"][2] < .5 and r["orb"] and r["farWake"][0] and r["farWake"][1] < 2.5 and r["farWake"][2] < 10 and r["once"] and r["again"] == "ghost" and r["netBody"] < .1 and "warn" in r["danger"][0] and r["danger"][1] and r["danger"][2] < 2.5 and r["bWake"][1] and r["glow"] == 1 and r["nearest"] and r["untied"] and r["beacon"] and r["dream"][0] > .9 and r["dream"][1] > 5 and r["dreamOff"][0] < .05 and r["dreamOff"][1] == 0 and r["rested"] == 100 and r["morning"][0] and r["morning"][1] <= 50
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)

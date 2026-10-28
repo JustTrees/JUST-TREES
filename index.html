@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.97";              // Just Trees 2.55
+const VERSION = "2.98";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6518,6 +6518,7 @@ function* envGen(o) {
   return Object.assign(E0, { kinds, NV, BUSHV, recs, bushRecs, pickVar, setTreeSize, stretch, treeAt });
 }
 function generate() {
+  if (geoMode()) { set.rough = 1; set.land = "dramatic"; set.density = .5; }   // 2.98: Treeocashing always: the roughest terrain, dramatic features on, normal trees (1.0x)
   gunLabClear(); if (!GUNLAB.want) { gunLabApply(false); if (GUNLAB.prev) { Object.assign(set, GUNLAB.prev); GUNLAB.prev = null; } }   // 2.84: the guns' own numbers again outside the Gun Lab
   groveOld = true;                                               // 2.59: after a map, the menus come back in a new clearing
   ARENA = set.arena || null; if (ARENA) arenaApply(ARENA);       // 2.46
