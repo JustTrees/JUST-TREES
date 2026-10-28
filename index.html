@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.98";              // Just Trees 2.55
+const VERSION = "2.99";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3568,15 +3568,16 @@ function enAnimSpot(kind, x, z) {                             // somewhere this 
   if (kind === "goat" || kind === "bighorn") return H(x, z) > water + ENDLESS.envL[enDom(x, z).b].span * .45;
   return true;
 }
-function enAnimPick(b, R, birds) {                            // one kind from this environment's list, the commoner ones more often
-  const list = (DINO.on && gameMode === "hunt" ? DINO_NATIVE : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
+const geoDinoAt = (x, z) => !!(GLOBE && GLOBE.isle && glArc(glToSphere(x, z, [0, 0, 0]), GLOBE.isle.c) < GLOBE.isle.r + .01);   // 2.99: the dinosaur island
+function enAnimPick(b, R, birds, dino) {                            // one kind from this environment's list, the commoner ones more often
+  const list = (DINO.on && gameMode === "hunt" ? DINO_NATIVE : dino ? DINO_NATIVE.filter(e => e[0] !== "trex") : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
   let tot = 0; for (const [k, n] of list) tot += k === "rabbit" ? Math.min(n, 6) : n; let u = R() * tot;
   for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
 }
 function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
-  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), nG = Math.round((DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3)) * (nightNow() ? NIGHT.more : 1)), x0 = i * EA_C, z0 = j * EA_C;
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), dIs = geoDinoAt((i + .5) * EA_C, (j + .5) * EA_C), nG = dIs ? (R() < .35 ? 1 : 0) : Math.round((DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3)) * (nightNow() ? NIGHT.more : 1)), x0 = i * EA_C, z0 = j * EA_C;
   for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
-    const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false); if (!e) break;
+    const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false, geoDinoAt(x, z)); if (!e) break;
     const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
     if (enAnimNear(ps, x, z) < (init ? 45 : EA_SEEN)) break;                         // it would pop up in view: not this time
     const m = grp ? grp[0] + Math.floor(R() * (grp[1] - grp[0] + 1)) : 1, gid = ++HAB.gid, sp = k === "elephant" || k === "giraffe" ? 16 : 8;
@@ -3588,7 +3589,7 @@ function enAnimFill(i, j, ps, init) {                         // a square's grou
   if (DINO.on) {
     if (R() < .18) for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: "trex", x, z, hx: x, hz: z, gid: ++HAB.gid, key, reg: enDom(x, z).key }); break; } }   // 2.24: a T. rex in every region (one alive in each)
     if (R() < .45) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (far(x, z)) E.aQ.unshift({ k: "ptero", x, z, hx: x, hz: z, gid: -1, key }); }
-  } else if (R() < .05) {                                     // Bigfoot (the Yeti in the cold) in about 1 square in 20
+  } else if (!dIs && R() < .05) {                             // Bigfoot (the Yeti in the cold) in about 1 square in 20
     for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C, L = (NATIVE[enDom(x, z).b] || []).find(e => LEGEND[e[0]]);
       if (L && enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: L[0], x, z, hx: x, hz: z, gid: ++HAB.gid, key }); break; } }
   }
@@ -3610,7 +3611,7 @@ function enLootFill(i, j) {
 function enLootDrop(rec) { for (const id of rec.ids) { const d = DROPS.get(id); if (!d) continue; scene.remove(d.obj); const U = d.obj.userData; if (U.glow && U.glow.material) U.glow.material.dispose(); DROPS.delete(id); } }
 function enBirdFill(i, j) {                                   // a flock or a lone bird circling over the square (each headset its own)
   const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 43 + 5, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), x = (i + .2 + R() * .6) * EA_C, z = (j + .2 + R() * .6) * EA_C;
-  if (R() > .75) return; const e = enAnimPick(enDom(x, z).b, R, true); if (!e) return;
+  if (R() > .75) return; const e = enAnimPick(enDom(x, z).b, R, true, geoDinoAt(x, z)); if (!e) return;
   const [kind, , grp] = e, parrot = kind === "parrot", sc = parrot ? .5 : kind === "eagle" ? 1.4 : kind === "owl" ? .9 : kind === "vulture" ? 1.8 : 1.6;
   const rad = (parrot ? 25 : 35) + R() * 55, ang = R() * 6.28, w = (R() < .5 ? 1 : -1) * (parrot ? .1 + R() * .05 : .03 + R() * .03), m = grp ? grp[0] + Math.floor(R() * (grp[1] - grp[0] + 1)) : 1;
   for (let j2 = 0; j2 < m && beasts.length < BEAST_CAP; j2++) {
@@ -4179,12 +4180,12 @@ function globeSetup(E, rnd) {
   const OX = r0() * 3000 - 1500, OY = r0() * 3000 - 1500, OZ = r0() * 3000 - 1500;
   // 2.81: the oceans: 2 to 4 of them (together about as big as the old two round ones), each built from several overlapping lobes strung
   // along a spine, with gulfs reaching into the land, peninsulas pushing out into the water and a big island somewhere in it
-  const basins = [], nOc = 2 + Math.floor(r0() * 3), share = []; for (let i = 0; i < nOc; i++) share.push(.6 + r0());
-  const shTot = share.reduce((x, y) => x + y, 0), AREA = .21;
+  const basins = [], nOc = 3 + (r0() < .5 ? 1 : 0), share = [3, 1.2 + r0() * .35, 1.05 + r0() * .35, .6 + r0() * .3].slice(0, nOc);   // 2.99: one large, at least two medium-large (and maybe a small one)
+  const shTot = share.reduce((x, y) => x + y, 0), AREA = .21 * 1.1;                                                        //       (all of them 10% more water)
   const away = (c, ang, d) => { const f = glFrame(c), t = Math.tan(d); return glNorm([c[0] + (f.N[0] * Math.cos(ang) + f.E[0] * Math.sin(ang)) * t, c[1] + (f.N[1] * Math.cos(ang) + f.E[1] * Math.sin(ang)) * t, c[2] + (f.N[2] * Math.cos(ang) + f.E[2] * Math.sin(ang)) * t]); };
   for (let i = 0; i < nOc; i++) {
     const a = Math.acos(1 - AREA * share[i] / shTot); let c = null;
-    for (let t = 0; t < 800 && !c; t++) { const q = glFromLL((r0() * 2 - 1) * 46, r0() * 360 - 180); if (!basins.some(B => glArc(B.c, q) < B.a + a + .32)) c = q; }
+    for (let t = 0; t < 800 && !c; t++) { const q = glFromLL((r0() * 2 - 1) * (i ? 46 : 3), r0() * 360 - 180); if (!basins.some(B => glArc(B.c, q) < B.a + a + .32)) c = q; }   // (the large one sits across the equator)
     if (!c) continue;
     const spine = r0() * 6.283, nl = 3 + Math.floor(r0() * 4), lobes = [], gulfs = [], pens = [];
     for (let k = 0; k < nl; k++) { const t = nl > 1 ? (k / (nl - 1)) * 2 - 1 : 0, d = Math.abs(t) * a * (.8 + r0() * .4);
@@ -4200,6 +4201,8 @@ function globeSetup(E, rnd) {
     basins.push({ c, a, lobes, gulfs, pens, bound, cosB: Math.cos(Math.min(Math.PI, bound)), bc, ba: .05 + r0() * .04 });
   }
   G.basins = basins;
+  // 2.99: in the large ocean, on the equator: the biggest island in the game (3–4 km across), with its own landform, and dinosaurs
+  if (basins[0]) { const ll = glLatLon(basins[0].c); G.isle = { c: glFromLL(0, ll[1]), r: (1500 + r0() * 500) / R }; }
   const contS = (p, X, Y, Z) => {                              // > 0 land, < 0 sea (unit p; X, Y, Z the same point in metres)
     let s = .3 + f3(nc, X, Y, Z, 1 / 9000, 4) * 1.15, oc = 0, big = 0;
     const wob = f3(nCoast, X, Y, Z, 1 / 2600, 3) * .13 + n3(nCoast, X, Y, Z, 1 / 700, 5) * .025;   // (ragged shores, not circles)
@@ -4212,6 +4215,8 @@ function globeSetup(E, rnd) {
       big = Math.max(big, smooth(B.ba, B.ba * .3, glArc(p, B.bc) + n3(nBig, X, Y, Z, 1 / 900) * .02)); }
     if (oc > 0) { let ch = 1 - Math.abs(f3(nI, X, Y, Z, 1 / 1700, 2)); ch = ch * ch * ch * ch * ch; const bl = smooth(-.05, .45, f3(nB, X, Y, Z, 1 / 520, 2));
       s += oc * (-1.5 + ch * bl * 2.1 + big * 2.2); }
+    if (G.isle) { const I = G.isle, dI = glArc(p, I.c) + wob * .35;   // (2.99: the big island, open sea all round it)
+      if (dI < I.r + .2) { const land = smooth(I.r + .01, I.r - .035, dI), sea = smooth(I.r + .2, I.r + .05, dI) * (1 - land); s = lerp(s, Math.min(s, -.9), sea); s = lerp(s, Math.max(s, .6), land); } }
     return s;
   };
   const contH = s => s > 0 ? Math.min(1, s) * 16 : Math.max(-95, s * 120);
@@ -4306,6 +4311,14 @@ function globeSetup(E, rnd) {
   };
   G.landAt = landAt;
   E.hNF = E.hW = (x, z) => landAt(glToSphere(x, z, sp));
+  if (G.isle) {                                                  // 2.99: the island's own landform (made in a flat frame laid on the island)
+    const I = G.isle, f = glFrame(I.c), q = [0, 0, 0], inv = (u, v) => glNorm([I.c[0] + (f.E[0] * u + f.N[0] * v) / R, I.c[1] + (f.E[1] * u + f.N[1] * v) / R, I.c[2] + (f.E[2] * u + f.N[2] * v) / R]);
+    const Rf = mulberry32(seed * 977 + 31), kH = HALF, kE = EDGE; HALF = 1500; EDGE = 1e9;
+    let F = null; try { F = makeFeature(Rf, (u, v) => landAt(inv(u, v)), water); } catch (_) { F = null; } finally { HALF = kH; EDGE = kE; }
+    I.feat = F; const cosL = Math.cos(I.r + .05);
+    if (F) E.hW = (x, z) => { const pp = glToSphere(x, z, sp), h = landAt(pp), d = glDot(pp, I.c); if (d < cosL) return h; q[0] = pp[0]; q[1] = pp[1]; q[2] = pp[2];
+      const u = R * glDot(q, f.E) / d, v = R * glDot(q, f.N) / d; return F.apply(u, v, h); };
+  }
   G.SPAN = SPAN; E.OFF = OFF; E.SPAN = SPAN;
 }
 function glRegions(x, z) { const p = glToSphere(x, z, GLOBE.tp), R = GLOBE.R; return GLOBE.regionsP(p, p[0] * R, p[1] * R, p[2] * R); }
@@ -4412,6 +4425,12 @@ function geoPlace() {                                          // the caches: th
     const n = G.regionsP(p, X, Y, Z); let b = EN_RL[0].reg.b; for (let q = 1; q < n; q++) if (EN_RL[q].w > EN_RL[0].w) b = EN_RL[q].reg.b;
     const ll = glLatLon(p); per[gi]++; L.push({ id: L.length + 1, p, lat: ll[0], lon: ll[1], b, diff: 1 + Math.floor(rr() * 5), terr: 1 + Math.floor(rr() * 5) });
   }
+  if (G.isle && L.length >= 80) {                                // 2.99: three of the high caches are out on the dinosaur island
+    const I = G.isle, f = glFrame(I.c), put = [], mv = [L.length - 1, L.length - 13, L.length - 25], others = L.filter((c, k) => !mv.includes(k)); for (let t = 0; t < 2000 && put.length < 3; t++) { const a = rr() * 6.283, d = Math.sqrt(rr()) * I.r * .75;
+      const q = glNorm([I.c[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * Math.tan(d), I.c[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * Math.tan(d), I.c[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * Math.tan(d)]);
+      if (G.landAt(q) > 2 && put.every(o => glArc(o, q) * R > 900) && others.every(c => glArc(c.p, q) * R > 900)) put.push(q); }
+    put.forEach((q, k) => { const c = L[L.length - 1 - k * 12], ll = glLatLon(q); c.p = q; c.lat = ll[0]; c.lon = ll[1]; c.isle = true; });
+  }
   return L;
 }
 function geoStart(sv) {
@@ -4428,6 +4447,7 @@ function geoStart(sv) {
   if (sv && typeof sv.nades === "number") vr.nades = Math.min(geoNadeCap(), sv.nades); if (sv && typeof sv.flares === "number" && geoHas("flares")) vr.flares = sv.flares;
   if (GEO.found.size && GEO.found.size < GEO_N) {             // 2.76: a new planet at your level: the next cache a few hundred metres off
     let best = null, bd = 1e9; for (const c of GEO.caches) { if (GEO.found.has(c.id)) continue; const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
+    if (best) best.placed = true;
     if (best && bd * GLOBE.R > 700) for (let k = 0; k < 60; k++) { const a = k * 2.4, r = 300 + k * 4, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (geoCacheClear(x, z)) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; break; } }
   }
   if (!GEO.found.size) {                                       // the very first cache is close by, so you're armed before long (the rest are wherever they are)
@@ -4465,9 +4485,18 @@ function geoMapCaches() {                                     // 2.72: which cac
   if (!geoHas("satphone") || !GLOBE) return [];
   return GEO.caches.filter(c => !GEO.found.has(c.id)).map(c => [glArc(GLOBE.p, c.p), c]).sort((a, b) => a[0] - b[0]).slice(0, 3).map(e => e[1]);
 }
-function geoTarget() {                                         // the nearest cache you haven't found
-  const G = GLOBE; let best = null, bd = 1e9;
-  for (const c of GEO.caches) if (!GEO.found.has(c.id)) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
+function geoTarget() {                                         // the next cache: further away the higher you are (2.99); now and then, high up, one on the dinosaur island
+  const G = GLOBE, lv = GEO.found.size, want = (600 + lv * 30) / G.R; let best = null, bd = 1e9;
+  const isle = GEO.caches.filter(c => c.isle && !GEO.found.has(c.id));
+  if (isle.length && lv >= 60 && mulberry32(enHash(seed * 3 + 7, lv, 1))() < .2) { for (const c of isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } } GEO.target = best; return; }
+  for (const c of GEO.caches) if (!GEO.found.has(c.id) && !c.isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
+  if (best && !best.placed && GEO.found.size) {                 // put it out at this level's distance, somewhere dry (each player's caches are their own)
+    const f = glFrame(G.p), rr = mulberry32(enHash(seed * 5 + 3, lv, best.id));
+    for (let t = 0; t < 80; t++) { const a = rr() * 6.283, d = want * (.85 + rr() * .3), k = Math.tan(d);
+      const q = glNorm([G.p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * k, G.p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * k, G.p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * k]);
+      if (G.landAt(q) > 1.5 && !(G.isle && glArc(q, G.isle.c) < G.isle.r + .05)) { best.p = q; const ll = glLatLon(q); best.lat = ll[0]; best.lon = ll[1]; best.chk = false; best.ok = false; break; } }
+    best.placed = true; }
+  if (!best) for (const c of isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
   GEO.target = best;
 }
 const geoSolidAt = (x, z) => { const ch = ENDLESS && ENDLESS.chunks.get(enKey(Math.floor(x / EN_C), Math.floor(z / EN_C))); return !!(ch && ch.rg && ch.tile && !ch.stale); };
@@ -5269,8 +5298,9 @@ function glabLake() {
 }
 function glabJetAt(b) { const J = { id: 100 + JET.list.length, p: glToSphere(b.x, b.z, [0, 0, 0]), ok: true, dead: false, yaw: b.yaw, x: b.x, z: b.z, obj: null }; JET.list.push(J); GEO.tT = 0; GEO.reAt = true; return J; }
 function glabSea() {
-  let b = null; const s = glabSpot((x, z) => H(x, z) < water - 1.5 && geoSalty({ x, z }), 9000);
-  if (s) b = jetFindBeach(s[0], s[1]);
+  let b = null, s = null, tries = 0;                              // (2.99: rough coasts: keep looking along the sea until there's a sandy beach)
+  for (let k = 0; k < 4000 && !b && tries < 40; k++) { const a = k * 2.4, r = 8 + k * (9000 / 4000), x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;
+    if (!(H(x, z) < water - 1.5 && geoSalty({ x, z }))) continue; s = s || [x, z]; if (k % 7) continue; tries++; b = jetFindBeach(x, z); }
   if (!b) { glabSay(s ? "Found the sea but no sandy beach there" : "No sea within 9 km"); return; }
   const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw); glabGoTo(b.x - fx * 14, b.z - fz * 14); glabJetAt(b); glabSay("On a sea beach: a jet ski is waiting in the water");
 }
@@ -5641,7 +5671,7 @@ function geoIsland() {                                               // one big 
   const G = GLOBE, R = G.R, rr = mulberry32(seed * 2027 + 9), land = p => G.landAt(p) > 1.5;
   const at = (p, d, a) => { const f = glFrame(p), k = Math.tan(d / R); return glNorm([p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * k, p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * k, p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * k]); };
   let best = null, bs = 0;
-  for (let t = 0; t < 1400; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .8 || !land(p)) continue;
+  for (let t = 0; t < 1400; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .8 || !land(p) || (G.isle && glArc(p, G.isle.c) < G.isle.r + .3)) continue;
     let enc = 0, ext = 0; for (let d = 150; d <= 1500; d += 150) { let n = 0; for (let q = 0; q < 10; q++) if (land(at(p, d, q / 10 * 6.283))) n++; if (n >= 5) ext = d; if (n === 0) { enc = d; break; } }
     if (enc && ext >= 300 && ext > bs) { bs = ext; best = p; } }
   if (!best) best = geoRandomSpot();

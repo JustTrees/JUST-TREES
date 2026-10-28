@@ -68,7 +68,7 @@ async def main():
           // the sea is salt: hands in it don't drink
           { const G = D.GLOBE, R = G.R; let sea = null; for (let r = 20; r < 3000 && !sea; r += 40) for (let a = 0; a < 6.28 && !sea; a += .3) { const x = D.P.x + Math.cos(a) * r, z = D.P.z + Math.sin(a) * r, q = D.glToSphere(x, z, [0, 0, 0]); if (D.H(x, z) < D.water - 1 && G.contS(q, q[0] * R, q[1] * R, q[2] * R) < 0) sea = [x, z]; }
             o.sea = !!sea; if (sea) { D.GEO.water = 40; const ib = { head: new T.Vector3(sea[0], D.water + 1.6, sea[1]), headQ: new T.Quaternion(), hands: { left: hand(new T.Vector3(sea[0], D.water - .2, sea[1])) } }; for (let i = 0; i < 40; i++) D.geoGearTick(ib, null, null, 1 / 20); o.seaDrink = Math.round(D.GEO.water); } }
-          { const xz = D.glFromSphere(D.GLOBE.basins[0].c, [0, 0]); o.saltSea = D.geoSalty(new T.Vector3(xz[0], -5, xz[1])); o.saltLake = spot ? D.geoSalty(new T.Vector3(spot[0], -1, spot[1])) : false; }
+          { const xz = D.glFromSphere(D.GLOBE.basins[1].c, [0, 0]);   /* (2.99: the big one has the island in its middle) */ o.saltSea = D.geoSalty(new T.Vector3(xz[0], -5, xz[1])); o.saltLake = spot ? D.geoSalty(new T.Vector3(spot[0], -1, spot[1])) : false; }
           // Pack on the wheel
           o.packWheel = D.wheelKeys().includes('pack'); D.vr.I = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} }; D.GEO.packOpen = false; D.pickGun('pack'); o.packFromWheel = D.GEO.packOpen; D.GEO.packOpen = false; if (D.GEO.packM) D.GEO.packM.visible = false;
           // fruit on the trees near you: a hand on one, squeezing, eats it
