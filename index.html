@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.83";              // Just Trees 2.55
+const VERSION = "2.84";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3033,6 +3033,7 @@ function toggleMap(on) {
 
 /* ---------------- Flyover ---------------- */
 function startFly() {
+  gunLabStart();
   if (vr.on) {                                                  // in VR: a little model of the map turns in front of you, then you drop in
     fly = null; reveal(); drawMap($("miniMap")); vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined;
     vruiOpen("preview"); if (set.geoNet && MP.code) VRUI.fadeGo = () => { enEnsureHere(); vruiClose(); vr.placeAt = true; state = "play"; showHud(true); };   // 2.80: online Treeocashing: straight onto the planet
@@ -5335,6 +5336,117 @@ function geoHostPanel() {                                        // the host: gi
     { labelFn: () => { const L = mpOpen()[i]; return L ? (L.tag || "Player") : ""; }, hide: () => !mpOpen()[i], fs: 36, personal: true });
   uiBtn(Pn, 110, 880, 880, 90, "Back", () => vruiOpen("pause"), { fs: 36, personal: true });
 }
+/* ---- 2.84: the Gun Lab (Dev menu): a quiet open island with a shooting range: dummies at 10, 25, 50, 100, 200 and 400 m (health 100,
+   shield 100 if you want it, standing or strafing), each showing its health and, when it drops, how many hits and how long it took. Y →
+   "Gun Lab tools": every gun's numbers to change live (damage, fire rate, magazine, bullet speed, reach, recoil, head-shot ×, size) and
+   the star level you're testing at. The changes only ever apply inside the Gun Lab (kept on this headset); tell Claude the ones you like. ---- */
+const GUNLAB_K = ["hunt", "ar", "smg", "pistol"], GUN_DEF = {};
+for (const k of GUNLAB_K) { const W = WEAP[k]; GUN_DEF[k] = { dmg: W.dmg, cool: W.cool, mag: W.mag, spd: W.spd, reach: W.reach, recoil: 1, head: 2, size: 1, auto: W.auto }; }
+const GUNLAB = { on: false, want: false, tune: {}, gun: "ar", tier: 5, shield: true, move: false, dummies: [], page: 0, lane: null };
+try { const o = JSON.parse(localStorage.getItem("jt-guntune") || "null"); if (o && typeof o === "object") { GUNLAB.tune = o.t || {}; GUNLAB.tier = o.tier || 5; } } catch (_) {}
+const GL_ROWS = [["dmg", "Damage", 1], ["cool", "Fire rate (shots a minute)", 0], ["mag", "Magazine", 1], ["spd", "Bullet speed (m/s)", 25], ["reach", "Reach (m)", 25], ["recoil", "Recoil ×", .1], ["head", "Head shot ×", .25], ["size", "Gun size ×", .1]];
+const glVal = (k, f) => { const t = GUNLAB.tune[k]; return t && t[f] !== undefined ? t[f] : GUN_DEF[k][f]; };
+function gunLabSave() { try { localStorage.setItem("jt-guntune", JSON.stringify({ t: GUNLAB.tune, tier: GUNLAB.tier })); } catch (_) {} }
+function gunLabApply(on) {                                       // the tuned numbers in the Gun Lab; the game's own everywhere else
+  for (const k of GUNLAB_K) { const W = WEAP[k]; for (const f in GUN_DEF[k]) W[f] = on ? glVal(k, f) : GUN_DEF[k][f]; }
+}
+function gunLabStep(f, s) {
+  const k = GUNLAB.gun, d = GUN_DEF[k][f], v = glVal(k, f); let n;
+  if (f === "cool") { const rpm = 60 / v, st = Math.max(5, Math.round(60 / d * .1 / 5) * 5); n = 60 / Math.max(5, rpm + s * st); }
+  else { const row = GL_ROWS.find(r => r[0] === f), st = row[2] === 1 ? Math.max(1, Math.round(d * .1)) : row[2]; n = Math.max(f === "dmg" || f === "mag" ? 1 : .05, Math.round((v + s * st) * 1000) / 1000); }
+  (GUNLAB.tune[k] = GUNLAB.tune[k] || {})[f] = n; gunLabSave(); gunLabApply(true); gunLabArm();
+}
+const glFmt = (k, f) => { const v = glVal(k, f); return f === "cool" ? Math.round(60 / v) + "" : f === "recoil" || f === "head" || f === "size" ? v.toFixed(2) + "×" : String(Math.round(v)); };
+const glFmtD = (k, f) => { const v = GUN_DEF[k][f]; return f === "cool" ? Math.round(60 / v) + "" : f === "recoil" || f === "head" || f === "size" ? v.toFixed(2) + "×" : String(Math.round(v)); };
+function gunLabArm() {                                            // every gun at the star level you're testing, full magazines
+  vr.own = {}; for (const k of GUNLAB_K) vr.own[k] = GUNLAB.tier; vr.own.bow = GUNLAB.tier;
+  for (const k of GUNLAB_K) { const A = arms[k]; A.phase = 0; A.k = 0; A.popping = false; A.mag = magOf(k); A.res = WEAP[k].start; }
+  if (!vr.own[vr.weapon]) { vr.weapon = GUNLAB.gun; vr.gunInit = false; }
+}
+// the range
+const GL_DIST = [10, 25, 50, 100, 200, 400];
+function gunLabRange() {                                          // the clearest line from where you stand, the dummies along it
+  let best = null; const eye = P.y + 1.6;
+  for (let i = 0; i < 32; i++) { const a = i / 32 * 6.283, dx = -Math.sin(a), dz = -Math.cos(a); let bad = 0;
+    for (let r = 6; r <= 410; r += 4) { const x = P.x + dx * r, z = P.z + dz * r, h = H(x, z); if (h < water + .2) bad += 3; const line = eye + (groundAt(P.x + dx * 400, P.z + dz * 400) + 1 - eye) * r / 400; if (h > line - .5) bad += 2; if (nearObstacle(x, z, .6)) bad += 1; if (outMap(x, z)) bad += 50; }
+    if (!best || bad < best.bad) best = { a, dx, dz, bad }; }
+  GUNLAB.lane = best; for (const D of GUNLAB.dummies) scene.remove(D.g, D.pole, D.lab); GUNLAB.dummies = [];
+  GL_DIST.forEach((r, i) => { const px = -best.dz, pz = best.dx; let bx = 0, bz = 0;   // (each a little to the side, so none stands in front of another; on dry ground)
+    for (let k = 0; k < 40; k++) { const side = (i % 2 ? 1 : -1) * (1.5 + r * .06) + (k ? (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 3 : 0); bx = P.x + best.dx * r + px * side; bz = P.z + best.dz * r + pz * side; if (H(bx, bz) > water + .3 && !nearObstacle(bx, bz, .5)) break; }
+    const D = { i, r, bx, bz, px, pz, x: bx, z: bz, y: groundAt(bx, bz), hp: 100, sh: 0, alive: true, t0: 0, hits: 0, heads: 0, last: "", downT: 0, lastHitT: 0 };
+    D.g = gunLabDummy(); D.pole = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, 14, 6), new THREE.MeshBasicMaterial({ color: 0xffd65a, fog: false, transparent: true, opacity: .55 }));
+    const cv = document.createElement("canvas"); cv.width = 256; cv.height = 128; D.lab = new THREE.Mesh(new THREE.PlaneGeometry(.9 + r * .012, (.9 + r * .012) / 2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthWrite: false, fog: false, toneMapped: false }));
+    D.lab.userData.cv = cv; D.lab.renderOrder = 6; scene.add(D.g, D.pole, D.lab); gunLabReset(D); GUNLAB.dummies.push(D); });
+}
+function gunLabDummy() {
+  const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: 0xe0602a }), d = new THREE.MeshLambertMaterial({ color: 0x2a2a2a });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.22, .25, 1.3, 10), m); body.position.y = .8; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.14, 12, 9), m); head.position.y = 1.62; g.add(head);
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(.04, .04, .3, 6), d); post.position.y = .05; g.add(post);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(.12, .02, 6, 16), new THREE.MeshBasicMaterial({ color: 0xffffff })); ring.position.set(0, 1.0, .24); g.add(ring);
+  return g;
+}
+function gunLabReset(D) { D.hp = 100; D.sh = GUNLAB.shield ? 100 : 0; D.alive = true; D.t0 = 0; D.hits = 0; D.heads = 0; D.g.rotation.set(0, 0, 0); gunLabDraw(D); }
+function gunLabDraw(D) {
+  const g = D.lab.userData.cv.getContext("2d"); g.clearRect(0, 0, 256, 128); g.fillStyle = "rgba(10,14,12,.72)"; uiRound(g, 2, 2, 252, 124, 16); g.fill();
+  g.fillStyle = "#ffd65a"; g.font = "bold 30px sans-serif"; g.textAlign = "left"; g.fillText(D.r + " m", 12, 34);
+  if (D.alive) { const bar = (y, v, c) => { g.fillStyle = "rgba(255,255,255,.15)"; g.fillRect(12, y, 232, 18); g.fillStyle = c; g.fillRect(12, y, 232 * Math.max(0, v) / 100, 18); };
+    if (GUNLAB.shield) bar(48, D.sh, "#3f9bff"); bar(GUNLAB.shield ? 72 : 60, D.hp, "#3fe060"); g.fillStyle = "#e8f0dc"; g.font = "22px sans-serif"; g.fillText(D.last || (D.hits ? D.hits + " hits" : "ready"), 12, 116); }
+  else { g.fillStyle = "#ff8a6a"; g.font = "bold 28px sans-serif"; g.fillText("DOWN", 12, 70); g.fillStyle = "#e8f0dc"; g.font = "24px sans-serif"; g.fillText(D.last, 12, 108); }
+  D.lab.material.map.needsUpdate = true;
+}
+function gunLabHit(a, d, maxT) {                                  // a bullet's step against the dummies: the head, or the body
+  let best = null;
+  for (const D of GUNLAB.dummies) { if (!D.alive) continue;
+    const hc = _v1.set(D.x, D.y + 1.62, D.z), oc = _v2.subVectors(a, hc), b = oc.dot(d), c = oc.lengthSq() - .15 * .15, disc = b * b - c;
+    if (disc >= 0) { const t = -b - Math.sqrt(disc); if (t >= 0 && t <= maxT && (!best || t < best.t)) best = { D, t, head: true }; }
+    const ox = a.x - D.x, oz = a.z - D.z, A2 = d.x * d.x + d.z * d.z; if (A2 < 1e-9) continue;   // the body: an upright cylinder
+    const B2 = ox * d.x + oz * d.z, C2 = ox * ox + oz * oz - .25 * .25, ds = B2 * B2 - A2 * C2; if (ds < 0) continue;
+    const t = (-B2 - Math.sqrt(ds)) / A2, y = a.y + d.y * t - D.y; if (t >= 0 && t <= maxT && y > .1 && y < 1.47 && (!best || t < best.t)) best = { D, t, head: false };
+  }
+  return best;
+}
+function gunLabDamage(D, dmg, head) {
+  const now = performance.now() / 1000; if (!D.t0 || now - D.lastHitT > 3) { D.t0 = now; D.hits = 0; D.heads = 0; }
+  D.lastHitT = now; D.hits++; if (head) D.heads++; const s = Math.min(D.sh, dmg); D.sh -= s; D.hp -= dmg - s; D.last = "-" + dmg + (head ? " head" : "") + " · " + D.hits + " hits";
+  if (D.hp <= 0) { D.alive = false; D.downT = 2.5; D.last = D.hits + " hits" + (D.heads ? " (" + D.heads + " head)" : "") + " · " + (now - D.t0).toFixed(2) + " s"; D.g.rotation.x = -1.45; downChime(dmg); }
+  gunLabDraw(D);
+}
+function gunLabTick(dt) {
+  if (!GUNLAB.on) return; const t = performance.now() / 1000, L = GUNLAB.lane;
+  for (const D of GUNLAB.dummies) {
+    if (GUNLAB.move && D.alive) { const s = Math.sin(t * .8 + D.i) * 4; D.x = D.bx + D.px * s; D.z = D.bz + D.pz * s; D.y = groundAt(D.x, D.z); } else if (!GUNLAB.move) { D.x = D.bx; D.z = D.bz; D.y = groundAt(D.x, D.z); }
+    D.g.position.set(D.x, D.y, D.z); if (L) D.g.rotation.y = Math.atan2(-L.dx, -L.dz);
+    D.pole.position.set(D.x, D.y + 9, D.z); D.lab.position.set(D.x, D.y + 2.25 + D.r * .006, D.z); D.lab.lookAt(camera.position);
+    if (!D.alive && (D.downT -= dt) <= 0) gunLabReset(D);
+  }
+}
+function gunLabClear() { for (const D of GUNLAB.dummies) scene.remove(D.g, D.pole, D.lab); GUNLAB.dummies = []; GUNLAB.on = false; }
+function gunLabStart() {                                           // after the map is built (startFly): the range, the guns
+  if (!GUNLAB.want) return; GUNLAB.want = false; GUNLAB.on = true; gunLabApply(true); gunLabArm(); vr.weapon = GUNLAB.gun; vr.gunInit = false; vr.gunOut = true; gunLabRange();
+  vrBanner("Gun Lab: the range is where the yellow poles are. Y → Gun Lab tools", 6, 3);
+}
+function gunLabPanel() {
+  const Pn = uiPanel("gunlab", 1400, 1100, 2.0, 74, 1.45), x0 = 60, per = GL_ROWS.length, names = { hunt: "Sniper", ar: "Assault", smg: "SMG", pistol: "Pistol" };
+  Pn.paint = (g, P) => {
+    uiBg(g, P, "GUN LAB"); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "24px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Only in the Gun Lab, on this headset. Tell Claude the ones you like.", x0, 240);
+    const k = GUNLAB.gun; GL_ROWS.forEach(([f, name], i) => { const y = 300 + i * 82, ch = Math.abs(glVal(k, f) - GUN_DEF[k][f]) > 1e-9;
+      g.font = "bold 28px sans-serif"; g.fillStyle = ch ? UIC.sun : UIC.text; g.fillText(name, x0, y); g.font = "26px sans-serif"; g.fillStyle = ch ? UIC.sun : UIC.dim; g.fillText(glFmt(k, f) + (ch ? "   (was " + glFmtD(k, f) + ")" : ""), x0, y + 32); });
+    g.font = "bold 28px sans-serif"; g.fillStyle = UIC.text; g.fillText("Stars", 860, 300); g.fillText("The dummies", 860, 520);
+  };
+  const B = (x, y, w, l, f, o) => uiBtn(Pn, x, y, w, 70, l, () => { f(); uiDraw(Pn); }, Object.assign({ fs: 28, personal: true }, o || {}));
+  GUNLAB_K.forEach((k, i) => B(x0 + i * 300, 130, 290, names[k], () => { GUNLAB.gun = k; pickGun(k); }, { active: () => GUNLAB.gun === k }));
+  GL_ROWS.forEach(([f], i) => { B(560, 268 + i * 82, 100, "−", () => gunLabStep(f, -1), { fs: 40 }); B(680, 268 + i * 82, 100, "+", () => gunLabStep(f, 1), { fs: 40 }); });
+  B(x0 + 1200, 130, 80, "", () => { const k = GUNLAB.gun; (GUNLAB.tune[k] = GUNLAB.tune[k] || {}).auto = !glVal(k, "auto"); gunLabSave(); gunLabApply(true); }, { labelFn: () => glVal(GUNLAB.gun, "auto") ? "Auto" : "Semi", fs: 24 });
+  for (let s = 1; s <= 5; s++) B(860 + (s - 1) * 98, 320, 90, s + "★", () => { GUNLAB.tier = s; gunLabSave(); gunLabArm(); }, { active: () => GUNLAB.tier === s, fs: 26 });
+  B(860, 400, 230, "", () => { GUNLAB.shield = !GUNLAB.shield; for (const D of GUNLAB.dummies) gunLabReset(D); }, { labelFn: () => GUNLAB.shield ? "Shield: on" : "Shield: off" });
+  B(1100, 400, 240, "", () => { GUNLAB.move = !GUNLAB.move; }, { labelFn: () => GUNLAB.move ? "Strafing" : "Standing" });
+  B(860, 540, 480, "Reset the dummies", () => { for (const D of GUNLAB.dummies) gunLabReset(D); });
+  B(860, 620, 480, "Range here, facing open ground", () => gunLabRange());
+  B(860, 760, 480, "Reset this gun", () => { delete GUNLAB.tune[GUNLAB.gun]; gunLabSave(); gunLabApply(true); gunLabArm(); });
+  B(860, 840, 480, "Reset all guns", () => { GUNLAB.tune = {}; gunLabSave(); gunLabApply(true); gunLabArm(); });
+  B(x0, 1000, 300, "Back to it", () => vruiResume(), { primary: true }); B(x0 + 320, 1000, 300, "Main menu", () => vruiOpen("mode"));
+}
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
    sight, growls, and pounces. Gators and crocodiles lunge from the water's edge. Lions charge if you walk up on the pride. Bear spray turns
@@ -5589,6 +5701,7 @@ function* envGen(o) {
   return Object.assign(E0, { kinds, NV, BUSHV, recs, bushRecs, pickVar, setTreeSize, stretch, treeAt });
 }
 function generate() {
+  gunLabClear(); if (!GUNLAB.want) { gunLabApply(false); if (GUNLAB.prev) { Object.assign(set, GUNLAB.prev); GUNLAB.prev = null; } }   // 2.84: the guns' own numbers again outside the Gun Lab
   groveOld = true;                                               // 2.59: after a map, the menus come back in a new clearing
   ARENA = set.arena || null; if (ARENA) arenaApply(ARENA);       // 2.46
   clearSquad(); vbClear(); if (!LAB.on) statPing();
@@ -9298,6 +9411,7 @@ function vrGun() {
     }
     scene.add(g); vr.guns[key] = g;
   }
+  g.scale.setScalar((WEAP[kind] && WEAP[kind].size) || 1);   // (2.84: the Gun Lab can resize it)
   vr.gun = g; vr.gunKind = kind; vr.gunKey = key; return g;
 }
 let binos = null;
@@ -9682,7 +9796,7 @@ function vrFire() {
     vr.cool = cl - late; A.mag--; vr.kick = 0;
     if (W.auto) {                                                                 // 2.08: recoil: the muzzle climbs (no scatter, same fire rate)
       const lvl = vr.two ? 6 - Math.max(1, Math.min(5, tierOf(vr.gunKind))) : 6;
-      vr.climb = Math.min(RECOIL.max * Math.PI / 180, (vr.climb || 0) + RECOIL.up[lvl] * (vr.ads ? RECOIL.ads : 1) * Math.PI / 180); vr.lastShot = performance.now();
+      vr.climb = Math.min(RECOIL.max * Math.PI / 180, (vr.climb || 0) + RECOIL.up[lvl] * (W.recoil || 1) * (vr.ads ? RECOIL.ads : 1) * Math.PI / 180); vr.lastShot = performance.now();
     }
     if (gameMode === "hunt") scatterBeasts(P);
     if (A.mag <= 0) { A.phase = 1; A.k = 0; A.popping = true; setTimeout(() => gunFoleyK("magout", SFX.magOut), 120); }   // empty: the magazine pops out and hovers, glowing
@@ -10492,7 +10606,7 @@ function vruiParts() {
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
   uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
   uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
-  devPanels(); glabPanel(); geoHostPanel(); labPanel(); arenasPanel(); vbPanel();
+  devPanels(); glabPanel(); gunLabPanel(); geoHostPanel(); labPanel(); arenasPanel(); vbPanel();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -10647,6 +10761,7 @@ function vruiParts() {
   [["Resume", () => vruiResume(), { primary: true, personal: true }],
    ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],
    ["Hand over the host", () => vruiOpen("ghost"), { personal: true, hide: () => !(MP.host && set.geoNet && mpOpen().length) }],   // 2.80
+   ["Gun Lab tools", () => vruiOpen("gunlab"), { personal: true, hide: () => !GUNLAB.on }],   // 2.84
    ["Gear Lab tools", () => vruiOpen("glab"), { personal: true, hide: () => !(GEO.on && GEO.lab) }],   // 2.79   // 2.46: a test walk
    ["Set height", () => vrHeightCheck("pause"), { personal: true }],                                                                    // 2.38
    ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() || LAB.testing }],
@@ -11119,10 +11234,12 @@ function devPanels() {
   const Dv = uiPanel("dev", 1400, 900, 2.0, 74, 1.45);
   Dv.paint = (g, P) => { uiBg(g, P, "DEV MODE"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Tools for making the game. Only this headset has them.", 700, 150);
     if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 740); } };
-  uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
-  uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
-  uiBtn(Dv, 720, 450, 590, 170, "Gear Lab", () => { GEO.labWant = true; setMode("hunt"); set.huntMap = "globe"; renderSetup(); startNew(); }, { sub: "Every Treeocashing item to try and tweak", fs: 46 });   // 2.79
-  uiBtn(Dv, 90, 640, 1220, 120, "Online Treeocashing (testing)", () => geoNetGo(), { sub: "A shared planet, up to 8: drops you into one with room, or opens a new one", fs: 44, paintCol: "#6a5a2a" });   // 2.80
+  uiBtn(Dv, 90, 190, 1220, 150, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 50 });
+  uiBtn(Dv, 90, 360, 590, 140, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 44 });   // 2.46
+  uiBtn(Dv, 720, 360, 590, 140, "Gear Lab", () => { GEO.labWant = true; setMode("hunt"); set.huntMap = "globe"; renderSetup(); startNew(); }, { sub: "Every Treeocashing item to try and tweak", fs: 44 });   // 2.79
+  uiBtn(Dv, 720, 520, 590, 140, "Online Treeocashing", () => geoNetGo(), { sub: "A shared planet for up to 8", fs: 42, paintCol: "#6a5a2a" });   // 2.80
+  uiBtn(Dv, 90, 520, 590, 140, "Gun Lab", () => { GUNLAB.want = true; GUNLAB.prev = { huntMap: set.huntMap, size: set.size, density: set.density, rough: set.rough, dino: set.dino };
+    setMode("hunt"); Object.assign(set, { huntMap: "island", size: "medium", density: .15, rough: .25, dino: false }); renderSetup(); startNew(); }, { sub: "Tune every gun on a shooting range", fs: 44, paintCol: "#6a3a3a" });   // 2.84
   if (0) uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
@@ -11670,7 +11787,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");   // 2.45 / 2.46
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -15934,7 +16051,7 @@ const _bB = new THREE.Vector3(), _bD = new THREE.Vector3(), _bT = new THREE.Vect
 function sniperMul(d) {                                       // 2.61: sniper damage by distance: 70% up close (50 m and in), normal at 100 m, 150% from 400 m, smooth between
   if (d <= 50) return .7; if (d < 100) return .7 + .3 * smooth(50, 100, d); if (d < 400) return 1 + .5 * smooth(100, 400, d); return 1.5;
 }
-function shotDmg(t, head, at) { const m = t.gun === "hunt" ? sniperMul(t.from.distanceTo(at)) : 1; return Math.round(t.dmg * (head ? 2 : 1) * m); }   // what this bullet does where it hits
+function shotDmg(t, head, at) { const m = t.gun === "hunt" ? sniperMul(t.from.distanceTo(at)) : 1; return Math.round(t.dmg * (head ? (WEAP[t.gun] && WEAP[t.gun].head) || 2 : 1) * m); }   // what this bullet does where it hits
 function dmgTier(d) { return d >= 350 ? 3 : d >= 250 ? 2 : d >= 150 ? 1 : 0; }
 const tracerGeoR = new THREE.CylinderGeometry(.5, .5, 1, 10, 1, true).rotateX(Math.PI / 2);   // 2.67: round streaks (the headset's), same size rules as the box
 const TRACE = { head: 12, life: [.14, .3], ownLen: 70 };       // 2.67: head streak length (m); seen from .14 s, gone by .3 s after the shot; your own glow trails at most 70 m behind (out of the barrel for ~.08 s)
@@ -15957,6 +16074,8 @@ function bulletStep(t, dt) {                                // move one frame al
   let rh = t.online && MP.on ? mpHitTest(a, d, end ? a.distanceTo(end) : seg) : null;   // online: did it reach them? (they take the damage; head shots double)
   const bh = VB.list.length && gameMode === "pvp" ? vbBulletStep(t, a, d, rh ? rh.t : end ? a.distanceTo(end) : seg) : null;   // 2.48: a bot in the way (a bot's own bullet: anyone)
   if (bh) { rh = null; end = a.clone().addScaledVector(d, bh.t); h = { kind: null }; }
+  const gl = GUNLAB.on && !t.remote && !t.bot ? gunLabHit(a, d, rh ? rh.t : end ? a.distanceTo(end) : seg) : null;   // 2.84: the range's dummies
+  if (gl) { rh = null; end = a.clone().addScaledVector(d, gl.t); h = { kind: null }; gunLabDamage(gl.D, shotDmg(t, gl.head, end), gl.head); hitTick(gl.head, t.gun === "hunt" ? 100 : 0); }
   if (rh) { end = a.clone().addScaledVector(d, rh.t); h = { kind: null }; const dm = shotDmg(t, rh.head, end); mpSendTo(rh.L, { t: "hit", d: dm, hd: rh.head }); myDmg(dm, t); hitTick(rh.head, t.gun === "hunt" ? dm : 0); }
   const pos = end || b, out = !end && outMap(b.x, b.z);
   t.gone += a.distanceTo(pos); a.copy(pos);
@@ -16040,6 +16159,7 @@ function addPuff(p, kind) {
 function updateGun(dt) {
   if (ARROWS.length) arrowsTick(dt);
   if (FIRES.length) firesTick(dt);
+  if (GUNLAB.on) gunLabTick(dt);                               // 2.84
   if (GEO.on) geoTick(dt);
   GUN.cool = Math.max(0, GUN.cool - dt); GUN.kick = Math.max(0, GUN.kick - dt * 7);
   GUN.ads = Math.min(1, Math.max(0, (72 - camera.fov) / 40));
