@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.81";              // Just Trees 2.55
+const VERSION = "2.82";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4391,11 +4391,11 @@ function geoStart(sv) {
   if (sv && typeof sv.nades === "number") vr.nades = Math.min(geoNadeCap(), sv.nades); if (sv && typeof sv.flares === "number" && geoHas("flares")) vr.flares = sv.flares;
   if (GEO.found.size && GEO.found.size < GEO_N) {             // 2.76: a new planet at your level: the next cache a few hundred metres off
     let best = null, bd = 1e9; for (const c of GEO.caches) { if (GEO.found.has(c.id)) continue; const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
-    if (best && bd * GLOBE.R > 700) for (let k = 0; k < 60; k++) { const a = k * 2.4, r = 300 + k * 4, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; break; } }
+    if (best && bd * GLOBE.R > 700) for (let k = 0; k < 60; k++) { const a = k * 2.4, r = 300 + k * 4, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (geoCacheClear(x, z)) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; break; } }
   }
   if (!GEO.found.size) {                                       // the very first cache is close by, so you're armed before long (the rest are wherever they are)
     let best = null, bd = 1e9; for (const c of GEO.caches) { const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
-    if (best) for (let k = 0; k < 40; k++) { const a = k * 2.4, r = 60 + k * 2, x = P.x - Math.sin(P.yaw + a * .3) * r, z = P.z - Math.cos(P.yaw + a * .3) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; break; } }
+    if (best) for (let k = 0; k < 40; k++) { const a = k * 2.4, r = 60 + k * 2, x = P.x - Math.sin(P.yaw + a * .3) * r, z = P.z - Math.cos(P.yaw + a * .3) * r; if (geoCacheClear(x, z)) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; break; } }
     vrBanner("Treeocashing: you have nothing. Find caches for gear: the GPS is on your wheel", 6, 3);
   }
   if (GEO.lab) { vrBanner("Gear Lab: every item and gun. Hold X for the backpack; Y → Gear Lab tools", 6, 3);
@@ -4433,6 +4433,10 @@ function geoTarget() {                                         // the nearest ca
   for (const c of GEO.caches) if (!GEO.found.has(c.id)) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
   GEO.target = best;
 }
+const geoSolidAt = (x, z) => { const ch = ENDLESS && ENDLESS.chunks.get(enKey(Math.floor(x / EN_C), Math.floor(z / EN_C))); return !!(ch && ch.rg && ch.tile && !ch.stale); };
+function geoCacheClear(x, z) {                                   // 2.82: a spot you can walk right up to: dry, not steep, no rock, boulder, log or trunk on it
+  const h = H(x, z); return h > water + .3 && slopeNy(x, z) > .8 && !inLava(x, z, 4) && rockAround(x, z, 1.3) < h + .3 && !nearObstacle(x, z, 1.2);
+}
 function geoTick(dt) {
   if (!GEO.on || !GLOBE || state !== "play") return;
   const G = GLOBE, R = G.R, out = [0, 0];
@@ -4456,8 +4460,11 @@ function geoTick(dt) {
       const near = !GEO.found.has(c.id) && glArc(G.p, c.p) * R < 500; let o = GEO.objs.get(c.id);
       if (!near) { if (o) { scene.remove(o); GEO.objs.delete(c.id); } continue; }
       glFromSphere(c.p, out);
-      if (!o) { if (!c.ok) { for (let k = 0; k < 60; k++) { const a = k * 2.4, r = k * 1.5, x = out[0] + Math.cos(a) * r, z = out[1] + Math.sin(a) * r; if (H(x, z) > water + .3 && slopeNy(x, z) > .8 && !inLava(x, z, 4)) { c.p = glToSphere(x, z, [0, 0, 0]); out[0] = x; out[1] = z; break; } } c.ok = true; }
+      if (!o) { if (!c.ok) { for (let k = 0; k < 60; k++) { const a = k * 2.4, r = k * 1.5, x = out[0] + Math.cos(a) * r, z = out[1] + Math.sin(a) * r; if (geoCacheClear(x, z)) { c.p = glToSphere(x, z, [0, 0, 0]); out[0] = x; out[1] = z; break; } } c.ok = true; }
         o = geoCacheObj(); scene.add(o); GEO.objs.set(c.id, o); }
+      if (!c.chk && geoSolidAt(out[0], out[1])) {               // 2.82: once the rocks and trees there are built: never inside a boulder, a log or a trunk
+        c.chk = true; if (!geoCacheClear(out[0], out[1])) for (let k = 1; k < 120; k++) { const a = k * 2.4, r = k * .5, x = out[0] + Math.cos(a) * r, z = out[1] + Math.sin(a) * r;
+          if (geoCacheClear(x, z)) { c.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(c.p); c.lat = ll[0]; c.lon = ll[1]; out[0] = x; out[1] = z; break; } } }
       o.position.set(out[0], groundAt(out[0], out[1]), out[1]); c.x = out[0]; c.z = out[1];
     }
     jetsTick(dt);                                                // 2.75
@@ -5235,7 +5242,7 @@ function glabRefill() { MP.hp = 100; GEO.food = GEO.water = 100; GEO.aid = 1; GE
 function glabCache() {
   let best = GEO.target; if (!best) return; let spot = null;
   for (let k = 0; k < 40 && !spot; k++) { const a = P.yaw + k * .3, r = 25 + k, x = P.x - Math.sin(a) * r, z = P.z - Math.cos(a) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) spot = [x, z]; }
-  if (!spot) return; best.p = glToSphere(spot[0], spot[1], [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; GEO.tT = 0; GEO.reAt = true; glabSay("The next cache is 25 m ahead of you");
+  if (!spot) return; best.p = glToSphere(spot[0], spot[1], [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; best.chk = false; GEO.tT = 0; GEO.reAt = true; glabSay("The next cache is 25 m ahead of you");
 }
 function glabBite() { const R = GEO.rod; if (R && R.st === "wait") { R.rate = 1e6; glabSay("Biting now: jerk the rod up!"); } else glabSay("Cast into the water first"); }
 function glabSay(t) { GLAB.msg = t; GLAB.msgT = performance.now(); if (VRUI.panels.glab) uiDraw(VRUI.panels.glab); }
