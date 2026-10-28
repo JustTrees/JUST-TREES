@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.78";              // Just Trees 2.55
+const VERSION = "2.79";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -516,6 +516,22 @@ let hourNow = 10;                            // the hour the world is lit for
 let GLOBE = null;                                              // 2.70: the Geocaching globe (see globeSetup)
 const GEO = { on: false, caches: [], found: new Set(), target: null, tT: 0, saveT: 0, mz: 0, foods: [], warn: 100, beepT: 0, objs: new Map(), gps: null, reAt: false,
   items: new Set(), food: 100, water: 100, cant: 0, aid: 1, spray: 4, worn: new Set(), sprays: [], frT: 0, sipT: 0, nvK: 0, held: null, heldObj: null, leaves: [], pops: [] };   // (2.72: the gear)
+// 2.79: the Treeocashing gear's numbers, tweakable in the Gear Lab (kept on this headset in "jt-tune"; a Dev Mode headset only)
+const TUNE_DEF = [
+  ["boots", "Trail boots: speed", 1.15, .05, 1, 2], ["snowSlow", "Deep snow without snowshoes", .7, .05, .3, 1], ["bushSlow", "Pushing through bushes", .8, .05, .3, 1],
+  ["wings", "Glider wings: sinking", .67, .03, .1, 1], ["wings2", "Ultralight: sinking", .42, .03, .05, 1], ["wings2Speed", "Ultralight: glide speed", 1.2, .05, 1, 2.5],
+  ["fill", "Canteen: fill speed (per s)", 2.2, .2, .2, 8], ["chug", "Canteen: water a second", 10, 1, 1, 40],
+  ["bite", "Fishing: how often they bite", 1, .25, .25, 10], ["fishStr", "Fishing: how hard they fight", 1, .1, .2, 3], ["band", "Fishing: reel-speed window", .15, .02, .05, .4],
+  ["jetMax", "Jet ski: top speed (m/s)", 20, 2, 6, 50], ["jetTurn", "Jet ski: turning", 1, .1, .3, 3],
+  ["chopV", "Machete: swing speed to cut", 2.2, .2, .6, 6], ["sprayR", "Bear spray: reach (m)", 14, 1, 4, 30], ["sprays", "Bear spray: sprays per refill", 4, 1, 1, 12],
+  ["fireT", "Campfire: seconds to light", 2, 1, 0, 15], ["cook", "Campfire: cooked food ×", 2, .25, 1, 4],
+  ["foodDrain", "Hunger speed ×", 1, .1, 0, 4], ["waterDrain", "Thirst speed ×", 1, .1, 0, 4], ["danger", "Predators: how often ×", 1, .25, 0, 4], ["predBite", "Predators: bite damage ×", 1, .1, 0, 3]
+];
+const TUNE = {}; for (const [k, , d] of TUNE_DEF) TUNE[k] = d;
+try { const o = JSON.parse(localStorage.getItem("jt-tune") || "null"); if (o && localStorage.getItem("jt-dev-ok") === "1") for (const [k] of TUNE_DEF) if (typeof o[k] === "number" && isFinite(o[k])) TUNE[k] = o[k]; } catch (_) {}
+function tuneSave() { const o = {}; for (const [k, , d] of TUNE_DEF) if (Math.abs(TUNE[k] - d) > 1e-9) o[k] = TUNE[k]; try { localStorage.setItem("jt-tune", JSON.stringify(o)); } catch (_) {} }
+function tuneStep(D, s) { const [k, , , st, lo, hi] = D; TUNE[k] = Math.round(Math.max(lo, Math.min(hi, TUNE[k] + s * st)) * 1000) / 1000; tuneSave(); }
+const tuneFmt = (v, st) => st >= 1 ? String(Math.round(v)) : v.toFixed(st >= .1 ? (st % .1 ? 2 : 1) : 2);
 const GEO_N = 100, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // 2.70: the globe: the sun where you really are
@@ -4321,7 +4337,7 @@ function geoChar() {
 }
 function geoLoad() { const c = geoChar(); return c ? { n: c.n, found: Array.from({ length: c.n }, (_, i) => i + 1), score: c.score || 0, kills: c.kills || 0, lat: c.lat, lon: c.lon } : null; }   // (lat/lon: only the tests pick a start spot)
 function geoSave() {
-  if (!GEO.on || !GLOBE) return;
+  if (!GEO.on || !GLOBE || GEO.lab) return;
   try { localStorage.setItem(geoCharKey, JSON.stringify({ n: GEO.found.size, score: +hunt.score.toFixed(1), kills: hunt.kills })); } catch (_) {}
 }
 function geoRestart() { try { localStorage.setItem(geoCharKey, JSON.stringify({ n: 0, score: 0, kills: 0 })); localStorage.removeItem(geoKey); } catch (_) {} }   // start over at level 0
@@ -4342,6 +4358,7 @@ function geoPlace() {                                          // the caches: th
   return L;
 }
 function geoStart(sv) {
+  GEO.lab = !!GEO.labWant; GEO.labWant = false;
   GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
   for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = [];
   MP.hp = 100; MP.sh = 0; MP.dead = 0;
@@ -4360,6 +4377,8 @@ function geoStart(sv) {
     let best = null, bd = 1e9; for (const c of GEO.caches) { const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
     if (best) for (let k = 0; k < 40; k++) { const a = k * 2.4, r = 60 + k * 2, x = P.x - Math.sin(P.yaw + a * .3) * r, z = P.z - Math.cos(P.yaw + a * .3) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; break; } }
     vrBanner("Treeocashing: you have nothing. Find caches for gear: the GPS is on your wheel", 6, 3);
+  }
+  if (GEO.lab) { vrBanner("Gear Lab: every item and gun. Hold X for the backpack; Y → Gear Lab tools", 6, 3);
   }
 }
 function geoStop() { geoGearClear(); GEO.on = false; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; vr.gpsMode = false; if (GEO.gps) GEO.gps.visible = false; if (GEO.globe) GEO.globe.visible = false; }
@@ -4566,12 +4585,12 @@ function geoGearApply(n, fresh) {                             // your guns and i
   vr.own = Object.assign({}, g.own);
   for (const k in WEAP) { const A = arms[k], t = vr.own[k] || 0; A.phase = 0; A.k = 0; A.popping = false; A.mag = t ? magOf(k) : 0; A.res = t ? WEAP[k].start : 0; }
   if (!(vr.own[vr.weapon] > 0)) { vr.weapon = ["pistol", "smg", "ar", "hunt"].find(k => vr.own[k] > 0) || "pistol"; vr.gunInit = false; }
-  if (fresh) { vr.nades = geoNadeCap(); vr.flares = geoHas("flares") ? FLARE.N : 0; GEO.aid = 1; GEO.spray = 4; }
+  if (fresh) { vr.nades = geoNadeCap(); vr.flares = geoHas("flares") ? FLARE.N : 0; GEO.aid = 1; GEO.spray = TUNE.sprays; }
   vr.nadeMode = vr.nadeMode && vr.nades > 0;
 }
 function geoReward(n) {                                       // a cache found: what's in it
   const r = geoRewardOf(n);
-  GEO.aid = 1; GEO.spray = 4; vr.flares = geoHas("flares") ? FLARE.N : 0; vr.nades = Math.max(vr.nades | 0, geoNadeCap());   // (refills, every cache)
+  GEO.aid = 1; GEO.spray = TUNE.sprays; vr.flares = geoHas("flares") ? FLARE.N : 0; vr.nades = Math.max(vr.nades | 0, geoNadeCap());   // (refills, every cache)
   if (r.gun) {
     const was = vr.own[r.gun] || 0; vr.own[r.gun] = r.star;
     if (r.gun !== "bow") { const A = arms[r.gun]; A.mag = magOf(r.gun); A.res = Math.max(A.res, WEAP[r.gun].start); if (!was) { vr.weapon = r.gun; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = vr.bowMode = vr.gpsMode = false; geoHeld(null); } }
@@ -4633,11 +4652,11 @@ function geoShowTick(dt) {
 }
 // food, water and health
 function geoDrink(amt, msg) { if (GEO.water >= 99.5) return false; GEO.water = Math.min(100, GEO.water + amt * (geoHas("filter") ? 2 : 1)); if (msg) vrBanner(msg, 1.2, 0); return true; }
-function geoEat(amt, msg) { const cook = geoFireNear(8) ? 2 : 1; gunFoley([[0, 1600, .06, .12], [.12, 1300, .06, .1], [.24, 1500, .06, .08]]); if (vr.head) geoPop(vr.head.clone().add(_v1.set(0, -.2, 0)), 0xe8a050, 8, "splash"); GEO.meterT = 1; GEO.food = Math.min(100, GEO.food + amt * cook); MP.hp = Math.min(100, MP.hp + amt * .25 * cook); if (msg) vrBanner(msg + (cook > 1 ? " (cooked: double)" : ""), 1.8, 1); }
+function geoEat(amt, msg) { const cook = geoFireNear(8) ? TUNE.cook : 1; gunFoley([[0, 1600, .06, .12], [.12, 1300, .06, .1], [.24, 1500, .06, .08]]); if (vr.head) geoPop(vr.head.clone().add(_v1.set(0, -.2, 0)), 0xe8a050, 8, "splash"); GEO.meterT = 1; GEO.food = Math.min(100, GEO.food + amt * cook); MP.hp = Math.min(100, MP.hp + amt * .25 * cook); if (msg) vrBanner(msg + (cook > 1 ? " (cooked: double)" : ""), 1.8, 1); }
 const geoCold = () => { const b = ENDLESS && ENDLESS.here && ENDLESS.here.b, L = b && ENDLESS.envL[b]; return b === "polar" || b === "tundra" || !!(L && L.winterSnow); };
 function geoBarsTick(dt) {
   const hard = P.gliding || input.run ? 1.3 : 1, cold = geoCold() && !geoHas("thermos") && !geoFireNear(10) ? 1.5 : 1;
-  GEO.food = Math.max(0, GEO.food - dt * .05 * hard * cold); GEO.water = Math.max(0, GEO.water - dt * .075 * hard);
+  GEO.food = Math.max(0, GEO.food - dt * .05 * hard * cold * TUNE.foodDrain); GEO.water = Math.max(0, GEO.water - dt * .075 * hard * TUNE.waterDrain);
   if (GEO.food <= 0 || GEO.water <= 0) MP.hp = Math.max(0, MP.hp - dt * .6);
   else if (GEO.food > 30 && GEO.water > 30 && MP.hp < 100) MP.hp = Math.min(100, MP.hp + dt * .15);
   const low = Math.min(GEO.food, GEO.water), w = low < 10 ? 10 : low < 25 ? 25 : low < 50 ? 50 : 100;
@@ -4667,13 +4686,13 @@ function geoAimGround(main, maxD) {                           // where the hand 
 function geoFirePlace(x, z) {
   if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); }
   const obj = giModel("campfire"); obj.scale.setScalar(4); const y = groundAt(x, z); obj.position.set(x, y + .05, z); scene.add(obj);
-  const pts = fireMake(18, .45); GEO.fire = { obj, pts, x, y, z, t: 0, lit: false, lightT: 2, life: 240 };   // 2.74: lights in 2 s (no fire starter any more)
+  const pts = fireMake(18, .45); GEO.fire = { obj, pts, x, y, z, t: 0, lit: TUNE.fireT <= 0, lightT: TUNE.fireT, life: 240 };   // 2.74: lights in 2 s (no fire starter any more)
   vrBanner(GEO.fire.lit ? "Campfire lit" : "Campfire: lighting…", 2, 1); geoPop(new THREE.Vector3(x, y + .3, z), 0x8a8a84, 18, "smoke"); gunFoley([[0, 300, .2, .14], [.1, 2200, .4, .05], [.3, 1800, .3, .04]]); buzz(set.hand === "right" ? "R" : "L", .4, 60);
 }
 function geoFireTick(dt) {
   const F = GEO.fire; if (!F) return; F.t += dt;
   if (!F.lit && (F.lightT -= dt) <= 0) { F.lit = true; vrBanner("Campfire lit: cook your food here", 2.5, 1); geoPop(new THREE.Vector3(F.x, F.y + .4, F.z), 0xff8a2a, 20, "heal"); gunFoley([[0, 600, .5, .16], [.05, 2600, .6, .06]]); }
-  const pa = F.pts.geometry.attributes.position, ca = F.pts.geometry.attributes.color, k = F.lit ? 1 : .15 * Math.max(0, 1 - F.lightT / 2) + .05, fade = Math.min(1, (F.life - F.t) / 5);
+  const pa = F.pts.geometry.attributes.position, ca = F.pts.geometry.attributes.color, k = F.lit ? 1 : .15 * Math.max(0, 1 - F.lightT / Math.max(.1, TUNE.fireT)) + .05, fade = Math.min(1, (F.life - F.t) / 5);
   for (let i = 0; i < 18; i++) { const u = (i / 18 + F.t * (.7 + (i % 5) * .13)) % 1, a = i * 2.4, r = .25 * (1 - u); pa.setXYZ(i, F.x + Math.cos(a) * r, F.y + .15 + u * 1.1 * k, F.z + Math.sin(a) * r); const f = (1 - u) * k * fade; ca.setXYZ(i, f, f * (.35 + .4 * (1 - u)), f * .06); }
   pa.needsUpdate = ca.needsUpdate = true;
   if (F.t > F.life) { scene.remove(F.obj); scene.remove(F.pts); GEO.fire = null; }
@@ -4750,7 +4769,7 @@ function geoRodTick(I, main, dt) {
     const g = H(R.p.x, R.p.z);
     if (R.p.y <= water && g < water - .3 && !(ENDLESS && enIcedAt(R.p.x, R.p.z))) {   // in the water: wait for a bite
       const depth = water - g, dawn = Math.min(Math.abs(hourNow - 6), Math.abs(hourNow - 18)) < 2 ? 1.6 : 1, spot = .6 + .4 * Math.abs(Math.sin(R.p.x * .013 + R.p.z * .017)), salt = geoSalty(R.p);
-      R.st = "wait"; R.t = 0; R.p.y = water; R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot; R.salt = salt; gunFoley([[0, 700, .1, .1]]);
+      R.st = "wait"; R.t = 0; R.p.y = water; R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot * TUNE.bite; R.salt = salt; gunFoley([[0, 700, .1, .1]]);
     } else if (R.p.y <= g + .05 || R.t > 4) { vrBanner("Cast it into the water", 1.5, 0); geoRodReset(R); }
     return;
   }
@@ -4767,7 +4786,7 @@ function geoRodTick(I, main, dt) {
   if (R.st === "bite") {                                       // jerk the rod up, quickly
     if (R.tvS.y > 2) {
       const L = R.salt ? SEA_FISH : FISH_KINDS, f = L[Math.floor(Math.random() * L.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
-      R.st = "fight"; R.t = 0; R.fish = { name: f[0], kg, col: f[3] }; R.F = { got: 0, tense: .2, slack: 0, pull: 0, pullT: 0, want: .5, wantT: 0, reel: 0, tilt: 0, str: .6 + kg / 8 };
+      R.st = "fight"; R.t = 0; R.fish = { name: f[0], kg, col: f[3] }; R.F = { got: 0, tense: .2, slack: 0, pull: 0, pullT: 0, want: .5, wantT: 0, reel: 0, tilt: 0, str: (.6 + kg / 8) * TUNE.fishStr };
       vrBanner("Fish on! Reel it in", 1.5, 1); buzz(ms, .8, 120); geoFishUI().visible = true; R.ang = null;
     } else if (R.t > 1.2) { R.st = "wait"; R.t = 0; vrBanner("Too slow: jerk the rod up when it bites", 1.8, 0); }
     return;
@@ -4783,7 +4802,7 @@ function geoRodTick(I, main, dt) {
     if ((F.pullT -= dt) <= 0) { F.pullT = 1.5 + Math.random() * 2.5; F.pullTo = (Math.random() * 2 - 1) * (.5 + .5 * Math.min(1, F.str / 2)); } F.pull += ((F.pullTo || 0) - F.pull) * Math.min(1, dt * 1.5);
     if ((F.wantT -= dt) <= 0) { F.wantT = 1 + Math.random() * 2; F.wantTo = .25 + Math.random() * .6; } F.want += ((F.wantTo || .5) - F.want) * Math.min(1, dt * 1.2);
     const tipOk = Math.sign(F.tilt) === Math.sign(F.pull) && Math.abs(F.tilt) > .25 || Math.abs(F.pull) < .15, dv = F.reel - F.want;
-    if (Math.abs(dv) < .15) F.got = Math.min(1, F.got + dt * (tipOk ? .09 : .04) / F.str);
+    if (Math.abs(dv) < TUNE.band) F.got = Math.min(1, F.got + dt * (tipOk ? .09 : .04) / F.str);
     F.tense = Math.max(0, Math.min(1.2, F.tense + dt * ((dv > .2 ? (dv - .1) * 1.6 : -.25) + (tipOk ? -.15 : .45 * F.str))));
     F.slack = Math.max(0, F.slack + dt * (dv < -.25 ? .35 : -.4));
     const mx = 1 - F.got; R.lure.position.set(P.x + (R.p.x - P.x) * mx + F.pull * .8, water - .1, P.z + (R.p.z - P.z) * mx); line(R.lure.position);
@@ -4806,7 +4825,7 @@ function geoRodTick(I, main, dt) {
 // 2.74: the machete: swing it through bushes to cut them down (and it bites into anything that comes for you)
 function geoMacheteTick(main, dt) {
   const o = GEO.heldObj, tip = o.localToWorld(_giV.set(0, 0, -.36)).clone(), mid = o.localToWorld(new THREE.Vector3(0, 0, -.18));
-  const v = GEO.mTip ? tip.distanceTo(GEO.mTip) / Math.max(dt, 1e-3) : 0; GEO.mTip = tip; if (v < 2.2) return;
+  const v = GEO.mTip ? tip.distanceTo(GEO.mTip) / Math.max(dt, 1e-3) : 0; GEO.mTip = tip; if (v < TUNE.chopV) return;
   let cut = 0;
   for (const p of [tip, mid]) for (const t of geoBushesNear(p.x, p.z, 1.2)) {
     if (t.cut) continue; const r = Math.max(.35, t.s * .55), d = Math.hypot(t.x - p.x, t.z - p.z); if (d > r || p.y > t.y + t.s * 1.3 + .3 || p.y < t.y - .4) continue;
@@ -4852,7 +4871,7 @@ function geoBushTouch() {                                     // how many bushes
 function geoSpray(main) {
   if (GEO.spray <= 0) { vrBanner("Bear spray is empty (refills at caches)", 1.5, 0); return; }
   GEO.spray--; const o = main.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ).normalize(); let hit = 0;
-  for (const A of beasts) { if (A.dead || A.gone) continue; const dx = A.x - o.x, dz = A.z - o.z, dist = Math.hypot(dx, dz); if (dist > 14 || (dx * d.x + dz * d.z) / (dist || 1) < .75) continue;
+  for (const A of beasts) { if (A.dead || A.gone) continue; const dx = A.x - o.x, dz = A.z - o.z, dist = Math.hypot(dx, dz); if (dist > TUNE.sprayR || (dx * d.x + dz * d.z) / (dist || 1) < .75) continue;
     hit++; if (A.pred) predCalm(A, 60); if (A.hunter && typeof dinoLeave === "function") dinoLeave(A); else if (A.rexOn && typeof rexGiveUp === "function") rexGiveUp(A); else fleeFrom(A, P.x, P.z, (A.run || 8) * 1.3, 12, 150); }
   const pts = fireMake(30, .3); GEO.sprays.push({ pts, o: o.clone(), d: d.clone(), t: 0 }); gunFoley([[0, 3800, .5, .12], [0, 2400, .45, .08]]); buzz(set.hand === "right" ? "R" : "L", .5, 300);
   if (hit) vrBanner("Bear spray: it's running!", 1.5, 1);
@@ -4873,13 +4892,13 @@ function geoWornTick(I) {
 }
 // speed, gliding
 function geoSpeedMul() {
-  if (!GEO.on) return 1; let m = geoHas("boots") ? 1.15 : 1; const b = ENDLESS && ENDLESS.here && ENDLESS.here.b;
-  if ((b === "polar" || (footEnv && footEnv.snow)) && !geoHas("snowshoes")) m *= .7;                 // deep snow
-  const nb = geoBushTouch(); if (nb) m *= nb > 1 ? .65 : .8;                                        // 2.74: pushing through bushes (chop them with the machete)
+  if (!GEO.on) return 1; let m = geoHas("boots") ? TUNE.boots : 1; const b = ENDLESS && ENDLESS.here && ENDLESS.here.b;
+  if ((b === "polar" || (footEnv && footEnv.snow)) && !geoHas("snowshoes")) m *= TUNE.snowSlow;                 // deep snow
+  const nb = geoBushTouch(); if (nb) m *= nb > 1 ? TUNE.bushSlow * .81 : TUNE.bushSlow;                                        // 2.74: pushing through bushes (chop them with the machete)
   return m;
 }
-const geoSinkMul = () => !GEO.on ? 1 : geoHas("wings2") ? .42 : geoHas("wings") ? .67 : 1;
-const geoGlideMul = () => GEO.on && geoHas("wings2") ? 1.2 : 1;
+const geoSinkMul = () => !GEO.on ? 1 : geoHas("wings2") ? TUNE.wings2 : geoHas("wings") ? TUNE.wings : 1;
+const geoGlideMul = () => GEO.on && geoHas("wings2") ? TUNE.wings2Speed : 1;
 // fruit on the trees (by climate): reach up and squeeze to pull one off
 const GEO_FRUIT = { rainforest: [0xf2d030, "banana"], tropical: [0x7a5a2a, "coconut"], swamp: [0x8a3aa0, "berries"], temperate: [0xd02a2a, "apple"], birchmaple: [0xd02a2a, "apple"], redwood: [0x4a3ab0, "berries"],
   boreal: [0x3a4ac0, "berries"], tundra: [0xd03050, "berries"], desert: [0xe04a8a, "cactus fruit"], badlands: [0xe04a8a, "cactus fruit"] };
@@ -4970,9 +4989,9 @@ function geoHeldTick(I, main, dt) {                           // using what's in
     GEO.sipT -= dt;
     if (geoInWater(neck) && up.y > .6) {                       // (upright, the opening under the surface)
       if (geoSalty(neck)) geoSaltSay();
-      else if (GEO.cant < 4) { GEO.cant = Math.min(4, GEO.cant + dt * 2.2); if (GEO.sipT <= 0) { GEO.sipT = .3; gunFoley([[0, 380 + GEO.cant * 120, .15, .08]]); buzz(ms, .15, 20); geoPop(neck, 0x9ad8ff, 6, "bubble"); } if (GEO.cant >= 4) { buzz(ms, .5, 60); bing(); } }
+      else if (GEO.cant < 4) { GEO.cant = Math.min(4, GEO.cant + dt * TUNE.fill); if (GEO.sipT <= 0) { GEO.sipT = .3; gunFoley([[0, 380 + GEO.cant * 120, .15, .08]]); buzz(ms, .15, 20); geoPop(neck, 0x9ad8ff, 6, "bubble"); } if (GEO.cant >= 4) { buzz(ms, .5, 60); bing(); } }
     } else if (neck.distanceTo(mouth) < .2 && up.y < .75 && up.dot(_v3c.copy(I.head).sub(o.position).normalize()) > .25) {   // tipped up at your face
-      if (GEO.cant > 0 && GEO.water < 99.5) { const take = Math.min(GEO.cant, dt * .4); GEO.cant -= take; geoDrink(take * 25);
+      if (GEO.cant > 0 && GEO.water < 99.5) { const take = Math.min(GEO.cant, dt * TUNE.chug / 25); GEO.cant -= take; geoDrink(take * 25);
         if (GEO.sipT <= 0) { GEO.sipT = .32; gunFoley([[0, 300, .12, .14], [.05, 520, .1, .08]]); buzz(ms, .25, 40); geoPop(neck, 0x6ac8ff, 4, "splash"); } }
       else if (GEO.cant <= .01 && GEO.sipT <= 0) { GEO.sipT = 1.5; vrBanner("Empty: hold it upright under a lake to fill it", 1.5, 0); }
     }
@@ -5003,7 +5022,7 @@ function geoGearClear() {
    at dry land close by and pull the trigger. ---- */
 const JET = { list: [], ride: null, aim: null, ring: null, snd: null };
 const JET_N = 8, JET_MAX = 20, JET_UNLOCK = 50, JET_SEAT = new THREE.Vector3(0, .78, .25), JET_GRIP = { L: new THREE.Vector3(-.34, .98, -.42), R: new THREE.Vector3(.34, .98, -.42) };
-const jetOn = () => GEO.on && !!GLOBE && GEO.found.size >= JET_UNLOCK;
+const jetOn = () => GEO.on && !!GLOBE && (GEO.found.size >= JET_UNLOCK || GEO.lab);
 function jetPlace() {                                          // the spots: just off the sea coasts, far apart (the same ones for this planet)
   const G = GLOBE, R = G.R, rr = mulberry32(seed * 313 + 9), L = [], step = 220 / R;
   for (let t = 0; t < 80000 && L.length < JET_N; t++) {
@@ -5064,7 +5083,7 @@ function jetsTick(dt) {                                       // (in geoTick: th
 function jetBob(J, t, sp, steer) {                            // the hull on the waves (only the jet ski: never your view)
   const o = J.obj, gnd = H(J.x, J.z), afloat = gnd < water - .3, k = afloat ? 1 : .15;
   const y = Math.max(water, gnd) + (.06 * Math.sin(t * 1.7 + J.id) + .035 * Math.sin(t * 3.1) + (sp > 6 ? .05 * Math.sin(t * 9) * Math.min(1, sp / 15) : 0)) * k - .05;
-  o.position.set(J.x, y, J.z); o.rotation.set((.05 * Math.sin(t * 1.3 + J.id) * k) + Math.min(.09, sp / JET_MAX * .09), J.yaw, (.04 * Math.sin(t * 1.1) * k) + steer * .22 * Math.min(1, sp / 6), "YXZ");
+  o.position.set(J.x, y, J.z); o.rotation.set((.05 * Math.sin(t * 1.3 + J.id) * k) + Math.min(.09, sp / TUNE.jetMax * .09), J.yaw, (.04 * Math.sin(t * 1.1) * k) + steer * .22 * Math.min(1, sp / 6), "YXZ");
   o.userData.bars.rotation.y = -steer * .5; o.updateMatrixWorld(true);
 }
 function jetGripAt(side) { const Rd = JET.ride; return Rd && Rd.J.obj ? Rd.J.obj.localToWorld(JET_GRIP[side].clone()) : null; }
@@ -5134,8 +5153,8 @@ function jetRide(dt) {                                          // (instead of w
   let st = 0;
   if (both) { const vx = Rh.pos.x - L.pos.x, vz = Rh.pos.z - L.pos.z, lx = vx * rx + vz * rz, back = -(vx * fx + vz * fz); st = Math.max(-1, Math.min(1, Math.atan2(back, Math.max(.05, lx)) / .55)); }   // right hand back: turn right
   Rd.steer += (st - Rd.steer) * Math.min(1, dt * 8);
-  const want = thr * JET_MAX; Rd.sp += (want - Rd.sp) * Math.min(1, dt * (want > Rd.sp ? .8 : .45));
-  const turn = -Rd.steer * (.35 + 1.05 * Math.min(1, Math.abs(Rd.sp) / 7)) * dt * (Math.abs(Rd.sp) > .3 || both ? 1 : 0);
+  const want = thr * TUNE.jetMax; Rd.sp += (want - Rd.sp) * Math.min(1, dt * (want > Rd.sp ? .8 : .45));
+  const turn = -Rd.steer * (.35 + 1.05 * Math.min(1, Math.abs(Rd.sp) / 7)) * TUNE.jetTurn * dt * (Math.abs(Rd.sp) > .3 || both ? 1 : 0);
   J.yaw += turn;
   // where the nose would go: open water, a sandy beach (it slides up and stops), or a cliff / rocks (it bumps back)
   let mv = Rd.sp * dt; const nfx = -Math.sin(J.yaw), nfz = -Math.cos(J.yaw);
@@ -5154,11 +5173,77 @@ function jetRide(dt) {                                          // (instead of w
   P.x = J.x + px * c + pz * s; P.z = J.z - px * s + pz * c; P.y = Rd.floor; P.vy = 0; P.onGround = true; P.gliding = false; P.crouch = false;
   vr.pendTurn = turn + (Rd.turn0 || 0); Rd.turn0 = 0;
   jetBob(J, Rd.t, Math.abs(Rd.sp), Rd.steer);
-  if (Rd.eng) jetEngine(true, Math.min(1, Math.abs(Rd.sp) / JET_MAX), thr); else if (JET.snd) jetEngine(false);
+  if (Rd.eng) jetEngine(true, Math.min(1, Math.abs(Rd.sp) / TUNE.jetMax), thr); else if (JET.snd) jetEngine(false);
   if (both && (Rd.buzzT = (Rd.buzzT || 0) - dt) <= 0) { Rd.buzzT = .1; const k = .04 + .2 * thr; buzz("L", k, 15); buzz("R", k, 15); }
   input.run = Rd.sp > 12;                                       // (hard riding makes you hungry like running)
 }
 function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; }   // (the spots stay: a new game makes new ones)
+/* ---- 2.79: the Gear Lab (Dev menu): a Treeocashing planet with every item and every gun at red, nothing saved to your character. Y →
+   "Gear Lab tools": quick helpers (go to a lake or a sea beach, a jet ski here, predators, day or night, refill, the next cache close) and
+   live tweaks for the items (kept on this headset; read them out and they can be made the real values). ---- */
+function glabSpot(test, maxR) {                                  // the nearest spot round you that passes the test
+  for (let k = 0; k < 4000; k++) { const a = k * 2.4, r = 8 + k * (maxR / 4000), x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (test(x, z)) return [x, z]; }
+  return null;
+}
+function glabGoTo(x, z) { P.x = x; P.z = z; enEnsure(x, z, 260); P.y = groundAt(x, z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined; GEO.reAt = true; GEO.tT = 0; }
+function glabShore(x, z) {                                       // walk out from the water to dry, gentle ground
+  for (let d = 0; d < 16; d++) { const a = d * .3927; for (let r = 2; r < 120; r += 2) { const sx = x + Math.cos(a) * r, sz = z + Math.sin(a) * r; if (H(sx, sz) > water + .3) { if (slopeNy(sx, sz) > .8) return [sx + Math.cos(a) * 2, sz + Math.sin(a) * 2]; break; } } }
+  return null;
+}
+function glabLake() {
+  const s = glabSpot((x, z) => H(x, z) < water - 1.5 && !geoSalty({ x, z }), 5000); if (!s) { glabSay("No lake within 5 km"); return; }
+  const sh = glabShore(s[0], s[1]); if (!sh) { glabSay("Found a lake but no way in"); return; }
+  glabGoTo(sh[0], sh[1]); glabSay("At a lake: drink, fill the canteen, fish");
+}
+function glabJetAt(b) { const J = { id: 100 + JET.list.length, p: glToSphere(b.x, b.z, [0, 0, 0]), ok: true, dead: false, yaw: b.yaw, x: b.x, z: b.z, obj: null }; JET.list.push(J); GEO.tT = 0; GEO.reAt = true; return J; }
+function glabSea() {
+  let b = null; const s = glabSpot((x, z) => H(x, z) < water - 1.5 && geoSalty({ x, z }), 9000);
+  if (s) b = jetFindBeach(s[0], s[1]);
+  if (!b) { glabSay(s ? "Found the sea but no sandy beach there" : "No sea within 9 km"); return; }
+  const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw); glabGoTo(b.x - fx * 14, b.z - fz * 14); glabJetAt(b); glabSay("On a sea beach: a jet ski is waiting in the water");
+}
+function glabJet() { const b = jetFindBeach(P.x, P.z); if (!b) { glabSay("No sandy sea beach close by: try 'Sea beach'"); return; } glabJetAt(b); glabSay("A jet ski on the nearest beach"); }
+function glabPred(kind) {
+  const put = (dx, dz) => { let x = P.x + dx, z = P.z + dz; for (let t = 0; t < 40 && !(H(x, z) > water + .5); t++) { x += 7; z += 3; } return addGround(kind, x, z); };
+  const a = P.yaw + Math.PI;                                     // (behind you, so you can turn and meet it)
+  if (kind === "wolf") { for (let i = 0; i < 4; i++) { const A = put(Math.sin(a) * 30 + i * 3, Math.cos(a) * 30); if (A) { A.grp = 77; predGo(A, "circle", { a: i, r: 22, dir: 1, wait: 4 + i * 2, pack: 4 }); } } glabSay("A wolf pack: they circle, then dart in"); return; }
+  const A = put(Math.sin(a) * (kind === "bear" ? 25 : 45), Math.cos(a) * (kind === "bear" ? 25 : 45)); if (!A) return;
+  predGo(A, kind === "bear" ? "charge" : "stalk"); glabSay(kind === "bear" ? "A bear, charging" : "A mountain lion, stalking you");
+}
+function glabTime(h) { if (!GLOBE) return; GLOBE.utc = ((h - GLOBE.lon / 15) % 24 + 48) % 24; glabSay(h >= 20 || h < 5 ? "Night" : "Midday"); }
+function glabRefill() { MP.hp = 100; GEO.food = GEO.water = 100; GEO.aid = 1; GEO.spray = TUNE.sprays; GEO.cant = 4; vr.flares = geoHas("flares") ? FLARE.N : 0; vr.nades = geoNadeCap(); glabSay("Everything full"); }
+function glabCache() {
+  let best = GEO.target; if (!best) return; let spot = null;
+  for (let k = 0; k < 40 && !spot; k++) { const a = P.yaw + k * .3, r = 25 + k, x = P.x - Math.sin(a) * r, z = P.z - Math.cos(a) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) spot = [x, z]; }
+  if (!spot) return; best.p = glToSphere(spot[0], spot[1], [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; GEO.tT = 0; GEO.reAt = true; glabSay("The next cache is 25 m ahead of you");
+}
+function glabBite() { const R = GEO.rod; if (R && R.st === "wait") { R.rate = 1e6; glabSay("Biting now: jerk the rod up!"); } else glabSay("Cast into the water first"); }
+function glabSay(t) { GLAB.msg = t; GLAB.msgT = performance.now(); if (VRUI.panels.glab) uiDraw(VRUI.panels.glab); }
+const GLAB = { msg: "", msgT: 0, page: 0 };
+function glabPanel() {
+  const Pn = uiPanel("glab", 1400, 1100, 2.0, 74, 1.45), lx = 60, rx = 660, per = 8;
+  Pn.paint = (g, P) => {
+    uiBg(g, P, "GEAR LAB"); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 34px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Try it", lx, 150); g.fillText("Tweak it", rx, 150);
+    g.font = "24px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Kept on this headset. Tell Claude the ones you like.", rx, 186);
+    TUNE_DEF.slice(GLAB.page * per, GLAB.page * per + per).forEach(([k, name, d0, step], i) => { const y = 250 + i * 92, v = TUNE[k], ch = Math.abs(v - d0) > 1e-9;
+      g.font = "bold 28px sans-serif"; g.fillStyle = ch ? UIC.sun : UIC.text; g.fillText(name, rx, y); g.font = "26px sans-serif"; g.fillStyle = ch ? UIC.sun : UIC.dim; g.fillText(tuneFmt(v, step) + (ch ? "   (was " + tuneFmt(d0, step) + ")" : ""), rx, y + 34); });
+    g.textAlign = "right"; g.font = "24px sans-serif"; g.fillStyle = UIC.dim; g.fillText("page " + (GLAB.page + 1) + " / " + Math.ceil(TUNE_DEF.length / per), 1340, 1000);
+    if (GLAB.msg && performance.now() - GLAB.msgT < 12000) { g.textAlign = "left"; g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, GLAB.msg, 560), lx, 1000); }
+  };
+  const B = (x, y, w, l, f, o) => uiBtn(Pn, x, y, w, 72, l, () => { f(); uiDraw(Pn); }, Object.assign({ fs: 28, personal: true }, o || {}));
+  [["Go to a lake", glabLake], ["Go to a sea beach + jet ski", glabSea], ["Jet ski at the nearest beach", glabJet], ["Next cache 25 m ahead", glabCache], ["Fish bites now", glabBite],
+   ["Bear", () => glabPred("bear")], ["Wolf pack", () => glabPred("wolf")], ["Mountain lion", () => glabPred("panther")], ["Midday", () => glabTime(12)], ["Night", () => glabTime(23)],
+   ["Hungry + thirsty", () => { GEO.food = GEO.water = 20; glabSay("Food and water at 20"); }], ["Refill everything", glabRefill]].forEach(([l, f], i) => {
+    const half = i >= 5, col = half ? (i - 5) % 2 : 0, row = half ? 5 + Math.floor((i - 5) / 2) : i, w = half ? 275 : 560;
+    B(lx + col * 285, 180 + row * 86, w, l, f); });
+  for (let i = 0; i < per; i++) {
+    const idx = () => GLAB.page * per + i, hide = () => idx() >= TUNE_DEF.length;
+    B(1110, 218 + i * 92, 100, "−", () => tuneStep(TUNE_DEF[idx()], -1), { hide, fs: 40 }); B(1230, 218 + i * 92, 100, "+", () => tuneStep(TUNE_DEF[idx()], 1), { hide, fs: 40 }); }
+  B(rx, 1020, 200, "◀ Page", () => { GLAB.page = (GLAB.page + Math.ceil(TUNE_DEF.length / per) - 1) % Math.ceil(TUNE_DEF.length / per); });
+  B(rx + 210, 1020, 200, "Page ▶", () => { GLAB.page = (GLAB.page + 1) % Math.ceil(TUNE_DEF.length / per); });
+  B(rx + 420, 1020, 260, "Reset tweaks", () => { for (const [k, , d0] of TUNE_DEF) TUNE[k] = d0; tuneSave(); glabSay("Tweaks back to the game's values"); });
+  B(lx, 1020, 270, "Back to it", () => vruiResume(), { primary: true }); B(lx + 290, 1020, 270, "Main menu", () => vruiOpen("mode"));
+}
 /* ---- 2.73: in Geocaching the predators hunt you (nowhere else). Wolves (and coyotes at night) come as a pack: they circle, then dart in one
    at a time to bite. A bear charges if you get close or shoot it, and takes several shots. A mountain lion stalks you from behind, out of
    sight, growls, and pounces. Gators and crocodiles lunge from the water's edge. Lions charge if you walk up on the pride. Bear spray turns
@@ -5167,7 +5252,7 @@ const PRED = { wolf: "pack", coyote: "pack", bear: "bear", polar: "bear", panthe
 const PRED_BITE = { wolf: 12, coyote: 7, bear: 28, polar: 32, panther: 30, lion: 22, gator: 20, crocodile: 24 };
 const PRED_TOUGH = { bear: 4, polar: 5, lion: 2 };           // shots it takes (a sniper or a head shot counts double)
 const PRED_NAME = { wolf: "A wolf", coyote: "A coyote", bear: "A bear", polar: "A polar bear", panther: "A mountain lion", lion: "A lion", gator: "A gator", crocodile: "A crocodile" };
-const geoDanger = () => Math.min(1, .3 + GEO.found.size / 30);
+const geoDanger = () => Math.min(1, .3 + GEO.found.size / 30) * TUNE.danger;
 function predGo(A, st, extra) { A.pred = Object.assign({ st, t: 0 }, extra || {}); A.fleeT = 0; A.trek = false; A.mode = "walk"; A.timer = 99; A.steerT = 0; }
 function predCalm(A, secs) { A.pred = null; A.predCool = secs; A.mode = "idle"; A.timer = 1; }
 function predAnger(A) {                                       // shot at (and not dropped): bears and lions come for you, the rest bolt
@@ -5176,7 +5261,7 @@ function predAnger(A) {                                       // shot at (and no
 }
 function predGrowl(A, big) { gunFoley(big ? [[0, 90, .7, .3], [.05, 140, .6, .22]] : [[0, 160, .4, .22], [.08, 240, .3, .14]]); }
 function predBite(A) {
-  const d = PRED_BITE[A.kind] || 10; MP.hp = Math.max(0, MP.hp - d); GEO.hurt = Math.min(1, GEO.hurt + .45 + d / 60);
+  const d = Math.round((PRED_BITE[A.kind] || 10) * TUNE.predBite); MP.hp = Math.max(0, MP.hp - d); GEO.hurt = Math.min(1, GEO.hurt + .45 + d / 60);
   buzz("L", .9, 120); buzz("R", .9, 120); predGrowl(A, A.kind === "bear" || A.kind === "polar");
   const now = performance.now(); if (now - (GEO.biteSaid || 0) > 4000) { GEO.biteSaid = now; vrBanner(PRED_NAME[A.kind] + " got you! (-" + d + ")", 2, 2); }
   if (MP.hp <= 0) { GEO.killedBy = PRED_NAME[A.kind]; UW.drown = .001; UW.red = 1; vrBanner(PRED_NAME[A.kind] + " killed you", 3.5, 3); }
@@ -5420,7 +5505,7 @@ function generate() {
   const EN = HIKEMAP === "endless";
   GLOBE = EN && geoMode() ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // 2.70: Geocaching: the little globe
   CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !GLOBE) geoStop();
-  if (GLOBE) GLOBE.sv = geoLoad();                              // (2.76: the planet is this game's own; only your level carries over)
+  if (GLOBE) GLOBE.sv = GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (2.79: the Gear Lab: everything, saved nowhere)                              // (2.76: the planet is this game's own; only your level carries over)
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
   starMat.uniforms.uPx.value = renderer.getPixelRatio();
@@ -10316,7 +10401,7 @@ function vruiParts() {
   uiBtn(M, 90, 850, 380, 90, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { fs: 34, personal: true });
   uiBtn(M, 1070, 850, 240, 90, "Dev", () => vruiOpen("dev"), { fs: 36, hide: () => !DEV.ok, paintCol: "#3a4a6a" });   // 2.45
   uiBtn(M, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
-  devPanels(); labPanel(); arenasPanel(); vbPanel();
+  devPanels(); glabPanel(); labPanel(); arenasPanel(); vbPanel();
   // ---- online: host a room (you're straight in its lobby, with a code to share) or join one ----
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
@@ -10469,7 +10554,8 @@ function vruiParts() {
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 140, 1000, 34);
     if (state === "play") { g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText("The game keeps going for everyone while this is open", 550, 184); } };   // 2.38: online, only you stop
   [["Resume", () => vruiResume(), { primary: true, personal: true }],
-   ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],   // 2.46: a test walk
+   ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],
+   ["Gear Lab tools", () => vruiOpen("glab"), { personal: true, hide: () => !(GEO.on && GEO.lab) }],   // 2.79   // 2.46: a test walk
    ["Set height", () => vrHeightCheck("pause"), { personal: true }],                                                                    // 2.38
    ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() || LAB.testing }],
    ["Change settings", () => { pvpEndRound(); vruiSettings(); }, { hide: () => mpGuest() || LAB.testing, labelFn: () => MP.code ? "Exit to lobby · change settings" : "Change settings" }],
@@ -10943,7 +11029,7 @@ function devPanels() {
     if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 740); } };
   uiBtn(Dv, 90, 190, 1220, 230, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 58 });
   uiBtn(Dv, 90, 450, 590, 170, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 46 });   // 2.46
-  uiBtn(Dv, 720, 450, 590, 170, "Test tools", () => {}, { sub: "Coming next", fs: 46, disabled: () => true });
+  uiBtn(Dv, 720, 450, 590, 170, "Gear Lab", () => { GEO.labWant = true; setMode("hunt"); set.huntMap = "globe"; renderSetup(); startNew(); }, { sub: "Every Treeocashing item to try and tweak", fs: 46 });   // 2.79
   if (0) uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });   // 2.72
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
@@ -11491,7 +11577,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (2.38: Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");   // 2.45 / 2.46
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
