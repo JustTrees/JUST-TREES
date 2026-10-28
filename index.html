@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.82";              // Just Trees 2.55
+const VERSION = "2.83";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4445,7 +4445,7 @@ function geoTick(dt) {
     geoBarsTick(dt);
     if (MP.hp <= 0 && !(UW.drown > 0)) { GEO.killedBy = GEO.food <= 0 ? "Hunger" : GEO.water <= 0 ? "Thirst" : null; UW.drown = .001; UW.red = 0; vrBanner(GEO.food <= 0 ? "You starved" : "You collapsed", 3, 3); buzz("L", 1, 300); buzz("R", 1, 300); }   // 2.73: then you wake somewhere random (geoRespawn)
   }
-  if ((GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); }   // 2.73
+  if ((GEO.predT = (GEO.predT || 0) - dt) <= 0) { GEO.predT = .5; predWatch(); geoNetNear(); }   // 2.73
   geoHurtTick(dt);
   for (let i = GEO.foods.length - 1; i >= 0; i--) {
     const F = GEO.foods[i]; F.t += dt; F.obj.rotation.y += dt * 1.5; F.obj.position.y = F.y + .9 + Math.sin(F.t * 2) * .06;
@@ -5277,6 +5277,17 @@ function glabPanel() {
    themselves, so positions travel as points on the planet (each message carries the sender's layout, the receiver turns them into its
    own). The host can hand the planet to someone else; if the host leaves, the next player takes over and the room carries on. ---- */
 const geoNet = () => GEO.on && !!MP.code && !!set.geoNet;
+const GEO_DIRS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+function geoNetNear() {                                         // 2.83: no markers anywhere: just a heads-up at 1 km (which way), and their voice from 500 m
+  if (!geoNet() || !GLOBE || !GLOBE.p) return;
+  for (const L of mpOpen()) { if (!L.R || !L.R.cur || !L.R.alive) continue; const h = L.R.head, d = Math.hypot(h.x - P.x, h.z - P.z);
+    if (d < 1000 && !L.n1k) { L.n1k = true; const q = glToSphere(h.x, h.z, [0, 0, 0]), p = GLOBE.p, f = glFrame(p), t = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+      const b = Math.atan2(glDot(t, f.E), glDot(t, f.N)), k = Math.round(((b / (2 * Math.PI)) * 8 + 8)) % 8;
+      vrBanner("There's another player about " + (d > 850 ? "1 km" : Math.round(d / 100) * 100 + " m") + " to your " + GEO_DIRS[k], 5, 2); buzz("L", .3, 60); buzz("R", .3, 60); gunFoley([[0, 900, .2, .1], [.15, 1300, .2, .08]]); }
+    else if (d > 1200) L.n1k = false;
+    if (d < 500 && !L.n500) { L.n500 = true; vrBanner("Comms open: they can hear you now", 3, 1); gunFoley([[0, 2200, .08, .1], [.1, 2200, .08, .1]]); }
+    else if (d > 650) L.n500 = false; }
+}
 function geoFrameArr() {                                        // my layout of the planet, for the others to read my positions with
   const G = GLOBE; if (!G) return null; const key = G.reN + "|" + G.ox + "|" + G.oz;
   if (G.fKey !== key) { G.fKey = key; const r = v => +v.toFixed(8); G.fArr = [...G.c.map(r), ...G.e.map(r), ...G.n.map(r), +G.ox.toFixed(3), +G.oz.toFixed(3)]; }
@@ -9394,7 +9405,7 @@ function placeMark(from, dir) {                           // a tall glowing beam
   if (!vr.mark) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd860, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     m.frustumCulled = false; scene.add(m); vr.mark = m; }
   vr.mark.position.set(hit.p.x, hit.p.y + 35, hit.p.z); vr.mark.visible = true; vr.markT = 45; hitTick(); drawMap($("miniMap"));
-  if (MP.on) for (const L of mpOpen()) if (gameMode !== "pvp" || (teamsOn() && mpMate(L))) mpSendTo(L, { t: "mk", x: hit.p.x, y: hit.p.y, z: hit.p.z });   // 2.00: your team sees your mark
+  if (MP.on && !geoNet()) for (const L of mpOpen()) if (gameMode !== "pvp" || (teamsOn() && mpMate(L))) mpSendTo(L, { t: "mk", x: hit.p.x, y: hit.p.y, z: hit.p.z });   // 2.00: your team sees your mark
 }
 function mpMarkGot(L, o) {                                   // a teammate's mark: a beam in their colour, for 45 seconds
   if (!L.mark) { L.mark = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: MP_COL[mpColOf(L)], transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -14024,6 +14035,7 @@ function mpRoster() {
   return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx)).concat(gameMode === "pvp" ? vbRows() : []);   // (2.48: then the bots)
 }
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
+  if (geoNet()) { const d = L.R && L.R.cur ? L.R.head.distanceTo(vr.head) : 1e9; return [d > 500 ? 0 : d < 40 ? 1 : Math.pow((500 - d) / 460, 1.5), true]; }   // 2.83: online Treeocashing: you start to hear someone 500 m out, louder as you close in
   const c = set.comms === undefined ? 1 : set.comms | 0;
   if (c === 0) return [1, true]; if (c === 1) return [1, false]; if (!mpMate(L)) return [0, true]; if (c === 2) return [1, true]; return [L.bumped ? 1 : 0, true];
 }
