@@ -16,7 +16,7 @@ async def main():
           o.lab = [D.GEO.lab, D.GEO.items.size, Object.values(V.own).filter(v => v >= 5).length, D.jetOn()];
           D.geoSave(); o.charKept = JSON.parse(localStorage.getItem('jt-geochar')).n;
           // tweaks
-          const s0 = D.geoSpeedMul(); D.tuneStep(D.TUNE_DEF.find(d => d[0] === 'boots'), 1); o.tweak = [+s0.toFixed(2), +D.geoSpeedMul().toFixed(2), JSON.parse(localStorage.getItem('jt-tune')).boots];
+          const s0 = D.geoSpeedMul(); D.tuneStep(D.TUNE_DEF.find(d => d[0] === 'boots'), 1); D.testLabSave(); o.tweak = [+s0.toFixed(2), +D.geoSpeedMul().toFixed(2), JSON.parse(localStorage.getItem('jt-tune')).boots];
           // helpers
           D.glabTime(23); tick(2); o.night = Math.round(D.hourNow);
           D.glabRefill(); o.refill = [D.GEO.food, D.GEO.water, D.GEO.cant];
