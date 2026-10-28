@@ -52,7 +52,7 @@ async def main():
         out = {}
         # ================= solo =================
         A = await page("solo")
-        await A.evaluate("() => { D.set.size = 'medium'; D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'PvP').on(); return 1; }")
+        await A.evaluate("() => { D.set.size = 'medium'; D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'Bot battle').on(); return 1; }")
         out["auto"] = await A.evaluate("() => { const r = []; for (const sz of ['small', 'xl', 'xxxl', 'medium']) { D.set.size = sz; D.vbFit(); r.push(D.VB.list.length); } return r; }")   # 2.49: Auto: more bots on bigger maps
         out["solo"] = await A.evaluate("() => [D.VRUI.stage, D.gameMode, !!W('setup', 'Bots · 5'), !!W('setup', '2 Teams'), SL('setup').length, !!W('setup', 'Hike')]")
         await A.evaluate("() => { W('setup', 'Bots · 5').on(); W('bots', 'Normal').on(); return 1; }")
@@ -117,7 +117,7 @@ async def main():
         H1 = await page("host")
         await H1.evaluate("() => { D.MP.tag = 'HOSTY'; D.set.botFill = 4; D.set.botSkill = 'normal'; D.vruiOpen('mode'); W('mode', 'Online').on(); W('mp', 'Host a room').on(); return 1; }")
         await until(H1, "() => /Waiting/.test(D.MP.status)", 15); code = await H1.evaluate("() => D.MP.code")
-        await H1.evaluate("() => { W('setup', 'PvP').on(); return 1; }")
+        await H1.evaluate("() => { W('setup', 'Deathmatch').on(); return 1; }")
         out["hostAlone"] = await until(H1, "() => D.VB.list.length === 3", 10)
         G = await page("guest")
         await G.evaluate("() => { D.MP.tag = 'FRIEND'; D.vruiOpen('mode'); W('mode', 'Online').on(); W('mp', 'Join a room').on(); return 1; }")

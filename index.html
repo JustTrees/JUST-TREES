@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "2.93";              // Just Trees 2.55
+const VERSION = "2.94";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3106,6 +3106,12 @@ function updateFly(dt) {
    Hiking in a headset has two maps: Island (always the 3 km map) or Endless (HIKEMAP). */
 let HIKEMAP = null, HIKE_FORCE = null;
 const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || set.huntMap === "globe");
+const pvpEndless = () => gameMode === "pvp" && !MP.code && set.pvpMap === "endless";      // 2.94: a solo Bot battle on endless land
+function mapRules() {                                         // 2.94: what each mode plays on (VR). Solo: Hike endless; Hunt and Bot battle the 3 km island or endless.
+  if (gameMode === "hike") set.hikeMap = "endless";          //   Online: Hiking endless; Hunting the 3 km island or endless; Deathmatch every size; Treeocashing its planet
+  else if (gameMode === "hunt") { if (set.huntMap !== "endless" && set.huntMap !== "globe") { set.huntMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
+  else if (gameMode === "pvp" && !MP.code) { if (set.pvpMap === "endless") { set.zone = "off"; set.capture = "off"; } else { set.pvpMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
+}
 const geoMode = () => gameMode === "hunt" && set.huntMap === "globe" && (!MP.code || !!set.geoNet);   // (2.80: online too, on its own button)   // (2.77: Treeocashing is live; always solo)   // 2.70: Geocaching (solo; 2.72: Dev Mode only while it's tested)
 const spawnPick = () => !!MP.code && (gameMode === "hike" ? set.hikeMap === "endless" : huntEndless());   // 2.24: online on endless land: how far apart everyone starts
 function enSpawnNear(hx, hz, d, k) {                         // a spot about d m from the host, each player in their own direction
@@ -3666,7 +3672,9 @@ const enPF = (n, x, z, f, oct, a = 0, b = 0) => { let s = 0, w = 1, t = 0, ff = 
 const enMod = (i, n) => ((i % n) + n) % n;
 function enRegInfo(ci, cj) {                                 // one region: its environment, roughness, weather and sky (the same every time, for everyone)
   const E = ENDLESS, NR = EN_P / EN_RC, wi = enMod(ci, NR), wj = enMod(cj, NR), key = wi * 1000 + wj; let g = E.regs.get(key); if (g) return g;
-  const R = mulberry32(enHash(seed * 53 + 11, wi, wj)), b = set.env && set.env !== "auto" && set.env !== "climate" && EN_BIOMES.includes(set.env) ? set.env : EN_BIOMES[Math.floor(R() * EN_BIOMES.length)];
+  const R = mulberry32(enHash(seed * 53 + 11, wi, wj)), start = !GLOBE && (wi <= 1 || wi >= NR - 1) && (wj <= 1 || wj >= NR - 1);   // 2.94: round the start: your latitude's land
+  if (start && !E.startB) { const o = envOptions(set.lat * set.hemi), R0 = mulberry32(seed * 71 + 3); let u = R0(); E.startB = o[o.length - 1][0]; for (const [k, w] of o) { u -= w; if (u <= 0) { E.startB = k; break; } } if (!EN_BIOMES.includes(E.startB)) E.startB = "temperate"; }
+  const b = set.env && set.env !== "auto" && set.env !== "climate" && EN_BIOMES.includes(set.env) ? set.env : start ? E.startB : EN_BIOMES[Math.floor(R() * EN_BIOMES.length)];
   const jx = (R() - .5) * .62, jz = (R() - .5) * .62, r = Math.max(0, Math.min(1, set.rough + (R() * 2 - 1) * .5)), L = E.envL[b];
   const wx = weatherFor(R, b, L.season, L.winterSnow || (b === "tundra" && L.season !== "summer"), enHash(seed * 13 + 1, wi, wj));
   const keepW = weather; weather = wx; const sky = makeSkyStyle(R, b); weather = keepW;
@@ -6514,7 +6522,7 @@ function generate() {
   groveOld = true;                                               // 2.59: after a map, the menus come back in a new clearing
   ARENA = set.arena || null; if (ARENA) arenaApply(ARENA);       // 2.46
   clearSquad(); vbClear(); if (!LAB.on) statPing();
-  HIKEMAP = ARENA ? null : HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && huntEndless() ? "endless" : null);   // 2.19 (2.23: Hunting can be Endless)
+  HIKEMAP = ARENA ? null : HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && huntEndless() ? "endless" : VR_ON && vr.on && pvpEndless() ? "endless" : null);   // (2.94: Bot battle can be endless)   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
   GLOBE = EN && geoMode() ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // 2.70: Geocaching: the little globe
   CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !GLOBE) geoStop();
@@ -7439,7 +7447,7 @@ function zoneR(Z, cx, cz, r, x, z, t) {
 }
 function startZone() {
   clearZoneMesh();
-  if (set.zone !== "on" || gameMode !== "pvp") { zone = null; return; }
+  if (set.zone !== "on" || gameMode !== "pvp" || ENDLESS) { zone = null; return; }
   const rnd = mulberry32(seed * 7 + 99), r0 = edgeShape.island ? edgeShape.R0 * 1.2 : HALF * 1.45, rf = r0 * ZONE_FINAL;
   let fx = 0, fz = 0;                                                          // the final spot: near the middle, nudged a little each map, on dry land
   if (coin && rnd() < .25 && Math.hypot(coin.x, coin.z) < HALF * .3) { fx = coin.x; fz = coin.z; }
@@ -11416,8 +11424,8 @@ function vruiParts() {
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
   uiBtn(M, 900, 150, 410, 230, "Treeocashing", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "Solo · new planet, your level carries on", fs: 46, hide: () => !!MP.code, paintCol: "#6a5a2a" });   // 2.77: live
-  uiBtn(M, 90, 150, 790, 230, "Solo", () => { if (gameMode === "pvp") setMode("hike"); if (set.huntMap === "globe") set.huntMap = "endless"; renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike or hunt. Your character on the left, the map on the right.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
-  uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: hike, hunt or PvP together. Host a room or join one.", fs: 64 });
+  uiBtn(M, 90, 150, 790, 230, "Solo", () => { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (2.72: Geocaching moved to the Dev menu while it's tested)
+  uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64 });
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
   uiBtn(M, 1070, 660, 240, 150, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 40, personal: true });   // 2.28: read them again
@@ -11429,16 +11437,17 @@ function vruiParts() {
   const MPP = uiPanel("mp", 1400, 900, 2.0, 74, 1.45);
   MPP.paint = (g, P) => {
     uiBg(g, P, "ONLINE"); g.textAlign = "center"; g.font = "34px sans-serif"; g.fillStyle = MP.status ? "#ffd8cc" : UIC.dim;
-    uiWrap(g, MP.code ? "You're in room " + MP.code + "." : MP.status || "Host your own room and share its code, or join someone else's.", 700, 640, 1200, 42);
+    uiWrap(g, MP.code ? "You're in room " + MP.code + "." : MP.status || "Host your own room and share its code, or join someone else's.", 700, 660, 1200, 42);
     if (VRUI.newVer) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", 700, 740); }
   };
-  uiBtn(MPP, 90, 150, 590, 420, "Host a room", () => { MP.status = ""; mpHost(); vruiOpen("lobby"); }, { sub: "Your own room with a code to share. Set up the game while friends join.", fs: 60, hide: () => !!MP.code });
-  uiBtn(MPP, 720, 150, 590, 420, "Join a room", () => { MP.status = ""; MP.rooms = null; MP.roomPg = 0; MP.roomsT = 0; MP.entry = ""; vruiOpen("rooms"); }, { sub: "The open rooms, or type a friend's code.", fs: 60, hide: () => !!MP.code });
+  uiBtn(MPP, 90, 150, 1220, 200, "Treeocashing", () => { MP.status = ""; geoNetGo(); }, { sub: "One shared planet: you're dropped into a room with space (up to 8)", fs: 60, hide: () => !!MP.code, paintCol: "#6a5a2a" });   // 2.94: live
+  uiBtn(MPP, 90, 370, 590, 220, "Host a room", () => { MP.status = ""; set.geoNet = false; mpHost(); mapRules(); vruiOpen("lobby"); }, { sub: "Deathmatch, hunting or hiking, with a code to share", fs: 54, hide: () => !!MP.code });
+  uiBtn(MPP, 720, 370, 590, 220, "Join a room", () => { MP.status = ""; MP.rooms = null; MP.roomPg = 0; MP.roomsT = 0; MP.entry = ""; vruiOpen("rooms"); }, { sub: "The open rooms, or type a friend's code.", fs: 60, hide: () => !!MP.code });
   uiBtn(MPP, 405, 250, 590, 150, "Back to your room", () => vruiOpen("lobby"), { primary: true, fs: 44, hide: () => !MP.code });
   uiBtn(MPP, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 36, personal: true });
   // ---- Join a room: the open rooms (one line each: who's hosting, the mode, how many), and a code pad ----
   const RP = uiPanel("rooms", 1700, 1000, 2.0, 88, 1.45);
-  const roomMode = r => r.mode === "pvp" ? (r.teams ? "Team PvP" : "PvP") : r.mode === "hunt" ? (r.dino ? "Prehistoric hunt" : "Hunting") : "Hiking";
+  const roomMode = r => r.map === "Treeocashing" ? "Treeocashing" : r.mode === "pvp" ? (r.teams ? "Team deathmatch" : "Deathmatch") : r.mode === "hunt" ? (r.dino ? "Prehistoric hunt" : "Hunting") : "Hiking";
   RP.paint = (g, P) => {
     uiBg(g, P, "JOIN A ROOM"); const L = MP.rooms, np = L ? Math.max(1, Math.ceil(L.length / 6)) : 1;
     g.textAlign = "left"; g.textBaseline = "alphabetic"; uiLabel(g, 70, 168, "Open rooms"); g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
@@ -11470,7 +11479,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : gameMode === "pvp" ? (MP.code ? "Deathmatch" : "Bot battle") : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
     { const pv = gameMode === "pvp" && !mpGuest(); wAr.w = pv ? 210 : 250; wRnd.x = rx + (pv ? 444 : 262); wRnd.w = pv ? 210 : 250; wGo.x = rx + (pv ? 664 : 524); wGo.w = pv ? 236 : 376; }   // 2.48: room for Bots   // (2.46: an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
@@ -11478,15 +11487,16 @@ function vruiParts() {
     uiLabel(g, lx, 468, "Time of day", hourText(set.hour)); note(g, lx, 504, $("sunNote").textContent);
     uiLabel(g, lx, 618, "Tree density", Math.abs(densMul() - 1) < .05 ? "Normal (1.0x)" : densMul().toFixed(1) + "x trees"); note(g, lx, 654, "From today's forest up to very thick woods.");
     uiLabel(g, lx, 768, "Month", MONTH_FULL[set.month]); note(g, lx + 420, 768, sea === "tropical" ? "Always warm" : sea[0].toUpperCase() + sea.slice(1));
-    if (gameMode === "pvp") { uiLabel(g, lx, 948, "Zone"); uiLabel(g, lx + 420, 948, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, lx, 1028, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s");
+    if (gameMode === "pvp" && !pvpEndless()) { uiLabel(g, lx, 948, "Zone"); uiLabel(g, lx + 420, 948, "Hold", (set.zoneHold || 60) + " s"); uiLabel(g, lx, 1028, "Speed", (set.zoneSpeed || 3) + " · shrinks in " + ZONE_SPEEDS[set.zoneSpeed || 3] + " s");
       uiLabel(g, lx, 1108, "Capture point"); note(g, lx + 540, 1108, "+1 point per " + CAPTURE.every + " s held alone"); }
     if (gameMode === "hunt") { uiLabel(g, lx, 948, "Prehistoric"); note(g, lx + 500, 948, "Dinosaurs to hunt"); }
     if (spawnPick()) uiLabel(g, lx, 1028, "Start apart");
-    if (gameMode === "hike") { uiLabel(g, rx, 168, "Map"); note(g, rx, 304, set.hikeMap === "endless" ? "New land grows as you walk" : "The big 3 km island"); }
-    else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : huntEndless() ? "Endless" : $("sizeVal").textContent);
+    if (gameMode === "hike") { uiLabel(g, rx, 168, "Map", "Endless"); note(g, rx, 238, "New land grows as you walk: it starts in the land of your latitude"); }
+    else if (!geoMode() && (gameMode === "hunt" || !onl())) { uiLabel(g, rx, 168, "Map", huntEndless() || pvpEndless() ? "Endless" : "The 3 km island"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
+    else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : $("sizeVal").textContent);
     if (geoMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
     else if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
-    else if (gameMode !== "hike") uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
+    else if (gameMode === "pvp" && onl()) uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     if (!onl() && gameMode === "pvp") uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min");   // 2.48: solo PvP (with bots)
     if (gameMode === "pvp") { uiLabel(g, rx, 618, "Teams"); note(g, rx, 734, "Deathmatch: you respawn · kills and deaths count" + (set.teams === "teams" ? " · no friendly fire" : "") + (set.bigHead ? " · big heads" : "")); }
@@ -11498,8 +11508,8 @@ function vruiParts() {
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map", P.W - 70, 92);
       g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("The host starts the game · change your look on the left", P.W - 70, 1112); }
   };
-  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1400 + i * 190, 40, 175, 66, l, () => { if (gameMode !== m) { setMode(m); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 34 }));   // 2.26: Solo picks here (2.48: PvP against bots)
-  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "PvP"]].forEach(([m, l], i) => uiBtn(S2, 1434 + i * 200, 40, 190, 66, l, () => { setMode(m); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m, hide: () => !MP.code || mpGuest(), fs: 34 }));   // online: the host picks
+  [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "Bot battle"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 200, 40, 190, 66, l, () => { if (gameMode !== m) { setMode(m); mapRules(); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 30 }));   // 2.26: Solo picks here (2.48: PvP against bots)
+  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 210, 40, 200, 66, l, () => { setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m, hide: () => !MP.code || mpGuest() || geoMode(), fs: 30 }));   // online: the host picks
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -11507,13 +11517,13 @@ function vruiParts() {
   uiSlider(S2, lx, 516, cw, 0, 23.75, () => set.hour, v => { set.hour = v; }, .25);
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + i * 75, 790, 69, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 24 }));   // 2.38: one row
-  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode === "hike" || geoMode(), fs: 30 }));
-  uiBtn(S2, rx + 7 * 112, 196, 106, 62, "Endless", () => { set.huntMap = "endless"; }, { active: () => set.huntMap === "endless", hide: () => gameMode !== "hunt" || geoMode(), fs: 24 });   // 2.23
+  [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode !== "pvp" || !onl() || geoMode(), fs: 30 }));   // (2.94: every size: online Deathmatch)
+  uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { if (gameMode === "hunt") set.huntMap = "island"; else set.pvpMap = "island"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => !huntEndless() && !pvpEndless(), hide: () => geoMode() || !(gameMode === "hunt" || (gameMode === "pvp" && !onl())) });   // 2.94
+  uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { if (gameMode === "hunt") set.huntMap = "endless"; else set.pvpMap = "endless"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => huntEndless() || pvpEndless(), hide: () => geoMode() || !(gameMode === "hunt" || (gameMode === "pvp" && !onl())) });
   if (0) uiBtn(S2, rx, 196, 240, 62, "Start over", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Start over", hide: () => !geoMode() || !(geoLoad() && geoLoad().n), fs: 28 });   // 2.76: back to level 0
-  uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { set.hikeMap = "island"; }, { active: () => set.hikeMap !== "endless", hide: () => gameMode !== "hike" });   // 2.19
-  uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { set.hikeMap = "endless"; }, { active: () => set.hikeMap === "endless", hide: () => gameMode !== "hike" });
-  uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => gameMode === "hike" || huntEndless() });
-  uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless", hide: () => gameMode === "hike" || huntEndless() });
+
+  uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => !(gameMode === "pvp" && onl()) });
+  uiBtn(S2, rx + 300, 346, 290, 62, "Endless", () => { set.edges = "endless"; }, { active: () => set.edges === "endless", hide: () => !(gameMode === "pvp" && onl()) });
   uiBtn(S2, rx + 610, 346, 290, 62, "Dramatic", () => { set.land = set.land === "dramatic" ? "natural" : "dramatic"; }, { active: () => set.land === "dramatic", hide: () => geoMode() });
   WEATHERS.forEach(([k, l], i) => uiBtn(S2, rx + i * 152, 496, 140, 62, l, () => { set.weather = k; }, { active: () => set.weather === k, fs: 28 }));
   // online: teams, voice, the round (they used to be on the lobby panel)
@@ -11525,17 +11535,17 @@ function vruiParts() {
   uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => !onl() && gameMode !== "pvp";   // round length (2.00: every online mode, 5 to 60 minutes)
   // the extras, in three short rows under the months
   [[0, "Together"], [50, "50"], [150, "150"], [300, "300"], [500, "500"], [750, "750"], [1000, "1 km"]].forEach(([v, l], i) => uiBtn(S2, i ? 436 + (i - 1) * 98 : 290, 986, i ? 92 : 140, 62, l, () => { set.spawnD = v; }, { active: () => (set.spawnD || 0) === v, hide: () => !spawnPick(), fs: 26 }));   // 2.24
-  uiBtn(S2, 340, 1066, 120, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" });   // PvP capture point
-  uiBtn(S2, 470, 1066, 120, 62, "On", () => { set.capture = "on"; }, { active: () => set.capture === "on", hide: () => gameMode !== "pvp" });
+  uiBtn(S2, 340, 1066, 120, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" || pvpEndless() });   // PvP capture point
+  uiBtn(S2, 470, 1066, 120, 62, "On", () => { set.capture = "on"; }, { active: () => set.capture === "on", hide: () => gameMode !== "pvp" || pvpEndless() });
   uiBtn(S2, 300, 906, 120, 62, "Off", () => { set.dino = false; }, { active: () => !set.dino, hide: () => gameMode !== "hunt" });   // Prehistoric (Hunting, VR)
   uiBtn(S2, 430, 906, 120, 62, "On", () => { set.dino = true; }, { active: () => !!set.dino, hide: () => gameMode !== "hunt" });
-  uiBtn(S2, 180, 906, 110, 62, "Off", () => { set.zone = "off"; }, { active: () => set.zone !== "on", hide: () => gameMode !== "pvp" });   // PvP closing zone
-  uiBtn(S2, 300, 906, 110, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" });
-  uiSlider(S2, 690, 908, 280, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp";
-  uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp";
+  uiBtn(S2, 180, 906, 110, 62, "Off", () => { set.zone = "off"; }, { active: () => set.zone !== "on", hide: () => gameMode !== "pvp" || pvpEndless() });   // PvP closing zone
+  uiBtn(S2, 300, 906, 110, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" || pvpEndless() });
+  uiSlider(S2, 690, 908, 280, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp" || pvpEndless();
+  uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp" || pvpEndless();
   const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // 2.46: maps built in Map Lab
   const wRnd = uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
-  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(S2, rx + 220, 1060, 214, 90, "Bots", () => vbOpen(), { hide: () => mpGuest() || gameMode !== "pvp", active: () => vbWant() > 0, fs: 32, labelFn: () => vbWant() ? "Bots · " + vbWant() : "Bots · off" });   // 2.48
   for (const w of S2.widgets) if (([212, 216, 366, 666].includes(w.y) && w.x < rx) || ([196, 346].includes(w.y) && w.x >= rx)) { const d0 = w.disabled; w.disabled = () => !!set.arena || !!(d0 && d0()); }   // an arena sets the land
   // ---- your character: beside the map settings (Solo, and online when you tap your own card), and on its own from the main menu ----
@@ -13598,7 +13608,8 @@ function pvpWin() {
 }
 function pvpRespawn() {                                   // taken down: back in somewhere away from the enemies, kills kept
   pvp.deaths++; let sp = null;
-  for (let k = 0; k < 200 && !sp; k++) { const x = (Math.random() * 2 - 1) * EDGE * .85, z = (Math.random() * 2 - 1) * EDGE * .85;
+  const c0 = ENDLESS ? [P.x, P.z, 300] : [0, 0, EDGE * .85];   // (2.94)
+  for (let k = 0; k < 200 && !sp; k++) { const x = c0[0] + (Math.random() * 2 - 1) * c0[2], z = c0[1] + (Math.random() * 2 - 1) * c0[2];
     if (okSpot(x, z) && squad.every(o => o.dead || Math.hypot(o.x - x, o.z - z) > Math.min(160, HALF * .6))) sp = [x, z]; }
   if (sp) { P.x = sp[0]; P.z = sp[1]; P.y = groundAt(P.x, P.z); P.vy = 0; }
   P.hp = 100; P.sh = 100; updateHud(true);
@@ -14490,12 +14501,13 @@ let CAPT = null;
 function clearCapture() { if (CAPT) { for (const o of [CAPT.ring, CAPT.flag]) if (o) { scene.remove(o); o.geometry && o.geometry.dispose(); o.material.dispose(); } } CAPT = null; }
 function startCapture() {
   clearCapture();
-  if (set.capture !== "on" || gameMode !== "pvp" || !VR_ON) return;
+  if (set.capture !== "on" || gameMode !== "pvp" || !VR_ON || ENDLESS) return;
   const rnd = mulberry32(seed * 13 + 5), Z = zone && zone.vr ? zone.circles[zone.circles.length - 1] : null;
   let best = null;
   for (let k = 0; k < 500; k++) {
     let x, z;
     if (Z) { const a = rnd() * 6.283, d = Math.sqrt(rnd()) * Math.max(0, Z[2] - CAPTURE.r - 2); x = Z[0] + Math.cos(a) * d; z = Z[1] + Math.sin(a) * d; }
+    else if (ENDLESS) { x = P.x + (rnd() * 2 - 1) * 300; z = P.z + (rnd() * 2 - 1) * 300; }   // (2.94: endless: round you)
     else { x = (rnd() * 2 - 1) * EDGE * .8; z = (rnd() * 2 - 1) * EDGE * .8; }
     if (!okSpot(x, z)) continue;
     const h = H(x, z); let ring = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ring += H(x + Math.cos(a) * 45, z + Math.sin(a) * 45); } ring /= 8;
@@ -15484,7 +15496,7 @@ function vbSpawnSpot(B, start, placed) {
   { const L = ARENA && ARENA.spawns; if (L && L.length) {                    // an arena's start points (its side's, in a team game)
       const side = teamsOn() ? vbTeam(B.id) + 1 : 0, ok = L.filter(p => !side || !p[2] || p[2] === side);
       if (ok.length) { let best = ok[0], bd = -1; for (const p of ok) { const d = foes.length ? Math.min(...foes.map(([a, b]) => Math.hypot(p[0] - a, p[1] - b))) : Math.random(); if (d > bd) { bd = d; best = p; } } return arenaSpawnNear(best); } } }
-  let cx = 0, cz = 0, R = EDGE * .85;
+  let cx = 0, cz = 0, R = EDGE * .85; if (ENDLESS) { cx = P.x; cz = P.z; R = 350; }   // (2.94: endless: round you)
   if (!start && zone && zone.vr) { const Z = zone, c = Z.phase !== "final" && Z.stage + 1 < Z.circles.length ? Z.circles[Z.stage + 1] : [Z.cx, Z.cz, Z.r]; cx = c[0]; cz = c[1]; R = Math.max(10, c[2] * .75); }
   const mates = teamsOn() ? VB.ents.filter(e => e.alive && e.id !== B.id && vbMate(B.id, e.id)) : [];
   let best = null, bs = -1e9;

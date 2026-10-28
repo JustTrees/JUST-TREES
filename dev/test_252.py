@@ -19,7 +19,7 @@ async def main():
         await pg.goto(f"http://127.0.0.1:{PORT}/dbg.html", timeout=120000); await pg.wait_for_timeout(1000)
         await pg.evaluate("""() => { window.FREEZE = true; D.setVR(true); D.setVRON(true); D.vr.on = true; try { localStorage.setItem('jt-age', 'ok'); } catch (_) {} D.VRUI.rulesOk = true;
           window.W = (p, l) => D.VRUI.panels[p].widgets.find(w => !(w.hide && w.hide()) && !w.ghost && (w.label === l || (w.labelFn && w.labelFn() === l)));
-          D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'PvP').on(); return 1; }""")
+          D.vruiOpen('mode'); W('mode', 'Solo').on(); W('setup', 'Bot battle').on(); return 1; }""")
         out = {}
         out["button"] = await pg.evaluate("() => { const w = W('setup', 'Big heads'); if (!w) return null; const a = !!D.set.bigHead; w.on(); const b = !!D.set.bigHead; w.on(); return [a, b, !!D.set.bigHead]; }")
         await pg.evaluate("() => { D.setSeed(4242); Object.assign(D.set, { size: 'medium', zone: 'off', capture: 'off', teams: 'solo', hour: 13, weather: 'clear', botFill: 3 }); D.generate(); D.state = 'play'; D.vbFit(); D.vbRoundStart(); return 1; }")

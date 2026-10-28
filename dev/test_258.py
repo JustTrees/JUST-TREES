@@ -30,7 +30,7 @@ ISLAND = """(seed) => { window.FREEZE = true; const T = D.THREE, o = { seed };
   const y = g + .55, r = D.castShot(new T.Vector3(x - dx * 3, y, z - dz * 3), new T.Vector3(dx, 0, dz), 3.2); o.shot = r.kind;
   return o; }"""
 ENDLESS = """() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); const T = D.THREE, o = {}; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true;
-  Object.assign(D.set, { env: 'climate', land: 'dramatic', lat: 38, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .6, huntMap: 'endless', dino: false, size: 'medium' });
+  Object.assign(D.set, { env: 'temperate', land: 'dramatic', lat: 38, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .6, huntMap: 'endless', dino: false, size: 'medium' });
   D.generate(); D.state = 'play'; o.endless = !!D.ENDLESS; for (let f = 0; f < 60; f++) D.endlessTick(1 / 72);
   let rs = 99; const rnd = () => (rs = (rs * 16807) % 2147483647) / 2147483647, X = D.P.x, Z = D.P.z;
   let rock = 0, freed = 0, shotUnder = 0, solid = 0, solidBlocks = 0, stand = 0;

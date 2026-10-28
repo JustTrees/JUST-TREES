@@ -52,7 +52,7 @@ async def main():
             for nm, pg in (("host", A), ("guest", B)):
                 u = await pg.evaluate("() => D.VRUI.panels.lobby.cv.toDataURL('image/jpeg', .85)"); open(os.path.join(OUT, f"t243_lobby_{nm}.jpg"), "wb").write(base64.b64decode(u.split(",")[1]))
         # the host picks PvP and presses Start, then Play this map
-        await A.evaluate("() => { W('setup', 'PvP').on(); D.set.size = 'small'; D.set.weather = 'clear'; W('setup', 'Start').on(); return 1; }")
+        await A.evaluate("() => { W('setup', 'Deathmatch').on(); D.set.size = 'small'; D.set.weather = 'clear'; W('setup', 'Start').on(); return 1; }")
         out["bothPreview"] = await wait(A, "() => D.VRUI.stage === 'preview'", 40) and await wait(B, "() => D.VRUI.stage === 'preview'", 40)
         await A.evaluate("() => { W('preview', 'Play this map').on(); return 1; }")
         for _ in range(40):

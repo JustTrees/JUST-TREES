@@ -137,7 +137,7 @@ async def main():
         # ---- online: the host picks the arena, a friend joins, both get the same map as Map Lab built
         await A.evaluate("() => { D.MP.tag = 'HOSTY'; D.vruiOpen('mode'); W('mode', 'Online').on(); W('mp', 'Host a room').on(); return 1; }")
         await until(A, "() => /Waiting/.test(D.MP.status)", 15); code = await A.evaluate("() => D.MP.code")
-        await A.evaluate("() => { W('setup', 'PvP').on(); W('setup', '2 Teams').on(); W('setup', 'Arenas').on(); return 1; }")
+        await A.evaluate("() => { W('setup', 'Deathmatch').on(); W('setup', '2 Teams').on(); W('setup', 'Arenas').on(); return 1; }")
         await until(A, "() => D.ARN.list && D.ARN.list.length > 0", 10)
         out["arenaList"] = await A.evaluate("() => D.ARN.list.map(a => a.name + ' · ' + a.info).join(',')")
         if OUT: save("t246_arenas.jpg", await A.evaluate("() => { D.uiDraw(D.VRUI.panels.arenas); return D.VRUI.panels.arenas.cv.toDataURL('image/jpeg', .85); }"))
