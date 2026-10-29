@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.11";              // Just Trees 2.55
+const VERSION = "3.12";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -534,7 +534,7 @@ const LAB_DIRTY = { v: false };                                   // 2.93: the T
 function tuneStep(D, s) { const [k, , , st, lo, hi] = D; TUNE[k] = Math.round(Math.max(lo, Math.min(hi, TUNE[k] + s * st)) * 1000) / 1000; LAB_DIRTY.v = true; }
 function testLabSave() { tuneSave(); gunLabSave(); LAB_DIRTY.v = false; }
 const tuneFmt = (v, st) => st >= 1 ? String(Math.round(v)) : v.toFixed(st >= .1 ? (st % .1 ? 2 : 1) : 2);
-const GEO_N = 56, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
+const GEO_N = 57, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // 2.70: the globe: the sun where you really are
   const doy = month * 30.44 + 15;
@@ -706,7 +706,7 @@ const skyMat = new THREE.ShaderMaterial({
     ridgeCol: { value: new THREE.Color() }, time: { value: 0 },
     uNear: { value: new THREE.Color("#ffc070") }, uMid: { value: new THREE.Color("#ff5a40") }, uFar: { value: new THREE.Color("#7a3a8a") }, uSpread: { value: .5 },
     uRays: { value: 0 }, uBow: { value: 0 }, uHalo: { value: 0 }, uMeteor: { value: 0 },
-    uNeon: { value: 0 }, uNeonSun: { value: new THREE.Vector3(1, .15, 0) }, uAur: { value: 0 }, uAurA: { value: new THREE.Color("#3cff9a") }, uAurB: { value: new THREE.Color("#b05aff") },
+    uHell: { value: 0 }, uNeon: { value: 0 }, uNeonSun: { value: new THREE.Vector3(1, .15, 0) }, uAur: { value: 0 }, uAurA: { value: new THREE.Color("#3cff9a") }, uAurB: { value: new THREE.Color("#b05aff") },
     uNight: { value: 0 }, uNightA: { value: new THREE.Color("#0d2a5a") }, uNightB: { value: new THREE.Color("#3a6ab0") }, uNightC: { value: new THREE.Color("#3a1f5a") },
     uMwN: { value: new THREE.Vector3(.3, .5, .8).normalize() }, uMw: { value: .5 }
   },
@@ -717,7 +717,7 @@ const skyMat = new THREE.ShaderMaterial({
     uniform float beltAmt; uniform vec3 beltCol; uniform vec3 shadowCol; uniform vec3 ridgeCol; uniform float time; varying vec3 vDir;
     uniform vec3 uNear; uniform vec3 uMid; uniform vec3 uFar; uniform float uSpread;
     uniform float uRays; uniform float uBow; uniform float uHalo; uniform float uMeteor;
-    uniform float uAur; uniform vec3 uAurA; uniform vec3 uAurB; uniform float uNeon; uniform vec3 uNeonSun;
+    uniform float uAur; uniform vec3 uAurA; uniform vec3 uAurB; uniform float uNeon; uniform vec3 uNeonSun; uniform float uHell;
     uniform float uNight; uniform vec3 uNightA; uniform vec3 uNightB; uniform vec3 uNightC; uniform vec3 uMwN; uniform float uMw;
     // smooth gradient noise (no square grid look), rotated between octaves so nothing lines up
     vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return -1.0 + 2.0 * fract(sin(p) * 43758.5453); }
@@ -841,6 +841,18 @@ const skyMat = new THREE.ShaderMaterial({
       float ridge = 0.012 + fbm(vec2(az * 2.2 + skySeed.x, 0.5), 4) * 0.05 + fbm(vec2(az * 9.0, 2.0 + skySeed.y), 3) * 0.012;
       float rm = smoothstep(ridge + 0.002, ridge - 0.002, d.y) * smoothstep(-0.06, 0.0, d.y);
       c = mix(c, ridgeCol, rm * 0.55);
+      if (uHell > 0.001) {                                            // 3.12: hell glasses: a blood-red sky choked with churning smoke, the horizon on fire
+        float y = d.y; vec2 sp = d.xz / max(y + 0.25, 0.08);
+        float sm = fbm(sp * 1.3 + vec2(time * 0.02, time * 0.013), 5), sm2 = fbm(sp * 3.1 - vec2(time * 0.035, 0.0), 4);
+        vec3 hk = mix(vec3(0.75, 0.13, 0.02), vec3(0.18, 0.02, 0.01), smoothstep(-0.02, 0.3, y)); hk = mix(hk, vec3(0.04, 0.0, 0.0), smoothstep(0.25, 0.9, y));
+        hk = mix(hk, vec3(0.02, 0.005, 0.004), smoothstep(0.45, 0.75, sm) * 0.85);                            // smoke rolling over
+        hk += vec3(1.0, 0.3, 0.05) * smoothstep(0.55, 0.85, sm2) * (1.0 - smoothstep(0.0, 0.5, y)) * 0.35;      // firelight catching its undersides
+        hk += vec3(1.0, 0.35, 0.05) * exp(-abs(y) * 14.0) * 0.8;                                                // the horizon burning
+        vec3 hs = normalize(sunDir); float ha = acos(clamp(dot(d, hs), -1.0, 1.0));                            // the sun: a black disc with a ring of fire
+        float hsv = smoothstep(-0.1, 0.02, hs.y);
+        hk = mix(hk, vec3(0.01, 0.0, 0.0), smoothstep(0.075, 0.07, ha) * hsv); hk += vec3(1.0, 0.25, 0.03) * exp(-pow((ha - 0.075) / 0.008, 2.0)) * 1.4 * hsv + vec3(0.6, 0.08, 0.0) * exp(-ha / 0.25) * 0.4 * hsv;
+        c = mix(c, hk, uHell);
+      }
       if (uNeon > 0.001) {                                            // 3.07: neon shades: the synthwave sky: always dark, a huge striped sun, neon through the sky
         float y = d.y; vec3 n = mix(vec3(0.42, 0.05, 0.4), vec3(0.07, 0.03, 0.24), smoothstep(-0.02, 0.22, y)); n = mix(n, vec3(0.01, 0.01, 0.07), smoothstep(0.2, 0.85, y));
         if (y < 0.0) n = mix(vec3(0.3, 0.04, 0.3), vec3(0.04, 0.0, 0.08), smoothstep(0.0, -0.3, y));
@@ -987,7 +999,7 @@ uniform float fogDensity;
 #else
 uniform float fogNear; uniform float fogFar;
 #endif
-uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG; uniform float uMVG; uniform float uMVT; uniform float uGHG;   // our own camera position: three.js only sends cameraPosition to some materials
+uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG; uniform float uMVG; uniform float uMVT; uniform float uGHG; uniform float uHLG;   // our own camera position: three.js only sends cameraPosition to some materials
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -1014,6 +1026,36 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   if (uBBG > 0.001) {                                                 // 3.04: blue blockers: blues gone, everything orange to red, sharp
     float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
     gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
+  }
+  if (uHLG > 0.001) {                                                 // 3.12: hell glasses: scorched black land split by glowing lava, everything's edges burning, blood-red smoke
+    vec3 hv = vFogW - uCamP; float hd = max(length(hv), 0.001); vec3 hn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+    vec3 c0 = gl_FragColor.rgb, cs = preFogC; float hl = dot(cs, vec3(0.3, 0.59, 0.11)), hfl = smoothstep(0.55, 0.92, abs(hn.y)), ht = uMVT;
+    vec3 hc = (vec3(0.035, 0.011, 0.008) + hl * vec3(0.26, 0.06, 0.03)) * (0.7 + 0.6 * hfN(vFogW.xz * 0.35));                                      // charred: black, a dull red where the light falls
+    vec2 hp = vFogW.xz + vec2(hfN(vFogW.xz * 0.6), hfN(vFogW.xz * 0.6 + 5.0)) * 2.2;                           // (jagged)
+    float vn = abs(hfN(hp * 0.07) + 0.5 * hfN(hp * 0.19 + 7.1) - 0.75), crack = 1.0 - smoothstep(0.0, 0.016 + hd * 0.00004, vn);   // lava cracks through the ground
+    float vn2 = abs(hfN(hp * 0.31 + 3.3) - 0.5), crack2 = (1.0 - smoothstep(0.0, 0.012, vn2)) * 0.5;
+    float vn3 = abs(hfN(hp * 0.12 + 11.7) - 0.5), crack3 = (1.0 - smoothstep(0.0, 0.018 + hd * 0.00004, vn3)) * 0.85; crack = max(crack, crack3); vn = min(vn, vn3 * 1.4);   // (a whole web of them)
+    float pulse = 0.75 + 0.25 * sin(ht * 1.7 + hfN(hp * 0.02) * 9.0);
+    float cr = max(crack, crack2) * hfl * (1.0 - smoothstep(250.0, 900.0, hd));
+    hc += mix(vec3(1.0, 0.25, 0.03), vec3(1.0, 0.75, 0.25), crack * 0.6) * cr * 1.4 * pulse;
+    hc += vec3(0.5, 0.08, 0.01) * (1.0 - smoothstep(0.0, 0.25, vn)) * hfl * 0.35 * pulse;                  // (a glow spreading out from them)
+    float hrim = smoothstep(0.6, 0.98, 1.0 - abs(dot(hn, hv / hd))) * (1.0 - 0.8 * hfl);
+    float hedge = smoothstep(0.03, 0.14, fwidth(hl)) * (1.0 - 0.6 * hfl);
+#ifdef DREAM_CARD
+    hedge = max(hedge, smoothstep(0.08, 0.3, fwidth(gl_FragColor.a)));
+#endif
+    float flick = 0.8 + 0.2 * sin(ht * 9.0 + vFogW.y * 2.0 + vFogW.x * 0.3);
+    hc += vec3(1.0, 0.3, 0.04) * (hrim * 0.85 + hedge * 0.6) * flick * (1.0 - smoothstep(200.0, 1400.0, hd));   // everything's edges smoulder
+#ifdef IS_WATER
+    float lf = hfN(hp * 0.05 + vec2(ht * 0.03, ht * 0.02)) * 0.6 + hfN(hp * 0.17 - vec2(ht * 0.05, 0.0)) * 0.4;   // lakes and rivers of lava, slowly churning
+    hc = mix(vec3(0.35, 0.03, 0.0), vec3(1.0, 0.42, 0.05), smoothstep(0.3, 0.75, lf)); hc = mix(hc, vec3(1.0, 0.85, 0.35), smoothstep(0.72, 0.9, lf) * 0.8);
+    hc = mix(hc, vec3(0.08, 0.02, 0.01), smoothstep(0.25, 0.05, abs(lf - 0.5)) * 0.5);                      // (a dark crust floating on it)
+#endif
+    hc = mix(hc, vec3(0.32, 0.04, 0.015), smoothstep(80.0, 1600.0, hd) * 0.8);                             // red smoke swallowing the distance
+    gl_FragColor.rgb = mix(c0, hc, uHLG);
+#ifdef IS_WATER
+    gl_FragColor.a = mix(gl_FragColor.a, 1.0, uHLG);
+#endif
   }
   if (uGHG > 0.001) {                                                 // 3.11: golden hour glasses: warm gold light, soft warm shadows, backlit edges glowing, a golden haze
     vec3 gv = vFogW - uCamP; float gd = max(length(gv), 0.001); vec3 gn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -1109,9 +1151,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(dc, vec3(0.045, 0.028, 0.09) + lc * 0.035, mist), uDream.x);
   }
 #endif`;
-const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uGHG: { value: 0 } };
-const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; };   // 2.88: materials that skip the ground fog still see the dream
-const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; };
+const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uGHG: { value: 0 }, uHLG: { value: 0 } };
+const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; sh.uniforms.uHLG = HFOG.uHLG; };   // 2.88: materials that skip the ground fog still see the dream
+const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; sh.uniforms.uHLG = HFOG.uHLG; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
 const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
@@ -1293,7 +1335,8 @@ function waterMaterial(baseCol, murky) {
       void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vec4 mvPosition = viewMatrix * w; ${CURVE_GLSL} gl_Position = projectionMatrix * mvPosition;
         #include <fog_vertex>
       }`,
-    fragmentShader: `uniform float uTime; uniform vec3 uSky; uniform vec3 uHor; uniform vec3 uSunDir; uniform vec3 uSunCol; uniform float uSunVis;
+    fragmentShader: `#define IS_WATER
+uniform float uTime; uniform vec3 uSky; uniform vec3 uHor; uniform vec3 uSunDir; uniform vec3 uSunCol; uniform float uSunVis;
       uniform sampler2D uShore; uniform vec2 uShoreC; uniform float uMapHalf; uniform float uR0; uniform float uIsland; uniform vec3 uDeep; uniform vec3 uShallow; uniform float uMurky;
       varying vec3 vW;
       #include <fog_pars_fragment>
@@ -4775,7 +4818,7 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
-  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1]
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1]
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
@@ -4783,7 +4826,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
-  if (n === 52) return { item: "bblock" }; if (n === 53) return { item: "tglass" }; if (n === 54) return { item: "dglass" }; if (n === 55) return { item: "mvglass" }; if (n === 56) return { item: "ghglass" };   // 3.03: the glasses (3.05: 53 levels for now; new finds get added on the end)
+  if (n === 52) return { item: "bblock" }; if (n === 53) return { item: "tglass" }; if (n === 54) return { item: "dglass" }; if (n === 55) return { item: "mvglass" }; if (n === 56) return { item: "ghglass" }; if (n === 57) return { item: "hlglass" };   // 3.03: the glasses (3.05: 53 levels for now; new finds get added on the end)
   return { refill: true, last: n >= GEO_N };
 }
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
@@ -4843,7 +4886,7 @@ function giModel(k) {                                         // (about hand siz
     case "headlamp": P(giCyl(.065, .065, .02, 18, 1), 0x222222, 0, 0, 0); P(giBox(.04, .03, .02), 0x3a3a3a, 0, 0, -.07); P(giCyl(.012, .012, .006, 12), 0xfff6c0, 0, 0, -.081, Math.PI / 2); break;
     case "thermos": P(giCyl(.03, .03, .2, 14), 0x2a6a4a, 0, 0, 0); P(giCyl(.032, .032, .04, 14), 0x999999, 0, .12, 0); break;
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
-    case "bblock": case "tglass": case "dglass": case "mvglass": case "ghglass": { const fr = k === "ghglass" ? 0xc89a3a : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "ghglass" ? 0xffb347 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // 3.03 (3.06: dream glasses, neon shades)
+    case "bblock": case "tglass": case "dglass": case "mvglass": case "ghglass": case "hlglass": { const fr = k === "hlglass" ? 0x161010 : k === "ghglass" ? 0xc89a3a : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "hlglass" ? 0xff2a08 : k === "ghglass" ? 0xffb347 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // 3.03 (3.06: dream glasses, neon shades)
       for (const sx of [-1, 1]) { P(giCyl(.026, .026, .006, 16), fr, sx * .034, 0, 0, Math.PI / 2); const L = P(giCyl(.022, .022, .007, 16), ln, sx * .034, 0, .001, Math.PI / 2); L.material = new THREE.MeshBasicMaterial({ color: ln }); P(giBox(.004, .006, .1), fr, sx * .062, .005, -.05); }
       P(giBox(.02, .006, .006), fr, 0, .008, 0); break; }
     case "nvg": for (const s of [-1, 1]) P(giCyl(.02, .024, .07, 12), 0x23262a, s * .03, 0, -.03, Math.PI / 2); P(giBox(.1, .03, .04), 0x3a3a3a, 0, 0, 0); P(giCyl(.016, .016, .003, 12), 0x50ff70, .03, 0, -.067, Math.PI / 2); P(giCyl(.016, .016, .003, 12), 0x50ff70, -.03, 0, -.067, Math.PI / 2); break;
@@ -5116,7 +5159,11 @@ function geoWornTick(I) {
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.06: neon shades (the sky follows) */
   const ghw = GEO.worn.has("ghglass") && !GEO.sleep, gk0 = GEO.ghK || 0; GEO.ghK = gk0 + ((ghw ? 1 : 0) - gk0) * .2; if (GEO.ghK < .005) GEO.ghK = 0; if (Math.abs(GEO.ghK - gk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.11: golden hour glasses (the sky follows) */
   HFOG.uGHG.value = GEO.ghK > .01 ? GEO.ghK : 0; if (GEO.ghK > .01) { scene.fog.color.lerp(C("#f2c690"), .55 * GEO.ghK); renderer.setClearColor(scene.fog.color); }
-  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; HFOG.uMVT.value = performance.now() / 1000 % 1000; if (GEO.mvK > .01) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
+  const hlw = GEO.worn.has("hlglass") && !GEO.sleep, hk0 = GEO.hlK || 0; GEO.hlK = hk0 + ((hlw ? 1 : 0) - hk0) * .2; if (GEO.hlK < .005) GEO.hlK = 0;   /* 3.12: hell glasses */
+  HFOG.uHLG.value = GEO.hlK > .01 ? GEO.hlK : 0; skyMat.uniforms.uHell.value = GEO.hlK > .01 && !UNDER.on ? GEO.hlK : 0;
+  if (GEO.hlK > .01) { scene.fog.color.lerp(C("#2a0603"), GEO.hlK); renderer.setClearColor(scene.fog.color); if (GEO.hlK > .5 && !UNDER.on) { stars.visible = false; GEO.hlHid = true; } } else if (GEO.hlHid) { if (!UNDER.on) stars.visible = true; GEO.hlHid = false; }
+  hellEmbers(I, GEO.hlK);
+  HFOG.uMVT.value = performance.now() / 1000 % 1000; HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0;  if (GEO.mvK > .01) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
 }
@@ -5206,7 +5253,7 @@ function geoPackTick(I, main, off, dt) {
     const L = geoPackItems();
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
-    if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "ghglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "ghglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (3.03: one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
+    if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "ghglass" || k === "hlglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "ghglass", "hlglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (3.03: one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
 }
@@ -5245,7 +5292,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -5913,6 +5960,19 @@ function neonBeasts(on) {
       if (Array.isArray(o.material)) { if (o.material.some(m => !!m.userData.nb !== on)) o.material = o.material.map(sw); } else if (!!o.material.userData.nb !== on) o.material = sw(o.material); }); }
   if (!on) NEON_LIVE.clear(); }
 function neonSync() { for (const c of NEON_LIVE) { const m = c.userData.src; c.opacity = m.opacity; c.transparent = m.transparent; c.visible = m.visible; if (m.color) c.color.copy(m.color); if (m.emissive) c.emissive.copy(m.emissive); } }   // (fades and hit flashes still show)
+function hellEmbers(I, k) {                                            // 3.12: embers drifting up all round you (hell glasses)
+  if (!(k > .01) || !I) { if (GEO.emb) GEO.emb.visible = false; return; }
+  const N = 420; let E = GEO.emb;
+  if (!E) { const g = new THREE.BufferGeometry(), p = new Float32Array(N * 3); g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+    E = GEO.emb = new THREE.Points(g, new THREE.PointsMaterial({ map: ORB_TEX(), color: 0xff6a1a, size: .16, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false }));
+    E.frustumCulled = false; E.v = new Float32Array(N * 3); E.fresh = true; scene.add(E); }
+  if (E.parent !== scene) scene.add(E);
+  E.visible = true; E.material.opacity = .9 * k; const p = E.geometry.attributes.position.array, v = E.v, hx = I.head.x, hy = I.head.y, hz = I.head.z, t = performance.now() / 1000, dt = 1 / 72;
+  for (let i = 0; i < N; i++) { const j = i * 3; let dx = p[j] - hx, dz = p[j + 2] - hz;
+    if (E.fresh || dx * dx + dz * dz > 30 * 30 || p[j + 1] > hy + 14) { const a = Math.random() * 6.283, r = 1 + Math.random() * 28; p[j] = hx + Math.cos(a) * r; p[j + 2] = hz + Math.sin(a) * r; p[j + 1] = (E.fresh ? hy - 3 + Math.random() * 16 : hy - 4 - Math.random() * 3); v[j] = (Math.random() - .5) * .6; v[j + 1] = .8 + Math.random() * 1.6; v[j + 2] = (Math.random() - .5) * .6; }
+    p[j] += (v[j] + Math.sin(t * 1.3 + i) * .5) * dt; p[j + 1] += v[j + 1] * dt; p[j + 2] += (v[j + 2] + Math.cos(t * 1.1 + i * .7) * .5) * dt; }
+  E.fresh = false; E.geometry.attributes.position.needsUpdate = true;
+}
 const WISP_N = 14;
 function dreamWisp() {                                             // one ribbon of coloured mist along a lazy curve
   const pts = [], R = () => (Math.random() - .5); let p = new THREE.Vector3(), d = new THREE.Vector3(R(), R() * .3, R()).normalize();
