@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.14";              // Just Trees 2.55
+const VERSION = "3.15";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1130,6 +1130,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     float tl = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), trim = smoothstep(0.5, 0.97, 1.0 - abs(dot(tn, tv / td))) * mix(1.0, 0.12, smoothstep(0.55, 0.93, abs(tn.y))), tedge = smoothstep(0.03, 0.12, fwidth(tl));
     float tfl = smoothstep(0.55, 0.93, abs(tn.y));                     // (3.04: like the thermal binoculars: black, everything traced in bright red; the open ground quieter)
     vec3 tc = vec3(0.035, 0.004, 0.004) + tl * vec3(0.18, 0.025, 0.02) + vec3(1.0, 0.12, 0.06) * min(1.0, trim * 1.1 + tedge * mix(0.9, 0.2, tfl)) * (1.0 - smoothstep(600.0, 2500.0, td));
+#ifdef NEON_BODY
+    tc = vec3(0.95, 0.93, 0.9) * (0.72 + 0.28 * smoothstep(0.02, 0.5, tl));                   // 3.15: animals and people plain white, like through the thermal binoculars
+#endif
     gl_FragColor.rgb = mix(gl_FragColor.rgb, tc, uThG);
   }
   if (uDream.x > 0.001) {                                             // 2.88: the dream sight: dark, everything traced in light
@@ -1137,19 +1140,16 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     vec3 dn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
     float lum = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), mist = smoothstep(450.0, 2400.0, dd);
     float dFl = smoothstep(0.55, 0.93, abs(dn.y));
-    float rim = smoothstep(0.45, 0.97, 1.0 - abs(dot(dn, dv / dd))) * mix(1.0, 0.15, dFl);   // surfaces turned away from you glow: trunk sides, rock edges, ridges (the flat ground, softly)
-    float edge = smoothstep(0.03, 0.12, fwidth(lum)) * mix(1.0, 0.35, dFl);                  // where the light changes sharply: shapes, shadows, detail, sketched in
+    // 3.15: smooth, not glittery: no pixel-edge sketching or level-lines (they shimmered as you moved); soft glowing rims that fade with distance,
+    // and everything lit softly in the dream's own colours
+    float rim = smoothstep(0.6, 1.0, 1.0 - abs(dot(dn, dv / dd))) * mix(1.0, 0.1, dFl) * (1.0 - 0.75 * smoothstep(60.0, 500.0, dd));
 #ifdef DREAM_CARD
-    edge = max(edge, smoothstep(0.08, 0.3, fwidth(gl_FragColor.a)));   // leaf cards: the ragged edges of the leaves
+    rim *= 0.35;                                                       // (leaf cards: their own soft glow instead of sparkling edges)
 #endif
-    float ln = 0.0;
-#ifdef DREAM_GROUND
-    float yy = vFogW.y * 0.6 - t * 0.06, fw = max(fwidth(yy), 0.0001); ln = 1.0 - min(abs(fract(yy - 0.5) - 0.5) / fw, 1.0);
-    ln *= 1.0 - smoothstep(0.12, 0.45, fw);
-#endif                             // faint level-lines sliding over everything (wherever they can be seen clearly)
     float far = smoothstep(6.0, 180.0, dd), cyc = 0.5 + 0.5 * sin(t * 0.18 + vFogW.x * 0.004 - vFogW.z * 0.003);
     vec3 lc = mix(mix(vec3(0.8, 0.25, 1.0), vec3(1.0, 0.35, 0.85), cyc * (1.0 - far) * 0.4), mix(vec3(0.16, 0.95, 0.85), vec3(0.4, 1.0, 0.45), cyc), far);
-    vec3 dc = vec3(0.04, 0.025, 0.08) + lum * 0.45 * vec3(0.5, 0.45, 1.0) + lc * (rim * 0.6 + edge * 0.45 + ln * 0.35) * (1.0 - mist * 0.8);
+    float soft = smoothstep(0.03, 0.55, lum);
+    vec3 dc = vec3(0.04, 0.025, 0.08) + lc * (0.05 + 0.15 * soft) + lc * rim * 0.5 * (1.0 - mist * 0.8);
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(dc, vec3(0.045, 0.028, 0.09) + lc * 0.035, mist), uDream.x);
   }
 #endif`;
@@ -4519,6 +4519,7 @@ function enSwap(old, nc) {                                     // a rebuilt squa
   for (const d of DROPS.values()) if (d.x >= nc.x0 && d.x < nc.x0 + EN_C && d.z >= nc.z0 && d.z < nc.z0 + EN_C && d.obj) { const y = groundAt(d.x, d.z); if (Math.abs(y - d.y) < 30) { d.obj.position.y += y - d.y; d.y = y; } }
 }
 function globeTick(dt) {                                       // every frame on the globe: where you are, the sun and the clock, and laying the patch again
+  if (GEO.emb && GEO.emb.visible && !(GEO.hlK > .01 && GEO.on && state === "play")) GEO.emb.visible = false;   // (3.15: embers never linger once the hell glasses are off)
   const G = GLOBE; if (!G) return;
   if (state === "play") G.utc = (G.utc + dt / 60) % 24;
   if ((G.llT -= dt) <= 0 || G.reDone !== G.reN) {
@@ -4839,7 +4840,7 @@ function geoGearFromCount(n) {                                // everything you'
   return { own, items };
 }
 const geoNadeCap = () => geoHas("pouch2") ? 10 : geoHas("pouch1") ? 5 : 0;
-const geoSlots = () => geoHas("pack2") ? 12 : geoHas("pack1") ? 6 : 3;
+const geoSlots = () => geoHas("pack2") ? 16 : geoHas("pack1") ? 6 : 3;   // (3.15: the big pack holds 16)
 function geoGearApply(n, fresh) {                             // your guns and items for this many finds
   const g = geoGearFromCount(n); GEO.items = g.items;
   vr.own = Object.assign({}, g.own);
@@ -5160,7 +5161,7 @@ function geoWornTick(I) {
   const th = GEO.worn.has("tglass") && !GEO.sleep; GEO.thK = (GEO.thK || 0) + ((th ? 1 : 0) - (GEO.thK || 0)) * .2; HFOG.uThG.value = GEO.thK > .01 ? GEO.thK : 0;
   if (GEO.thK > .01) { scene.fog.color.lerp(C("#141414"), GEO.thK); renderer.setClearColor(scene.fog.color); if (!UNDER.on) sky.visible = GEO.thK < .5; }
   else if (GEO.thWas && !UNDER.on) sky.visible = true;
-  GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, GEO.thK > .3, true);   /* (3.06: the dream glasses keep their own souls) */
+  GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, false);   /* (3.15: no glowing souls through thermal glasses: the animals and people themselves go white) */   /* (3.06: the dream glasses keep their own souls) */
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.06: neon shades (the sky follows) */
   const ghw = GEO.worn.has("ghglass") && !GEO.sleep, gk0 = GEO.ghK || 0; GEO.ghK = gk0 + ((ghw ? 1 : 0) - gk0) * .2; if (GEO.ghK < .005) GEO.ghK = 0; if (Math.abs(GEO.ghK - gk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.11: golden hour glasses (the sky follows) */
   HFOG.uGHG.value = GEO.ghK > .01 ? GEO.ghK : 0; if (GEO.ghK > .01) { scene.fog.color.lerp(C("#f2c690"), .55 * GEO.ghK); renderer.setClearColor(scene.fog.color); }
@@ -5168,7 +5169,7 @@ function geoWornTick(I) {
   HFOG.uHLG.value = GEO.hlK > .01 ? GEO.hlK : 0; skyMat.uniforms.uHell.value = GEO.hlK > .01 && !UNDER.on ? GEO.hlK : 0;
   if (GEO.hlK > .01) { scene.fog.color.lerp(C("#2a0603"), GEO.hlK); renderer.setClearColor(scene.fog.color); if (GEO.hlK > .5 && !UNDER.on) { stars.visible = false; GEO.hlHid = true; } } else if (GEO.hlHid) { if (!UNDER.on) stars.visible = true; GEO.hlHid = false; }
   hellEmbers(I, GEO.hlK);
-  HFOG.uMVT.value = performance.now() / 1000 % 1000; HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0;  if (GEO.mvK > .01) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
+  HFOG.uMVT.value = performance.now() / 1000 % 1000; HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0;  if (GEO.mvK > .01 || GEO.thK > .01) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
 }
@@ -5218,14 +5219,14 @@ function geoPackDraw(sel) {
   g.fillStyle = "rgba(40,30,18,.9)"; uiRound(g, 4, 4, 632, 472, 26); g.fill(); g.strokeStyle = "#a07a40"; g.lineWidth = 6; uiRound(g, 7, 7, 626, 466, 24); g.stroke();
   g.fillStyle = "#f0e0b8"; g.font = "bold 34px sans-serif"; g.textAlign = "left"; g.fillText(geoHas("pack2") ? "Big backpack" : geoHas("pack1") ? "Backpack" : "Belt pouch", 28, 50);
   g.textAlign = "right"; g.font = "28px sans-serif"; g.fillText(L.length + " / " + slots, 612, 50);
-  const cols = 4, rows = 3, W = 146, Hh = 110;
+  const cols = 4, rows = 4, W = 146, Hh = 76;
   for (let i = 0; i < cols * rows; i++) {
-    const x = 24 + (i % cols) * (W + 6), y = 70 + Math.floor(i / cols) * (Hh + 8), k = L[i], on = sel === i, lock = i >= slots;
+    const x = 24 + (i % cols) * (W + 6), y = 70 + Math.floor(i / cols) * (Hh + 7), k = L[i], on = sel === i, lock = i >= slots;
     g.fillStyle = lock ? "rgba(0,0,0,.35)" : on ? "#ffd65a" : "rgba(255,240,210,.12)"; uiRound(g, x, y, W, Hh, 14); g.fill();
     if (!k) continue; const I = GI[k], worn = GEO.worn.has(k), held = GEO.held === k;
-    g.fillStyle = on ? "#2a1a08" : "#fff4dc"; g.textAlign = "center"; g.font = "bold 24px sans-serif"; uiWrap(g, giNm(k), x + W / 2, y + 40, W - 16, 26);
-    g.font = "21px sans-serif"; g.fillStyle = on ? "#4a3010" : "#d8c49a";
-    g.fillText(worn ? "on · tap: off" : held ? "in your hand" : k === "aid" ? (GEO.aid > 0 ? "ready" : "used") : k === "spray" ? GEO.spray + " sprays" : k === "canteen" ? Math.round(GEO.cant * 25) + "% full" : "take out", x + W / 2, y + Hh - 16);
+    g.fillStyle = on ? "#2a1a08" : "#fff4dc"; g.textAlign = "center"; g.font = "bold 20px sans-serif"; uiWrap(g, giNm(k), x + W / 2, y + 28, W - 14, 21);
+    g.font = "17px sans-serif"; g.fillStyle = on ? "#4a3010" : "#d8c49a";
+    g.fillText(worn ? "on · tap: off" : held ? "in your hand" : k === "aid" ? (GEO.aid > 0 ? "ready" : "used") : k === "spray" ? GEO.spray + " sprays" : k === "canteen" ? Math.round(GEO.cant * 25) + "% full" : "take out", x + W / 2, y + Hh - 9);
   }
   g.fillStyle = sel === -2 ? "#ffd65a" : "rgba(255,240,210,.16)"; uiRound(g, 24, 434 - 30, 300, 56, 14); g.fill(); g.fillStyle = sel === -2 ? "#2a1a08" : "#fff4dc"; g.textAlign = "center"; g.font = "bold 26px sans-serif"; g.fillText("Hands free", 174, 440);
   g.textAlign = "right"; g.font = "22px sans-serif"; g.fillStyle = "#d8c49a"; g.fillText("Food " + Math.round(GEO.food) + " · Water " + Math.round(GEO.water), 612, 440);
@@ -5252,7 +5253,7 @@ function geoPackTick(I, main, off, dt) {
   const m = GEO.packM; if (I.head.distanceTo(m.position) > 1.2) { GEO.packOpen = false; m.visible = false; return; }
   const n = _giV.set(0, 0, 1).applyQuaternion(m.quaternion), d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ), den = d.dot(n); let sel = -1;
   if (Math.abs(den) > 1e-3) { const t = _v2.copy(m.position).sub(main.rayPos).dot(n) / den; if (t > 0) { const lp = m.worldToLocal(_v2.copy(main.rayPos).addScaledVector(d, t)), u = (lp.x / .4 + .5) * 640, v = (.5 - lp.y / .3) * 480;
-      if (v > 404 && v < 460 && u > 24 && u < 324) sel = -2; else { const c = Math.floor((u - 24) / 152), r = Math.floor((v - 70) / 118); if (c >= 0 && c < 4 && r >= 0 && r < 3 && u - 24 - c * 152 < 146) sel = r * 4 + c; } } }
+      if (v > 404 && v < 460 && u > 24 && u < 324) sel = -2; else { const c = Math.floor((u - 24) / 152), r = Math.floor((v - 70) / 83); if (c >= 0 && c < 4 && r >= 0 && r < 4 && u - 24 - c * 152 < 146 && v - 70 - r * 83 < 76) sel = r * 4 + c; } } }
   if (sel !== GEO.packSel) { GEO.packSel = sel; geoPackDraw(sel); if (sel !== -1) buzz(ms, .12, 10); }
   if (edge("pkT", main.trig)) {
     const L = geoPackItems();
