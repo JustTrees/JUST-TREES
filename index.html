@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.12";              // Just Trees 2.55
+const VERSION = "3.13";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -534,7 +534,7 @@ const LAB_DIRTY = { v: false };                                   // 2.93: the T
 function tuneStep(D, s) { const [k, , , st, lo, hi] = D; TUNE[k] = Math.round(Math.max(lo, Math.min(hi, TUNE[k] + s * st)) * 1000) / 1000; LAB_DIRTY.v = true; }
 function testLabSave() { tuneSave(); gunLabSave(); LAB_DIRTY.v = false; }
 const tuneFmt = (v, st) => st >= 1 ? String(Math.round(v)) : v.toFixed(st >= .1 ? (st % .1 ? 2 : 1) : 2);
-const GEO_N = 57, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
+const GEO_N = 58, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // 2.70: the globe: the sun where you really are
   const doy = month * 30.44 + 15;
@@ -4591,7 +4591,7 @@ function geoPlace() {                                          // the caches: th
 }
 function geoStart(sv) {
   GEO.lab = !!GEO.labWant; GEO.labWant = false; GEO.full = !!GEO.fullWant; GEO.fullWant = false;
-  GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
+  GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); boatClear(); BOAT.list = boatPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
   for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = [];
   MP.hp = 100; MP.sh = 0; MP.dead = 0;
   if (sv) { hunt.score = sv.score || 0; hunt.kills = sv.kills || 0; showHuntScore(); }
@@ -4691,7 +4691,7 @@ function geoTick(dt) {
           if (geoCacheClear(x, z)) { c.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(c.p); c.lat = ll[0]; c.lon = ll[1]; out[0] = x; out[1] = z; break; } } }
       o.position.set(out[0], groundAt(out[0], out[1]), out[1]); c.x = out[0]; c.z = out[1];
     }
-    jetsTick(dt);                                                // 2.75
+    jetsTick(dt); boatsTick(1);                                  // 2.75 (3.13: the boats)
     GEO.reAt = false;
   }
   for (const [id, o] of GEO.objs) {
@@ -4764,6 +4764,8 @@ function geoMapDraw(cv) {
   const toMap = p => { const t = [p[0] - glDot(p, G.p) * G.p[0], p[1] - glDot(p, G.p) * G.p[1], p[2] - glDot(p, G.p) * G.p[2]], a = glArc(p, G.p), l = Math.hypot(t[0], t[1], t[2]) || 1, r = a * G.R; return [W / 2 + glDot(t, G.ax) / l * r / span * W, W / 2 + glDot(t, G.az) / l * r / span * W, a]; };
   if (jetOn()) for (const J of JET.list) { if (J.dead) continue; const [mx, my, a] = toMap(J.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue;   // 2.75: the jet skis
     g.fillStyle = "#3ad0ff"; g.strokeStyle = "#002030"; g.lineWidth = 2; g.beginPath(); g.moveTo(mx, my - 7); g.lineTo(mx + 5, my + 6); g.lineTo(mx - 5, my + 6); g.closePath(); g.fill(); g.stroke(); }
+  if (boatOn()) for (const B of BOAT.list) { if (B.dead) continue; const [mx, my, a] = toMap(B.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue;   // 3.13: the boats
+    g.fillStyle = "#ffffff"; g.strokeStyle = "#e8306a"; g.lineWidth = 2; g.beginPath(); g.moveTo(mx, my - 8); g.quadraticCurveTo(mx + 6, my - 2, mx + 5, my + 7); g.lineTo(mx - 5, my + 7); g.quadraticCurveTo(mx - 6, my - 2, mx, my - 8); g.closePath(); g.fill(); g.stroke(); }
   for (const c of geoMapCaches()) { const [mx, my, a] = toMap(c.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue; g.fillStyle = c === GEO.target ? "#ffd65a" : "rgba(255,214,90,.6)"; g.beginPath(); g.arc(mx, my, c === GEO.target ? 7 : 4, 0, 6.283); g.fill(); }
   g.save(); g.translate(W / 2, W / 2); g.rotate(-P.yaw); const sz = W / 26; g.fillStyle = "#F2C14E"; g.strokeStyle = "#000"; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(0, -sz); g.lineTo(sz * .65, sz * .7); g.lineTo(0, sz * .35); g.lineTo(-sz * .65, sz * .7); g.closePath(); g.fill(); g.stroke(); g.restore();
@@ -4826,7 +4828,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
-  if (n === 52) return { item: "bblock" }; if (n === 53) return { item: "tglass" }; if (n === 54) return { item: "dglass" }; if (n === 55) return { item: "mvglass" }; if (n === 56) return { item: "ghglass" }; if (n === 57) return { item: "hlglass" };   // 3.03: the glasses (3.05: 53 levels for now; new finds get added on the end)
+  if (n === 52) return { item: "bblock" }; if (n === 53) return { item: "tglass" }; if (n === 54) return { item: "dglass" }; if (n === 55) return { item: "mvglass" }; if (n === 56) return { item: "ghglass" }; if (n === 57) return { item: "hlglass" }; if (n === 58) return { boat: "wake" };   // 3.03: the glasses (3.05: 53 levels for now; new finds get added on the end)
   return { refill: true, last: n >= GEO_N };
 }
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
@@ -4858,7 +4860,8 @@ function geoReward(n) {                                       // a cache found: 
     if (r.item === "flares") vr.flares = FLARE.N;
     if (r.item === "tscope") TOOL.on.hunt = true; if (r.item === "tbinos") TOOL.on.binos = true;
     vrBanner(giNm(r.item) + ": " + giDesc(r.item), 5, 3); geoShow({ item: r.item });
-  } else if (n < JET_UNLOCK) vrBanner("Supplies refilled", 4, 3);   // 2.76: from #50 on there are no banners: just the easter eggs out there to come across
+  } else if (r.boat) vrBanner("A wakeboard boat! Boats wait off sea beaches (on your map): point and pull the trigger to climb in, a hand on the wheel to drive", 6, 3);   // 3.13
+  else if (n < JET_UNLOCK) vrBanner("Supplies refilled", 4, 3);   // 2.76: from #50 on there are no banners: just the easter eggs out there to come across
   if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
 }
 // models: every item, low-poly, in plain colours
@@ -5287,14 +5290,15 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
   if (UNDER.on) { geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWornTick(I); geoShowTick(dt); return; }
   if (geoNet()) hamTick(I, main, off, dt); sleepTick(I, main, dt);   // 2.86: the hammock, and dreaming
   if (GEO.sleep) { HFOG.uThG.value = 0; geoFireTick(dt); geoSprayTick(dt); geoLeafTick(dt); return; }
-  if (JET.ride) jetHandsTick(I, main); else if (jetOn()) jetAimTick(I, main, off);   // 2.75: the jet skis
+  if (GLOBE) boatsFrame(dt);                                                                     // 3.13: the boats
+  if (BOAT.on) boatHandsTick(I, main, dt); else if (JET.ride) jetHandsTick(I, main); else { if (jetOn()) jetAimTick(I, main, off); if (!JET.aim) boatAimTick(I, main, off); }   // 2.75: the jet skis
   geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
   HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
-  if (typeof jetClear === "function") jetClear();
+  if (typeof jetClear === "function") jetClear(); if (typeof boatClear === "function") boatClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
   for (const S of (GEO.sprays || []).concat(GEO.leaves || [], GEO.pops || [])) scene.remove(S.pts); toolFxHide(GEO.lampFx);
   Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], leaves: [], pops: [], fishM: null, nvM: null, nvK: 0, worn: new Set() });
@@ -5461,6 +5465,229 @@ function jetRide(dt) {                                          // (instead of w
   if (both && (Rd.buzzT = (Rd.buzzT || 0) - dt) <= 0) { Rd.buzzT = .1; const k = .04 + .2 * thr; buzz("L", k, 15); buzz("R", k, 15); }
   input.run = Rd.sp > 12;                                       // (hard riding makes you hungry like running)
 }
+/* ---- 3.13: the wakeboard boat (find 58; online Treeocashing first, and the Test Lab). A few are moored off sea beaches round the planet (on
+   your map). Point at one and pull the trigger: you're standing on its deck. Walk about on it with the stick while it moves (you ride along,
+   your view never rocks). To drive: a hand on the wheel (squeeze the grip by the rim), turn it like a real wheel, the trigger is the throttle.
+   Up to 8 can ride; one drives. Online, the driver sends where the boat is (as points on the planet, so everyone's own layout reads it right)
+   and everyone aboard sends where they stand on the deck, so they're drawn on the boat exactly, not trailing behind it. To get off: hands
+   off the wheel, point over the side (land or water) and pull the trigger. ---- */
+const _bv3 = new THREE.Vector3(), _bv4 = new THREE.Vector3();
+const BOAT = { list: [], on: null, drive: null, aim: null, ring: null, snd: null, sendT: 0, reN: -1 };
+const BOAT_N = 6, BOAT_UNLOCK = 58, BOAT_DECK = .55, BOAT_MAX = 13, BOAT_WR = .19, BOAT_WHEEL = new THREE.Vector3(.52, 1.5, -1.12);
+const boatOn = () => GEO.on && !!GLOBE && !UNDER.on && (geoNet() || GEO.lab) && (GEO.found.size >= BOAT_UNLOCK || GEO.lab);
+function boatPlace() {                                         // the spots: off the sea coasts, far apart (the same ones for this planet)
+  const G = GLOBE, R = G.R, rr = mulberry32(seed * 421 + 5), L = [], step = 260 / R;
+  for (let t = 0; t < 80000 && L.length < BOAT_N; t++) {
+    const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .78) continue;
+    const s = G.contS(p, p[0] * R, p[1] * R, p[2] * R); if (s >= 0 || s < -.1) continue;
+    if (L.some(b => glArc(b.p, p) * R < 3000)) continue;
+    const f = glFrame(p); let land = false;
+    for (let k = 0; k < 8 && !land; k++) { const a = k * .785, q = glNorm([p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * step, p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * step, p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * step]);
+      if (G.contS(q, q[0] * R, q[1] * R, q[2] * R) > .03) land = true; }
+    if (land) L.push({ id: L.length + 1, p, f: null, ok: false, dead: false, x: 0, z: 0, yaw: 0, obj: null, rx: [], netT: 0, drv: null, own: null, sp: 0, st: 0, w: 0, m: new THREE.Matrix4(), mi: new THREE.Matrix4(), q: new THREE.Quaternion() });
+  }
+  return L;
+}
+function boatFindMoor(x0, z0) {                                // a mooring: 1.5–3.5 m of water a little off a beach, open sea behind
+  for (let k = 0; k < 700; k++) {
+    const a = k * 2.4, r = k * 1.8, x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r, h = H(x, z);
+    if (h > water - 1.5 || h < water - 3.5 || enIcedAt(x, z)) continue;
+    for (let d = 0; d < 8; d++) { const dx = Math.cos(d * .785), dz = Math.sin(d * .785);
+      if (!(H(x + dx * 26, z + dz * 26) > water + .2 || H(x + dx * 40, z + dz * 40) > water + .2)) continue;     // land in front of it…
+      if ([5, 12].some(r => H(x + dx * r, z + dz * r) > water - 1.1)) continue;                                   // (but not too close)
+      if ([6, 15, 30, 60].some(r => H(x - dx * r, z - dz * r) > water - 1.3)) continue;                           // …and open water behind
+      if (!geoSalty({ x, z })) break;
+      return { x, z, yaw: Math.atan2(dx, dz) };                                                                    // (its bow out to sea)
+    }
+  }
+  return null;
+}
+function boatModel() {
+  const g = new THREE.Group(), M = c => new THREE.MeshLambertMaterial({ color: c }), white = M(0xf4f4f0), stripe = M(0xe8306a), navy = M(0x1c2a44), deck = M(0xc9c3b4), vinyl = M(0xf0ece2), dark = M(0x22252a), metal = M(0x8a9098);
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0, p = g) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); p.add(o); return o; };
+  const outline = (w, len, s) => { const sh = new THREE.Shape(); sh.moveTo(0, -len * s); sh.bezierCurveTo(w * .55 * s, -len * .92 * s, w * s, -len * .45 * s, w * s, -len * .1 * s); sh.lineTo(w * s, len * .95 * s); sh.quadraticCurveTo(w * s, len * s, w * .92 * s, len * s);
+    sh.lineTo(-w * .92 * s, len * s); sh.quadraticCurveTo(-w * s, len * s, -w * s, len * .95 * s); sh.lineTo(-w * s, -len * .1 * s); sh.bezierCurveTo(-w * s, -len * .45 * s, -w * .55 * s, -len * .92 * s, 0, -len * s); return sh; };
+  const ext = (sh, y0, d, m) => { const geo = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false, curveSegments: 10 }); geo.rotateX(Math.PI / 2); geo.translate(0, y0 + d, 0); return add(geo, m, 0, 0, 0); };
+  const W = 1.22, L = 3.55;
+  ext(outline(W * .96, L * .97, 1), -.45, .55, navy);                                                      // the hull below the waterline
+  ext(outline(W, L, 1), .1, .3, stripe);                                                                    // a stripe along it
+  ext(outline(W, L, 1), .4, .15, white);
+  { const sh = outline(W, L, 1); sh.holes.push(outline(W, L, .9)); ext(sh, .55, .72, white); }              // the sides, up to the gunwale
+  ext(outline(W, L, .9), .5, .06, deck);                                                                    // the deck
+  // the windshield, the helm and its wheel
+  const ws = add(new THREE.BoxGeometry(2.0, .42, .03), new THREE.MeshLambertMaterial({ color: 0x9fd0ea, transparent: true, opacity: .35 }), 0, 1.47, -1.55, -.5); ws.renderOrder = 3;
+  add(new THREE.BoxGeometry(2.04, .04, .06), dark, 0, 1.67, -1.66, -.5);
+  add(new THREE.BoxGeometry(.66, .85, .55), vinyl, .52, .98, -1.32); add(new THREE.BoxGeometry(.62, .05, .45), dark, .52, 1.42, -1.3, -.5);   // console and dash
+  add(new THREE.BoxGeometry(.66, .85, .55), vinyl, -.52, .98, -1.32);
+  const wb = new THREE.Group(); wb.position.copy(BOAT_WHEEL); wb.rotation.x = -.95; g.add(wb);                // (the wheel's own frame: its face toward the driver)
+  const wheel = new THREE.Group(); wb.add(wheel);
+  add(new THREE.TorusGeometry(BOAT_WR, .022, 8, 28), dark, 0, 0, 0, 0, 0, 0, wheel);
+  for (let k = 0; k < 3; k++) { const a = k * 2.094 + Math.PI / 2; add(new THREE.BoxGeometry(.02, BOAT_WR, .02), metal, Math.cos(a) * BOAT_WR / 2, Math.sin(a) * BOAT_WR / 2, 0, 0, 0, a - Math.PI / 2, wheel); }
+  add(new THREE.CylinderGeometry(.04, .04, .05, 12), metal, 0, 0, 0, Math.PI / 2, 0, 0, wheel);
+  add(new THREE.CylinderGeometry(.025, .025, .25, 8), dark, 0, 0, -.13, Math.PI / 2, 0, 0, wb);
+  // seats, the tower, the engine box and the swim platform
+  add(new THREE.BoxGeometry(2.0, .42, .55), vinyl, 0, .76, 2.85); add(new THREE.BoxGeometry(2.0, .5, .14), vinyl, 0, 1.2, 3.12);   // the back bench
+  for (const s of [-1, 1]) add(new THREE.BoxGeometry(.42, .42, 2.0), vinyl, s * .9, .76, 1.25);                                     // side benches
+  add(new THREE.BoxGeometry(1.3, .4, .7), vinyl, 0, .75, -2.55);                                                                    // the bow seat
+  add(new THREE.BoxGeometry(.5, .4, .45), vinyl, .52, .75, -.55); add(new THREE.BoxGeometry(.5, .45, .1), vinyl, .52, 1.12, -.35);   // the driver's seat
+  for (const s of [-1, 1]) { const leg = add(new THREE.CylinderGeometry(.045, .045, 1.75, 8), metal, s * 1.0, 2.1, .35, 0, 0, s * .12); leg.rotation.x = -.18; }
+  add(new THREE.BoxGeometry(2.25, .09, .32), dark, 0, 2.95, .18); add(new THREE.CylinderGeometry(.06, .06, .3, 10), dark, 0, 3.05, .45, Math.PI / 2);   // the tower and its rope post
+  add(new THREE.BoxGeometry(1.1, .4, .8), white, 0, .75, 3.3 - .9);
+  add(new THREE.BoxGeometry(2.1, .06, .55), M(0xa07c52), 0, .48, 3.78);
+  g.userData = { wheel, wb, mats: [white, stripe] }; g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return g;
+}
+function boatGlow(B, on) { if (!B.obj) return; for (const m of B.obj.userData.mats) m.emissive.setHex(on ? 0x553010 : 0x000000); }
+const boatSeen = B => boatOn() || performance.now() - B.netT < 8000 || BOAT.on === B;      // (you only see boats once you have them, unless someone's out in one)
+function boatsTick(dt) {                                      // (in geoTick, once a second: the boats near you)
+  const G = GLOBE, R = G.R, out = [0, 0];
+  for (const B of BOAT.list) {
+    const near = !B.dead && boatSeen(B) && glArc(G.p, B.p) * R < 1200;
+    if (!near) { if (B.obj && BOAT.on !== B) { scene.remove(B.obj); B.obj = null; } continue; }
+    if (!B.ok && !B.rx.length) { glFromSphere(B.p, out); const m = boatFindMoor(out[0], out[1]); B.ok = true; if (!m) { if (!B.netT) B.dead = true; continue; }
+      B.p = glToSphere(m.x, m.z, [0, 0, 0]); B.f = glToSphere(m.x - Math.sin(m.yaw) * 10, m.z - Math.cos(m.yaw) * 10, [0, 0, 0]); }
+    if (!B.f) continue;
+    if (!B.obj) { B.obj = boatModel(); scene.add(B.obj); }
+  }
+  for (const B of BOAT.list) if (B.own === mpMyId() && BOAT.drive !== B && B.f && (B.parkT = (B.parkT || 0) + dt) > 2) { B.parkT = 0; boatSend(B, 0); }   // (where I left it, now and then, for anyone new)
+}
+function boatSphereRead(B) {                                   // the boat in my layout, from its points on the planet
+  const a = glFromSphere(B.p, [0, 0]), b = glFromSphere(B.f, [0, 0]); B.x = a[0]; B.z = a[1]; B.yaw = Math.atan2(-(b[0] - a[0]), -(b[1] - a[1]));
+}
+function boatSphereWrite(B) { B.p = glToSphere(B.x, B.z, [0, 0, 0]); B.f = glToSphere(B.x - Math.sin(B.yaw) * 10, B.z - Math.cos(B.yaw) * 10, [0, 0, 0]); }
+function boatMatrix(B) { B.q.setFromAxisAngle(_UPv, B.yaw); B.m.compose(_bv3.set(B.x, water, B.z), B.q, _bv4.set(1, 1, 1)); B.mi.copy(B.m).invert(); }
+function boatsFrame(dt) {                                      // every frame: where each boat is now, drawn on the waves
+  const now = performance.now(), t = now / 1000;
+  for (const B of BOAT.list) {
+    if (!B.obj || !B.f) continue;
+    if (BOAT.drive !== B && B.rx.length) {                     // driven by someone else: smoothed between their updates, a moment behind
+      const tt = now - 110; let a = B.rx[0], b = B.rx[0]; for (const e of B.rx) { if (e.at <= tt) a = e; if (e.at >= tt) { b = e; break; } b = e; }
+      const k = b.at > a.at ? Math.max(0, Math.min(1, (tt - a.at) / (b.at - a.at))) : 1, mix = (A, C) => glNorm([A[0] + (C[0] - A[0]) * k, A[1] + (C[1] - A[1]) * k, A[2] + (C[2] - A[2]) * k]);
+      B.p = mix(a.p, b.p); B.f = mix(a.f, b.f); B.sp = a.sp + (b.sp - a.sp) * k; B.st = a.st + (b.st - a.st) * k; B.w = a.w + (b.w - a.w) * k;
+      if (now - B.netT > 1500) { B.sp *= .9; if (B.drv && now - B.netT > 3000) B.drv = null; }
+    }
+    if (BOAT.drive !== B) boatSphereRead(B);
+    boatMatrix(B);
+    const o = B.obj, sp = Math.abs(B.sp), y = water - .04 + .07 * Math.sin(t * 1.4 + B.id) + .04 * Math.sin(t * 2.7) + (sp > 5 ? .03 * Math.sin(t * 8) : 0);
+    o.position.set(B.x, y, B.z); o.rotation.set(.035 * Math.sin(t * 1.1 + B.id) + Math.min(.07, sp / BOAT_MAX * .07), B.yaw, .03 * Math.sin(t * .9) + B.st * .08 * Math.min(1, sp / 6), "YXZ");
+    o.userData.wheel.rotation.z = B.w; o.updateMatrixWorld(true);
+  }
+}
+function boatSend(B, d) { mpSend({ t: "bt", id: B.id, p: B.p.map(v => +v.toFixed(7)), f: B.f.map(v => +v.toFixed(7)), sp: +B.sp.toFixed(2), st: +B.st.toFixed(3), w: +B.w.toFixed(3), d }); }
+function boatNetIn(L, o) {                                     // someone's boat: where it is now
+  const B = BOAT.list[(o.id | 0) - 1]; if (!B || !Array.isArray(o.p) || !Array.isArray(o.f)) return;
+  if (o.d && BOAT.drive === B && L.id < mpMyId()) { BOAT.drive = null; vrBanner("Someone else took the wheel", 2.5, 1); }   // (two at once: one keeps it)
+  if (BOAT.drive === B) return;
+  B.rx.push({ at: performance.now(), p: o.p, f: o.f, sp: +o.sp || 0, st: +o.st || 0, w: +o.w || 0 }); if (B.rx.length > 20) B.rx.shift();
+  B.netT = performance.now(); B.own = L.id; B.drv = o.d ? L.id : (B.drv === L.id ? null : B.drv); B.ok = true; B.dead = false;
+  if (!B.f) { B.p = o.p; B.f = o.f; }
+}
+function boatEngine(on, k, thr) {                              // a deeper motor than the jet ski's
+  if (!SND.ctx) return; const c = SND.ctx;
+  if (on && !BOAT.snd) {
+    const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
+    o.type = "sawtooth"; o2.type = "triangle"; o2.detune.value = 7; lp.type = "lowpass"; lp.frequency.value = 300; g.gain.value = 0;
+    const nb = c.createBufferSource(); nb.buffer = SND.noise; nb.loop = true; const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 800; bp.Q.value = .7; const ng = c.createGain(); ng.gain.value = 0;
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(SND.master); nb.connect(bp).connect(ng).connect(SND.master); o.start(); o2.start(); nb.start();
+    BOAT.snd = { o, o2, lp, g, nb, ng }; gunFoley([[0, 90, .3, .22], [.15, 130, .3, .18]]);
+  }
+  const S = BOAT.snd; if (!S) return; const t = c.currentTime;
+  if (!on) { S.g.gain.setTargetAtTime(0, t, .2); S.ng.gain.setTargetAtTime(0, t, .2); const s = S; BOAT.snd = null; setTimeout(() => { try { s.o.stop(); s.o2.stop(); s.nb.stop(); } catch (_) {} }, 800); return; }
+  const f = 26 + 42 * k + 16 * thr; S.o.frequency.setTargetAtTime(f, t, .1); S.o2.frequency.setTargetAtTime(f * .5, t, .1); S.lp.frequency.setTargetAtTime(240 + 900 * Math.max(k, thr), t, .12);
+  S.g.gain.setTargetAtTime(.06 + .08 * Math.max(k, thr), t, .12); S.ng.gain.setTargetAtTime(.05 * k, t, .12);
+}
+const boatDeck = (lx, lz) => { const hw = lz < -1.9 ? Math.max(.15, 1.0 * (lz + 3.2) / 1.3) : 1.0; return [Math.max(-hw, Math.min(hw, lx)), Math.max(-3.0, Math.min(3.3, lz))]; };   // (where you can stand)
+function boatMount(B, at) {                                    // onto the deck, by where you pointed
+  BOAT.on = B; jetOff(); geoHeld(null); vr.binos = vr.scoped = false; vr.cl = null; vr.climbing = false;
+  const l = at ? at.clone().applyMatrix4(B.mi) : new THREE.Vector3(0, 0, 2); const [lx, lz] = boatDeck(l.x, l.z), w = new THREE.Vector3(lx, 0, lz).applyMatrix4(B.m);
+  P.x = w.x; P.z = w.z; P.y = water + BOAT_DECK; P.vy = 0; P.onGround = true; P.gliding = false; BOAT.last = { x: B.x, z: B.z, yaw: B.yaw, reN: GLOBE.reN };
+  BOAT.hold = { L: false, R: false }; BOAT.wa = { L: 0, R: 0 }; gunFoley([[0, 380, .2, .14], [.06, 700, .15, .08]]); buzz("L", .4, 60); buzz("R", .4, 60);
+  if (!GEO.boatSaid) { GEO.boatSaid = true; vrBanner("A hand on the wheel to drive: turn it to steer, trigger for throttle", 4, 1); }
+}
+function boatOff(x, z) {
+  const B = BOAT.on; if (!B) return; if (BOAT.drive === B) { BOAT.drive = null; boatSend(B, 0); }
+  BOAT.on = null; boatEngine(false); if (BOAT.ring) BOAT.ring.visible = false;
+  if (x !== undefined) { P.x = x; P.z = z; P.y = groundAt(x, z); P.vy = 0; P.onGround = true; gunFoley([[0, 300, .15, .12]]); }
+}
+function boatAimTick(I, main, off) {                            // not aboard: point at a boat close by to make it glow; trigger to climb in
+  const gunUp = vr.gun && vr.gun.visible, h = gunUp ? off : main; let best = null, at = null;
+  if (h && !GEO.packOpen && !GEO.held) {
+    const o = h.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(h.rayQ);
+    for (const B of BOAT.list) { if (!B.obj) continue; if (Math.hypot(B.x - P.x, B.z - P.z) > 14) continue;
+      const c = _v2.set(B.x, water + .8, B.z), toC = c.clone().sub(o), t = toC.dot(d); if (t < 0) continue; if (toC.lengthSq() - t * t < 3.2 * 3.2) { best = B; at = o.clone().addScaledVector(d, t); break; } }
+  }
+  if (best !== BOAT.aim) { if (BOAT.aim) boatGlow(BOAT.aim, false); if (best) { boatGlow(best, true); buzz(h === main ? (set.hand === "right" ? "R" : "L") : (set.hand === "right" ? "L" : "R"), .15, 15); } BOAT.aim = best; }
+  if (best && h && edge(h === main ? "boatM" : "boatO", h.trig)) { BOAT.aim = null; boatGlow(best, false); boatMount(best, at); }
+  else if (h) edge(h === main ? "boatM" : "boatO", h.trig);
+}
+function boatHandsTick(I, main, dt) {                          // aboard: the wheel, the throttle, and getting off
+  const B = BOAT.on; if (!B.obj) return; const wb = B.obj.userData.wb;
+  for (const [s, hn] of [["L", "left"], ["R", "right"]]) {
+    const h = I.hands[hn]; if (!h) { BOAT.hold[s] = false; continue; }
+    const l = wb.worldToLocal(_v1.copy(h.pos)), r = Math.hypot(l.x, l.y), dRim = Math.hypot(r - BOAT_WR, l.z), ang = Math.atan2(l.y, l.x);
+    if (!BOAT.hold[s] && h.grip > .6 && dRim < .13) { if (B.drv && B.drv !== mpMyId() && performance.now() - B.netT < 1500) { if (!BOAT.toldBusy) { BOAT.toldBusy = true; vrBanner("Someone else is driving", 2, 1); } continue; }
+      BOAT.hold[s] = true; BOAT.wa[s] = ang; buzz(s, .3, 30); if (s === (set.hand === "right" ? "R" : "L")) vr.gunOut = false; }
+    else if (BOAT.hold[s] && h.grip < .35) BOAT.hold[s] = false;
+    if (BOAT.hold[s]) { let da = ang - BOAT.wa[s]; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; BOAT.wa[s] = ang; BOAT.wd = (BOAT.wd || 0) + da * (BOAT.hold.L && BOAT.hold.R ? .5 : 1); }
+  }
+  const held = BOAT.hold.L || BOAT.hold.R;
+  if (held && BOAT.drive !== B) { BOAT.drive = B; B.drv = mpMyId(); B.own = mpMyId(); B.rx.length = 0; boatEngine(true, 0, 0); }
+  B.w = Math.max(-2.4, Math.min(2.4, B.w + (BOAT.wd || 0))); BOAT.wd = 0; if (!held) B.w *= Math.exp(-dt * .6);   // (it eases back straight when you let go)
+  BOAT.thr = held ? Math.max(BOAT.hold.L ? I.hands.left.trig || 0 : 0, BOAT.hold.R ? I.hands.right.trig || 0 : 0) : 0;
+  // off: hands off the wheel, point over the side, trigger
+  const free = !held && !(vr.gun && vr.gun.visible) && main; let spot = null;
+  if (free) { const o = main.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ), ht = castShot(o, d.clone(), 16);
+    let p = ht.kind ? ht.p : null; if (!p && d.y < -.05) { const k = (o.y - water) / -d.y; if (k > 0 && k < 16) p = o.clone().addScaledVector(d, k); }
+    if (p) { const l = p.clone().applyMatrix4(B.mi); if (Math.abs(l.x) > 1.6 || l.z < -3.9 || l.z > 4.1) spot = p; } }
+  if (!BOAT.ring) { BOAT.ring = new THREE.Mesh(new THREE.RingGeometry(.35, .5, 24), new THREE.MeshBasicMaterial({ color: 0xffd65a, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, fog: false })); BOAT.ring.rotation.x = -Math.PI / 2; BOAT.ring.renderOrder = 5; scene.add(BOAT.ring); }
+  BOAT.ring.visible = !!spot; if (spot) { const dry = H(spot.x, spot.z) > water; BOAT.ring.material.color.setHex(dry ? 0xffd65a : 0x5ad0ff); BOAT.ring.position.set(spot.x, Math.max(groundAt(spot.x, spot.z), dry ? -1e9 : water) + .06, spot.z); }
+  if (main && edge("boatOff", main.trig) && spot) boatOff(spot.x, spot.z);
+}
+function boatDrive(B, dt) {                                    // the driver's boat: throttle, steering, and what's in front of the bow
+  const thr = BOAT.thr || 0, want = thr * BOAT_MAX; B.sp += (want - B.sp) * Math.min(1, dt * (want > B.sp ? .5 : .32));
+  B.st = Math.max(-1, Math.min(1, -B.w / 1.8));
+  const turn = -B.st * (.12 + .5 * Math.min(1, Math.abs(B.sp) / 6)) * dt; B.yaw += turn;
+  let mv = B.sp * dt; const fx = -Math.sin(B.yaw), fz = -Math.cos(B.yaw);
+  if (mv > 0) { const nx = B.x + fx * (3.9 + mv), nz = B.z + fz * (3.9 + mv), hn = H(nx, nz), rk = rockAround(nx, nz, .8, water, 1.2, .05);
+    if (hn > water - .6 || rk > water - .2) { if ((BOAT.bumpT || 0) <= 0 && B.sp > 2) { gunFoley([[0, 110, .35, .3], [.03, 300, .2, .14]]); buzz("L", .9, 120); buzz("R", .9, 120); BOAT.bumpT = .6; vrBanner("Too shallow: steer back out", 2, 0); } B.sp = -Math.min(1.5, B.sp * .25); mv = 0; } }
+  else if (mv < 0) { if (H(B.x - fx * 3.8, B.z - fz * 3.8) > water - .6) { B.sp = 0; mv = 0; } }
+  BOAT.bumpT = (BOAT.bumpT || 0) - dt;
+  B.x += fx * mv; B.z += fz * mv; boatSphereWrite(B);
+  boatEngine(true, Math.min(1, Math.abs(B.sp) / BOAT_MAX), thr);
+  if ((BOAT.sendT -= dt) <= 0) { BOAT.sendT = .05; boatSend(B, 1); }
+  if (thr > .05 && (BOAT.buzzT = (BOAT.buzzT || 0) - dt) <= 0) { BOAT.buzzT = .12; const k = .03 + .12 * thr; if (BOAT.hold.L) buzz("L", k, 15); if (BOAT.hold.R) buzz("R", k, 15); }
+}
+function boatMove(dt) {                                        // aboard (instead of walking on the land): carried with the boat, walking about its deck
+  const B = BOAT.on, G = GLOBE; if (!B || !B.f) { BOAT.on = null; return; }
+  if (BOAT.drive === B && !(BOAT.hold.L || BOAT.hold.R)) { BOAT.drive = null; boatSend(B, 0); B.drv = null; }
+  if (BOAT.drive === B) boatDrive(B, dt); else { if (BOAT.snd) boatEngine(false); B.sp *= Math.exp(-dt * .3); }
+  if (BOAT.drive !== B) boatSphereRead(B);
+  const Lb = BOAT.last;
+  if (Lb && Lb.reN === G.reN) {                                 // ride along: turned with it about its middle and carried with it
+    const turn = B.yaw - Lb.yaw, px = P.x - Lb.x, pz = P.z - Lb.z, c = Math.cos(turn), s = Math.sin(turn);
+    P.x = B.x + px * c + pz * s; P.z = B.z - px * s + pz * c; vr.pendTurn = (vr.pendTurn || 0) + turn;
+  }
+  BOAT.last = { x: B.x, z: B.z, yaw: B.yaw, reN: G.reN };
+  boatMatrix(B);
+  if (!(BOAT.hold.L || BOAT.hold.R)) {                           // walk about the deck
+    let mx = input.jx, my = input.jy; const mag = Math.hypot(mx, my); if (mag > 1) { mx /= mag; my /= mag; }
+    if (mag > .05) { const sy = Math.sin(P.yaw), cy = Math.cos(P.yaw), sp = 1.7; P.x += (-sy * my + cy * mx) * sp * dt; P.z += (-cy * my - sy * mx) * sp * dt; }
+  }
+  const l = _v1.set(P.x, water, P.z).applyMatrix4(B.mi), [lx, lz] = boatDeck(l.x, l.z), w = _v2.set(lx, 0, lz).applyMatrix4(B.m);
+  P.x = w.x; P.z = w.z; P.y = water + BOAT_DECK; P.vy = 0; P.onGround = true; P.gliding = false; P.crouch = false; input.run = false;
+}
+function boatNetPose(I, G) {                                   // (in my "s" message while aboard: where I am on the deck)
+  const B = BOAT.on; if (!B || !B.obj) return null; const qi = B.q.clone().invert();
+  const lp = (p, q) => pose7(p.clone().applyMatrix4(B.mi), qi.clone().multiply(q));
+  const Lh = I.hands.left, Rh = I.hands.right;
+  return { bd: B.id, bl: { h: lp(I.head, I.headQ), l: Lh ? lp(Lh.pos, Lh.q) : null, r: Rh ? lp(Rh.pos, Rh.q) : null, g: G ? lp(G.position, G.quaternion) : null, f: +(P.y - water - BOAT_DECK).toFixed(3) } };
+}
+function boatRemotePose(s) {                                    // someone aboard: their head, hands and gun put back on the boat as I see it
+  const B = BOAT.list[(s.bd | 0) - 1]; if (!B || !B.obj || !s.bl) return;
+  const W = (P7, out) => { out.p.copy(P7.p).applyMatrix4(B.m); out.q.copy(B.q).multiply(P7.q); };
+  W(s.bl.h, s.h); if (s.bl.l && s.l) W(s.bl.l, s.l); if (s.bl.r && s.r) W(s.bl.r, s.r); if (s.bl.g && s.g) W(s.bl.g, s.g.pose); s.feet = water + BOAT_DECK + s.bl.f;
+}
+function boatClear() { boatOff(); for (const B of BOAT.list) if (B.obj) { scene.remove(B.obj); B.obj = null; } BOAT.aim = null; BOAT.drive = null; }
 function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; }   // (the spots stay: a new game makes new ones)
 /* ---- 2.79: the Gear Lab (Dev menu): a Treeocashing planet with every item and every gun at red, nothing saved to your character. Y →
    "Gear Lab tools": quick helpers (go to a lake or a sea beach, a jet ski here, predators, day or night, refill, the next cache close) and
@@ -13155,6 +13382,7 @@ const GLIDE_SPEED = 11, GLIDE_SINK = 2.2, GLIDE_VR = 22;   // VR glides twice as
 const CLIMB = 1.5, CLIFF = 5.67;   // anything below eye level (1.5 m) can be walked up onto; walkable up to 80 degrees (tan 80)
 const keys = {};
 function update(dt) {
+  if (BOAT.on && vr.on && state === "play") { boatMove(dt); return; }   // 3.13: aboard a boat
   if (JET.ride && vr.on && state === "play") { jetRide(dt); return; }
   if (GEO.sleep && vr.on && state === "play") { sleepMove(dt); return; }
   if ((UNDER.on || UNDER.go) && vr.on && state === "play") { if (UNDER.on) ugMove(dt); return; }   // 2.90: the Underworld   // 2.86: in the hammock / out of your body   // 2.75: riding a jet ski
@@ -15567,6 +15795,7 @@ function mpRecv(o, L) {
   if (o.t === "host") { if (o.id) geoNetSetHost(String(o.id)); return; }
   if (o.t === "welcome") { MP.idx = o.idx; for (const id of o.peers || []) mpMeet(id); mpStatus("Joined! The host is setting up the game…"); mpLobbyDraw(); return; }
   if (mpRecv2(o, L)) return;
+  if (o.t === "bt") { if (GLOBE) boatNetIn(L, o); return; }   // 3.13: a boat
   if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
   if (o.t === "set") { if (!MP.host) mpApplySet(o.set); return; }
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
@@ -16769,6 +16998,7 @@ function mpSample(L, buf) {                                 // where they were a
   const out = { h: lerp7(a.h, b.h, k, mk()), feet: a.f + (b.f - a.f) * k, alive: b.a, gl: b.gl, hp: b.hp, l: null, r: null, g: null, gp: b.gp | 0, tl: b.tl | 0 };
   if (a.l && b.l) out.l = lerp7(a.l, b.l, k, mk()); if (a.r && b.r) out.r = lerp7(a.r, b.r, k, mk());
   if (b.g && b.g.o) { out.g = { k: b.g.k, pose: a.g && a.g.o && a.g.k === b.g.k ? lerp7(a.g.p, b.g.p, k, mk()) : lerp7(b.g.p, b.g.p, 0, mk()) }; }
+  if (b.bl && b.bd) { const A = a.bl && a.bd === b.bd ? a.bl : b.bl, Bl = b.bl; out.bd = b.bd; out.bl = { h: lerp7(A.h, Bl.h, k, mk()), l: A.l && Bl.l ? lerp7(A.l, Bl.l, k, mk()) : null, r: A.r && Bl.r ? lerp7(A.r, Bl.r, k, mk()) : null, g: A.g && Bl.g ? lerp7(A.g, Bl.g, k, mk()) : Bl.g ? lerp7(Bl.g, Bl.g, 0, mk()) : null, f: Bl.f || 0 }; }   // 3.13: aboard a boat
   return out;
 }
 function mpRemoteGun(R, k) {
@@ -16776,7 +17006,7 @@ function mpRemoteGun(R, k) {
   const m = (k === "hunt" ? sniper : GUNMODEL[k] || sniper).clone(true); m.visible = true; const g = new THREE.Group(); g.add(m); scene.add(g); return R.guns[k] = g;
 }
 function mpRemoteTick(L, dt) {
-  const s = mpSample(L); if (!s) return;
+  const s = mpSample(L); if (!s) return; if (s.bl && GLOBE) boatRemotePose(s);   // 3.13: on a boat: drawn where they stand on it
   if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); charDrop(R0.C); L.R = null; }   // they changed uniform
   if (!L.R) L.R = mpRemoteMake(L);
   const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
@@ -16918,7 +17148,7 @@ function mpTick(dt) {                                       // (also runs offlin
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // 2.86: asleep, the others see your body in the hammock (not where your spirit is)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: SB ? SB.h : pose7(I.head, I.headQ), l: SB ? SB.l : Lh ? pose7(Lh.pos, Lh.q) : null, r: SB ? SB.r : Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0), ...(BOAT.on ? boatNetPose(I, G) : null) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);

@@ -72,7 +72,7 @@ async def main():
           D.geoAsk('re', D.geoRestart); o.oneTap = D.geoLoad().n === n0 && n0 > 0; D.geoAsk('re', D.geoRestart); const sv = D.geoLoad(); o.afterTwo = [true, sv.n, true];
           D.generate(); D.state = 'play'; o.fresh = [D.GEO.found.size, D.hunt.score]; o.gone = true; return o; }""")
         print("restart", json.dumps(rs))
-        ok = o["on"] and r["caches"] == 57 and r["bands"] >= 6 and r["minGap"] >= 850 and r["curve"] and r["wheel"] \
+        ok = o["on"] and r["caches"] == 58 and r["bands"] >= 6 and r["minGap"] >= 850 and r["curve"] and r["wheel"] \
              and abs(r["walkLat"] - r["walkExpect"]) < r["walkExpect"] * .08 and r["reanchors"] >= 1 and all(abs(j) < .02 for j in r["jumps"]) and r["stale"] == 0 \
              and all(abs(v) < .012 for v in r["squareBack"]) and r["east"][0] > 10 and abs(r["east"][1] - r["east"][0] / 15) < .02 \
              and pole["maxLat"] > 89.4 and pole["end"][0] < pole["maxLat"] and pole["lonFlip"] < 20 and pole["biome"] == "polar" \
