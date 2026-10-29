@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.16";              // Just Trees 2.55
+const VERSION = "3.17";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -844,6 +844,7 @@ const skyMat = new THREE.ShaderMaterial({
       float rm = smoothstep(ridge + 0.002, ridge - 0.002, d.y) * smoothstep(-0.06, 0.0, d.y);
       c = mix(c, ridgeCol, rm * 0.55);
       c = mix(c, vec3(0.012, 0.01, 0.01), uThermal);                  // 3.16: through thermal glasses the sky is simply black
+#ifdef JT_FX
       if (uHell > 0.001) {                                            // 3.12: hell glasses: a blood-red sky choked with churning smoke, the horizon on fire
         float y = d.y; vec2 sp = d.xz / max(y + 0.25, 0.08);
         float sm = fbm(sp * 1.3 + vec2(time * 0.02, time * 0.013), 5), sm2 = fbm(sp * 3.1 - vec2(time * 0.035, 0.0), 4);
@@ -891,6 +892,7 @@ const skyMat = new THREE.ShaderMaterial({
         n += vec3(0.2, 0.8, 1.0) * (exp(-pow((length(ml2) - 1.0) / 0.03, 2.0)) * 0.9 + exp(-max(length(ml2) - 1.0, 0.0) / 0.35) * 0.3) * mvis * smoothstep(-0.02, 0.01, y);
         c = mix(c, n, uNeon);
       }
+#endif
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0 * 1.5;   // dither: no colour banding
@@ -1030,6 +1032,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
     gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
   }
+#ifdef JT_FX
   if (uHLG > 0.001) {                                                 // 3.12: hell glasses: scorched black land split by glowing lava, everything's edges burning, blood-red smoke
     vec3 hv = vFogW - uCamP; float hd = max(length(hv), 0.001); vec3 hn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
     vec3 c0 = gl_FragColor.rgb, cs = preFogC; float hl = dot(cs, vec3(0.3, 0.59, 0.11)), hfl = smoothstep(0.55, 0.92, abs(hn.y)), ht = uMVT;
@@ -1126,6 +1129,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(c0, mc, uMVG);
 #endif
   }
+#endif
   if (uThG > 0.001) {                                                 // 3.03: thermal glasses: the land cold and dark, its shapes traced in dull red
     vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
     float tl = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), trim = smoothstep(0.5, 0.97, 1.0 - abs(dot(tn, tv / td))) * mix(1.0, 0.12, smoothstep(0.55, 0.93, abs(tn.y))), tedge = smoothstep(0.03, 0.12, fwidth(tl));
@@ -5177,6 +5181,7 @@ function geoWornTick(I) {
   HFOG.uHLG.value = GEO.hlK > .01 ? GEO.hlK : 0; skyMat.uniforms.uHell.value = GEO.hlK > .01 && !UNDER.on ? GEO.hlK : 0;
   if (GEO.hlK > .01) { scene.fog.color.lerp(C("#2a0603"), GEO.hlK); renderer.setClearColor(scene.fog.color); if (GEO.hlK > .5 && !UNDER.on) { stars.visible = false; GEO.hlHid = true; } } else if (GEO.hlHid) { if (!UNDER.on) stars.visible = true; GEO.hlHid = false; }
   hellEmbers(I, GEO.hlK);
+  jtFxTick(GEO.mvK > 0 || GEO.ghK > 0 || GEO.hlK > 0 || GEO.worn.has("mvglass") || GEO.worn.has("ghglass") || GEO.worn.has("hlglass"));
   HFOG.uMVT.value = performance.now() / 1000 % 1000; HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0;  bodySwapTick(GEO.mvK > .01 || GEO.thK > .01 || GEO.ghostK > .01); skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
@@ -5307,7 +5312,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; skyMat.uniforms.uThermal.value = 0; if (GEO.thHid && !UNDER.on) stars.visible = true; GEO.thHid = false; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; skyMat.uniforms.uThermal.value = 0; if (GEO.thHid && !UNDER.on) stars.visible = true; GEO.thHid = false; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; if (JTFX.on) { JTFX.on = false; jtFxSweep(); } HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear(); if (typeof boatClear === "function") boatClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -6197,6 +6202,10 @@ function neonBeasts(on) {
     A.root.traverse(o => { if (!o.isMesh || !o.material) return; const sw = m => on ? neonMat(m, cls) : m.userData.src || m;
       if (Array.isArray(o.material)) { if (o.material.some(m => !!m.userData.nb !== on)) o.material = o.material.map(sw); } else if (!!o.material.userData.nb !== on) o.material = sw(o.material); }); }
   if (!on) NEON_LIVE.clear(); }
+const JTFX = { on: false, t: 0 };                                       // 3.17: the neon / golden hour / hell looks are only built into the shaders while one is on (light everywhere else)
+function jtFxSweep() { scene.traverse(o => { const ms = o.material; if (!ms) return; for (const m of Array.isArray(ms) ? ms : [ms]) { if (!m || !m.isMaterial) continue; const has = !!(m.defines && "JT_FX" in m.defines);
+  if (has === JTFX.on) continue; if (JTFX.on) m.defines = Object.assign({}, m.defines, { JT_FX: "" }); else { m.defines = Object.assign({}, m.defines); delete m.defines.JT_FX; } m.needsUpdate = true; } }); }
+function jtFxTick(want) { if (want !== JTFX.on) { JTFX.on = want; JTFX.t = 0; } if (--JTFX.t <= 0) { JTFX.t = 60; jtFxSweep(); } }
 function bodySwapTick(on) { if (on) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } }   // (neon, thermal and the dream redraw the animals themselves)
 function neonSync() { for (const c of NEON_LIVE) { const m = c.userData.src; c.opacity = m.opacity; c.transparent = m.transparent; c.visible = m.visible; if (m.color) c.color.copy(m.color); if (m.emissive) c.emissive.copy(m.emissive); } }   // (fades and hit flashes still show)
 function hellEmbers(I, k) {                                            // 3.12: embers drifting up all round you (hell glasses)
@@ -7184,7 +7193,7 @@ function generate() {
     spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); if (gameMode === "hike" || gameMode === "hunt") enAnimInit(); clearLoot(); if (ARMED() && VR_ON) { resetArms(); gunSndLoad(); } startZone(); startCapture();
     if (GLOBE) { runGen(globePaintGen()); geoStart(GLOBE.sv); }
     if (gameMode !== "hike") { const W = weather, R2 = mulberry32(seed * 29 + 3), P0 = W.type === "fog" ? [6 + R2() * 6, 9, .05, 14, .55] : W.precip ? [10, 30, W.storm ? .012 : .008, 10, .3] : [0, 10, 0, 0, 0];   // 2.23: hunting's ground fog
-      HFOG.uHFog.value.set(P0[0], P0[1], P0[2], P0[3]); HFOG.uHFogB.value.set(R2() * 400, R2() * 400, P0[4]); }
+      HFOG.uHFog.value.set(P0[0], P0[1], P0[2] * .7, P0[3]); HFOG.uHFogB.value.set(R2() * 400, R2() * 400, P0[4]); }
     enAmbient(true);
     explored = new Uint8Array(64 * 64);
     { const it = enMapJob(Math.round(P.x / 25) * 25, Math.round(P.z / 25) * 25); while (!it.next().done); }
@@ -7768,7 +7777,7 @@ function generate() {
   { const W = weather, R = mulberry32(seed * 29 + 3);
     const P0 = gameMode === "hike" ? [0, 10, 0, 0, 0] : W.type === "fog" ? [water + 6 + R() * 6, 9, .05, 14, .55] : W.mist ? [water + 1.5, 5, .03, 6, .7]
              : W.blizzard ? [water + 10, 30, .012, 10, .3] : W.precip ? [water + 10, 30, W.storm ? .012 : .008, 10, .3] : [0, 10, 0, 0, 0];
-    HFOG.uHFog.value.set(P0[0], P0[1], P0[2], P0[3]); HFOG.uHFogB.value.set(R() * 400, R() * 400, P0[4]); }
+    HFOG.uHFog.value.set(P0[0], P0[1], P0[2] * .7, P0[3]); HFOG.uHFogB.value.set(R() * 400, R() * 400, P0[4]); }   // (3.17: fog banks a little thinner)
   spawn(rand);
   if (gameMode === "pvp" && !VR_ON) spawnSquad(); else clearSquad();          // VR PvP: real players, no bots
   perchTrees = allTrees.filter(t => t.kind !== "bare").map(t => ({ x: t.x, z: t.z, top: t.y + kinds[t.kind].vars[t.vi].h * t.s * t.sy * .78 })).filter(t => t.top - H(t.x, t.z) > 7);
@@ -7928,7 +7937,7 @@ function setLighting(lat, biome, topMix) {
   WATER_U.uSunDir.value.copy(sp.dir).multiplyScalar(sw).addScaledVector(moonDir, mw).normalize(); WATER_U.uSunCol.value.copy(sunCol).lerp(C("#c8d4f0"), mw);   // (2.85: blended too)
   WATER_U.uSunVis.value = lerp(U.moonVis.value * .7, smooth(-3, 2, el) * (1 - oc * .9), sw);
   if (fogBanks) fogBanks.material.uniforms.uCol.value.copy(scene.fog.color).multiplyScalar(1.05);
-  fogBase = (VR_ON ? 1200 : isTouch ? 550 : 950) * weather.fogMul; if (!ENDLESS || !ENDLESS.clock) scene.fog.far = fogBase;   /* 2.25: on endless land the frame's own fog (with its headset adjustments) is left alone — resetting it flashed the view */   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
+  fogBase = (VR_ON ? 1700 : isTouch ? 550 : 950) * weather.fogMul;   /* (3.17: in a headset the air is clearer: far mountains stand out) */ if (!ENDLESS || !ENDLESS.clock) scene.fog.far = fogBase;   /* 2.25: on endless land the frame's own fog (with its headset adjustments) is left alone — resetting it flashed the view */   /* 1.86: VR 1.2 km (was 1.5) */   // you can see further before the haze takes over
 }
 
 /* ---------------- The zone: green spore mist that creeps inward in stages ---------------- */
@@ -18037,7 +18046,7 @@ function loop(now) {
   const fogT = 0;                                       // walking into fog is now handled by the ground fog itself
   fogLocal += (fogT - fogLocal) * Math.min(1, dt * .5);
   if (scene.fog) {                                      // (2.49: the Workshop and Map Lab have no fog: this used to throw every frame and freeze the headset)
-  scene.fog.near = lerp(weather.type === "fog" ? 25 : 70, 3, fogLocal);
+  scene.fog.near = lerp(weather.type === "fog" ? 25 : vr.on ? 110 : 70, 3, fogLocal);
   const showerFog = weather.precip ? lerp(1.25, .85, weather.k) : 1;
   scene.fog.far = fogBase * lerp(1, .2, fogLocal) * showerFog * Math.min(3.6, 1 + (72 / camera.fov - 1) * .4) * (fly ? lerp(fly.far / Math.max(1, fogBase), 1, smooth(.84, .98, fly.t)) : 1) * (vr.on ? Math.min(4.5, 1 + (vr.zoomK - 1) * .4) : 1);   // shorter views in a headset   // long views in the flyover, haze hides the far edges
     if (vr.on && UW.under) { scene.fog.near = .5; scene.fog.far = 26; }   // murky under water
