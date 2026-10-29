@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.00";              // Just Trees 2.55
+const VERSION = "3.01";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8669,6 +8669,7 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (!A.hpMax) { killAnimal(A, dist); return; }
   const tbl = A.hunter || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
   if (A.ptero) A.aggro = A.killBy || "me";                     // (a shot pteranodon comes for the shooter)
+  if (A.giant && gun === "hunt") { A.hp = 0; killAnimal(A, dist); dinoCall(A, "die"); return; }   // 3.01: the giant pteranodon: one sniper shot
   A.hp -= hit; A.flinch = 1;                                  // it reacts with its body, not a cry every time
   if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
   dinoBar(A); hitTick(head);
@@ -9187,13 +9188,16 @@ function vrBanner(text, secs, prio = 2) {                  // a message in front
   if (VBAN.t > 0 && (VBAN.prio || 0) > prio) return;        // a pickup message never covers the Bigfoot one
   VBAN.prio = prio;
   if (!VBAN.m) {
-    const cv = document.createElement("canvas"); cv.width = 768; cv.height = 120;
-    VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.3, .047),   /* 2.35: smaller */ new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+    const cv = document.createElement("canvas"); cv.width = 768; cv.height = 300;
+    VBAN.m = new THREE.Mesh(new THREE.PlaneGeometry(.3, .1172),   /* 2.35: smaller (3.01: room for three lines) */ new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
     VBAN.m.renderOrder = 997; VBAN.m.frustumCulled = false; VBAN.m.userData.cv = cv; VBAN.m.visible = false; scene.add(VBAN.m);
   }
-  const g = VBAN.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 768, 120);
-  g.fillStyle = "rgba(8,12,10,.7)"; uiRound(g, 4, 4, 760, 112, 26); g.fill();
-  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffd65a"; g.font = "bold 46px sans-serif"; g.fillText(text, 384, 62);
+  const g = VBAN.m.userData.cv.getContext("2d"); g.clearRect(0, 0, 768, 300);
+  let fs = 46, lines = []; for (; fs >= 30; fs -= 4) { g.font = "bold " + fs + "px sans-serif"; lines = []; let cur = "";   // 3.01: wrapped onto up to three lines, so it's all there to read
+    for (const w of String(text).split(" ")) { const t = cur ? cur + " " + w : w; if (g.measureText(t).width > 720 && cur) { lines.push(cur); cur = w; } else cur = t; } if (cur) lines.push(cur); if (lines.length <= 3) break; }
+  const lh = fs * 1.22, bh = lines.length * lh + 40, y0 = 150 - bh / 2;
+  g.fillStyle = "rgba(8,12,10,.74)"; uiRound(g, 4, y0, 760, bh, 26); g.fill();
+  g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffd65a"; lines.forEach((l, i) => g.fillText(l, 384, y0 + 20 + lh * (i + .5)));
   VBAN.m.material.map.needsUpdate = true; VBAN.t = secs; VBAN.init = false;
 }
 function bannerTick(I, dt) {
@@ -10003,13 +10007,14 @@ function qaPick(A, cold, tropic) {                         // the model file and
 /* ---------------- 2.02: Pteranodons: huge (9 m wings), circling high over the dinosaur maps. Pass under one and it screeches and dives at
    you; if it reaches you, you black out like a raptor bite. Shoot one and it comes for you. Quaternius' Dragon reshaped (dev/dinos/exp_ptero.*):
    long beak, swept crest, stub tail, flat colours, a little less boxy. Its own flight, not the ground animals' walking. */
-const PT = { span: 11, alt: [45, 80], trig: 90, cruise: 14, dive: 27 };
+const PT = { span: 11, alt: [45, 80], trig: 50, cruise: 14, dive: 27 };   // (3.01: they come for you less: closer, rarer)
 function pteroAdd(x, z, y) {
   const root = new THREE.Group(), pitchG = new THREE.Group(), body = new THREE.Group(); root.add(pitchG); pitchG.add(body);
   const g = groundAt(x, z), A = { kind: "ptero", ptero: true, thru: true, wings: [], root, pitchG, body, head: body, legs: [], hit: [], x, z, y: y !== undefined ? y : Math.max(g, water) + PT.alt[0] + Math.random() * (PT.alt[1] - PT.alt[0]),
-    yaw: Math.random() * 6.283, speed: PT.cruise, pitch: 1.2, bank: 0, scale: 1, size: 1, dead: false, deadT: 0, vy: 0, state: "circle", cd: 15 + Math.random() * 25,
+    yaw: Math.random() * 6.283, speed: PT.cruise, pitch: 1.2, bank: 0, scale: 1, size: 1, dead: false, deadT: 0, vy: 0, state: "circle", cd: 45 + Math.random() * 45,
     cx: x, cz: z, rad: 60 + Math.random() * 80, ang: Math.random() * 6.283, w: (Math.random() < .5 ? 1 : -1) * (.12 + Math.random() * .06), alt: PT.alt[0] + Math.random() * (PT.alt[1] - PT.alt[0]), mode: "fly", look: 0 };
   A.hp = A.hpMax = DINO_HP.ptero; A.nid = ++MP.nidN; MP.byNid.set(A.nid, A); qdinoLoad("ptero");
+  if (Math.random() < .25) { A.giant = true; A.size = 4; A.alt += 40; A.y += 40; A.rad *= 1.6; }   // 3.01: the giant one: looks the same, four times the size (one sniper shot brings it down)
   if (animalGroup) animalGroup.add(root); beasts.push(A); return A;
 }
 function pteroSpawn() {
@@ -10020,9 +10025,9 @@ function pteroSpawn() {
 function pteroAttach(A) {
   const M = QDINO.models.ptero; if (!M) { qdinoLoad("ptero"); return false; }
   const Q = qdinoMake(M); if (!M.sph) M.sph = qdSpheres(M, Q);
-  const bb = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld), s = PT.span / Math.max(1, bb.max.x - bb.min.x), cy = (bb.min.y + bb.max.y) / 2;
+  const bb = M.geo.boundingBox.clone().applyMatrix4(Q.mesh.matrixWorld), s = PT.span * (A.size || 1) / Math.max(1, bb.max.x - bb.min.x), cy = (bb.min.y + bb.max.y) / 2;
   const wrap = new THREE.Group(); wrap.scale.setScalar(s); wrap.position.y = -cy * s; wrap.add(Q.top); A.body.add(wrap);   // turns about its middle
-  A.qhit = M.sph.map(([b, x, y, z, r, hd]) => [Q.mesh.skeleton.bones[b], x, y, z, r * s, hd]); A.bR = PT.span * .75 + 2;
+  A.qhit = M.sph.map(([b, x, y, z, r, hd]) => [Q.mesh.skeleton.bones[b], x, y, z, r * s, hd]); A.bR = PT.span * (A.size || 1) * .75 + 2;
   Q.wrap = wrap; A.qd = Q; return true;
 }
 function pteroTargets() {                                    // everyone it could go for: [x, y (head), z, id]
@@ -10030,8 +10035,9 @@ function pteroTargets() {                                    // everyone it coul
   if (MP.on && MP.host) for (const L of mpOpen()) if (L.R && L.R.cur && L.R.alive) out.push([L.R.head.x, L.R.head.y, L.R.head.z, L.id]);
   return out;
 }
+function pteroCalm() { for (const B of beasts) if (B.ptero && !B.dead) { B.aggro = null; if (B.state === "dive" || B.state === "screech") { B.state = "climb"; B.clT = 6; } B.cd = Math.max(B.cd || 0, 120 + Math.random() * 60); } }   // 3.01: after you're knocked out, they all leave you be for a while
 function pteroGot(A, id) {                                   // it reached you
-  dinoCall(A, "screech"); A.state = "climb"; A.clT = 6; A.cd = 40 + Math.random() * 30; A.aggro = null;
+  dinoCall(A, "screech"); A.state = "climb"; A.clT = 6; A.cd = 120 + Math.random() * 60; A.aggro = null; if (id === "me") pteroCalm();
   if (id === "me") { if (VR_ON) { UW.drown = .001; UW.red = 1; vrBanner("A pteranodon got you", 3.5, 1); } else uwRespawn(); }
   else { const L = MP.links.get(id); if (L) mpSendTo(L, { t: "got", text: "A pteranodon got you", call: "screech" }); }
 }
@@ -10048,7 +10054,7 @@ function pteroMind(A, dt) {
     if (Math.random() < dt * .03) dinoCall(A, "call");
     let pick = A.aggro ? tg(A.aggro) : null;                 // shot: it comes for the shooter
     if (!pick && A.cd <= 0) for (const t of T) if (Math.hypot(t[0] - A.x, t[2] - A.z) < PT.trig && A.y - t[1] > 15) { pick = t; break; }   // you passed under it
-    if (pick) { A.state = "screech"; A.tgt = pick[3]; A.stT = 1.1; A.dvT = 0; dinoCall(A, "screech"); }
+    if (pick) { A.state = "screech"; A.tgt = pick[3]; A.stT = 2.6; A.dvT = 0; dinoCall(A, "screech"); if (pick[3] === "me" && SND.ctx) { dinoSample(A, "screech", true, .05); dinoSample(A, "screech", true, .95); buzz("L", .4, 120); buzz("R", .4, 120); } }   // 3.01: a BIG caw first, twice, then it comes
   } else if (A.state === "screech") {                        // a beat to turn and scream
     const t = tg(A.tgt); if (!t) { A.state = "circle"; return; }
     turn(Math.atan2(t[0] - A.x, t[2] - A.z), 1.8); fly(PT.cruise * .8, A.y, 3);
@@ -10059,7 +10065,7 @@ function pteroMind(A, dt) {
     turn(Math.atan2(dx, dz), 2.2); fly(PT.dive, Math.max(t[1] - .3, d < 12 ? -1e9 : floor), Math.max(8, PT.dive * Math.abs(dy) / Math.max(1, d) * 1.4));
     A.doomT = 1; A.dvT += dt;
     if (d < 2.8) pteroGot(A, A.tgt);
-    else if (A.dvT > 10) { A.state = "climb"; A.clT = 5; A.cd = 25; A.aggro = null; }
+    else if (A.dvT > 10) { A.state = "climb"; A.clT = 5; A.cd = 60; A.aggro = null; }
   } else {                                                   // climbing away, back up to circle
     A.clT -= dt; fly(PT.cruise * 1.3, Math.max(groundAt(A.x, A.z), water) + A.alt, 7);
     if (A.clT <= 0) { A.state = "circle"; A.cx = A.x + Math.sin(A.yaw) * A.rad; A.cz = A.z + Math.cos(A.yaw) * A.rad; A.ang = Math.atan2(A.z - A.cz, A.x - A.cx); }
@@ -10599,6 +10605,7 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
   if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
 function uwRespawn() {                                      // wake up somewhere random on dry ground
+  pteroCalm();                                               // 3.01: the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // 2.73: Geocaching: anywhere on the planet
   let s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
   for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30) && (k > 300 || vbFarFrom(x, z, Math.min(120, HALF * .4)))) s = [x, z]; }   // (2.48: not next to a bot)

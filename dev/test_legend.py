@@ -26,7 +26,7 @@ async def main():
           out.unhittableBefore = D.animalRay(eye, dir, .5)[1] !== B;
           D.legendShot(eye, dir, 3200, 850); D.scatterBeasts(eye); step(30); out.noReactBefore = !B.bolting && !(B.boltIn > 0);
           // pick up the red sniper: the message shows, and he's there
-          D.dropUse({ type: 'gun', kind: 'hunt', tier: 5, x: 0, y: 0, z: 0, id: 'gRed' }); out.banner = D.VBAN.m && D.VBAN.t > 5 ? D.VBAN.m.userData.cv.getContext('2d').getImageData(384, 62, 1, 1).data[3] > 0 : false; out.ownRed = D.vrOwn.hunt === 5; step(3); out.seenAfter = B.root.visible && D.legendSeen();
+          D.dropUse({ type: 'gun', kind: 'hunt', tier: 5, x: 0, y: 0, z: 0, id: 'gRed' }); out.banner = D.VBAN.m && D.VBAN.t > 5 ? D.VBAN.m.userData.cv.getContext('2d').getImageData(384, 150, 1, 1).data[3] > 0 : false; out.ownRed = D.vrOwn.hunt === 5; step(3); out.seenAfter = B.root.visible && D.legendSeen();
           // a shot at another animal far off his line: nothing
           aim(); const off = new T.Vector3(dir.x * Math.cos(1.2) - dir.z * Math.sin(1.2), 0, dir.x * Math.sin(1.2) + dir.z * Math.cos(1.2)).normalize(); D.scatterBeasts(eye); D.legendShot(eye, off, 3200, 850); step(30); out.ignoresOtherShots = !B.bolting && !(B.boltIn > 0);
           // a near miss: 6 m to the side (from a clear spot, he may have wandered)
