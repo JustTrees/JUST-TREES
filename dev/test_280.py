@@ -46,6 +46,8 @@ async def main():
           hd(); L.n1k = L.n500 = false; L.R.head.set(P.x, P.y + 1.6, P.z - 1500); D.geoNetNear(); o.push(!!L.n1k, D.mpHear(L)[0]);
           L.R.head.set(P.x + 600, P.y + 1.6, P.z - 600); D.D_V = D.VBAN.t = 0; D.geoNetNear(); o.push(!!L.n1k, D.VBAN.t > 0, D.mpHear(L)[0]);
           L.R.head.set(P.x + 200, P.y + 1.6, P.z); D.geoNetNear(); o.push(!!L.n500, +D.mpHear(L)[0].toFixed(2)); return o; }""")
+        out["count"] = await A.evaluate("""() => { const cv = document.createElement('canvas'); cv.width = cv.height = 512; D.geoMapDraw(cv); const d = cv.getContext('2d').getImageData(8, 8, 300, 40).data; let y = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 170 && d[i + 2] < 140) y++; return y; }""")   # 3.02: the count of players on the map
         # A hands the host to B; C dials the code (A's) and is sent on to B
         bid = await B.evaluate("() => D.MP.peer.id")
         await A.evaluate(f"() => {{ D.geoNetGive('{bid}'); return 1; }}"); await run([A, B], 12)
@@ -59,7 +61,7 @@ async def main():
         await B.evaluate("() => { D.mpLeave2(); return 1; }"); await run([A, C], 60)
         out["after"] = [await A.evaluate("() => D.MP.host"), await C.evaluate("() => D.MP.host"), await A.evaluate("() => D.MP.on"), await C.evaluate("() => D.MP.on")]
         print(json.dumps(out))
-        ok = out["hostUp"] and out["listed"] and out["bIn"] and out["same"][0] == out["same"][3] and out["same"][1] == 12 and out["same"][4] == 30 and out["same"][2] == 0 and out["same"][6] \
+        ok = out["count"] > 30 and out["hostUp"] and out["listed"] and out["bIn"] and out["same"][0] == out["same"][3] and out["same"][1] == 12 and out["same"][4] == 30 and out["same"][2] == 0 and out["same"][6] \
              and out["near"][:2] == [False, 0] and out["near"][2] and out["near"][4] == 0 and out["near"][5] and out["near"][6] > .3 and out["seen"] is not None and out["seen"] < 1.5 and out["handed"] == [False, True] and out["cIn"] and out["cHost"] and out["cLinks"] >= 2 and sorted(out["after"][:2]) == [False, True] and out["after"][2] and out["after"][3]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)

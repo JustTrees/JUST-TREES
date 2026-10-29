@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.01";              // Just Trees 2.55
+const VERSION = "3.02";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4614,6 +4614,9 @@ function geoMapDraw(cv) {
   if (G.Nf) { const nx = W / 2 + G.Nf[0] * W * .44, ny = W / 2 + G.Nf[1] * W * .44; g.fillStyle = "#fff"; g.font = "700 " + Math.round(W / 16) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("N", nx, ny); }
   g.fillStyle = "rgba(8,12,10,.72)"; g.fillRect(8, W - W / 11 - 8, W * .62, W / 11); g.fillStyle = "#e8f0dc"; g.font = "700 " + Math.round(W / 22) + "px system-ui"; g.textAlign = "left"; g.textBaseline = "middle";
   g.fillText((span >= 1000 ? (span / 1000).toFixed(span < 10000 ? 1 : 0) + " km" : Math.round(span) + " m") + " across · stick to zoom", 16, W - W / 22 - 8);
+  if (geoNet()) { const n = mpOpen().length + 1; if (n > 1) {                // 3.02: online, how many of you are on this planet (just the count: nobody shows on the map)
+    const t = n + " players on this planet", fz = Math.round(W / 20); g.font = "700 " + fz + "px system-ui"; const tw = g.measureText(t).width;
+    g.fillStyle = "rgba(8,12,10,.72)"; g.fillRect(8, 8, tw + 24, fz * 1.6); g.fillStyle = "#ffd65a"; g.textAlign = "left"; g.textBaseline = "middle"; g.fillText(t, 20, 8 + fz * .8); } }
 }
 function geoGlobe() {
   if (GEO.globe) return GEO.globe;
