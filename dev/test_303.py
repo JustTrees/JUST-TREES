@@ -14,7 +14,7 @@ async def main():
           D.MP.code = '9999'; D.set.geoNet = true; D.generate(); D.state = 'play'; for (let i = 0; i < 20; i++) { D.endlessTick(1 / 30); D.geoTick(1 / 30); }
           const o = {}, T = D.THREE, P = D.P, I = { head: new T.Vector3(P.x, P.y + 1.6, P.z), headQ: new T.Quaternion(), hands: {} };
           o.rew = [D.geoRewardOf(52).item, D.geoRewardOf(53).item, D.geoRewardOf(51).item || null]; o.have = [D.GEO.items.has('bblock'), D.GEO.items.has('tglass')];
-          D.GEO.worn.add('tglass'); for (let i = 0; i < 30; i++) D.geoWornTick(I); o.therm = [+D.HFOG.uThG.value.toFixed(2), D.sky.visible];
+          D.GEO.worn.add('tglass'); for (let i = 0; i < 30; i++) D.geoWornTick(I); o.therm = [+D.HFOG.uThG.value.toFixed(2), D.sky.material.uniforms.uThermal.value < .9];
           D.GEO.worn.clear(); D.GEO.worn.add('bblock'); for (let i = 0; i < 30; i++) D.geoWornTick(I); o.bb = [+D.HFOG.uThG.value.toFixed(2), D.GEO.bbM.visible, D.sky.visible];
           D.GEO.worn.clear(); for (let i = 0; i < 30; i++) D.geoWornTick(I); o.off = [D.GEO.bbM.visible, D.HFOG.uThG.value];
           o.binos = D.binoFovs().slice(0, 3);
