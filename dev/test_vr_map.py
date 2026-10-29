@@ -33,8 +33,8 @@ async def main():
           for (let k = 0; k < 64 && !eye; k++) { const a = k * .39, e = new T.Vector3(B.x - 350 * Math.sin(a), B.y + 50 + (k >> 4) * 30, B.z - 350 * Math.cos(a)); const d = tgt.clone().sub(e).normalize(), h = D.castShotDbg(e, d, 3200); if (!h || !h.p || h.p.distanceTo(e) > e.distanceTo(tgt) - 4) eye = e; }
           o.clear = !!eye; if (!eye) return o;
           const look = () => { D.vr.head.copy(eye); const m = new T.Matrix4().lookAt(eye, new T.Vector3(B.x, B.y + 1.6, B.z), new T.Vector3(0, 1, 0)); D.vr.headQ.setFromRotationMatrix(m); D.P.x = eye.x; D.P.z = eye.z; };
-          D.vr.binos = true; D.vr.zoom = 2; look(); step(10); o.weakZoomNothing = !(B.noticeT > 0);
-          D.vr.zoom = 3; look(); B.mode = 'walk'; B.want = B.walk; B.speed = B.walk; step(2);
+          D.vr.binos = true; D.vr.zoom = 4; look(); step(10); o.weakZoomNothing = !(B.noticeT > 0);
+          D.vr.zoom = 5; look(); B.mode = 'walk'; B.want = B.walk; B.speed = B.walk; step(2);
           o.noticed = B.noticeT > 0; o.stopped = B.speed === 0;
           const y0 = B.yaw; step(20); const face = Math.atan2(eye.x - B.x, eye.z - B.z); o.facesYou = Math.abs(((face - B.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < .3; o.headUp = +B.head.rotation.x.toFixed(2);
           o.pose = null; if (SHOTS_ON) { const c = D.camera; const ux = (eye.x - B.x), uz = (eye.z - B.z), ul = Math.hypot(ux, uz); c.position.set(B.x + ux / ul * 3.2 - uz / ul * 3.2, B.y + 1.4, B.z + uz / ul * 3.2 + ux / ul * 3.2); c.fov = 45; c.updateProjectionMatrix(); c.lookAt(B.x, B.y + 1.5, B.z); c.updateMatrixWorld(); D.renderer.render(D.scene, c); o.pose = D.renderer.domElement.toDataURL('image/jpeg', .9); }

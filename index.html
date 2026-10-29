@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.02";              // Just Trees 2.55
+const VERSION = "3.03";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -952,7 +952,7 @@ uniform float fogDensity;
 #else
 uniform float fogNear; uniform float fogFar;
 #endif
-uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream;   // our own camera position: three.js only sends cameraPosition to some materials
+uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG;   // our own camera position: three.js only sends cameraPosition to some materials
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -975,6 +975,12 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, uHFogCol, clamp(amt, 0.0, 0.97));
   }
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+  if (uThG > 0.001) {                                                 // 3.03: thermal glasses: the land cold and dark, its shapes traced in dull red
+    vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+    float tl = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), trim = smoothstep(0.5, 0.97, 1.0 - abs(dot(tn, tv / td))) * mix(1.0, 0.12, smoothstep(0.55, 0.93, abs(tn.y))), tedge = smoothstep(0.03, 0.12, fwidth(tl));
+    vec3 tc = vec3(0.03) + tl * 0.22 + vec3(0.95, 0.22, 0.08) * (trim * 0.45 + tedge * 0.4) * (1.0 - smoothstep(300.0, 1500.0, td));
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, tc, uThG);
+  }
   if (uDream.x > 0.001) {                                             // 2.88: the dream sight: dark, everything traced in light
     vec3 dv = vFogW - uCamP; float dd = max(length(dv), 0.001); float t = uDream.y;
     vec3 dn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -996,9 +1002,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(dc, vec3(0.045, 0.028, 0.09) + lc * 0.035, mist), uDream.x);
   }
 #endif`;
-const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() } };
-const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; };   // 2.88: materials that skip the ground fog still see the dream
-const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; };
+const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 } };
+const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; };   // 2.88: materials that skip the ground fog still see the dream
+const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
 const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
@@ -4661,7 +4667,8 @@ const GI_LIST = [
   ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
-  ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0]
+  ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
+  ["bblock", "Blue blockers", "Warm amber lenses: no glare in the sun or on snow (take them out to put them on or off)", 1], ["tglass", "Thermal glasses", "The world goes dark and anything warm glows (take them out to put them on or off)", 1]
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
@@ -4669,6 +4676,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
+  if (n === 52) return { item: "bblock" }; if (n === 56) return { item: "tglass" };   // 3.03: the glasses
   return { refill: true, last: n >= GEO_N };
 }
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
@@ -4728,6 +4736,9 @@ function giModel(k) {                                         // (about hand siz
     case "headlamp": P(giCyl(.065, .065, .02, 18, 1), 0x222222, 0, 0, 0); P(giBox(.04, .03, .02), 0x3a3a3a, 0, 0, -.07); P(giCyl(.012, .012, .006, 12), 0xfff6c0, 0, 0, -.081, Math.PI / 2); break;
     case "thermos": P(giCyl(.03, .03, .2, 14), 0x2a6a4a, 0, 0, 0); P(giCyl(.032, .032, .04, 14), 0x999999, 0, .12, 0); break;
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
+    case "bblock": case "tglass": { const fr = k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "tglass" ? 0xd0301a : 0xffa830;   // 3.03
+      for (const sx of [-1, 1]) { P(giCyl(.026, .026, .006, 16), fr, sx * .034, 0, 0, Math.PI / 2); const L = P(giCyl(.022, .022, .007, 16), ln, sx * .034, 0, .001, Math.PI / 2); L.material = new THREE.MeshBasicMaterial({ color: ln }); P(giBox(.004, .006, .1), fr, sx * .062, .005, -.05); }
+      P(giBox(.02, .006, .006), fr, 0, .008, 0); break; }
     case "nvg": for (const s of [-1, 1]) P(giCyl(.02, .024, .07, 12), 0x23262a, s * .03, 0, -.03, Math.PI / 2); P(giBox(.1, .03, .04), 0x3a3a3a, 0, 0, 0); P(giCyl(.016, .016, .003, 12), 0x50ff70, .03, 0, -.067, Math.PI / 2); P(giCyl(.016, .016, .003, 12), 0x50ff70, -.03, 0, -.067, Math.PI / 2); break;
     case "satphone": P(giBox(.06, .13, .03), 0x2a2a2a, 0, 0, 0); P(giBox(.045, .05, .002), 0x7ad0ff, 0, .025, .016); P(giCyl(.008, .008, .08, 6), 0x111111, .02, .1, 0); break;
     case "tscope": P(giCyl(.022, .022, .26, 12), 0x23262a, 0, 0, 0, Math.PI / 2); P(giCyl(.03, .024, .05, 12), 0x23262a, 0, 0, -.14, Math.PI / 2); P(giCyl(.026, .026, .003, 12), 0xff6a2a, 0, 0, -.166, Math.PI / 2); P(giBox(.03, .03, .05), 0x8a2a20, 0, .03, .02); break;
@@ -4987,6 +4998,14 @@ function geoWornTick(I) {
   const nv = GEO.worn.has("nvg"); GEO.nvK += ((nv ? 1 : 0) - GEO.nvK) * .2;
   if (!GEO.nvM) { GEO.nvM = new THREE.Mesh(new THREE.SphereGeometry(.25, 16, 10), new THREE.MeshBasicMaterial({ color: 0x66ff77, side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true })); GEO.nvM.renderOrder = 1000; GEO.nvM.frustumCulled = false; scene.add(GEO.nvM); }
   GEO.nvM.visible = GEO.nvK > .02; GEO.nvM.position.copy(I.head);
+  // 3.03: blue blockers (an amber tint) and thermal glasses (the world dark, outlines in red, anything warm glowing)
+  const bb = GEO.worn.has("bblock"); GEO.bbK = (GEO.bbK || 0) + ((bb ? 1 : 0) - (GEO.bbK || 0)) * .2;
+  if (!GEO.bbM) { GEO.bbM = new THREE.Mesh(new THREE.SphereGeometry(.245, 16, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true })); GEO.bbM.renderOrder = 1000; GEO.bbM.frustumCulled = false; scene.add(GEO.bbM); }
+  GEO.bbM.visible = GEO.bbK > .02; GEO.bbM.position.copy(I.head); GEO.bbM.material.color.setRGB(1, 1 - .24 * GEO.bbK, 1 - .62 * GEO.bbK);
+  const th = GEO.worn.has("tglass") && !GEO.sleep; GEO.thK = (GEO.thK || 0) + ((th ? 1 : 0) - (GEO.thK || 0)) * .2; HFOG.uThG.value = GEO.thK > .01 ? GEO.thK : 0;
+  if (GEO.thK > .01) { scene.fog.color.lerp(C("#141414"), GEO.thK); renderer.setClearColor(scene.fog.color); if (!UNDER.on) sky.visible = GEO.thK < .5; }
+  else if (GEO.thWas && !UNDER.on) sky.visible = true;
+  GEO.thWas = GEO.thK > .01; if (!GEO.sleep) dreamSouls(I, GEO.thK > .3);
 }
 // speed, gliding
 function geoSpeedMul() {
@@ -5074,7 +5093,7 @@ function geoPackTick(I, main, off, dt) {
     const L = geoPackItems();
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
-    if (k === "nvg") { if (GEO.worn.has(k)) GEO.worn.delete(k); else GEO.worn.add(k); vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
+    if (k === "nvg" || k === "bblock" || k === "tglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (3.03: one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
 }
@@ -5107,12 +5126,13 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
   ugTick(I, dt); if (!UNDER.on) ugPortalTick(I, dt);              // 2.90: the Underworld
   if (UNDER.on) { geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWornTick(I); geoShowTick(dt); return; }
   if (geoNet()) hamTick(I, main, off, dt); sleepTick(I, main, dt);   // 2.86: the hammock, and dreaming
-  if (GEO.sleep) { geoFireTick(dt); geoSprayTick(dt); geoLeafTick(dt); return; }
+  if (GEO.sleep) { HFOG.uThG.value = 0; geoFireTick(dt); geoSprayTick(dt); geoLeafTick(dt); return; }
   if (JET.ride) jetHandsTick(I, main); else if (jetOn()) jetAimTick(I, main, off);   // 2.75: the jet skis
   geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
+  HFOG.uThG.value = 0; GEO.thK = GEO.bbK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -9916,7 +9936,7 @@ const vr = { on: false, base: null, ox: 0, oy: 0, oz: 0, yaw: 0, stand: 1.6, gun
   prev: {}, mark: null, markT: 0, wristT: 0, avatar: null, gun: null, gunKind: "", head: new THREE.Vector3(0, 1.6, 0), headQ: new THREE.Quaternion(), gp: new THREE.Vector3(), gq: new THREE.Quaternion(),
   readInputs: null, crouchK: 0, moveAmt: 0, lastP: [0, 0], zoomK: 1, zoomOpen: 1, zoomWas: false, binoQ: new THREE.Quaternion(), headLocalY: 1.6, hOff: 0, hCal: false };
 try { const hs = parseFloat(localStorage.getItem("jt-height-off")); if (isFinite(hs)) vr.hOff = hs; } catch (_) {}
-const VR_SCOPE_FOV = [18, 9, 5, 3, 2], VR_BINO_FOV = [11, 7, 4.6, 3], VR_BINO_FOV2 = [11, 7, 4.6, 3, 1.8];
+const VR_SCOPE_FOV = [18, 9, 5, 3, 2], VR_BINO_FOV = [30, 18, 11, 7, 4.6, 3], VR_BINO_FOV2 = [30, 18, 11, 7, 4.6, 3, 1.8];   // (3.03: they start much wider: about 2.7× and 4.5× before the old 7.5×)
 const binoFovs = () => geoHas("tbinos") ? VR_BINO_FOV2 : VR_BINO_FOV;   // 2.72: the binocular upgrade (Geocaching): one more step   // VR sniper ≈ 4.6×, 9×, 17×, 28×, 42×; binoculars ≈ 7.5×, 12×, 18×, 28× (hunting is a long-shot game)
 const scopeFovs = () => vr.gunKind !== "hunt" ? ZOOM_FOV.pvp.slice(1) : lootMode() ? VR_SCOPE_FOV.slice(0, Math.max(1, Math.min(5, vr.own.hunt || 1))) : VR_SCOPE_FOV;   // better stars, more zoom steps (red = all 5)
 const XRV = { ok: false };
