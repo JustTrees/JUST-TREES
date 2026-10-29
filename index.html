@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.09";              // Just Trees 2.55
+const VERSION = "3.10";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -993,6 +993,7 @@ float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
 #endif`;
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  vec3 preFogC = gl_FragColor.rgb;
 #ifdef FOG_EXP2
   float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);
 #else
@@ -1015,6 +1016,36 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
   }
   if (uMVG > 0.001) {                                                 // 3.07: neon shades: a whole new look: the world gone dark, everything drawn in glowing neon
+#ifdef NEON_BODY
+    {                                                                 // 3.10: animals, dinosaurs and players: glowing neon versions of themselves
+      vec3 c0 = gl_FragColor.rgb, cs = preFogC; float mx = max(max(cs.r, cs.g), cs.b), mn0 = min(min(cs.r, cs.g), cs.b), ch = (mx - mn0) / max(mx, 0.02);
+      vec3 hue = (cs - mn0) / max(mx - mn0, 0.001);                                                    // its own colour, as pure as it gets
+      vec3 nc = mix(vec3(0.35, 0.78, 1.0), hue * 0.92 + 0.08, smoothstep(0.06, 0.25, ch)); nc /= max(max(nc.r, nc.g), max(nc.b, 0.001));   // players: their own uniform and hair colours (greys and whites icy blue)
+      float inner = 0.09;
+#if NEON_BODY >= 3
+      inner = 0.07;                                                                                    // animals: one neon colour for each kind of creature, their markings drawn in it
+#if NEON_BODY == 3
+      nc = vec3(0.1, 0.9, 1.0);                                                                        // grazers and small game: electric blue
+#elif NEON_BODY == 4
+      nc = vec3(1.0, 0.12, 0.55);                                                                      // predators: hot pink
+#elif NEON_BODY == 5
+      nc = vec3(0.72, 0.35, 1.0);                                                                      // birds: violet
+#elif NEON_BODY == 6
+      nc = vec3(0.35, 1.0, 0.25);                                                                      // plant-eating dinosaurs: acid green
+#else
+      nc = vec3(1.0, 0.42, 0.08);                                                                      // hunting dinosaurs: blazing orange
+#endif
+#endif
+      vec3 bv = vFogW - uCamP; float bd = max(length(bv), 0.001); vec3 bn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+      float brim = smoothstep(0.3, 0.95, 1.0 - abs(dot(bn, bv / bd))), bl = dot(cs, vec3(0.3, 0.59, 0.11)), bedge = smoothstep(0.03, 0.14, fwidth(bl));
+      float pulse = 0.88 + 0.12 * sin(uMVT * 2.4 + vFogW.y * 1.3);
+      vec3 bc = nc * (inner + 2.0 * inner * smoothstep(0.08, 0.6, bl)) + nc * brim * 1.35 * pulse + nc * bedge * 0.6;
+#if NEON_BODY == 2
+      bc = vec3(0.07, 0.02, 0.11) + vec3(0.25, 0.08, 0.2) * smoothstep(0.05, 0.6, bl) + vec3(1.0, 0.4, 0.65) * brim * 0.55;   // skin: dark, a warm pink edge (the uniform and hair glow)
+#endif
+      gl_FragColor.rgb = mix(c0, bc, uMVG);
+    }
+#else
     vec3 mv = vFogW - uCamP; float md = max(length(mv), 0.001); vec3 mn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
     vec3 c0 = gl_FragColor.rgb; float ml = dot(c0, vec3(0.3, 0.59, 0.11)), mg = clamp((c0.g - max(c0.r, c0.b)) * 4.0, 0.0, 1.0);
     float mfl = smoothstep(0.6, 0.93, abs(mn.y)), far = 1.0 - smoothstep(500.0, 2800.0, md);
@@ -1037,6 +1068,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     float grid = (max(gl2.x, gl2.y) + gg) * mfl * (1.0 - smoothstep(250.0, 1500.0, md));
     mc += vec3(1.0, 0.12, 0.78) * grid * 1.1;
     gl_FragColor.rgb = mix(c0, mc, uMVG);
+#endif
   }
   if (uThG > 0.001) {                                                 // 3.03: thermal glasses: the land cold and dark, its shapes traced in dull red
     vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -5071,7 +5103,7 @@ function geoWornTick(I) {
   else if (GEO.thWas && !UNDER.on) sky.visible = true;
   GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, GEO.thK > .3, true);   /* (3.06: the dream glasses keep their own souls) */
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.06: neon shades (the sky follows) */
-  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; HFOG.uMVT.value = performance.now() / 1000 % 1000; skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
+  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; HFOG.uMVT.value = performance.now() / 1000 % 1000; if (GEO.mvK > .01) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
 }
@@ -5200,7 +5232,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; skyMat.uniforms.uNeon.value = 0; if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -5859,6 +5891,15 @@ function dreamBeacon(k) {                                          // 2.90: drea
   const m = GEO.beacon; m.visible = !!on; if (!on) return; const o = [0, 0]; glFromSphere(c.p, o); m.position.set(o[0], Math.max(groundAt(o[0], o[1]), water) + 250, o[1]); const sc = Math.max(1, Math.hypot(o[0] - camera.position.x, o[1] - camera.position.z) / 160); m.scale.set(sc, 1, sc);   // (wider far away, so it's always there to see)
   m.material.uniforms.uT.value = performance.now() / 1000; m.material.uniforms.uK.value = (k - .3) / .7;
 }
+const NEON_MATS = new WeakMap(), NEON_LIVE = new Set();             // 3.10: animals and dinosaurs get their own neon look: a copy of each material while the shades are on
+function neonMat(m, cls) { if (!m || m.userData.nb) return m; let byC = NEON_MATS.get(m); if (!byC) NEON_MATS.set(m, byC = {}); let c = byC[cls]; if (!c) { c = m.clone(); c.onBeforeCompile = m.onBeforeCompile; if (m.customProgramCacheKey !== THREE.Material.prototype.customProgramCacheKey) c.customProgramCacheKey = m.customProgramCacheKey; c.defines = Object.assign({}, m.defines, { NEON_BODY: cls }); c.userData.nb = true; c.userData.src = m; byC[cls] = c; } NEON_LIVE.add(c); return c; }
+const neonClass = A => DINO_HP[A.kind] ? (A.kind === "trex" || A.kind === "raptor" || A.kind === "ptero" ? 7 : 6) : PRED_NAME[A.kind] ? 4 : FLY[A.kind] ? 5 : 3;
+function neonBeasts(on) {
+  for (const A of beasts) { if (!A.root) continue; const cls = neonClass(A);
+    A.root.traverse(o => { if (!o.isMesh || !o.material) return; const sw = m => on ? neonMat(m, cls) : m.userData.src || m;
+      if (Array.isArray(o.material)) { if (o.material.some(m => !!m.userData.nb !== on)) o.material = o.material.map(sw); } else if (!!o.material.userData.nb !== on) o.material = sw(o.material); }); }
+  if (!on) NEON_LIVE.clear(); }
+function neonSync() { for (const c of NEON_LIVE) { const m = c.userData.src; c.opacity = m.opacity; c.transparent = m.transparent; c.visible = m.visible; if (m.color) c.color.copy(m.color); if (m.emissive) c.emissive.copy(m.emissive); } }   // (fades and hit flashes still show)
 const WISP_N = 14;
 function dreamWisp() {                                             // one ribbon of coloured mist along a lazy curve
   const pts = [], R = () => (Math.random() - .5); let p = new THREE.Vector3(), d = new THREE.Vector3(R(), R() * .3, R()).normalize();
@@ -16345,13 +16386,13 @@ const CH_CAMO_MAP = `#include <map_fragment>
   else if (!metal && uLeatherOn > .5) diffuseColor.rgb = uLeather * clamp(v / .5, .5, 1.3);
 }`;
 function charMat(kind, tex, lk, uni) {
-  const m = new THREE.MeshLambertMaterial({ map: charTex(tex), side: THREE.DoubleSide });
+  const m = new THREE.MeshLambertMaterial({ map: charTex(tex), side: THREE.DoubleSide }); m.defines = { NEON_BODY: kind === "skin" ? 2 : 1 };   // 3.10: under the neon shades the uniform and hair glow
   if (kind === "skin") m.color.setRGB(...CH_SKIN[lk.k]);
   else if (kind === "hair") m.color.set(CH_HAIRC[lk.c]).multiplyScalar(1.9);
   else if (kind === "shoe") m.color.setRGB(.32, .29, .25);
   else if (kind === "cloth" && lk.o === 0) {                   // the Soldier: your uniform's camo
     const C = (CH_CAMO[uni] || CH_CAMO.green).map(c => new THREE.Color(c)), lea = new THREE.Color(0x2e2a22);
-    m.onBeforeCompile = sh => { sh.uniforms.uC = { value: C }; sh.uniforms.uLeather = { value: lea }; sh.uniforms.uLeatherOn = { value: 1 };
+    m.onBeforeCompile = sh => { addHF(sh); sh.uniforms.uC = { value: C }; sh.uniforms.uLeather = { value: lea }; sh.uniforms.uLeatherOn = { value: 1 };
       sh.vertexShader = sh.vertexShader.replace("#include <common>", CH_CAMO_VS).replace("#include <begin_vertex>", "#include <begin_vertex>\nvOP = position;");
       sh.fragmentShader = sh.fragmentShader.replace("#include <common>", CH_CAMO_FS).replace("#include <map_fragment>", CH_CAMO_MAP); };
     m.customProgramCacheKey = () => "chcamo";
