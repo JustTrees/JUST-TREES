@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.07";              // Just Trees 2.55
+const VERSION = "3.08";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -848,13 +848,19 @@ const skyMat = new THREE.ShaderMaterial({
         float r4 = exp(-pow((y - 0.75 - 0.05 * sin(az * 4.0 + time * 0.04 + 2.5)) / 0.006, 2.0));
         n += vec3(1.0, 0.12, 0.75) * r1 * 0.9 + vec3(0.08, 0.85, 1.0) * r2 * 0.8 + vec3(0.65, 0.2, 1.0) * r3 * 0.7 + vec3(0.08, 0.85, 1.0) * r4 * 0.5;
         n += vec3(1.0, 0.2, 0.6) * exp(-abs(y) * 22.0) * 0.55;                                   // the horizon glows
-        vec3 sq = floor(d * 320.0); float sh = fract(sin(dot(sq, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-        n += vec3(0.85, 0.85, 1.0) * step(0.9982, sh) * smoothstep(0.08, 0.3, y) * (0.6 + 0.4 * sin(time * 2.0 + sh * 60.0));
+        vec3 sq = floor(d * 320.0); float sh = fract(sin(dot(sq, vec3(12.9898, 78.233, 37.719))) * 43758.5453), sk = fract(sh * 913.7);   // 3.08: pink and blue stars, many more at night
+        vec3 stc = sk < 0.5 ? vec3(1.0, 0.25, 0.8) : vec3(0.2, 0.8, 1.0);
+        n += stc * step(mix(0.9982, 0.993, uNight), sh) * smoothstep(0.05, 0.25, y) * (0.7 + 0.5 * uNight) * (0.6 + 0.4 * sin(time * 2.0 + sh * 60.0));
+        vec3 mo = normalize(moonDir); float ma = acos(clamp(dot(d, mo), -1.0, 1.0)), MR = 0.075;                 // the moon: neon blue, a glowing ring
+        float mvis = moonVis * smoothstep(-0.01, 0.02, mo.y);
+        n = mix(n, vec3(0.04, 0.38, 0.9) * (0.75 + 0.25 * fbm(vec2(d.x, d.z) * 60.0, 3)), smoothstep(MR, MR - 0.003, ma) * mvis);
+        n += vec3(0.15, 0.85, 1.0) * (exp(-pow((ma - MR) / 0.004, 2.0)) * 1.2 + exp(-max(ma - MR, 0.0) / 0.05) * 0.35) * mvis;
         vec3 s = normalize(uNeonSun); float sa = acos(clamp(dot(d, s), -1.0, 1.0)), SR = 0.17, v = (y - s.y) / SR;   // about four times the size of the sun
         float band = fract(v * 6.5), gap = clamp((0.25 - v) * 0.38, 0.0, 0.62), cut = v < 0.25 ? step(band, gap) : 0.0;
-        float disc = smoothstep(SR, SR - 0.004, sa) * (1.0 - cut) * smoothstep(-0.005, 0.01, y);
+        float sunK = smoothstep(-0.12, 0.0, normalize(sunDir).y);   /* (3.08: the big sun sets at night; the moon takes over) */
+        float disc = smoothstep(SR, SR - 0.004, sa) * (1.0 - cut) * smoothstep(-0.005, 0.01, y) * sunK;
         vec3 sc = mix(vec3(0.95, 0.22, 0.12), vec3(0.88, 0.66, 0.08), smoothstep(-1.0, 0.95, v));    // dark yellow over orange
-        n += vec3(1.0, 0.3, 0.35) * exp(-max(sa - SR, 0.0) / 0.07) * 0.5 * smoothstep(-0.05, 0.02, y);
+        n += vec3(1.0, 0.3, 0.35) * exp(-max(sa - SR, 0.0) / 0.07) * 0.5 * smoothstep(-0.05, 0.02, y) * sunK;
         n = mix(n, sc, disc);
         c = mix(c, n, uNeon);
       }
@@ -1011,7 +1017,7 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     vec3 neon = mix(vec3(1.0, 0.1, 0.72), vec3(0.08, 0.88, 1.0), hy);
     mc += neon * (mrim * 1.0 + medge * 0.75 * (1.0 - mfl * 0.6)) * far;
     vec2 gd = abs(fract(vFogW.xz / 8.0 - 0.5) - 0.5) * 8.0, gf = fwidth(vFogW.xz) * 1.5;              // a thick neon grid over all the flat ground and water
-    float lw = 0.11 + md * 0.0018; vec2 gl2 = 1.0 - smoothstep(vec2(lw), vec2(lw) + gf, gd);
+    float lw = 0.06 + md * 0.0012; vec2 gl2 = 1.0 - smoothstep(vec2(lw), vec2(lw) + gf, gd);
     float gg = exp(-min(gd.x, gd.y) / (0.35 + md * 0.004)) * 0.3;
     float grid = (max(gl2.x, gl2.y) + gg) * mfl * (1.0 - smoothstep(250.0, 1500.0, md));
     mc += vec3(1.0, 0.12, 0.78) * grid * 1.1;
@@ -5050,7 +5056,7 @@ function geoWornTick(I) {
   else if (GEO.thWas && !UNDER.on) sky.visible = true;
   GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, GEO.thK > .3, true);   /* (3.06: the dream glasses keep their own souls) */
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.06: neon shades (the sky follows) */
-  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0;
+  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
 }
@@ -5179,7 +5185,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; skyMat.uniforms.uNeon.value = 0; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; skyMat.uniforms.uNeon.value = 0; if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
