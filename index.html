@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.22";              // Just Trees
+const VERSION = "3.23";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4343,7 +4343,7 @@ function globeStart(sv) {
 function globeReanchor(Fr) {                                   // lay the flat patch again where you stand (lined up with the old one at your feet) (Fr: the host's layout, a team on the planet)
   const G = GLOBE, E = ENDLESS, F = geoFocus(), A = Fr ? null : glAxes(F.x, F.z), keep = [];
   const hold = o => keep.push([o, glToSphere(o.x, o.z, [0, 0, 0])]);   // (what isn't at the centre is carried over exactly: your sleeping body, the animals)
-  if (F !== P || Fr) hold(P); for (const B of beasts) if (B.x !== undefined && !B.ptero) hold(B); for (const S of squad) if (S.x !== undefined) hold(S); for (const b of VB.list) if (b && b.x !== undefined) hold(b);   // (and the bots)
+  if (F !== P || Fr) hold(P); for (const B of beasts) if (B.x !== undefined && !B.ptero && !B.ug) hold(B); for (const S of squad) if (S.x !== undefined) hold(S); for (const b of VB.list) if (b && b.x !== undefined) hold(b);   // (and the bots)
   if (Fr) { G.c = Fr.c.slice(); G.e = Fr.e.slice(); G.n = Fr.n.slice(); G.ox = Fr.ox; G.oz = Fr.oz; } else { G.c = A.p; G.e = A.ax; G.n = A.az; G.ox = F.x; G.oz = F.z; } G.reN = (G.reN || 0) + 1;
   { const out = [0, 0]; for (const [o, sp] of keep) { glFromSphere(sp, out); o.x = out[0]; o.z = out[1]; } }
   if (GEO.sleep) { GEO.sleep.body.x = P.x; GEO.sleep.body.z = P.z; } hamRestore();
@@ -5583,7 +5583,7 @@ function gunLabPanel() {
    left stick flies you where you look, the right stick up and down, up to 1.2 km from your body. Anything coming for your body (a
    predator, an animal right there, a player within 60 m, a hit) warns you and snaps you back awake. B wakes you any time. Your body stays
    in the hammock for everyone else to see. ---- */
-const HAMMOCK = { min: 1.2, max: 14, tether: 1e9, speed: 25, climb: 14, near: 60, top: 250, vmax: 55, cmax: 28 };   // (the whole planet; up to 250 m above the ground, and never faster than the land can grow in)
+const HAMMOCK = { min: 1.2, max: 14, tether: 1e9, speed: 55, climb: 26, near: 60, top: 250, vmax: 85, cmax: 50 };   // (the whole planet; up to 250 m above the ground, and never faster than the land can grow in)
 const giNm = k => geoNet() && k === "tent" ? "Hammock" : GI[k].name, giDesc = k => geoNet() && k === "tent" ? "Touch a tree trunk, then another 3–5 m away, to hang it; sleep in it at night" : GI[k].desc;
 const sleepNight = () => hourNow >= 21 || hourNow < 5;
 function hamTrunk(p) {                                             // the tree trunk your hand is at (from the trees' footprints)
@@ -5741,7 +5741,7 @@ function sleepBody() {                                                // your bo
 function sleepMove(dt) {                                             // (instead of walking, while you're out of your body)
   const S = GEO.sleep; if (!S || !S.view || S.st !== "ghost" && !(S.st === "warn" && S.pre === "ghost")) return;
   const hl0 = vr.headLocalY || 1.6, up0 = S.view.y + hl0 - Math.max(groundAt(S.view.x, S.view.z), water);
-  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = Math.min(HAMMOCK.vmax, HAMMOCK.speed + Math.max(0, up0) * .15);   // (high up you fly much faster)
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw), sp = Math.min(HAMMOCK.vmax, HAMMOCK.speed + Math.max(0, up0) * .25);   // (high up you fly much faster)
   S.view.x += (fx * input.jy + rx * input.jx) * sp * dt; S.view.z += (fz * input.jy + rz * input.jx) * sp * dt;
   const m = vr.main; if (m && Math.abs(m.sy) > .2) S.view.y += -m.sy * Math.min(HAMMOCK.cmax, HAMMOCK.climb + Math.max(0, up0) * .1) * dt;
   const dx = S.view.x - S.body.x, dz = S.view.z - S.body.z, d = Math.hypot(dx, dz);   // tied to your body
@@ -6301,7 +6301,7 @@ function ugEnter(idx, at) {
     if (world) world.visible = false; sky.visible = false; stars.visible = false; HFOG.uHFog.value.z = 0; if (GEO.globe) GEO.globe.visible = false; }
   const L = UNDER.L[idx] || (UNDER.L[idx] = ugBuild(idx));
   for (const o of UNDER.L) if (o) o.group.visible = o === L; if (L.emb) L.emb.visible = true;
-  UNDER.idx = idx; UNDER.cur = L;
+  UNDER.idx = idx; UNDER.cur = L; ugBeastsEnter(L);
   const A = L.arrive[at] || L.arrive.top || Object.values(L.arrive)[0];
   P.x = UG_X + A.x; P.z = UG_Z + A.z; P.y = L.Y + ugFloor(L, A.x, A.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false;
   const d = A.yaw - P.yaw; vr.yaw += d; P.yaw += d; vr.placeAt = true; vr.goodX = undefined;
@@ -6310,7 +6310,7 @@ function ugEnter(idx, at) {
   scene.fog.color.setHex(L.fogC); renderer.setClearColor(L.fogC); ugSound(L.name);
 }
 function ugLeave(to) {
-  if (!UNDER.on) return; UNDER.on = false; UNDER.cur = null; UNDER.idx = 0; UNDER.go = null;
+  if (!UNDER.on) return; UNDER.on = false; UNDER.cur = null; UNDER.idx = 0; UNDER.go = null; ugBeastsClear();
   for (const o of UNDER.L) if (o) o.group.visible = false;
   if (world) world.visible = true; sky.visible = true; stars.visible = true; const K = UNDER.keep; if (K) { HFOG.uHFog.value.z = K.hf; hemi.intensity = K.hi; hemi.color.copy(K.hc); hemi.groundColor.copy(K.hg); sunL.intensity = K.si; }
   if (ENDLESS) ENDLESS.lightT = 0; ugSound(null); if (UNDER.blk) UNDER.blk.visible = false;
@@ -6339,6 +6339,140 @@ function ugTick(I, dt) {                                      // each frame in T
       else D.open += (D.want - D.open) * Math.min(1, dt * 5); if (D.hinge) D.hinge.rotation.y = D.open * 1.5;
       if (D.lamp) D.lamp.material.color.setRGB(Math.sin(t * 6) > 0 ? 2.2 : .5, .1, .05); }
     if (!UNDER.go && d < .75 && Math.abs(P.y - (L.Y + D.y)) < 3 && (D.haze || D.open > .6)) ugGo(D.to[0], D.to[1]);
+  }
+}
+/* ---- underground beasts. In the Backrooms and in the bunker a raptor that's there to frighten you, not to hunt you: nothing for the
+   first minute or so, then it runs the halls, stops to stare at you and screeches, and is gone again (the bunker's has red eyes that
+   shine in the dark). Shoot it and it yelps and runs off for a while. In the hellscape a dark, slow T. rex that comes for you and is
+   easy to bring down. Each player's own, made when you arrive on the level and gone when you leave it. ---- */
+const UGB = { list: [], wait: 0, L: null };
+function ugCellOf(G, lx, lz) { const i = Math.floor((lx - G.x0) / G.C), j = Math.floor((lz - G.z0) / G.C); return i >= 0 && j >= 0 && i < G.N && j < G.M ? i + j * G.N : -1; }
+function ugCellXZ(G, k) { const i = k % G.N, j = (k - i) / G.N; return [G.x0 + (i + .5) * G.C, G.z0 + (j + .5) * G.C]; }
+function ugNbrs(G, k) { const N = G.N, M = G.M, i = k % N, j = (k - i) / N, o = [];
+  if (i > 0 && G.open[k - 1] === 1 && !G.eV[i + j * (N + 1)]) o.push(k - 1); if (i < N - 1 && G.open[k + 1] === 1 && !G.eV[i + 1 + j * (N + 1)]) o.push(k + 1);
+  if (j > 0 && G.open[k - N] === 1 && !G.eH[i + j * N]) o.push(k - N); if (j < M - 1 && G.open[k + N] === 1 && !G.eH[i + (j + 1) * N]) o.push(k + N); return o; }
+function ugBfs(G, k0) { const n = G.N * G.M, D = new Int32Array(n).fill(-1), from = new Int32Array(n).fill(-1), Q = [k0]; let h = 0; D[k0] = 0;
+  while (h < Q.length) { const k = Q[h++]; for (const m of ugNbrs(G, k)) if (D[m] < 0) { D[m] = D[k] + 1; from[m] = k; Q.push(m); } } return { D, from }; }
+function ugRoute(B, k1) { const out = []; for (let k = k1; k >= 0; k = B.from[k]) out.push(k); return out.reverse(); }
+function ugLos(L, ax, az, bx, bz) {                           // a clear line from a to b along the halls (walls and crates block it)
+  const G = L.g; if (!G) return true; const d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / .4)); let pk = ugCellOf(G, ax, az); if (pk < 0) return false;
+  for (let s = 1; s <= n; s++) { const t = s / n, k = ugCellOf(G, ax + (bx - ax) * t, az + (bz - az) * t); if (k < 0 || G.open[k] !== 1) return false;
+    if (k !== pk) { const nb = ugNbrs(G, pk); if (!nb.includes(k)) { const pi = pk % G.N, pj = (pk - pi) / G.N, i = k % G.N, j = (k - i) / G.N; if (Math.abs(i - pi) + Math.abs(j - pj) !== 2) return false;
+        const a = pi + j * G.N, b = i + pj * G.N; if (!((nb.includes(a) && ugNbrs(G, a).includes(k)) || (nb.includes(b) && ugNbrs(G, b).includes(k)))) return false; } pk = k; } }
+  return true;
+}
+function ugBeastMake(kind, L, lx, lz) {
+  const A = addGround(kind, UG_X + lx, UG_Z + lz); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset)
+  Object.assign(A, { ug: L.idx, ul: [lx, lz], grp: -1, look: 0, mode: "walk", want: 0, speed: 0, fleeT: 99, jawK: .04 });
+  A.y = L.Y + ugFloor(L, lx, lz); A.root.position.set(A.x, A.y, A.z); UGB.list.push(A); return A;
+}
+function ugBeastsClear() {
+  for (const A of UGB.list) { A.gone = true; if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); if (A.eyes) for (const e of A.eyes) scene.remove(e); }
+  UGB.list = []; UGB.L = null; UGB.wait = 0;
+}
+function ugBeastsEnter(L) {                                    // arriving on a level: a raptor on its way in a minute or so, or the T. rex already about
+  ugBeastsClear(); UGB.L = L;
+  if (L.hell) { const [px, pz] = ugLocal(P.x, P.z); let best = null;
+    for (let k = 0; k < 200; k++) { const a = Math.random() * 6.283, r = 25 + Math.random() * 40, x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (ugBlocked(L, x, z, 2) || ugHellFloor(L, x, z) < UG_LAVA + .4) continue; const d = Math.hypot(x - px, z - pz); if (!best || d > best[2]) best = [x, z, d]; if (d > 50) break; }
+    if (best) { const T = ugBeastMake("trex", L, best[0], best[1]); if (T) { T.hp = T.hpMax = 450; T.walk = 1.1; T.ugs = { ph: "roam", t: 0, goal: null, biteT: 0, roarT: 6 }; } }
+  } else if (L.g) UGB.wait = 60 + Math.random() * 30;
+}
+function ugRaptorSpawn(L) {                                    // somewhere far off down the halls, out of sight
+  const G = L.g, [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz); if (pk < 0) { UGB.wait = 5; return; }
+  const B = ugBfs(G, pk), c = []; for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 22 && B.D[k] <= 45) c.push(k); if (!c.length) for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 10) c.push(k);
+  if (!c.length) { UGB.wait = 10; return; }
+  const k = c[Math.floor(Math.random() * c.length)], [x, z] = ugCellXZ(G, k), A = ugBeastMake("raptor", L, x, z); if (!A) return;
+  A.ugs = { ph: "roam", t: 0, path: null, pi: 0, goal: "roam", showT: 8 + Math.random() * 10, stareCool: 0, callT: 10 + Math.random() * 20 };
+  if (L.name === "bunker") ugEyes(A);
+}
+function ugEyes(A) {                                           // two red points that shine in the dark
+  const mk = () => { const m = new THREE.Mesh(new THREE.SphereGeometry(.035, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff1a0a, fog: false, toneMapped: false }));
+    const g = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xff2010, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); g.scale.setScalar(.22); m.add(g); scene.add(m); return m; };
+  A.eyes = [mk(), mk()];
+}
+const _ugE = new THREE.Vector3();
+function ugEyesTick(A) {
+  if (!A.eyes) return; const on = A.root.visible && !A.dead, Q = A.qd, sc = A.scale || 1, yaw = A.yaw + (A.look || 0) * .9, fx = Math.sin(yaw), fz = Math.cos(yaw);
+  if (Q && Q.head) Q.head.getWorldPosition(_ugE); else _ugE.set(A.x + fx * 1.2 * sc, A.y + 1.3 * sc, A.z + fz * 1.2 * sc);
+  for (let s = 0; s < 2; s++) { const e = A.eyes[s], sd = s ? 1 : -1; e.visible = on; e.position.set(_ugE.x + fx * .34 * sc + fz * sd * .075 * sc, _ugE.y + .1 * sc, _ugE.z + fz * .34 * sc - fx * sd * .075 * sc); }
+}
+function ugRaptorHit(A) {                                      // shot: a yelp, and it's off for a while
+  const K = A.ugs; if (!K || K.ph === "hide") return; A.flinch = 1; dinoCall(A, "hurt"); ugRaptorBolt(A, true);
+}
+function ugRaptorBolt(A, fast) {                               // away from you, a long way down the halls
+  const L = UGB.L, G = L.g, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz), ak = ugCellOf(G, A.ul[0], A.ul[1]); if (ak < 0) { K.ph = "hide"; K.t = 20; return; }
+  const Bp = pk >= 0 ? ugBfs(G, pk) : null, Ba = ugBfs(G, ak); let best = -1, bs = -1;
+  for (let k = 0; k < Ba.D.length; k++) { if (Ba.D[k] < 6 || Ba.D[k] > 40) continue; const sc = (Bp ? Bp.D[k] : 20) - Ba.D[k] * .3 + Math.random() * 4; if (sc > bs) { bs = sc; best = k; } }
+  if (best < 0) { K.ph = "hide"; K.t = 25 + Math.random() * 20; A.root.visible = false; return; }
+  K.ph = "run"; K.goal = "bolt"; K.path = ugRoute(Ba, best); K.pi = 0; K.sp = fast ? 11 : 9.5; K.t = 0;
+}
+function ugRaptorRoam(A) {                                     // off to somewhere else in the halls (or, now and then, to where you'll see it)
+  const L = UGB.L, G = L.g, K = A.ugs, ak = ugCellOf(G, A.ul[0], A.ul[1]); if (ak < 0) return;
+  const [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz), Ba = ugBfs(G, ak);
+  if (K.showT <= 0 && pk >= 0) {                               // a scare: run to a spot down a hall from you, in plain view
+    const Bp = ugBfs(G, pk), c = []; for (let k = 0; k < Bp.D.length; k++) if (Bp.D[k] >= 4 && Bp.D[k] <= 10 && Ba.D[k] >= 0) { const [x, z] = ugCellXZ(G, k); if (ugLos(L, px, pz, x, z)) c.push(k); }
+    if (c.length) { const k = c[Math.floor(Math.random() * c.length)]; K.ph = "run"; K.goal = "show"; K.path = ugRoute(Ba, k); K.pi = 0; K.sp = 9.5; K.showT = 25 + Math.random() * 25; return; }
+    K.showT = 5; }
+  const c = []; for (let k = 0; k < Ba.D.length; k++) if (Ba.D[k] >= 8 && Ba.D[k] <= 28) c.push(k); if (!c.length) return;
+  const k = c[Math.floor(Math.random() * c.length)]; K.ph = "run"; K.goal = "roam"; K.path = ugRoute(Ba, k); K.pi = 0; K.sp = Math.random() < .5 ? 9 : 4.5;
+}
+function ugRaptorTick(A, dt) {
+  const L = UGB.L, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), [ax, az] = A.ul, dx = px - ax, dz = pz - az, d = Math.hypot(dx, dz), toP = Math.atan2(dx, dz);
+  K.t += dt; K.showT -= dt; K.stareCool -= dt; A.rearT = Math.max(0, (A.rearT || 0) - dt);
+  if (K.ph === "hide") { A.root.visible = false; A.speed = 0; if (K.t <= 0) return; K.t -= dt * 2; if (K.t <= 0) { const G = L.g, pk = ugCellOf(G, px, pz); if (pk >= 0) { const B = ugBfs(G, pk), c = []; for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 18 && B.D[k] <= 40) c.push(k);
+      if (c.length) { const [x, z] = ugCellXZ(G, c[Math.floor(Math.random() * c.length)]); A.ul = [x, z]; } } K.ph = "roam"; K.t = 0; K.showT = 10 + Math.random() * 15; } return; }
+  const sees = d < 30 && ugLos(L, ax, az, px, pz);
+  if (K.ph === "stare") {                                      // stopped, staring right at you
+    A.speed *= Math.exp(-dt * 10); A.mode = "idle"; A.yaw += angDiff(toP, A.yaw) * Math.min(1, dt * 8); A.look += (0 - A.look) * Math.min(1, dt * 6);
+    if (!K.said && K.t > .35) { K.said = true; A.rearT = .9; dinoCall(A, Math.random() < .5 ? "screech" : "s_bark"); if (vr.on && d < 14) { buzz("L", .6, 120); buzz("R", .6, 120); } }
+    if (d < 5 && K.t > .3) { dinoCall(A, "rush"); ugRaptorBolt(A, true); return; }
+    if (K.t > K.hold || !sees) ugRaptorBolt(A, false);
+    ugBeastPlace(A, L); return; }
+  if (K.ph === "roam") { ugRaptorRoam(A); if (K.ph === "roam") { A.speed *= Math.exp(-dt * 6); ugBeastPlace(A, L); return; } }
+  // running down the halls
+  if (sees && K.goal !== "bolt" && K.stareCool <= 0 && (K.goal === "show" ? d < 34 : d < 22 && Math.random() < dt * 2)) { K.ph = "stare"; K.t = 0; K.said = false; K.hold = 1.3 + Math.random() * 1.4; K.stareCool = 14; ugBeastPlace(A, L); return; }
+  const G = L.g, nxt = K.path && K.path[K.pi]; if (nxt === undefined) { if (K.goal === "bolt") { K.ph = "hide"; K.t = 30 + Math.random() * 30; } else K.ph = "roam"; ugBeastPlace(A, L); return; }
+  const [tx, tz] = ugCellXZ(G, nxt), gx = tx - ax, gz = tz - az, gd = Math.hypot(gx, gz);
+  if (gd < .45) { K.pi++; ugBeastPlace(A, L); return; }
+  const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 8, Math.min(dt * 8, angDiff(h, A.yaw)));
+  const turn = Math.max(.35, Math.cos(angDiff(h, A.yaw))); A.speed += (K.sp * turn - A.speed) * Math.min(1, dt * 4); A.mode = "walk";
+  const st = Math.min(gd, A.speed * dt); A.ul = [ax + gx / gd * st, az + gz / gd * st];
+  A.look += ((sees ? Math.max(-1.4, Math.min(1.4, angDiff(toP, A.yaw))) : 0) - A.look) * Math.min(1, dt * 5);
+  if ((K.callT -= dt) <= 0) { K.callT = 25 + Math.random() * 35; if (!sees) dinoCall(A, "stalk"); }   // now and then you hear it somewhere in the halls
+  if (K.goal === "bolt" && d > 45 && !sees && K.t > 3) { K.ph = "hide"; K.t = 30 + Math.random() * 30; }
+  ugBeastPlace(A, L);
+}
+function ugRexTick(A, dt) {                                    // slow and heavy: it comes for you, and bites if it gets there
+  const L = UGB.L, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), [ax, az] = A.ul, dx = px - ax, dz = pz - az, d = Math.hypot(dx, dz), toP = Math.atan2(dx, dz);
+  K.t += dt; K.biteT -= dt; A.rearT = Math.max(0, (A.rearT || 0) - dt);
+  const hunt = d < 55 && !(MP.dead > 0); let goal = null, sp = 0;
+  if (hunt) { goal = [px, pz]; sp = d < 6 ? 0 : 2.1; if ((K.roarT -= dt) <= 0) { K.roarT = 9 + Math.random() * 8; A.rearT = 1.2; dinoCall(A, "charge"); } }
+  else { if (!K.goal || Math.hypot(K.goal[0] - ax, K.goal[1] - az) < 2 || K.t > 25) { K.t = 0; for (let k = 0; k < 30; k++) { const a = Math.random() * 6.283, r = 8 + Math.random() * 20, x = ax + Math.cos(a) * r, z = az + Math.sin(a) * r; if (!ugBlocked(L, x, z, 2) && ugHellFloor(L, x, z) > UG_LAVA + .4) { K.goal = [x, z]; break; } } } goal = K.goal; sp = .9; }
+  if (hunt && d < 5.5 && K.biteT <= 0) { K.biteT = 2; A.rearT = 1; K.bite = .45; }          // the bite lands a moment after it lunges
+  if (K.bite > 0 && (K.bite -= dt) <= 0 && d < 6.5 && !(MP.dead > 0)) { MP.hp -= 34; MP.hurt = Math.max(MP.hurt || 0, .9); buzz("L", 1, 200); buzz("R", 1, 200); gunFoley([[0, 90, .4, .5], [.02, 260, .25, .3]]); }
+  let h = goal ? Math.atan2(goal[0] - ax, goal[1] - az) : A.yaw, moved = false;
+  if (sp > 0) for (const da of [0, .45, -.45, .9, -.9, 1.5, -1.5]) { const hh = h + da, nx = ax + Math.sin(hh) * sp * dt, nz = az + Math.cos(hh) * sp * dt;
+    if (!ugBlocked(L, nx, nz, 1.6) && ugHellFloor(L, nx, nz) > UG_LAVA + .3) { h = hh; A.ul = [nx, nz]; moved = true; break; } }
+  A.yaw += Math.max(-dt * 1.2, Math.min(dt * 1.2, angDiff(hunt && !moved ? toP : h, A.yaw)));
+  A.speed += ((moved ? sp : 0) - A.speed) * Math.min(1, dt * 3); A.mode = A.speed > .2 ? "walk" : "idle";
+  A.look += ((hunt ? Math.max(-1.2, Math.min(1.2, angDiff(toP, A.yaw))) : 0) - A.look) * Math.min(1, dt * 3);
+  ugBeastPlace(A, L);
+}
+function ugBeastPlace(A, L) { A.x = UG_X + A.ul[0]; A.z = UG_Z + A.ul[1]; const y = L.Y + ugFloor(L, A.ul[0], A.ul[1]); A.y += (y - A.y) * .3; }
+function ugBeastsTick(dt) {                                    // each frame underground (instead of the land's animals)
+  const L = UNDER.cur; if (!L || UGB.L !== L) return;
+  if (UGB.wait > 0 && (UGB.wait -= dt) <= 0 && !UGB.list.some(A => A.kind === "raptor")) ugRaptorSpawn(L);
+  const far = (L.fog ? L.fog[1] : 70) + 15;
+  for (const A of UGB.list) {
+    if (A.dead) { deadPose(A, dt); ugEyesTick(A); continue; }
+    if (A.kind === "raptor") ugRaptorTick(A, dt); else ugRexTick(A, dt);
+    const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z);
+    if (!(A.ugs && A.ugs.ph === "hide")) A.root.visible = cd < far;
+    A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
+    if (A.root.visible && QD_KINDS[A.kind]) qdTick(A, dt, cd);
+    if (A.dark !== true && A.qd && A.kind === "trex") { A.dark = true; A.qd.wrap.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.multiplyScalar(.5); if (o.material.emissive) o.material.emissive.setHex(0x2a0d06); } }); }   // a dark one, lit a little by the lava (you can still make it out)
+    ugEyesTick(A);
   }
 }
 /* ---- the doorways on the trees, up on the land ---- */
@@ -6480,7 +6614,7 @@ function geoTeleport(p, Fr) {                                     // the land ro
   E.job = null; E.cur = null;
   for (const ch of [...E.chunks.values()]) enUnload(ch);
   E.want = []; E.solidQ.clear(); E.shQ.clear(); E.dropQ.clear();
-  for (let q = beasts.length - 1; q >= 0; q--) { const A = beasts[q]; if (!A.ptero && !A.net) enAnimDrop(A); }
+  for (let q = beasts.length - 1; q >= 0; q--) { const A = beasts[q]; if (!A.ptero && !A.net && !A.ug) enAnimDrop(A); }
   E.acG.clear(); E.acB.clear(); for (const rec of E.acL.values()) enLootDrop(rec); E.acL.clear(); E.aQ = []; E.aInit = true;
   for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear();
   if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); GEO.fire = null; }
@@ -8906,6 +9040,7 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (GEO.on && PRED[A.kind] && !A.hpMax) { const tough = PRED_TOUGH[A.kind];   // Geocaching: a bear takes several shots, and comes for you
     if (tough) { A.geoHp = (A.geoHp ?? tough) - (dmg >= 100 ? 3 : gun === "hunt" || head ? 2 : 1); if (A.geoHp > 0) { A.flinch = 1; hitTick(head); predAnger(A); return; } } }
   if (A.spook) { spookScare(A); return; }                    // a spook isn't hurt, it just bolts
+  if (A.ug && A.kind === "raptor") { ugRaptorHit(A); return; }   // (nor is the raptor in the halls)
   if (A.net && mpNetGuest()) { mpSendHost({ t: "ah", n: A.nid, d: dist || 0, dmg: dmg || 0, hd: head ? 1 : 0, g: gun || null, ti: gun ? tierOf(gun) : 0 }); if (A.hpMax) { A.flinch = 1; hitTick(); } return; }
   if (!A.hpMax) { killAnimal(A, dist); return; }
   const tbl = A.hunter || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
@@ -8915,7 +9050,7 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
   dinoBar(A); hitTick(head);
   const now = performance.now() / 1000; if (now - (A.painT || -99) > 6 && Math.random() < .35) { A.painT = now; dinoCall(A, "hurt"); }   // only now and then a pain call
-  if (A.kind === "trex") rexStart(A);
+  if (A.kind === "trex" && !A.ug) rexStart(A);
   if (A.hunter) {
     if (gun === "hunt") A.top = Math.max(0, A.top - hit);     // sniper wounds never heal
     A.hits++; A.sinceHit = 0; A.rage = 1; A.healing = false;
@@ -10446,14 +10581,14 @@ function qdTick(A, dt, cd) {                                 // pick the move, m
   }
   if (want === "Walk" || want === "Run") Q.curA.timeScale = Math.max(.4, Math.min(2.2, v / (A.stride * (want === "Run" ? 1.6 : 1)) * Q.curA.getClip().duration));
   const F = Q.F, hl = F.len * .35 * (A.scale || 1), hw = Math.max(.4, F.len * .06 * (A.scale || 1)), fx = Math.sin(A.yaw), fz = Math.cos(A.yaw);   // lean with the ground
-  const pT = Math.atan2(groundAt(A.x - fx * hl, A.z - fz * hl) - groundAt(A.x + fx * hl, A.z + fz * hl), hl * 2), rT = Math.atan2(groundAt(A.x + fz * hw, A.z - fx * hw) - groundAt(A.x - fz * hw, A.z + fx * hw), hw * 2);
+  const pT = A.ug ? 0 : Math.atan2(groundAt(A.x - fx * hl, A.z - fz * hl) - groundAt(A.x + fx * hl, A.z + fz * hl), hl * 2), rT = A.ug ? 0 : Math.atan2(groundAt(A.x + fz * hw, A.z - fx * hw) - groundAt(A.x - fz * hw, A.z + fx * hw), hw * 2);
   const kT = Math.min(1, dt * 5); Q.pitch += (Math.max(-.6, Math.min(.6, pT)) - Q.pitch) * kT; Q.roll += (Math.max(-.3, Math.min(.3, rT * .6)) - Q.roll) * kT;
   Q.wrap.rotation.set(Q.pitch, 0, Q.roll + A.body.rotation.z, "YXZ");   // (and the flinch when hit)
   Q.acc += dt; const every = cd < 50 || A.hunter || A.rexOn || A.spook ? 0 : cd < 140 ? 1 / 30 : cd < 320 || zoomed || (vr.on && (vr.scoped || vr.binos)) ? 1 / 12 : 1 / 4;   // far ones move a little less often
   if (Q.acc < every) return;
   if (Q.looked) { Q.neck.quaternion.copy(Q.nq); Q.head.quaternion.copy(Q.hq); Q.looked = false; }   // (the turn was piling up on moves that don't move the neck: the head spun)
   Q.mixer.update(Q.acc); Q.acc = 0;
-  const look = !A.dead && (A.hunter || A.spook || A.kind === "trex") ? A.look || 0 : 0;
+  const look = !A.dead && (A.hunter || A.spook || A.ug || A.kind === "trex") ? A.look || 0 : 0;
   if (look) { Q.nq.copy(Q.neck.quaternion); Q.hq.copy(Q.head.quaternion); Q.looked = true; Q.neck.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upN, look * .45)); Q.head.quaternion.multiply(_qdQ.setFromAxisAngle(Q.upH, look * .55)); }
 }
 function qgunLoad(key) {
@@ -14730,6 +14865,7 @@ function arrowsTick(dt) {
 function arrowHit(A, R, p, head, spd) {
   if (!A || A.dead) return;
   if (A.spook) { spookScare(A); return; }
+  if (A.ug && A.kind === "raptor") { ugRaptorHit(A); return; }
   const dist = R.from.distanceTo(p), k = Math.min(1, spd / (BOW_V[bowTier()] || BOW.vMax)), tier = Math.max(1, bowTier());
   for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
   if (!A.hpMax) {
@@ -17657,7 +17793,7 @@ function loop(now) {
     if (vr.on) vrAfterMove(dt);
     updateZone(dt);
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
-    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); if (!UNDER.on) updateAnimals(dt);
+    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); if (!UNDER.on) updateAnimals(dt); else ugBeastsTick(dt);
     if (vr.on && gameMode === "pvp") vbTick(dt);                            // bots
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
