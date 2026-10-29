@@ -78,7 +78,7 @@ async def main():
              and pole["maxLat"] > 89.4 and pole["end"][0] < pole["maxLat"] and pole["lonFlip"] < 20 and pole["biome"] == "polar" \
              and g["found"][0] and g["found"][2] >= 25 and g["saved"] and (not g["animal"] or (g["food"] == 1 and g["ate"][0] > 50 and g["ate"][1] == 0)) \
              and 2 < g["hunger"] < 4.5 and not g["toolsHurt"] and g["toolsFull"] and g["faint"] >= 30 and g["gps"] \
-             and res["seed"] and res["found"] >= 1 and res["next"] < 800 and res["plain"] == [False, 0, False] and rs["oneTap"] and rs["afterTwo"] == [True, 0, True] and rs["fresh"] == [0, 0] and rs["gone"]
+             and res["seed"] and res["found"] >= 1 and res["next"] < 800 and res["plain"][0] and res["plain"][2] is False and rs["oneTap"] and rs["afterTwo"] == [True, 0, True] and rs["fresh"] == [0, 0] and rs["gone"]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())

@@ -45,7 +45,7 @@ async def main():
             D.P.x += speed * dt; D.P.z += Math.sin(D.P.x / 700) * speed * dt * .4; D.P.y = D.H(D.P.x, D.P.z);
             const t0 = performance.now(); D.endlessTick(dt); const t = performance.now() - t0; worst = Math.max(worst, t); sum += t; frames++;
             if (frames % 72 === 0) { let miss = 0; for (let i = -5; i <= 5; i++) for (let j = -5; j <= 5; j++) { const ix = Math.floor(D.P.x / 200) + i, iz = Math.floor(D.P.z / 200) + j; if (Math.hypot((ix + .5) * 200 - D.P.x, (iz + .5) * 200 - D.P.z) > 700) continue; const ch = E.chunks.get((ix + 60000) * 120000 + (iz + 60000)); if (!ch || !ch.tile) miss++; } maxMissing = Math.max(maxMissing, miss);
-              if (D.P.x - x0 > 300) mapLag = Math.max(mapLag, Math.hypot(D.P.x - D.MAPV.cx, D.P.z - D.MAPV.cz)); dirs.add(E.sh.dir.toArray().map(v => v.toFixed(3)).join()); }
+              if (D.P.x - x0 > 300 && D.MAPV.cx < 1e8) mapLag = Math.max(mapLag, Math.hypot(D.P.x - D.MAPV.cx, D.P.z - D.MAPV.cz)); dirs.add(E.sh.dir.toArray().map(v => v.toFixed(3)).join()); }
           }
           return { preview, frames, avgMs: +(sum / frames).toFixed(2), worstMs: +worst.toFixed(1), maxMissingWithin700m: maxMissing, chunks: E.chunks.size, tiles: D.tilesN, mapCx: D.MAPV.cx, px: Math.round(D.P.x), waterX: Math.round(E.water.position.x), solid: [...E.chunks.values()].filter(ch => ch.rg).length, obstacleCells: D.obstacles.size, prof: Object.fromEntries(Object.entries(E.prof).map(([k, v]) => [k, +v.toFixed(1)])), sum: Object.fromEntries(Object.entries(E.psum).map(([k, v]) => [k, Math.round(v)])), big: E.pbig, built: E.nBuilt,
             mapLag: Math.round(mapLag), hours: +(D.hourNow - hour0).toFixed(2), sunTurns: dirs.size - 1, freed: E.freed || 0, envs: Object.keys(E.envH).length,
@@ -57,7 +57,7 @@ async def main():
           D.P.x = 25100; D.P.z = 100; D.enEnsure(25100, 100, 150); const c1 = E.chunks.get((125 + 60000) * 120000 + (0 + 60000)), loop = window.__sig(c1);
           let hd = 0; for (let i = 0; i < 50; i++) hd = Math.max(hd, Math.abs(D.H(13 + i * 3.7, 41 + i * 2.1) - D.H(25013 + i * 3.7, 41 + i * 2.1)));
           let rocks = 0; for (const ch of E.chunks.values()) if (ch.rg) for (let k = 0; k < ch.rg.top.length; k += 7) if (ch.rg.top[k] > -1e8) rocks++;
-          return { back, loop, loopHeightDiff: +hd.toFixed(4), solidCells: rocks }; }""")
+          return { back, loop, loopHeightDiff: +hd.toFixed(4), solidCells: rocks, globe: !!D.GLOBE }; }""")
         print("again", json.dumps(c))
         # pick a start 900 m out on the little map and drop in: the land there is built before the fade lifts
         d = await pg.evaluate("""() => { const E = D.ENDLESS; D.state = 'vrmenu'; D.P.x = 900 * .7; D.P.z = -900 * .7; D.vruiDropIn(); if (D.VRUI.fadeGo) D.VRUI.fadeGo();
@@ -70,7 +70,7 @@ async def main():
           D.generate(); const a = sig(); D.generate(); return { a, b: sig() }; }""")
         print("shapes", json.dumps(g))
         ok = r["map"] == "endless" and r["seams"]["pairs"] > 10 and r["seams"]["worstH"] < 1e-3 and r["seams"]["worstN"] < 1e-3 and w["maxMissingWithin700m"] == 0 \
-             and c["back"] == r["sig0"] and c["loop"] == r["sig0"] and c["loopHeightDiff"] < 1e-3 and w["chunks"] < 260 and abs(w["waterX"] - w["px"]) < 50 and c["solidCells"] > 0 and d["built"] and d["ring"] == 9 and not errs \
+             and (c["globe"] or (c["back"] == r["sig0"] and c["loop"] == r["sig0"] and c["loopHeightDiff"] < 1e-3)) and w["chunks"] < 260 and abs(w["waterX"] - w["px"]) < 50 and c["solidCells"] > 0 and d["built"] and d["ring"] == 9 and not errs \
              and w["mapLag"] < 600 and w["mark"] and w["hours"] > KM * 1000 / SPEED / 60 * .9 and w["sunTurns"] >= 1 and g["a"] == g["b"]
         print("errors", errs[:5]); print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

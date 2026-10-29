@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.20";              // Just Trees 2.55
+const VERSION = "3.21";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -445,7 +445,7 @@ const MONTH_FULL = ["January","February","March","April","May","June","July","Au
 
 /* ---------------- Settings ---------------- */
 const TURN_SMOOTH = 2.4;                                         // 2.36: smooth turning speed, radians a second at full stick (about 140°)
-const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", hikeMap: "island", huntMap: "island", spawnD: 0, zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
+const set = { land: "natural", lat: 45, hemi: 1, rough: .35, hour: 10, month: new Date().getMonth(), weather: "random", size: "medium", density: .5, edges: "endless", hikeMap: "endless", huntMap: "island", spawnD: 0, zone: "off", hand: "right", fling: 4.5, vrRes: "sharp", roundMin: 10, zoneHold: 60, zoneSpeed: 3, capture: "off" };
 try { const r = localStorage.getItem("jt-vrres"); if (r === "smooth" || r === "balanced" || r === "sharp") set.vrRes = r; } catch (_) {}
 const ROUND_SEC = 600, ZONE_WAIT = 120;
 
@@ -3117,7 +3117,7 @@ let HIKEMAP = null, HIKE_FORCE = null;
 const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || set.huntMap === "globe");
 const pvpEndless = () => gameMode === "pvp" && !MP.code && set.pvpMap === "endless";      // 2.94: a solo Bot battle on endless land
 function mapRules() {                                         // 2.94: what each mode plays on (VR). Solo: Hike endless; Hunt and Bot battle the 3 km island or endless.
-  if (gameMode === "hike") set.hikeMap = "endless";          //   Online: Hiking endless; Hunting the 3 km island or endless; Deathmatch every size; Treeocashing its planet
+  if (gameMode === "hike") { if (set.hikeMap !== "island") set.hikeMap = "endless"; }   // (3.21: Hike: the 3 km island or the planet)  //   Online: Hiking endless; Hunting the 3 km island or endless; Deathmatch every size; Treeocashing its planet
   else if (gameMode === "hunt") { if (set.huntMap !== "endless" && set.huntMap !== "globe") { set.huntMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
   else if (gameMode === "pvp" && !MP.code) { if (set.pvpMap === "endless") { set.zone = "off"; set.capture = "off"; } else { set.pvpMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
 }
@@ -3464,10 +3464,8 @@ function endlessTick(dt) {                                   // every frame: bui
     if (E.prof) { const tl = performance.now() - E.ts; E.prof["map-lane"] = Math.max(E.prof["map-lane"] || 0, tl); }
     if (r.done) E.mapJob = null; }
   // 2.21: a whole day in 24 minutes, the same clock for everyone online; the light follows it, the tree shadows turn with the sun
-  if (E.clock && play && !GLOBE) {                           // (the globe keeps its own clock: globeTick)
-    hourNow = (hourNow + dt / 60) % 24;
-    if (MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow, u: GLOBE ? +GLOBE.utc.toFixed(4) : undefined }); }
-  }
+  if (E.clock && play && !GLOBE) hourNow = (hourNow + dt / 60) % 24;   // (the globe keeps its own clock: globeTick)
+  if (E.clock && play && MP.on && MP.host && (E.hrT = (E.hrT || 0) - dt) <= 0) { E.hrT = 4; mpSend({ t: "hr", h: hourNow, u: GLOBE ? +GLOBE.utc.toFixed(4) : undefined }); }   // (3.21: on the planet too)
   if (E.clock && (E.lightT = (E.lightT || 0) - dt) <= 0) { E.lightT = .1; enLight(); }   // (2.25: 10 small steps a second)
   enShadowSun(dt);
 }
@@ -4338,15 +4336,16 @@ function globeStart(sv) {
   const dry = p => { const s = G.contS(p, p[0] * R, p[1] * R, p[2] * R); return s > .12 && G.landAt(p) > 1.5; };
   let p = sv && isFinite(sv.lat) && isFinite(sv.lon) ? glFromLL(sv.lat, sv.lon) : null;
   if (p && !dry(p)) p = null;
-  for (let t = 0; t < 3000 && !p; t++) { const q = glFromLL((t < 1500 ? 38 + rr() * 12 : (rr() * 2 - 1) * 60) * (t < 2500 || rr() < .5 ? 1 : -1), rr() * 360 - 180); if (dry(q)) p = q; }
+  const own = !geoMode(), L0 = Math.max(-75, Math.min(75, set.lat * set.hemi)), offIsle = q => !G.isle || glArc(q, G.isle.c) > G.isle.r + 800 / R;   // (3.21: the open-world modes start at your latitude)
+  for (let t = 0; t < 3000 && !p; t++) { const q = own ? glFromLL(Math.max(-80, Math.min(80, L0 + (rr() - .5) * (t < 1500 ? 10 : t < 2500 ? 24 : 60))), rr() * 360 - 180) : glFromLL((t < 1500 ? 38 + rr() * 12 : (rr() * 2 - 1) * 60) * (t < 2500 || rr() < .5 ? 1 : -1), rr() * 360 - 180); if (dry(q) && (!own || offIsle(q))) p = q; }
   p = p || glFromLL(45, 0);
   const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = 0; G.oz = 0;     // flat -z = north at the start
 }
-function globeReanchor() {                                     // lay the flat patch again where you stand (lined up with the old one at your feet)
-  const G = GLOBE, E = ENDLESS, F = geoFocus(), A = glAxes(F.x, F.z), keep = [];
+function globeReanchor(Fr) {                                   // lay the flat patch again where you stand (lined up with the old one at your feet) (3.21: Fr: the host's layout, a team on the planet)
+  const G = GLOBE, E = ENDLESS, F = geoFocus(), A = Fr ? null : glAxes(F.x, F.z), keep = [];
   const hold = o => keep.push([o, glToSphere(o.x, o.z, [0, 0, 0])]);   // (2.87: what isn't at the centre is carried over exactly: your sleeping body, the animals)
-  if (F !== P) hold(P); for (const B of beasts) if (B.x !== undefined && !B.ptero) hold(B);
-  G.c = A.p; G.e = A.ax; G.n = A.az; G.ox = F.x; G.oz = F.z; G.reN = (G.reN || 0) + 1;
+  if (F !== P || Fr) hold(P); for (const B of beasts) if (B.x !== undefined && !B.ptero) hold(B); for (const S of squad) if (S.x !== undefined) hold(S); for (const b of VB.list) if (b && b.x !== undefined) hold(b);   // (3.21: and the bots)
+  if (Fr) { G.c = Fr.c.slice(); G.e = Fr.e.slice(); G.n = Fr.n.slice(); G.ox = Fr.ox; G.oz = Fr.oz; } else { G.c = A.p; G.e = A.ax; G.n = A.az; G.ox = F.x; G.oz = F.z; } G.reN = (G.reN || 0) + 1;
   { const out = [0, 0]; for (const [o, sp] of keep) { glFromSphere(sp, out); o.x = out[0]; o.z = out[1]; } }
   if (GEO.sleep) { GEO.sleep.body.x = P.x; GEO.sleep.body.z = P.z; } hamRestore();
   for (const ch of E.chunks.values()) ch.stale = true;
@@ -4381,7 +4380,7 @@ function globeTick(dt) {                                       // every frame on
     if (Math.abs(A.p[1]) < .999999) { G.Nf = [glDot(f.N, A.ax), glDot(f.N, A.az)]; G.Ef = [glDot(f.E, A.ax), glDot(f.E, A.az)]; } else if (!G.Nf) { G.Nf = [0, -1]; G.Ef = [1, 0]; }   // (right on the pole north is everywhere: keep the last)
   }
   hourNow = ((G.utc + G.lon / 15) % 24 + 24) % 24;
-  { const F1 = geoFocus(); if (state === "play" && Math.hypot(F1.x - G.ox, F1.z - G.oz) > GLB.RE) globeReanchor(); }
+  { const F1 = geoFocus(); if (state === "play" && Math.hypot(F1.x - G.ox, F1.z - G.oz) > GLB.RE * (G.folKey && G.folKey === (geoFrameArr() || []).join() ? 2 : 1)) { G.folKey = null; globeReanchor(); } }   // (3.21: sharing the host's layout: keep it further out)
 }
 // the planet picture (painted once at the start): ice, forest, desert, jungle, ocean, islands — for the globe on your map
 function* globePaintGen() {
@@ -5640,6 +5639,17 @@ function geoFrameArr() {                                        // my layout of 
   if (G.fKey !== key) { G.fKey = key; const r = v => +v.toFixed(8); G.fArr = [...G.c.map(r), ...G.e.map(r), ...G.n.map(r), +G.ox.toFixed(3), +G.oz.toFixed(3)]; }
   return G.fArr;
 }
+const gfFrame = a => Array.isArray(a) && a.length === 11 ? { R: GLOBE.R, c: a.slice(0, 3), e: a.slice(3, 6), n: a.slice(6, 9), ox: a[9], oz: a[10] } : null;
+function globeFollow(a) {                                     // 3.21: a team on the planet: near the host, lay it out the way the host does, so everyone has the same trees and ground
+  const G = GLOBE; if (!G || state !== "play" || geoFocus() !== P || (G.folT || 0) > performance.now()) return;
+  const key = a.join(), mine = (geoFrameArr() || []).join(); if (key === mine) { G.folKey = key; return; }
+  const F = gfFrame(a); if (!F) return; const sp = glToSphere(P.x, P.z, [0, 0, 0]), o = [0, 0]; glFromSphere(sp, o, F);
+  if (Math.hypot(o[0] - F.ox, o[1] - F.oz) > GLB.RE * .8) { G.folKey = null; return; }   // too far out on theirs: keep my own
+  G.folT = performance.now() + 1000;
+  if (G.folKey && G.folKey === mine) globeReanchor(F);         // they re-centred: from their last layout to their new one (a few cm where you stand)
+  else if (Math.hypot(o[0] - P.x, o[1] - P.z) > .5) { geoTeleport(sp, F); G.folT = performance.now() + 8000; } else globeReanchor(F);   // coming back together: the land round you again, in their layout
+  G.folKey = key;
+}
 function geoNetIn(o) {                                          // their positions, from their layout into mine
   const a = o.gf; if (!GLOBE || !Array.isArray(a) || a.length !== 11) return;
   const F = { R: GLOBE.R, c: a.slice(0, 3), e: a.slice(3, 6), n: a.slice(6, 9), ox: a[9], oz: a[10] }, s = [0, 0, 0], out = [0, 0];
@@ -5652,6 +5662,8 @@ function geoNetIn(o) {                                          // their positio
   if (o.t === "s") { const x = o.h ? o.h[0] : 0, z = o.h ? o.h[2] : 0; for (const A of [o.h, o.l, o.r, o.g && o.g.p, o.gh]) if (A) { turn(x, z); pose(A); } }
   else if ((o.t === "f" || o.t === "g") && Array.isArray(o.o)) { const x = o.o[0], z = o.o[2]; vec(o.v, x, z); pose(o.o); }
   else if (o.t === "mk") { const q = conv(o.x, o.z); o.x = q[0]; o.z = q[1]; }
+  else if (o.t === "spawn" && isFinite(o.x)) { const q = conv(o.x, o.z); o.x = q[0]; o.z = q[1]; }
+  else if (o.t === "an" && Array.isArray(o.a)) for (let i = 0; i + 10 < o.a.length; i += 11) { const x = o.a[i + 2], z = o.a[i + 4], t = turn(x, z), q = conv(x, z); o.a[i + 2] = q[0]; o.a[i + 4] = q[1]; o.a[i + 5] += t; }   // 3.21: the host's animals, on the planet
 }
 async function geoNetGo() {                                     // the button: a planet with room for you, or a new one
   if (!MP.tag) { VRUI.tagNext = "geonet"; vruiOpen("tag"); return; }
@@ -6691,7 +6703,7 @@ function geoRandomSpot() {
   for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (t < 3000 && G.p && glArc(p, G.p) * R < 4000) continue; if (G.isle && glArc(p, G.isle.c) < G.isle.r + 600 / R) continue;   /* (3.20: not onto the dinosaur island) */ if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }   // (2.76: at least 4 km away)
   return G.p.slice();
 }
-function geoTeleport(p) {                                     // the land round you, built fresh at another spot on the planet (behind the dark)
+function geoTeleport(p, Fr) {                                     // the land round you, built fresh at another spot on the planet (behind the dark)
   const E = ENDLESS, G = GLOBE;
   if (E.job && E.job.ch) { const sl = E.slice; E.slice = 1e9; while (!E.job.it.next().done); E.slice = sl; }
   E.job = null; E.cur = null;
@@ -6702,7 +6714,8 @@ function geoTeleport(p) {                                     // the land round 
   for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear();
   if (GEO.fire) { scene.remove(GEO.fire.obj); scene.remove(GEO.fire.pts); GEO.fire = null; }
   jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; }
-  const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = P.x; G.oz = P.z; G.reN = (G.reN || 0) + 1; G.llT = 0;
+  if (Fr) { G.c = Fr.c.slice(); G.e = Fr.e.slice(); G.n = Fr.n.slice(); G.ox = Fr.ox; G.oz = Fr.oz; const o = [0, 0]; glFromSphere(p, o); P.x = o[0]; P.z = o[1]; }   // (3.21: in the host's layout)
+  else { const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = P.x; G.oz = P.z; } G.reN = (G.reN || 0) + 1; G.llT = 0;
   enEnsure(P.x, P.z, 260);
   let sx = P.x, sz = P.z; for (let k = 0; k < 200; k++) { const a = k * 2.4, r = k * 1.2, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (H(x, z) > water + 1 && slopeNy(x, z) > .85) { sx = x; sz = z; break; } }
   P.x = sx; P.z = sz; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
@@ -6864,10 +6877,10 @@ function generate() {
   clearSquad(); vbClear(); if (!LAB.on) statPing();
   HIKEMAP = ARENA ? null : HIKE_FORCE || (gameMode === "hike" && VR_ON && vr.on ? (set.hikeMap === "endless" ? "endless" : "island") : gameMode === "hunt" && VR_ON && vr.on && huntEndless() ? "endless" : VR_ON && vr.on && pvpEndless() ? "endless" : null);   // (2.94: Bot battle can be endless)   // 2.19 (2.23: Hunting can be Endless)
   const EN = HIKEMAP === "endless";
-  GLOBE = EN && geoMode() ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // 2.70: Geocaching: the little globe
-  CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !GLOBE) geoStop();
+  GLOBE = EN ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // 2.70: Geocaching: the little globe
+  CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !(GLOBE && geoMode())) geoStop();   // (3.21: every endless map is the planet; Treeocashing only when it's Treeocashing)
   const full = !GEO.labWant && DEV.ok && DEV.full && set.geoNet; GEO.fullWant = full;   // 2.93: Dev: Full level
-  if (GLOBE) GLOBE.sv = GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_N, found: Array.from({ length: GEO_N }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (2.79: the Gear Lab: everything, saved nowhere)                              // (2.76: the planet is this game's own; only your level carries over)
+  if (GLOBE) GLOBE.sv = !geoMode() ? null : GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_N, found: Array.from({ length: GEO_N }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (2.79: the Gear Lab: everything, saved nowhere)                              // (2.76: the planet is this game's own; only your level carries over)
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
   starMat.uniforms.uPx.value = renderer.getPixelRatio();
@@ -7004,7 +7017,9 @@ function generate() {
     E.clock = true; E.mapJob = null; E.envBase = { densN, spN, aspN, fluN, varN, nearRiver: () => false };
     E.kindCache = new Map(); E.envL = {}; E.envH = {}; E.regs = new Map(); E.feats = new Map(); E.lavas = []; E.prepQ = new Set();
     enWorldSetup(seed);
-    if (GLOBE) { globeSetup(E); globeStart(GLOBE.sv); const sv = GLOBE.sv; GLOBE.utc = sv && isFinite(sv.utc) ? sv.utc : ((set.hour - glLatLon(GLOBE.c)[1] / 15) % 24 + 24) % 24; GLOBE.llT = 0; P.x = 0; P.z = 0; globeTick(0); }
+    if (GLOBE) { globeSetup(E); globeStart(GLOBE.sv); const sv = GLOBE.sv; GLOBE.utc = sv && isFinite(sv.utc) ? sv.utc : ((set.hour - glLatLon(GLOBE.c)[1] / 15) % 24 + 24) % 24; GLOBE.llT = 0; P.x = 0; P.z = 0;
+      { const J = GLB_JOIN; GLB_JOIN = null; if (J && J.seed === seed) { const G = GLOBE, F = J.F; G.c = F.c.slice(); G.e = F.e.slice(); G.n = F.n.slice(); G.ox = F.ox; G.oz = F.oz; G.folKey = J.key; P.x = J.x; P.z = J.z; if (isFinite(J.u)) G.utc = J.u; } }   // 3.21: joining a team on the planet: the host's layout, by the host
+      globeTick(0); }
     E.wl = water; E.span = E.envL.temperate.span; E.make = enMake; E.gcol = enGcol;
     E.RGr = rockGeos(); E.RG = { ...E.RGr, ...sectionGeos() }; E.LG = logGeo();
     E.gMat = groundMaterial(1, "#b5642a", 0, true);
@@ -7024,15 +7039,15 @@ function generate() {
     { const sp0 = sunPos(lat, set.month, hourNow); enShadowInit(sp0.el > -4 ? sp0.dir : new THREE.Vector3(-sp0.dir.x, Math.max(.45, -sp0.dir.y * .5 + .4), -sp0.dir.z).normalize()); }
     { const need = new Set(); for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) { const n = enRegions(i * 150, j * 150); for (let q = 0; q < n; q++) need.add(EN_RL[q].reg.b); }   // the environments round the start, ready now
       for (const b of need) runGen(enPrepGen(b)); }
-    enEnsure(0, 0, EN_SYNC);                                                         // the land round the start, right away (the rest grows in while you look at the little map)
+    enEnsure(GLOBE ? P.x : 0, GLOBE ? P.z : 0, EN_SYNC);                             // (3.21: a guest joining on the planet: round the host) the land round the start, right away (the rest grows in while you look at the little map)
     for (const ch of E.chunks.values()) if (Math.hypot(ch.x0 + 100, ch.z0 + 100) < EN_SOLID + 145) enSolid(ch);
     for (const ch of E.chunks.values()) if (enNbBuilt(ch)) enShadowStamp(ch);
     const wMat = waterMaterial(WATERC[E.envL[enDom(0, 0).b].tb], false); if (VR_ON) wMat.side = THREE.DoubleSide;
     E.water = new THREE.Mesh(GLOBE ? new THREE.PlaneGeometry(EN_FAR + 3000, EN_FAR + 3000, 90, 90) : new THREE.PlaneGeometry(EN_FAR + 3000, EN_FAR + 3000), wMat); E.water.rotation.x = -Math.PI / 2; E.water.position.y = water; world.add(E.water);   // (2.70: the globe's sea curves away, so it needs the steps; 2.76: this comment used to hide the line, so there was no water)
     E.shoreC = [0, 0];
-    { E.ts = performance.now(); E.slice = 1e9; const it = enFarJob(0, 0); while (!it.next().done); E.farC0 = [0, 0]; enFarSink(); }
+    { const fx = GLOBE ? Math.round(P.x / 400) * 400 : 0, fz = GLOBE ? Math.round(P.z / 400) * 400 : 0; E.ts = performance.now(); E.slice = 1e9; const it = enFarJob(fx, fz); while (!it.next().done); E.farC0 = [fx, fz]; enFarSink(); }
     spawn(rand); clearSquad(); perchTrees = []; clearAnimals(); if (gameMode === "hike" || gameMode === "hunt") enAnimInit(); clearLoot(); if (ARMED() && VR_ON) { resetArms(); gunSndLoad(); } startZone(); startCapture();
-    if (GLOBE) { runGen(globePaintGen()); geoStart(GLOBE.sv); }
+    if (GLOBE) { runGen(globePaintGen()); if (geoMode()) geoStart(GLOBE.sv); }
     if (gameMode !== "hike") { const W = weather, R2 = mulberry32(seed * 29 + 3), P0 = W.type === "fog" ? [6 + R2() * 6, 9, .05, 14, .55] : W.precip ? [10, 30, W.storm ? .012 : .008, 10, .3] : [0, 10, 0, 0, 0];   // 2.23: hunting's ground fog
       HFOG.uHFog.value.set(P0[0], P0[1], P0[2] * .7, P0[3]); HFOG.uHFogB.value.set(R2() * 400, R2() * 400, P0[4]); }
     enAmbient(true);
@@ -11060,7 +11075,7 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
   if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
 function mpNearSpawn() {                                    // 3.20: online Hunting and Hiking: back in somewhere semi-close to another player (60-180 m, safe ground)
-  if (!MP.on || !MP.code || GLOBE || !(gameMode === "hunt" || gameMode === "hike")) return null;
+  if (!MP.on || !MP.code || GEO.on || !(gameMode === "hunt" || gameMode === "hike")) return null;
   const others = [...MP.links.values()].filter(L => L.R && L.R.cur && L.R.alive !== false && L.R.head); if (!others.length) return null;
   const L = others[Math.floor(Math.random() * others.length)], hx = L.R.head.x, hz = L.R.head.z;
   for (let k = 0; k < 400; k++) { const a = Math.random() * 6.283, r = 60 + Math.random() * 120 + (k > 250 ? 100 : 0), x = hx + Math.cos(a) * r, z = hz + Math.sin(a) * r;
@@ -11072,10 +11087,13 @@ function mpNearSpawn() {                                    // 3.20: online Hunt
 function uwRespawn() {                                      // wake up somewhere random on dry ground (3.20: online Hunting and Hiking, near another player)
   pteroCalm();                                               // 3.01: the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // 2.73: Geocaching: anywhere on the planet
-  let s = mpNearSpawn() || arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
+  let s = mpNearSpawn();
+  if (!s && GLOBE) for (let k = 0; k < 400 && !s; k++) { const a = Math.random() * 6.283, r = 150 + Math.random() * 550, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;   // (3.21: the planet: back in somewhere near where you fell)
+    if (H(x, z) > water + 2 && slopeNy(x, z) > .8 && !inLava(x, z, 30) && !beasts.some(A => A.pred && !A.dead && A.x !== undefined && Math.hypot(A.x - x, A.z - z) < 70)) s = [x, z]; }
+  if (!s) s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
   for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30) && (k > 300 || vbFarFrom(x, z, Math.min(120, HALF * .4)))) s = [x, z]; }   // (2.48: not next to a bot)
   if (!s) s = [P.x, P.z];
-  P.x = s[0]; P.z = s[1]; if (ENDLESS && !GLOBE) enEnsure(P.x, P.z, 200); P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
+  P.x = s[0]; P.z = s[1]; if (ENDLESS) enEnsure(P.x, P.z, 200); P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
 }
 function uwAudio(under, dt) {
   if (!SND.ctx || !SND.uw) return;
@@ -11545,7 +11563,7 @@ function scopeReadout() {                                    // distance (to 5 m
 const THERM = { rt: null, cam: null, mag: null, ovScene: null, hot: [], hotT: 0, lay: 5 };
 function thermalLoaded() {                                     // 2.64: the secret: every gun red (5 stars), all 10 grenades (and in PvP full health and full shield); 2.66: the binoculars too
   if (!(["hunt", "ar", "smg", "pistol"].every(k => (vr.own[k] || 0) >= 5) && (vr.nades | 0) >= NADE.MAX)) return false;
-  if (gameMode === "hunt") return !GLOBE || MP.hp >= 99.5;     // (animals and dinosaurs glow; 2.70: Geocaching also needs full health)
+  if (gameMode === "hunt") return !GEO.on || MP.hp >= 99.5;     // (animals and dinosaurs glow; 2.70: Geocaching also needs full health)
   return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
 }
 const geoTherm = k => GEO.on && ((k === "hunt" && geoHas("tscope")) || (k === "binos" && geoHas("tbinos")));   // 2.74: Geocaching: the thermal scope and binoculars are items
@@ -11992,11 +12010,10 @@ function vruiParts() {
       uiLabel(g, lx, 1108, "Capture point"); note(g, lx + 540, 1108, "+1 point per " + CAPTURE.every + " s held alone"); }
     if (gameMode === "hunt") { uiLabel(g, lx, 948, "Prehistoric"); note(g, lx + 500, 948, "Dinosaurs to hunt"); }
     if (spawnPick()) uiLabel(g, lx, 1028, "Start apart");
-    if (gameMode === "hike") { uiLabel(g, rx, 168, "Map", "Endless"); note(g, rx, 238, "New land grows as you walk: it starts in the land of your latitude"); }
-    else if (!geoMode() && (gameMode === "hunt" || !onl())) { uiLabel(g, rx, 168, "Map", huntEndless() || pvpEndless() ? "Endless" : "The 3 km island"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
+    if (!geoMode() && (gameMode === "hike" || gameMode === "hunt" || !onl())) { const pl = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(); uiLabel(g, rx, 168, "Map", pl ? "The planet · 50 km round" : "The 3 km island"); if (pl && gameMode === "hike") note(g, rx, 238, "You start in the land of your latitude"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
     else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : $("sizeVal").textContent);
     if (geoMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
-    else if (huntEndless()) note(g, rx, 318, "New land, animals and guns as you go");
+    else if (huntEndless()) note(g, rx, 318, "Land, animals and guns all over the planet");
     else if (gameMode === "pvp" && onl()) uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
     if (!onl() && gameMode === "pvp") uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min");   // 2.48: solo PvP (with bots)
@@ -12019,8 +12036,9 @@ function vruiParts() {
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + i * 75, 790, 69, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 24 }));   // 2.38: one row
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode !== "pvp" || !onl() || geoMode(), fs: 30 }));   // (2.94: every size: online Deathmatch)
-  uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { if (gameMode === "hunt") set.huntMap = "island"; else set.pvpMap = "island"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => !huntEndless() && !pvpEndless(), hide: () => geoMode() || !(gameMode === "hunt" || (gameMode === "pvp" && !onl())) });   // 2.94
-  uiBtn(S2, rx + 310, 196, 300, 62, "Endless", () => { if (gameMode === "hunt") set.huntMap = "endless"; else set.pvpMap = "endless"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => huntEndless() || pvpEndless(), hide: () => geoMode() || !(gameMode === "hunt" || (gameMode === "pvp" && !onl())) });
+  const mapPl = () => gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(), mapBtns = () => geoMode() || !(gameMode === "hike" || gameMode === "hunt" || (gameMode === "pvp" && !onl()));
+  uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { if (gameMode === "hike") set.hikeMap = "island"; else if (gameMode === "hunt") set.huntMap = "island"; else set.pvpMap = "island"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => !mapPl(), hide: mapBtns });   // 2.94 (3.21: Hike too)
+  uiBtn(S2, rx + 310, 196, 300, 62, "Planet · 50 km", () => { if (gameMode === "hike") set.hikeMap = "endless"; else if (gameMode === "hunt") set.huntMap = "endless"; else set.pvpMap = "endless"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: mapPl, hide: mapBtns });
   if (0) uiBtn(S2, rx, 196, 240, 62, "Start over", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Start over", hide: () => !geoMode() || !(geoLoad() && geoLoad().n), fs: 28 });   // 2.76: back to level 0
 
   uiBtn(S2, rx, 346, 290, 62, "Island", () => { set.edges = "island"; }, { active: () => set.edges === "island", hide: () => !(gameMode === "pvp" && onl()) });
@@ -15429,7 +15447,7 @@ function mpVoice(L, stream) {                               // each player's voi
     src.connect(g); g.connect(SND.master); L.vsrc = src; L.vg = g;
   } catch (e) {}
 }
-function mpSendTo(L, o) { if (GLOBE && (o.t === "s" || o.t === "f" || o.t === "g" || o.t === "mk") && !o.gf) { o.gf = geoFrameArr(); if (UNDER.on) o.ug = UNDER.idx; } if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
+function mpSendTo(L, o) { if (GLOBE && (o.t === "s" || o.t === "f" || o.t === "g" || o.t === "mk" || o.t === "an" || o.t === "spawn" || o.t === "start") && !o.gf) { o.gf = geoFrameArr(); o.gs = seed; if (UNDER.on) o.ug = UNDER.idx; } if (L && L.open && !L.bad && L.conn) try { L.conn.send(o); } catch (e) {} }
 function mpSend(o) { for (const L of MP.links.values()) mpSendTo(L, o); }
 function mpSendHost(o) { mpSendTo(MP.links.get(mpHostId()), o); }
 function mpSet() { const s = { mode: gameMode }; for (const k of MP_SET) s[k] = set[k]; return s; }
@@ -15460,8 +15478,8 @@ const mpColOf = L => L ? Math.max(0, L.idx) : MP.idx;           // your player c
 const mpUni = L => { const c = L ? L.col : MP.col; return c >= 0 && c < 5 ? c : (L ? Math.max(0, L.idx) : MP.idx) % 5; };   // your uniform
 const mpTagOf = id => { if (vbIsId(id)) return vbName(id); if (!id || id === mpMyId()) return MP.tag; const L = MP.links.get(id); return (L && L.tag) || "Player"; };
 const rexSeen = () => legendSeen() || (MP.on && MP.anyRed && gameMode === "hunt");
-const mpNetGuest = () => { if (!MP.code || MP.host || GLOBE || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
-MP.netV = "2.80";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
+const mpNetGuest = () => { if (!MP.code || MP.host || (GLOBE && GEO.on) || (gameMode !== "hunt" && !ENDLESS)) return false; const L = MP.links.get(mpHostId()); return !!(L && L.open && !L.bad); };
+MP.netV = "3.21";                                            // 2.43: the online "language" and the map recipe; only changes when they change, not every update
 const verNum = v => String(v || "0").split(".").map(Number).reduce((a, n, i) => a + n / Math.pow(1000, i), 0);
 function mpWarn(text) { MP.warn = { text, t: performance.now() }; mpLobbyDraw(); if (state === "play" && vr.on) vrBanner(text, 6, 1); }
 function verCheck() {                                         // a newer version on the site: say so on the menus (only on the real game sites)
@@ -15599,7 +15617,7 @@ function mpOnlineTick(dt, playing) {
   if (MP.host && (VB.fitT -= dt) <= 0) { VB.fitT = .5; vbFit(); }   // 2.48: the bots keep up with who's in the room
   for (const L of MP.links.values()) if (L.mark && L.mark.visible && ((L.markT -= dt) <= 0 || !playing || !L.open)) { L.mark.visible = false; drawMap($("miniMap")); }
   if (playing && (set.comms | 0) === 3 && vr.I && MP.on) mpBumpTick();
-  if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing && !GLOBE) mpBeastSend(dt);
+  if (MP.host && MP.on && (gameMode === "hunt" || ENDLESS) && playing && !(GLOBE && GEO.on)) mpBeastSend(dt);
   roomsBeat(dt);                                             // 2.28: a Public room stays on the list
   if (mpNetGuest() && (MP.pruneT = (MP.pruneT || 0) - dt) <= 0) {   // animals the host stopped sending (too far now, or gone)
     MP.pruneT = 1;
@@ -15610,7 +15628,7 @@ function mpOnlineTick(dt, playing) {
 /* ---- 2.28: open games. A Public room checks in with our Cloudflare Worker every 30 s (and when it changes); "Find a game" reads the list every 5 s. ---- */
 const ROOMS_URL = "https://just-trees-online.ron-bb2.workers.dev/rooms";
 const roomAt = i => MP.rooms && MP.rooms[(MP.roomPg || 0) * 6 + i] || null;
-function roomMapName() { if (set.geoNet && gameMode === "hunt" && set.huntMap === "globe") return "Treeocashing"; const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Endless"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
+function roomMapName() { if (set.geoNet && gameMode === "hunt" && set.huntMap === "globe") return "Treeocashing"; const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Planet"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
 function roomsPost(o) { try { fetch(MP.roomsUrl || ROOMS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), keepalive: true }).catch(() => {}); } catch (e) {} }
 function roomsSetPublic(on) { if (!MP.host) return; MP.pub = !!on; MP.pubKey = ""; MP.pubT = 0; if (!on && MP.code) roomsPost({ op: "gone", code: MP.code }); mpLobSync(true); mpLobbyDraw(); }
 function roomsBeat(dt) {                                      // host: keep a Public room on the list
@@ -15775,9 +15793,12 @@ function mpRevealEnd() {                                    // into the real map
 function mpSendStart() { MP.roundLeft = set.geoNet ? 0 : MP.roundLeft || (set.roundMin || 10) * 60; for (const L of mpOpen()) mpSendStartTo(L); MP.hp = 100; MP.sh = 0; MP.dead = 0; }
 function mpSendStartTo(L) {                                 // straight into a game that's already going
   const others = [[P.x, P.z]]; for (const q of MP.links.values()) if (q !== L && q.R && q.R.cur) others.push([q.R.head.x, q.R.head.z]);
-  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft, hr: hourNow });
+  mpSendTo(L, { t: "start", seed, set: mpSet(), hx: P.x, hz: P.z, others, left: MP.roundLeft, hr: hourNow, u: GLOBE ? GLOBE.utc : undefined });
 }
+let GLB_JOIN = null;                                          // 3.21: a guest's start on the planet, read when the world is made
 function mpGuestStart(o) {
+  if (GLOBE) GLOBE.folT = 1e15;
+  GLB_JOIN = !set.geoNet && Array.isArray(o.gf) && o.gf.length === 11 && isFinite(o.hx) ? { seed: o.seed, key: o.gf.join(), F: { c: o.gf.slice(0, 3), e: o.gf.slice(3, 6), n: o.gf.slice(6, 9), ox: o.gf[9], oz: o.gf[10] }, x: o.hx, z: o.hz, u: o.u } : null;                                // (3.21: not following the old world's layout while the new one is made)
   mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = set.geoNet ? 0 : o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
@@ -15787,7 +15808,9 @@ function mpGuestStart(o) {
     for (let k = 0; k < 400; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (!okSpot(x, z)) continue; const d = Math.min(...far.map(([a, b]) => Math.hypot(x - a, z - b))); if (!best || (best[2] < want && d > best[2])) best = [x, z, d]; if (d >= want) break; }
     if (best) { P.x = best[0]; P.z = best[1]; P.y = groundAt(P.x, P.z); }
     { const as = arenaSpawnFar(far); if (as) { P.x = as[0]; P.z = as[1]; P.y = groundAt(P.x, P.z); } }   // 2.47: an arena: your side's start point
-    if (GLOBE) { const a = Math.random() * 6.283, r = 20 + Math.random() * 60; for (let k = 0; k < 30; k++) { const x = Math.cos(a + k) * r, z = Math.sin(a + k) * r; if (H(x, z) > water + .5) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } } }   // 2.80: the planet's start, a little apart
+    if (GLOBE && GLOBE.folKey && GLOBE.folKey === (o.gf || []).join()) {   // 3.21: a hike or hunt on the planet: made in the host's layout (GLB_JOIN): start next to them, wherever they've got to
+      const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); }
+    else if (GLOBE) { const a = Math.random() * 6.283, r = 20 + Math.random() * 60; for (let k = 0; k < 30; k++) { const x = Math.cos(a + k) * r, z = Math.sin(a + k) * r; if (H(x, z) > water + .5) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } } }   // 2.80: the planet's start, a little apart
     else if (ENDLESS) { const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // 2.21: joining endless land: near the host (2.24: as far as chosen)
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
     vr.gunInit = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; $("loading").classList.add("hidden"); $("setup").classList.add("hidden");
@@ -15798,7 +15821,8 @@ function mpRecv(o, L) {
   if (!o || !o.t) return;
   if (o.gf) { const me = UNDER.on ? UNDER.idx : 0, th = o.ug | 0; L.ugAway = me !== th;   // 2.90: the Underworld: the same level, where it really is; another level, out of sight
     if (L.ugAway) { if (o.t !== "s") return; for (const A of [o.h, o.l, o.r, o.g && o.g.p]) if (Array.isArray(A)) A[1] -= 1e5; o.gh = undefined; delete o.gf; } else if (th) delete o.gf; }
-  if (o.gf) geoNetIn(o);                                       // 2.80: from their layout of the planet into mine
+  if (o.gf && o.t === "s" && !MP.host && GLOBE && !geoNet() && L && L.id === mpHostId() && o.gs === seed && !MP.pendingReveal) globeFollow(o.gf);   // 3.21
+  if (o.gf && o.t !== "start") geoNetIn(o);                    // (3.21: a start is read after the planet is made: mpGuestStart) 2.80: from their layout of the planet into mine
   L.lastRx = performance.now();
   if (o.t === "ping") return;
   if (o.t === "hi") {
@@ -17159,9 +17183,10 @@ function mpHurtMesh() {
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {                                       // (also runs offline in VR PvP, for dying and respawning)
   const now = performance.now();
-  if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 12 seconds is gone
+  if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 20 seconds is gone
+  { const gap = now - (MP.tickT || now); MP.tickT = now; if (gap > 1500) for (const L of MP.links.values()) L.lastRx += gap; }   // 3.21: my own long pause (a world being made) isn't them going quiet
   for (const L of [...MP.links.values()]) {
-    if (L.open && now - L.lastRx > 12000) mpLinkGone(L, true);
+    if (L.open && now - L.lastRx > 20000) mpLinkGone(L, true);   // (3.21: 20 s: the host may be making a world)
     else if (!L.open && now - L.lastRx > 30000) mpDropLink(L);
   }
   if (MP.revealT > 0 && (MP.revealT -= dt) <= 0) mpRevealEnd();
