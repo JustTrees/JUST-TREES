@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.23";              // Just Trees
+const VERSION = "3.24";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -523,7 +523,7 @@ const TUNE_DEF = [
   ["boots", "Trail boots: speed", 1.15, .05, 1, 2], ["snowSlow", "Deep snow without snowshoes", .7, .05, .3, 1], ["bushSlow", "Pushing through bushes", .8, .05, .3, 1],
   ["wings", "Glider wings: sinking", .67, .03, .1, 1], ["wings2", "Ultralight: sinking", .42, .03, .05, 1], ["wings2Speed", "Ultralight: glide speed", 1.2, .05, 1, 2.5],
   ["fill", "Canteen: fill speed (per s)", 2.2, .2, .2, 8], ["chug", "Canteen: water a second", 10, 1, 1, 40],
-  ["bite", "Fishing: how often they bite", 1, .25, .25, 10], ["fishStr", "Fishing: how hard they fight", 1, .1, .2, 3], ["band", "Fishing: reel-speed window", .15, .02, .05, .4],
+  ["bite", "Fishing: how often they bite", 1, .25, .25, 10], ["fishStr", "Fishing: how hard they fight", 1, .1, .2, 3], ["drag", "Fishing: drag (strain before line slips)", .78, .02, .4, 1], ["castK", "Fishing: cast distance ×", 1, .1, .3, 3],
   ["jetMax", "Jet ski: top speed (m/s)", 20, 2, 6, 50], ["jetTurn", "Jet ski: turning", 1, .1, .3, 3],
   ["chopV", "Machete: swing speed to cut", 2.2, .2, .6, 6], ["sprayR", "Bear spray: reach (m)", 14, 1, 4, 30], ["sprays", "Bear spray: sprays per refill", 4, 1, 1, 12],
   ["fireT", "Campfire: seconds to light", 2, 1, 0, 15], ["cook", "Campfire: cooked food ×", 2, .25, 1, 4],
@@ -4841,98 +4841,179 @@ function geoFishUI() {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
   m.renderOrder = 997; m.frustumCulled = false; m.visible = false; m.userData.cv = cv; scene.add(m); GEO.fishM = m; return m;
 }
-function geoFishDraw(F) {
+function geoFishDraw(F, L) {                                  // a small dial by the reel: how hard the line is pulling, and how much is out
   const m = geoFishUI(), g = m.userData.cv.getContext("2d"); g.clearRect(0, 0, 256, 256);
-  g.fillStyle = "rgba(10,20,26,.82)"; uiRound(g, 2, 2, 252, 252, 20); g.fill();
-  // the round meter: where the fish pulls (gold) and where your rod tips (white)
-  g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 5; g.beginPath(); g.arc(88, 110, 62, Math.PI, 2 * Math.PI); g.stroke();
-  const ang = v => Math.PI * 1.5 + Math.max(-1, Math.min(1, v)) * Math.PI / 2;
-  g.strokeStyle = "#ffd65a"; g.lineWidth = 16; g.beginPath(); g.arc(88, 110, 62, ang(F.pull) - .22, ang(F.pull) + .22); g.stroke();
-  g.strokeStyle = "#ffffff"; g.lineWidth = 5; g.beginPath(); g.moveTo(88, 110); g.lineTo(88 + Math.cos(ang(F.tilt)) * 70, 110 + Math.sin(ang(F.tilt)) * 70); g.stroke();
-  g.fillStyle = "#cfe8f0"; g.font = "bold 20px sans-serif"; g.textAlign = "center"; g.fillText("tip", 88, 140);
-  // the speed bar: the band to reel in, and how fast you're reeling
-  g.fillStyle = "rgba(255,255,255,.15)"; g.fillRect(196, 24, 34, 160);
-  const y = v => 184 - Math.max(0, Math.min(1, v)) * 160; g.fillStyle = "rgba(120,230,120,.75)"; g.fillRect(196, y(F.want + .15), 34, y(F.want - .15) - y(F.want + .15));
-  g.fillStyle = "#ffffff"; g.fillRect(190, y(F.reel) - 3, 46, 6); g.fillStyle = "#cfe8f0"; g.fillText("reel", 213, 206);
-  // how far in, and the line's strain
-  g.fillStyle = "rgba(255,255,255,.15)"; g.fillRect(20, 222, 216, 14); g.fillStyle = "#5ad0ff"; g.fillRect(20, 222, 216 * F.got, 14);
-  g.fillStyle = F.tense > .65 ? "#ff5a4a" : "#ffd65a"; g.fillRect(20, 160, 150 * Math.min(1, F.tense), 10); g.fillStyle = "#cfe8f0"; g.font = "16px sans-serif"; g.textAlign = "left"; g.fillText("strain", 20, 186);
-  if (F.got >= .9) { g.fillStyle = "#ffd65a"; g.font = "bold 30px sans-serif"; g.textAlign = "center"; g.fillText("PULL UP!", 100, 34); }
+  g.fillStyle = "rgba(10,20,26,.7)"; g.beginPath(); g.arc(128, 128, 120, 0, 6.283); g.fill();
+  const a0 = Math.PI * .75, a1 = Math.PI * 2.25, at = v => a0 + (a1 - a0) * Math.max(0, Math.min(1, v));
+  g.lineWidth = 20; g.strokeStyle = "rgba(255,255,255,.18)"; g.beginPath(); g.arc(128, 128, 92, a0, a1); g.stroke();
+  g.strokeStyle = "rgba(255,70,50,.55)"; g.beginPath(); g.arc(128, 128, 92, at(TUNE.drag), a1); g.stroke();   // past the drag: line slips out (and much further, it snaps)
+  g.strokeStyle = F.T > TUNE.drag ? "#ff5a4a" : F.T > .45 ? "#ffd65a" : "#8fe08a"; g.beginPath(); g.arc(128, 128, 92, a0, at(F.T)); g.stroke();
+  g.fillStyle = "#ffffff"; g.font = "bold 44px sans-serif"; g.textAlign = "center"; g.fillText(Math.round(L) + " m", 128, 140);
+  g.fillStyle = "#cfe8f0"; g.font = "20px sans-serif"; g.fillText(F.stam < .25 ? "tired" : "line out", 128, 172);
   m.material.map.needsUpdate = true;
 }
-function geoRodReset(R) { R.st = "idle"; if (R.lure) R.lure.visible = false; if (R.line) R.line.visible = false; if (GEO.fishM) GEO.fishM.visible = false; }
+/* ---- the fishing rod, the way real VR fishing does it: the rod in your off hand, a spinning reel under it. Your other hand grips the
+   reel's handle (squeeze grip near it and it locks on) and you crank it round: each turn brings in about 0.8 m of line. To cast: hold the
+   rod hand's trigger (your finger on the line, the bail open), swing the rod and let go as it comes forward: the lure flies off the tip
+   as fast as the tip was moving, through the air (gravity and drag), so a good snap of the rod sends it 30-40 m. The first turn of the
+   handle closes the bail. A bite tugs the tip: strike (jerk the rod up or back). Then the fight: the rod bends and the line turns yellow
+   and red as it strains; past the drag the reel lets line out instead (the fish runs); crank hard into a running fish with the rod pointed
+   straight at it and the line snaps; let it go slack too long and it throws the hook; hold the rod over to the side against its run to
+   tire it. Close in, lift the rod and it swings out of the water into your hand. ---- */
+const ROD = { L: 1.9, N: 8, turn: .8, spool: 120 };
+function geoRodModel() {
+  const g = new THREE.Group(), mat = c => giMat(c), sx = set.hand === "right" ? 1 : -1;
+  const add = (geo, c, x, y, z, rx = 0, ry = 0, rz = 0, par = g) => { const m = new THREE.Mesh(geo, mat(c)); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); par.add(m); return m; };
+  add(giCyl(.016, .017, .3, 10), 0x8a6a42, 0, -.17, 0);                       // the cork grip behind your hand
+  add(giCyl(.013, .013, .07, 10), 0x2a2a2a, 0, 0, 0);                          // the reel seat
+  add(giCyl(.012, .016, .03, 10), 0x8a6a42, 0, .05, 0);
+  // the reel, hanging under the rod: foot, body, spool, bail, and the handle on your reeling side
+  const reel = new THREE.Group(); reel.position.set(0, .0, -.075); g.add(reel);
+  add(new THREE.BoxGeometry(.008, .05, .06), 0x333333, 0, 0, .04, 0, 0, 0, reel);
+  add(giCyl(.026, .026, .045, 14), 0x3a3f46, 0, -.01, 0, 0, 0, 0, reel);          // the body (its axis along the rod)
+  const spool = add(giCyl(.022, .022, .03, 14), 0xb8bcc2, 0, .03, 0, 0, 0, 0, reel);
+  const bail = new THREE.Group(); bail.position.set(0, .03, 0); reel.add(bail);
+  add(new THREE.TorusGeometry(.03, .0025, 6, 16, Math.PI), 0xd8d8d8, 0, .012, 0, Math.PI / 2, 0, 0, bail);
+  const crank = new THREE.Group(); crank.position.set(sx * .03, -.012, 0); reel.add(crank);
+  add(giCyl(.004, .004, .062, 6), 0x2a2a2a, 0, .031, 0, 0, 0, 0, crank);         // the arm (turned in the rod's up-and-along plane)
+  const knob = add(giCyl(.009, .009, .03, 10), 0x111111, sx * .016, .062, 0, 0, 0, Math.PI / 2, crank);
+  // the blank, in joints so it can bend, with a guide at each joint
+  const segs = []; let par = g, y0 = .07; const seg = (ROD.L - y0) / ROD.N;
+  for (let i = 0; i < ROD.N; i++) { const j = new THREE.Group(); j.position.set(0, i ? seg : y0, 0); par.add(j); const r0 = .0075 - i * .0007, r1 = .0075 - (i + 1) * .0007;
+    add(giCyl(Math.max(.0015, r1), Math.max(.0018, r0), seg, 6), 0x2a3a52, 0, seg / 2, 0, 0, 0, 0, j);
+    if (i % 2 === 0) add(new THREE.TorusGeometry(.009 - i * .0007, .0012, 4, 10), 0xcccccc, 0, seg, -.012, 0, 0, 0, j);
+    segs.push(j); par = j; }
+  const tip = new THREE.Object3D(); tip.position.set(0, seg, 0); par.add(tip);
+  g.userData = { segs, tip, crank, knob, bail, spool, reel };
+  return g;
+}
+function geoRodReset(R) { R.st = "ready"; R.bail = false; R.L = .4; R.F = null; if (R.line) R.line.visible = true; if (R.lure) R.lure.visible = true; if (GEO.fishM) GEO.fishM.visible = false; if (R.fo) { scene.remove(R.fo); R.fo = null; } R.lp = null; }
+function geoRodLine(R, a, b, sag, T) {                         // the line: tip to lure, drooping when it's slack, colour by the strain
+  const pa = R.line.geometry.attributes.position, n = pa.count, d = a.distanceTo(b);
+  for (let i = 0; i < n; i++) { const t = i / (n - 1); pa.setXYZ(i, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t - Math.sin(t * Math.PI) * sag * d, a.z + (b.z - a.z) * t); }
+  pa.needsUpdate = true; R.line.visible = true; R.line.material.color.setHex(T > TUNE.drag ? 0xff4a3a : T > .45 ? 0xffd65a : 0xeeeeee);
+}
+const _rq = new THREE.Quaternion(), _rv = new THREE.Vector3(), _rw = new THREE.Vector3();
+function geoRodBend(R, dirW, k) {                               // bend the blank toward where the line goes (k: 0 straight, 1 hard over)
+  const M = R.M, U = M.userData; M.updateMatrixWorld(true); _rq.copy(M.quaternion).invert(); const dl = _rv.copy(dirW).applyQuaternion(_rq); dl.y = 0;
+  if (dl.lengthSq() < 1e-6) dl.set(0, 0, -1); dl.normalize(); const ax = _rw.set(0, 1, 0).cross(dl).normalize();
+  R.bendK = (R.bendK || 0) + (k - (R.bendK || 0)) * .25; const tot = R.bendK * 1.7;
+  U.segs.forEach((j, i) => { const w = (i + 1) * (i + 1) / 204; j.quaternion.setFromAxisAngle(ax, tot * w); });
+}
 function geoRodTick(I, main, dt) {
-  const R = GEO.rod || (GEO.rod = { st: "idle", t: 0 }), rod = GEO.heldObj, ms = set.hand === "right" ? "R" : "L", os = ms === "R" ? "L" : "R", off = I.hands[set.hand === "right" ? "left" : "right"];
-  if (!R.lure) { R.lure = new THREE.Mesh(giBall(.045, 8), giMat(0xff3a2a)); R.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineBasicMaterial({ color: 0xeeeeee })); R.line.frustumCulled = false; R.lure.visible = R.line.visible = false; scene.add(R.lure, R.line); }
-  const tip = rod.localToWorld(_giV.set(0, .9, 0)).clone(), tv = R.tipP ? tip.clone().sub(R.tipP).divideScalar(Math.max(dt, 1e-3)) : new THREE.Vector3(); R.tipP = tip.clone();
-  R.tvS = R.tvS ? R.tvS.lerp(tv, .5) : tv.clone(); R.t += dt;
-  const line = (p) => { const pa = R.line.geometry.attributes.position; pa.setXYZ(0, tip.x, tip.y, tip.z); pa.setXYZ(1, p.x, p.y, p.z); pa.needsUpdate = true; R.line.visible = true; };
-  if (R.st === "idle") {                                       // hold the trigger and fling; let go to cast
-    if (main.trig > .6) { if (!R.arm) { R.arm = true; R.best = 0; R.bestV = new THREE.Vector3(); } const sp = R.tvS.length(); if (sp > R.best) { R.best = sp; R.bestV.copy(R.tvS); } }
-    else if (R.arm) { R.arm = false;
-      if (R.best < 1.2) { vrBanner("Fling the rod as you let go", 1.5, 0); return; }
-      const v = R.bestV.clone().normalize().multiplyScalar(Math.min(16, 4 + R.best * 2.2)); v.y = Math.max(v.y, 2);
-      R.st = "fly"; R.t = 0; R.p = tip.clone(); R.v = v; R.lure.visible = true; gunFoley([[0, 1400, .25, .08]]); buzz(ms, .3, 40); }
+  const R = GEO.rod || (GEO.rod = { st: "ready", t: 0, L: .4 }), offN = set.hand === "right" ? "left" : "right", off = I.hands[offN], ms = set.hand === "right" ? "R" : "L", os = ms === "R" ? "L" : "R";
+  if (!R.M) { R.M = geoRodModel(); scene.add(R.M); R.lure = new THREE.Mesh(giBall(.03, 8), giMat(0xff3a2a)); R.line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 18 }, () => new THREE.Vector3())), new THREE.LineBasicMaterial({ color: 0xeeeeee }));
+    R.line.frustumCulled = false; scene.add(R.lure, R.line); geoRodReset(R); }
+  if (GEO.heldObj) GEO.heldObj.visible = false;
+  const hand = off || main; R.M.visible = R.lure.visible = true;
+  R.M.quaternion.copy(hand.rayQ).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.0)); R.M.position.copy(hand.pos).add(_v1.set(0, .02, -.05).applyQuaternion(hand.rayQ)); R.M.updateMatrixWorld(true);
+  const U = R.M.userData, tip = U.tip.getWorldPosition(new THREE.Vector3()), tv = R.tipP ? tip.clone().sub(R.tipP).divideScalar(Math.max(dt, 1e-3)) : new THREE.Vector3(); R.tipP = tip.clone();
+  R.tvS = R.tvS ? R.tvS.lerp(tv, .45) : tv.clone(); R.t += dt;
+  R.ht = (R.ht || 0) + dt; (R.hist || (R.hist = [])).push([R.ht, R.tvS.clone()]); while (R.hist.length > 1 && R.ht - R.hist[0][0] > .1) R.hist.shift();   // (the last tenth of a second of the tip's speed)
+  // the reel handle: grip near it and your hand locks on; turn it round
+  const hub = U.crank.getWorldPosition(new THREE.Vector3()), knobW = U.knob.getWorldPosition(new THREE.Vector3()); let turned = 0;
+  if (!R.crankOn && main && main.grip > .5 && (main.pos.distanceTo(knobW) < .13 || main.pos.distanceTo(hub) < .13) && !R.gripWas) { R.crankOn = true; R.ca = null; buzz(ms, .4, 30); }
+  if (R.crankOn && (!main || main.grip < .35)) R.crankOn = false;
+  R.gripWas = !!main && main.grip > .5 && !R.crankOn;
+  if (R.crankOn) { _rq.copy(R.M.quaternion).invert(); const l = _rv.copy(main.pos).sub(hub).applyQuaternion(_rq), a = Math.atan2(l.z, l.y);
+    if (R.ca !== null && R.ca !== undefined) { let da = a - R.ca; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; turned = Math.abs(da); } R.ca = a; U.crank.rotation.x = a;
+    R.clk = (R.clk || 0) + turned; if (R.clk > 1.57) { R.clk = 0; buzz(ms, .15, 12); gunFoley([[0, 3200, .015, .03]]); } }
+  const reelIn = turned / (2 * Math.PI) * ROD.turn, reelV = reelIn / Math.max(dt, 1e-3);   // metres of line this frame, and how fast
+  R.reelV = (R.reelV || 0) + (reelV - (R.reelV || 0)) * Math.min(1, dt * 8);
+  if (turned > 0 && R.bail && R.st !== "cast") { R.bail = false; gunFoley([[0, 2400, .03, .1]]); }   // the first turn flips the bail shut
+  U.bail.rotation.x = R.bail ? Math.PI : 0; U.spool.rotation.y += (turned - (R.F && R.F.pay ? R.F.pay * dt * 8 : 0));
+  const rodDir = tip.clone().sub(R.M.position).normalize(), water0 = water;
+  if (R.st === "ready") {                                      // the lure hangs from the tip and swings with it
+    if (!R.lp) { R.lp = tip.clone().add(_v1.set(0, -.35, 0)); R.lv = new THREE.Vector3(); }
+    R.lv.y -= 9.8 * dt; R.lv.multiplyScalar(Math.exp(-dt * .8)); R.lp.addScaledVector(R.lv, dt); const d = R.lp.clone().sub(tip), dl = d.length();
+    if (dl > .35) { d.multiplyScalar(1 / dl); R.lp.copy(tip).addScaledVector(d, .35); const vr = R.lv.dot(d); if (vr > 0) R.lv.addScaledVector(d, -vr); }
+    R.lure.position.copy(R.lp); geoRodLine(R, tip, R.lp, 0, 0); geoRodBend(R, _v2.set(0, -1, 0), .02);
+    if (off && off.trig > .6) { if (!R.bail) { R.bail = true; gunFoley([[0, 2200, .03, .1]]); } R.arm = true; }   // finger on the line, bail open
+    else if (R.arm) { R.arm = false;                           // let go: the lure flies off as fast as the tip was going
+      let v = R.tvS.clone(); for (const [, q] of R.hist) if (q.lengthSq() > v.lengthSq()) v = q.clone(); const sp = v.length(); if (sp < 3) v.multiplyScalar(.3); else { const hz = Math.hypot(v.x, v.z), el = Math.atan2(v.y, hz), e2 = Math.max(-.6, Math.min(1.3, el + .9)); if (hz > .1) { v.x *= sp * Math.cos(e2) / hz; v.z *= sp * Math.cos(e2) / hz; v.y = sp * Math.sin(e2); } }   // (the rod flexes and flicks the lure up: let go at about 10 to 11 o'clock; too early it goes high and short, too late it slaps down close)
+      v.multiplyScalar(TUNE.castK);
+      R.st = "cast"; R.t = 0; R.hist = []; R.p = R.lp.clone(); R.v = v.lengthSq() > R.lv.lengthSq() ? v : R.lv.clone(); R.v0 = R.v.length(); R.lp = null; gunFoley([[0, 1700, .3, .06], [.05, 900, .25, .04]]); buzz(os, .3, 40);
+    } else if (R.bail && !(off && off.trig > .6)) R.bail = false;
     return;
   }
-  if (R.st === "fly") {                                        // the lure arcs out
-    R.v.y -= 9.8 * dt; R.p.addScaledVector(R.v, dt); R.lure.position.copy(R.p); line(R.p);
+  if (R.st === "cast") {                                       // through the air: gravity and drag, the line paying out behind it
+    const sp = R.v.length(); R.v.y -= 9.8 * dt; R.v.multiplyScalar(1 / (1 + (.006 + R.L * .00004) * sp * dt)); R.p.addScaledVector(R.v, dt);
+    R.L = tip.distanceTo(R.p); R.lure.position.copy(R.p); geoRodLine(R, tip, R.p, .02, 0); geoRodBend(R, R.p.clone().sub(tip), .03);
     const g = H(R.p.x, R.p.z);
-    if (R.p.y <= water && g < water - .3 && !(ENDLESS && enIcedAt(R.p.x, R.p.z))) {   // in the water: wait for a bite
-      const depth = water - g, dawn = Math.min(Math.abs(hourNow - 6), Math.abs(hourNow - 18)) < 2 ? 1.6 : 1, spot = .6 + .4 * Math.abs(Math.sin(R.p.x * .013 + R.p.z * .017)), salt = geoSalty(R.p);
-      R.st = "wait"; R.t = 0; R.p.y = water; R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot * TUNE.bite; R.salt = salt; gunFoley([[0, 700, .1, .1]]);
-    } else if (R.p.y <= g + .05 || R.t > 4) { vrBanner("Cast it into the water", 1.5, 0); geoRodReset(R); }
+    if (R.L > ROD.spool) { R.v.multiplyScalar(.2); }
+    if (R.p.y <= Math.max(g, water0)) { const wet = g < water0 - .3 && !(ENDLESS && enIcedAt(R.p.x, R.p.z)); R.p.y = wet ? water0 : g + .03; R.st = "out"; R.t = 0; R.wet = wet;
+      if (wet) { geoPop(R.p.clone(), 0xd8f0ff, 10, "splash"); gunFoley([[0, 700, .1, .1]]);
+        const depth = water0 - g, dawn = Math.min(Math.abs(hourNow - 6), Math.abs(hourNow - 18)) < 2 ? 1.6 : 1, spot = .6 + .4 * Math.abs(Math.sin(R.p.x * .013 + R.p.z * .017));
+        R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot * TUNE.bite; R.salt = geoSalty(R.p); } else gunFoley([[0, 300, .06, .08]]); }
     return;
   }
-  // the lure sits out there: reel in (pull the trigger) to bring it back
-  const bobY = R.st === "bite" ? water - .08 * Math.abs(Math.sin(R.t * 22)) : water + Math.sin(performance.now() / 400) * .015;
-  if (R.st !== "fight") { R.lure.position.set(R.p.x, bobY, R.p.z); line(R.lure.position); }
-  if (Math.hypot(R.p.x - P.x, R.p.z - P.z) > 40) { geoRodReset(R); return; }
-  if (R.st === "wait") {
-    if (edge("rodT", main.trig)) { geoRodReset(R); return; }   // (pull the trigger: wind the lure in to cast again)
-    if (R.t > 45) { vrBanner("Nothing's biting here", 1.5, 0); geoRodReset(R); return; }
-    if (Math.random() < R.rate * dt) { R.st = "bite"; R.t = 0; buzz(ms, 1, 220); gunFoley([[0, 300, .1, .14]]); }
-    return;
-  }
-  if (R.st === "bite") {                                       // jerk the rod up, quickly
-    if (R.tvS.y > 2) {
-      const L = R.salt ? SEA_FISH : FISH_KINDS, f = L[Math.floor(Math.random() * L.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
-      R.st = "fight"; R.t = 0; R.fish = { name: f[0], kg, col: f[3] }; R.F = { got: 0, tense: .2, slack: 0, pull: 0, pullT: 0, want: .5, wantT: 0, reel: 0, tilt: 0, str: (.6 + kg / 8) * TUNE.fishStr };
-      vrBanner("Fish on! Reel it in", 1.5, 1); buzz(ms, .8, 120); geoFishUI().visible = true; R.ang = null;
-    } else if (R.t > 1.2) { R.st = "wait"; R.t = 0; vrBanner("Too slow: jerk the rod up when it bites", 1.8, 0); }
+  // the lure is out there: crank to bring it back along the water (or the ground)
+  if (R.st === "out" || R.st === "bite") {
+    const to = _v1.set(tip.x - R.p.x, 0, tip.z - R.p.z), dh = to.length();
+    if (reelIn > 0 && dh > .01) { R.p.addScaledVector(to.multiplyScalar(1 / dh), Math.min(dh, reelIn)); const g = H(R.p.x, R.p.z); R.wet = g < water0 - .3; R.p.y = R.wet ? water0 : g + .03; }
+    if (R.tvS.y > 2.5 && R.st === "out" && !R.bail && dh > 2) { R.p.addScaledVector(to.normalize(), .25); }   // a twitch of the rod hops the lure toward you
+    const bob = R.st === "bite" ? -.06 * Math.abs(Math.sin(R.t * 20)) : Math.sin(performance.now() / 400) * .012;
+    R.lure.position.set(R.p.x, R.p.y + (R.wet ? bob : 0), R.p.z); R.L = tip.distanceTo(R.lure.position);
+    geoRodLine(R, tip, R.lure.position, R.bail ? .06 : .015, 0); geoRodBend(R, R.lure.position.clone().sub(tip), R.st === "bite" ? .35 * Math.abs(Math.sin(R.t * 9)) : .03 + Math.min(.1, R.reelV * .04));
+    if (dh < 1.1) { geoRodReset(R); return; }                   // wound all the way in: ready to cast again
+    if (Math.hypot(R.p.x - P.x, R.p.z - P.z) > ROD.spool + 10) { vrBanner("The line ran out", 1.5, 0); geoRodReset(R); return; }
+    if (R.st === "out") {
+      if (R.wet && Math.random() < R.rate * (R.reelV > .1 && R.reelV < 1.2 ? 1.6 : 1) * dt) { R.st = "bite"; R.t = 0; buzz(os, 1, 220); gunFoley([[0, 300, .1, .14]]); }
+      return; }
+    // a bite: strike (jerk the rod up or back toward you)
+    const back = R.tvS.dot(_v2.copy(R.p).sub(tip).setY(0).normalize()) < -2.2;
+    if (R.tvS.y > 2.2 || back) {
+      const Lf = R.salt ? SEA_FISH : FISH_KINDS, f = Lf[Math.floor(Math.random() * Lf.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
+      R.st = "fight"; R.t = 0; R.bail = false; R.fish = { name: f[0], kg, col: f[3] };
+      R.F = { T: .3, stam: 1, s: Math.min(1.4, (.6 + kg / 8) * TUNE.fishStr / 1.3), mode: "run", modeT: 1.5, run: .8, side: Math.random() < .5 ? 1 : -1, fa: Math.atan2(R.p.x - P.x, R.p.z - P.z), snapT: 0, slackT: 0, pay: 0 };
+      vrBanner("Fish on!", 1.2, 1); buzz(os, .9, 160); buzz(ms, .5, 80);
+    } else if (R.t > 1.4) { R.st = "out"; R.t = 0; vrBanner("Missed it: strike when the tip jerks", 1.8, 0); }
     return;
   }
   if (R.st === "fight") {
-    const F = R.F, dir = _v2.copy(tip).sub(rod.position).normalize(), right = _v1.set(1, 0, 0).applyQuaternion(I.headQ);
-    // the reel: the other hand circling near it
-    const reelC = rod.localToWorld(new THREE.Vector3(.02, .1, 0)); let rate = 0;
-    if (off && off.pos.distanceTo(reelC) < .3) { const rel = off.pos.clone().sub(reelC), u = new THREE.Vector3().crossVectors(dir, Math.abs(dir.y) > .95 ? right : _UPv).normalize(), w = new THREE.Vector3().crossVectors(dir, u), a = Math.atan2(rel.dot(w), rel.dot(u));
-      if (R.ang !== null) { let da = a - R.ang; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI; rate = Math.abs(da) / Math.max(dt, 1e-3); } R.ang = a; } else R.ang = null;
-    F.reel += (Math.min(1, rate / (Math.PI * 4)) - F.reel) * Math.min(1, dt * 6);
-    F.tilt = Math.max(-1, Math.min(1, dir.dot(right) * 2.2));
-    if ((F.pullT -= dt) <= 0) { F.pullT = 1.5 + Math.random() * 2.5; F.pullTo = (Math.random() * 2 - 1) * (.5 + .5 * Math.min(1, F.str / 2)); } F.pull += ((F.pullTo || 0) - F.pull) * Math.min(1, dt * 1.5);
-    if ((F.wantT -= dt) <= 0) { F.wantT = 1 + Math.random() * 2; F.wantTo = .25 + Math.random() * .6; } F.want += ((F.wantTo || .5) - F.want) * Math.min(1, dt * 1.2);
-    const tipOk = Math.sign(F.tilt) === Math.sign(F.pull) && Math.abs(F.tilt) > .25 || Math.abs(F.pull) < .15, dv = F.reel - F.want;
-    if (Math.abs(dv) < TUNE.band) F.got = Math.min(1, F.got + dt * (tipOk ? .09 : .04) / F.str);
-    F.tense = Math.max(0, Math.min(1.2, F.tense + dt * ((dv > .2 ? (dv - .1) * 1.6 : -.25) + (tipOk ? -.15 : .45 * F.str))));
-    F.slack = Math.max(0, F.slack + dt * (dv < -.25 ? .35 : -.4));
-    const mx = 1 - F.got; R.lure.position.set(P.x + (R.p.x - P.x) * mx + F.pull * .8, water - .1, P.z + (R.p.z - P.z) * mx); line(R.lure.position);
-    if ((R.uiT = (R.uiT || 0) - dt) <= 0) { R.uiT = 1 / 15; geoFishDraw(F); }
-    const M = geoFishUI(); M.position.copy(rod.position).add(_v1.set(0, .3, 0)).addScaledVector(right, -.18); M.lookAt(I.head); M.visible = true;
-    if ((R.buzzT = (R.buzzT || 0) - dt) <= 0) { R.buzzT = .12; buzz(ms, .1 + .5 * F.tense, 20); }
-    if (F.tense >= 1) { vrBanner("Snap! The line broke (reeled too hard)", 2, 1); gunFoley([[0, 2600, .05, .14]]); geoRodReset(R); return; }
-    if (F.slack >= 1) { vrBanner("It shook free (keep the line tight)", 2, 1); geoRodReset(R); return; }
-    if (F.got >= .9 && R.tvS.y > 1.6) {                         // pull up: it flies out of the water into your hand
-      R.st = "land"; R.t = 0; GEO.fishM.visible = false; const fo = geoFishModel(R.fish.col, R.fish.kg); fo.position.copy(R.lure.position); scene.add(fo); R.fo = fo; R.from = R.lure.position.clone(); R.lure.visible = false; gunFoley([[0, 500, .3, .1]]);
-    }
+    const F = R.F, s = F.s, h = Math.max(.5, tip.y - water0);
+    if ((F.modeT -= dt) <= 0) { const r = Math.random();     // what the fish does next: a run, a rest, or swimming at you
+      if (r < .15 + .5 * F.stam) { F.mode = "run"; F.modeT = 1 + Math.random() * 2.5; F.run = .5 + Math.random() * .5; F.side = Math.random() < .5 ? 1 : -1; }
+      else if (r < .8) { F.mode = "rest"; F.modeT = 1.2 + Math.random() * 2; } else { F.mode = "come"; F.modeT = .8 + Math.random() * 1.8; } }
+    const pow = .35 + .65 * F.stam, rr = R.reelV;
+    let pull = F.mode === "run" ? (.3 + .45 * F.run) * s * pow : F.mode === "rest" ? .12 * s * pow : 0, give = F.mode === "come" ? .9 : 0;
+    if (F.mode === "come") pull = Math.max(0, rr - give) / 3 + (rr > .15 ? .07 : 0) + (rodDir.y > .5 ? .04 : 0);   // swimming at you: keep reeling (and the rod up) or the line goes slack
+    const crankLoad = F.mode === "come" ? 0 : rr / 2.4 * (F.mode === "run" ? .6 : .22);
+    const lineDir = R.lure.position.clone().sub(tip).normalize(), aim = Math.acos(Math.max(-1, Math.min(1, rodDir.dot(lineDir))));
+    const rodK = aim < .45 ? 1.35 : rodDir.y > .5 ? .88 : 1;   // pointed straight at it, the rod can't cushion anything
+    const Traw = (pull + crankLoad) * rodK;
+    F.pay = 0;
+    if (Traw > TUNE.drag) { F.pay = (Traw - TUNE.drag) * 9; R.L += F.pay * dt; F.T += (TUNE.drag + (Traw - TUNE.drag) * .3 - F.T) * Math.min(1, dt * 10);   // the drag lets line out
+      if ((F.dragT = (F.dragT || 0) - dt) <= 0) { F.dragT = .05; gunFoley([[0, 2600 + Math.random() * 400, .012, .025]]); buzz(ms, .2, 10); } }
+    else { R.L = Math.max(h + .3, R.L - (reelIn + give * dt * (F.mode === "come" ? 1 : 0))); F.T += (Traw - F.T) * Math.min(1, dt * 10); }
+    F.snapT = Traw > 1.18 ? F.snapT + dt : Math.max(0, F.snapT - dt * 2);
+    if (F.snapT > .35) { R.why = "snap"; vrBanner("Snap! The line broke", 2, 1); gunFoley([[0, 2600, .05, .14]]); buzz(os, 1, 120); R.st = "out"; geoRodReset(R); return; }
+    if (R.L > ROD.spool) { R.why = "ranout"; vrBanner("It ran off with all your line", 2, 1); geoRodReset(R); return; }
+    F.slackT = F.T < .05 ? F.slackT + dt : Math.max(0, F.slackT - dt * 2);
+    if (F.slackT > 2) { R.why = "slack"; vrBanner("It threw the hook (keep the line tight)", 2, 1); geoRodReset(R); return; }
+    // side pressure: the rod held over against the way it's running wears it out faster
+    const sideW = _v2.set(Math.cos(F.fa), 0, -Math.sin(F.fa)), rodSide = rodDir.x * sideW.x + rodDir.z * sideW.z, against = F.mode === "run" && Math.sign(rodSide) === -F.side && Math.abs(rodSide) > .3;
+    F.stam = Math.max(0, Math.min(1, F.stam - dt * (F.T * .085 + (against ? .035 : 0)) / s + (F.mode === "rest" ? dt * .008 : 0)));
+    if (F.mode === "run") F.fa += F.side * (1.5 + 2.5 * F.run) / Math.max(4, R.L) * dt * pow;
+    const dh = Math.sqrt(Math.max(.2, R.L * R.L - h * h)); R.p = new THREE.Vector3(P.x + Math.sin(F.fa) * dh, water0 - .08, P.z + Math.cos(F.fa) * dh);
+    { const g = H(R.p.x, R.p.z); if (g > water0 - .2 && dh > 3) { F.fa -= F.side * .05; } }   // (it keeps to the water)
+    R.lure.position.copy(R.p); R.lure.visible = false;
+    if ((F.splT = (F.splT || 0) - dt) <= 0 && (F.mode === "run" || R.L < 8)) { F.splT = .5 + Math.random(); geoPop(R.p.clone().setY(water0), 0xd8f0ff, 8, "splash"); }
+    geoRodLine(R, tip, R.p, Math.max(0, .05 - F.T * .2), F.T); geoRodBend(R, lineDir, Math.min(1, F.T * 1.05));
+    if ((R.uiT = (R.uiT || 0) - dt) <= 0) { R.uiT = 1 / 12; geoFishDraw(F, R.L); }
+    const Mu = geoFishUI(); Mu.position.copy(R.M.position).add(_v1.set(0, .1, 0)).addScaledVector(_v2.set(1, 0, 0).applyQuaternion(I.headQ), set.hand === "right" ? -.17 : .17); Mu.lookAt(I.head); Mu.visible = true;   // (beside the rod hand, out of the way)
+    if ((R.buzzT = (R.buzzT || 0) - dt) <= 0) { R.buzzT = .1; buzz(os, .08 + .6 * F.T, 18); }
+    if (dh < 2.6 && (R.tvS.y > 1.6 || tip.y > I.head.y)) {   // close in and lift: out it comes, into your hand
+      R.st = "land"; R.t = 0; Mu.visible = false; const fo = geoFishModel(R.fish.col, R.fish.kg); fo.position.copy(R.p); scene.add(fo); R.fo = fo; R.from = R.p.clone(); gunFoley([[0, 500, .3, .1]]); }
     return;
   }
   if (R.st === "land") {
-    const k = Math.min(1, R.t / .8), to = off ? off.pos : I.head.clone().add(_v1.set(0, -.3, -.3)), p = R.from.clone().lerp(to, k); p.y += Math.sin(k * Math.PI) * 2.2;
-    R.fo.position.copy(p); R.fo.rotation.set(k * 6, k * 3, 0); line(p);
-    if (k >= 1) { const food = Math.round(10 + R.fish.kg * 6); geoEat(food, "Caught a " + R.fish.kg.toFixed(1) + " kg " + R.fish.name + "! +" + food + " food"); bing(); buzz(os, .7, 120); scene.remove(R.fo); R.fo = null; geoRodReset(R); }
+    const k = Math.min(1, R.t / .8), to = main ? main.pos : I.head.clone().add(_v1.set(0, -.3, -.3)), p = R.from.clone().lerp(to, k); p.y += Math.sin(k * Math.PI) * 2.2;
+    R.fo.position.copy(p); R.fo.rotation.set(k * 6, k * 3, 0); geoRodLine(R, tip, p, 0, .3); geoRodBend(R, p.clone().sub(tip), .4 * (1 - k));
+    if (k >= 1) { const food = Math.round(10 + R.fish.kg * 6); geoEat(food, "Caught a " + R.fish.kg.toFixed(1) + " kg " + R.fish.name + "! +" + food + " food"); bing(); buzz(ms, .7, 120); geoRodReset(R); }
   }
 }
+function geoRodHide() { const R = GEO.rod; if (!R || !R.M) return; R.M.visible = R.lure.visible = R.line.visible = false; R.crankOn = false; if (GEO.fishM) GEO.fishM.visible = false; if (R.fo) { scene.remove(R.fo); R.fo = null; } R.st = "ready"; R.lp = null; R.L = .4; R.F = null; }
 // the machete: swing it through bushes to cut them down (and it bites into anything that comes for you)
 function geoMacheteTick(main, dt) {
   const o = GEO.heldObj, tip = o.localToWorld(_giV.set(0, 0, -.36)).clone(), mid = o.localToWorld(new THREE.Vector3(0, 0, -.18));
@@ -5081,7 +5162,7 @@ function geoPackDraw(sel) {
 }
 function geoHeld(k) {                                         // put something in your gun hand (null: hands free)
   if (GEO.heldObj) { scene.remove(GEO.heldObj); GEO.heldObj = null; }
-  if (GEO.rod && GEO.held === "rod") { if (GEO.rod.fo) { scene.remove(GEO.rod.fo); GEO.rod.fo = null; } geoRodReset(GEO.rod); }
+  if (GEO.held === "rod") geoRodHide();
   GEO.held = k || null;
   if (k) { GEO.heldObj = giModel(k); scene.add(GEO.heldObj); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; }
 }
@@ -5111,7 +5192,7 @@ function geoPackTick(I, main, off, dt) {
   }
 }
 function geoHeldTick(I, main, dt) {                           // using what's in your hand
-  const k = GEO.held, o = GEO.heldObj; if (!k || !o || !main) { if (o) o.visible = false; return; }
+  const k = GEO.held, o = GEO.heldObj; if (k !== "rod") geoRodHide(); if (!k || !o || !main) { if (o) o.visible = false; return; }
   o.visible = true; o.quaternion.copy(main.rayQ); o.position.copy(main.pos).add(_v1.set(0, .02, -.05).applyQuaternion(main.rayQ)); if (k === "rod") o.quaternion.multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.0)); o.updateMatrixWorld(true);
   const pressed = edge("giT", main.trig) && !GEO.packOpen;
   if (k === "canteen") {                                       // a clear bottle: hold it upright under a lake's surface and watch it fill; tip it up at your mouth and chug (10 water a second)
@@ -5135,7 +5216,7 @@ function geoHeldTick(I, main, dt) {                           // using what's in
   else if (k === "spray" && pressed) geoSpray(main);
 }
 function geoGearTick(I, main, off, dt) {                      // (each frame in a Geocaching game, after the hands are read)
-  if (!GEO.on || state !== "play" || VRUI.on) { if (GEO.heldObj) GEO.heldObj.visible = false; if (GEO.packM) GEO.packM.visible = false; GEO.packOpen = false; return; }
+  if (!GEO.on || state !== "play" || VRUI.on) { if (GEO.heldObj) GEO.heldObj.visible = false; geoRodHide(); if (GEO.packM) GEO.packM.visible = false; GEO.packOpen = false; return; }
   ugTick(I, dt); if (!UNDER.on) ugPortalTick(I, dt);              // the Underworld
   if (UNDER.on) { geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWornTick(I); geoShowTick(dt); return; }
   if (geoNet()) hamTick(I, main, off, dt); sleepTick(I, main, dt);   // the hammock, and dreaming
@@ -5148,7 +5229,7 @@ function geoGearClear() {
   HFOG.uThG.value = 0; skyMat.uniforms.uThermal.value = 0; if (GEO.thHid && !UNDER.on) stars.visible = true; GEO.thHid = false; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; if (JTFX.on) { JTFX.on = false; jtFxSweep(); } HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;
   if (typeof jetClear === "function") jetClear();
-  for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
+  for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.rod && GEO.rod.M, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
   for (const S of (GEO.sprays || []).concat(GEO.leaves || [], GEO.pops || [])) scene.remove(S.pts); toolFxHide(GEO.lampFx);
   Object.assign(GEO, { heldObj: null, held: null, packM: null, packOpen: false, fire: null, tent: null, show: null, rod: null, sprays: [], leaves: [], pops: [], fishM: null, nvM: null, nvK: 0, worn: new Set() });
 }
@@ -5355,7 +5436,7 @@ function glabCache() {
   for (let k = 0; k < 40 && !spot; k++) { const a = P.yaw + k * .3, r = 25 + k, x = P.x - Math.sin(a) * r, z = P.z - Math.cos(a) * r; if (H(x, z) > water + .5 && slopeNy(x, z) > .8) spot = [x, z]; }
   if (!spot) return; best.p = glToSphere(spot[0], spot[1], [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; best.ok = true; best.chk = false; GEO.tT = 0; GEO.reAt = true; glabSay("The next cache is 25 m ahead of you");
 }
-function glabBite() { const R = GEO.rod; if (R && R.st === "wait") { R.rate = 1e6; glabSay("Biting now: jerk the rod up!"); } else glabSay("Cast into the water first"); }
+function glabBite() { const R = GEO.rod; if (R && R.st === "out" && R.wet) { R.rate = 1e6; glabSay("Biting now: strike (jerk the rod up)!"); } else glabSay("Cast into the water first"); }
 function glabSay(t) { GLAB.msg = t; GLAB.msgT = performance.now(); if (VRUI.panels.glab) uiDraw(VRUI.panels.glab); }
 const GLAB = { msg: "", msgT: 0, page: 0 };
 function labTabs(Pn, B, me) {                                       // one Test Lab: Gear and Guns, and one Save for everything
@@ -10935,7 +11016,7 @@ function vrAfterMove(dt) {                                // carry the play spac
     wrist.visible = false;                                   // the wrist's info lives on the map now; messages float in front of you
     if (vr.lootT > 0 && vr.lootMsg && vr.lootMsg !== vr.banWas) { vr.banWas = vr.lootMsg; vrBanner(vr.lootMsg, Math.min(3.5, vr.lootT), vr.lootT >= 4 ? 1 : 0); }   // pickups and points just buzz and ding; only the big ones (drowned, the giant tree) show
     if (vr.lootT <= 0) vr.banWas = null;
-    const mapWas = vrMap.visible; vrMap.visible = off.trig > .6;
+    const mapWas = vrMap.visible; vrMap.visible = off.trig > .6 && !(GEO.on && GEO.held === "rod");   // (holding the rod, that trigger is your finger on the line)
     if (vrMap.visible) { _v2.copy(off.rayPos).sub(I.head); _v2.y = 0; if (_v2.lengthSq() > 1e-6) _v2.normalize(); vrMap.position.copy(off.rayPos).add(_v1.set(0, .235, 0)).addScaledVector(_v2, .07); vrMap.lookAt(I.head);   /* higher and a bit out in front, clear of the hand */
       const geoZ = GEO.on && GLOBE && GLOBE.pic; if (geoZ) geoMapTick(I, main, dt);   // the gun-hand stick zooms out to the whole planet
       const zMoved = geoZ && Math.abs(GEO.mz - (GEO.mzD ?? -1)) > .015;
@@ -11262,6 +11343,7 @@ function handPose(hand, h) {                               // where a hand is dr
     const q = FLARE.gun.quaternion.clone().multiply(gloveQ("pistol", "grip", _q1));
     return { pos: FLARE.gun.localToWorld(new THREE.Vector3(...FLARE.grip).add(_gx.set((set.hand === "right" ? 1 : -1) * .012, .012, .012))), q };
   }
+  if (isMain && GEO.rod && GEO.rod.crankOn && GEO.rod.M && GEO.rod.M.visible) return { pos: GEO.rod.M.userData.knob.getWorldPosition(new THREE.Vector3()), q: h.q };   // on the reel's handle
   if (isMain && vr.gun && vr.gun.visible) {                  // the gun hand wraps the gun's pistol grip: glove, gun and arm move as one piece
     const S = GUNSPOT[vr.gunKind], q = vr.gun.quaternion.clone().multiply(gloveQ(vr.gunKind, "grip", _q1));
     return { pos: vr.gun.localToWorld(new THREE.Vector3(...S.grip).add(_gx.set((set.hand === "right" ? 1 : -1) * .012, .012, .012))), q };

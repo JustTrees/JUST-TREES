@@ -95,7 +95,7 @@ async def main():
              and r["packOpen"] and not r["xEarly"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
              and (not w["lake"] or (w["drank"] > 60 and w["tipped"] == 0 and w["filled"] == 4 and w["sipped"][0] > 60 and w["sipped"][1] < 3)) \
              and (not w["fruit"] or (w["ateFruit"][0] > 30 and w["ateFruit"][1])) and (not w["animal"] or w["spray"][0] == 1)
-        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 100 and w["resume"][4] == 100 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["noDev"] == [True, True] and w["rod"] in ("idle", "wait")
+        ok = ok and w["resume"][:2] == [10, 5] and w["resume"][2] == "ar,bow,hunt,pistol,smg" and w["resume"][3] == 100 and w["resume"][4] == 100 and w["worn"][0] > .9 and (not w["sea"] or w["seaDrink"] == 40) and w["packWheel"] and w["packFromWheel"] and w["saltSea"] and not w["saltLake"] and w["noDev"] == [True, True] and w["rod"] in ("ready", "cast", "out")
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
