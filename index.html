@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.24";              // Just Trees
+const VERSION = "3.25";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4665,7 +4665,7 @@ const GI_LIST = [
   ["canteen", "Canteen", "Hold it upright under a lake to fill it, tip it up at your mouth to drink", 1], ["campfire", "Campfire kit", "Pull the trigger at the ground: meat cooked here heals double", 1],
   ["pack1", "Small backpack", "6 slots for your gear", 0], ["spray", "Bear spray", "Pull the trigger: a charging animal turns and runs", 1], ["aid", "First-aid kit", "Pull the trigger: full health (refills at each cache)", 1],
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
-  ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "Hold the trigger, fling and let go to cast; jerk up when it bites, reel with your other hand", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
+  ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "In your other hand: hold its trigger, swing and let go to cast; grip the reel handle and turn it to reel; strike when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
   ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
@@ -10931,7 +10931,7 @@ function vrTick(dt) {
       if (edge("drop", main.stickBtn) && A.phase !== 1) {                 // click the gun-hand stick: drop the magazine early (its rounds go back to your spare ammo)
         A.res += A.mag; A.mag = 0; A.phase = 1; A.k = 0; A.popping = true; vr.rl.grab = null; gunFoleyK("magout", SFX.magOut); buzz(mainSide, .3, 25);
       }
-      if (main.trig > .6 && state === "play" && (pressed || W.auto) && !(GEO.packOpen || GEO.trigLock || GEO.sleep)) { if (A.phase || A.mag <= 0) { if (pressed) gunFoleyK("dry", SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
+      if (main.trig > .6 && state === "play" && (pressed || W.auto) && !(GEO.packOpen || GEO.trigLock || GEO.sleep || (vr.binos && DEV.ok))) { if (A.phase || A.mag <= 0) { if (pressed) gunFoleyK("dry", SFX.dry); } else for (let n = 0; n < 4 && vr.cool <= 0 && !A.phase && A.mag > 0 && (n === 0 || W.auto); n++) vrFire(); }
     } else {
       fireHeld = main.trig > .6 && state === "play";
       if (edge("trig", main.trig) && !GUN.auto) fire();
@@ -10946,6 +10946,7 @@ function vrTick(dt) {
   if (huntV && gameMode === "hunt" && vr.bowMode && main && off && state === "play" && !P.gliding && !(vr.cl && vr.cl.hold)) bowTick(dt, I, main, off, mainSide, offSide); else bowHide();   // the bow
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
+  if (vr.binos && DEV.ok && state === "play" && edge("photo", main ? main.trig : 0)) PHOTO.want = true; else if (!vr.binos) edge("photo", 0);   // the Dev camera
   if (vr.binos) { const B = vrBinos(); B.visible = true; B.position.copy(main.pos).add(off.pos).multiplyScalar(.5); B.quaternion.copy(main.rayQ).slerp(off.rayQ, .5); vr.zoom = Math.max(0, Math.min(binoFovs().length - 1, vr.zoom)); }
   else if (binos) binos.visible = false;
   toolTick(off);                                                        // X: the tool of what you're holding
@@ -11605,6 +11606,48 @@ function vrZoomRender() {
   hide.forEach((o, i) => { if (o) o.visible = was[i]; }); ov.visible = false;
 }
 
+/* ---- the Dev camera. In Dev Mode, looking through the binoculars, the gun hand's trigger takes a picture of what you see (as wide as
+   the zoom you're at; no lens ring, no hands). Pictures stay in this headset only (its own storage) and are on the Dev menu's Photos page:
+   look through them, delete them, or save one to the headset's Downloads to share it. ---- */
+const PHOTO = { W: 1920, H: 1080, rt: null, want: false, list: [], page: 0, sel: -1, db: null, img: new Map(), say: "", sayT: 0, del: -1 };
+function photoDb() {
+  if (!PHOTO.db) PHOTO.db = new Promise((ok, no) => { try { const r = indexedDB.open("jt-photos", 1); r.onupgradeneeded = () => r.result.createObjectStore("p", { keyPath: "id" }); r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); } catch (e) { no(e); } });
+  return PHOTO.db;
+}
+function photoReq(mode, f) { return photoDb().then(db => new Promise((ok, no) => { const tx = db.transaction("p", mode), rq = f(tx.objectStore("p")); tx.oncomplete = () => ok(rq ? rq.result : undefined); tx.onerror = () => no(tx.error); })); }
+function photoRefresh() {                                     // the list (newest first), and a picture for each
+  return photoReq("readonly", st => st.getAll()).then(a => { PHOTO.list = (a || []).sort((x, y) => y.id - x.id);
+    for (const ph of PHOTO.list) if (!PHOTO.img.has(ph.id)) { const im = new Image(); im.onload = () => { if (VRUI.panels.photos) uiDraw(VRUI.panels.photos); }; im.src = URL.createObjectURL(ph.blob); PHOTO.img.set(ph.id, im); }
+    PHOTO.page = Math.min(PHOTO.page, Math.max(0, Math.ceil(PHOTO.list.length / 6) - 1)); if (PHOTO.sel >= PHOTO.list.length) PHOTO.sel = PHOTO.list.length - 1;
+    if (VRUI.panels.photos) uiDraw(VRUI.panels.photos); }).catch(() => { PHOTO.say = "Photos can't be kept in this browser"; PHOTO.sayT = performance.now(); });
+}
+function photoDelete(id) { const im = PHOTO.img.get(id); if (im) { URL.revokeObjectURL(im.src); PHOTO.img.delete(id); } PHOTO.del = -1; return photoReq("readwrite", st => st.delete(id)).then(photoRefresh); }
+function photoSave(ph) {                                       // to the headset's Downloads
+  const a = document.createElement("a"), u = URL.createObjectURL(ph.blob), d = new Date(ph.id), z = n => String(n).padStart(2, "0");
+  a.href = u; a.download = "just-trees-" + d.getFullYear() + z(d.getMonth() + 1) + z(d.getDate()) + "-" + z(d.getHours()) + z(d.getMinutes()) + z(d.getSeconds()) + ".jpg"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000);
+  PHOTO.say = "Saved to Downloads: " + a.download; PHOTO.sayT = performance.now();
+}
+function photoShoot() {                                       // (after the frame is drawn) the binoculars' view, drawn again into a picture
+  PHOTO.want = false; const W = PHOTO.W, H = PHOTO.H;
+  if (!PHOTO.rt) { PHOTO.rt = new THREE.WebGLRenderTarget(W, H); PHOTO.rt.texture.encoding = THREE.sRGBEncoding; PHOTO.rt.texture.internalFormat = "RGBA8"; PHOTO.rt.isXRRenderTarget = true; PHOTO.buf = new Uint8Array(W * H * 4); }   // (coloured exactly as the headset shows it)
+  const cam = PHOTO.cam || (PHOTO.cam = new THREE.PerspectiveCamera(30, W / H, .1, 1000)), fov = vr.on && vr.binos ? binoFovs()[vr.zoom] || 30 : camera.fov;
+  cam.fov = fov; cam.near = camera.near; cam.far = camera.far; cam.updateProjectionMatrix();
+  if (vr.on && vr.binos) { cam.position.copy(vr.head); cam.quaternion.copy(zoomViewQ(vr.binoQ)); } else { camera.getWorldPosition(cam.position); camera.getWorldQuaternion(cam.quaternion); }
+  cam.updateMatrixWorld();
+  const hide = [vr.gun, binos, vr.avatar && vr.avatar.group, vr.meC && vr.meC.top, vrHandsObj && vrHandsObj.L.g, vrHandsObj && vrHandsObj.R.g, wrist, vrMap, vignette, vr.cross, UW.mesh, VRUI.root, zoomOv];
+  const was = hide.map(o => o && o.visible); hide.forEach(o => { if (o) o.visible = false; });
+  const xrOn = renderer.xr.enabled, prev = renderer.getRenderTarget();
+  try { renderer.xr.enabled = false; renderer.setRenderTarget(PHOTO.rt); renderer.clear(); renderer.render(scene, cam); renderer.readRenderTargetPixels(PHOTO.rt, 0, 0, W, H, PHOTO.buf); }
+  finally { renderer.setRenderTarget(prev); renderer.xr.enabled = xrOn; hide.forEach((o, i) => { if (o) o.visible = was[i]; }); }
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H; const g = cv.getContext("2d"), img = g.createImageData(W, H), d = img.data, b = PHOTO.buf;
+  for (let y = 0; y < H; y++) d.set(b.subarray((H - 1 - y) * W * 4, (H - y) * W * 4), y * W * 4);   // (the picture comes out upside down)
+  for (let i = 3; i < d.length; i += 4) d[i] = 255;
+  g.putImageData(img, 0, 0);
+  gunFoley([[0, 4200, .02, .16], [.04, 1600, .07, .08]]); buzz(set.hand === "right" ? "R" : "L", .5, 40);
+  cv.toBlob(bl => { if (!bl) return; const id = Date.now(), at = GLOBE && GLOBE.lat !== undefined ? [+GLOBE.lat.toFixed(4), +GLOBE.lon.toFixed(4)] : null;
+    photoReq("readwrite", st => st.put({ id, blob: bl, w: W, h: H, at, mode: gameMode, zoom: +fov.toFixed(1) })).then(() => { vrBanner("Photo saved (Dev menu → Photos)", 1.6, 0); PHOTO.list.unshift({ id }); })
+      .catch(() => vrBanner("Couldn't keep the photo", 1.6, 0)); }, "image/jpeg", .92);
+}
 /* ---- red-gun tools. Fully decked out (every gun red, all 10 grenades; in PvP also full health and full shield: thermalLoaded) every
    weapon gets its tool, and the off-hand X (the bottom button) turns the tool of what you're holding on and off:
    sniper scope and binoculars = thermal, AK = flashlight, SMG = a thermal mini-sight, pistol = laser, bow (Hunting) = flaming arrows.
@@ -12569,7 +12612,7 @@ function devPanels() {
   // ---- the Dev menu
   const Dv = uiPanel("dev", 1400, 900, 2.0, 74, 1.45);
   Dv.paint = (g, P) => { uiBg(g, P, "DEV MODE"); g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Tools for making the game. Only this headset has them.", 700, 150);
-    if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 740); } };
+    if (DEV.msg && performance.now() - DEV.msgT < 15000) { g.font = "bold 26px sans-serif"; g.fillStyle = UIC.sun; g.fillText(DEV.msg, 700, 182); } };
   uiBtn(Dv, 90, 190, 1220, 150, "Creature Workshop", () => vruiOpen("work"), { sub: "Shape animals and dinosaurs on a turntable: stretch, thicken, add horns and sails, recolour, save.", fs: 50 });
   uiBtn(Dv, 90, 360, 590, 140, "Map Lab", () => labOpen(), { sub: "Build arenas: land, trees, rocks, loot", fs: 44 });
   uiBtn(Dv, 720, 360, 590, 140, "Test Lab", () => { GEO.labWant = true; GUNLAB.want = true; setMode("hunt"); set.huntMap = "globe"; renderSetup(); startNew(); }, { sub: "Every item and gun: tweak, save", fs: 44 });   // (the Gear and Gun Labs in one)
@@ -12577,7 +12620,29 @@ function devPanels() {
   uiBtn(Dv, 90, 520, 590, 140, "", () => { DEV.full = !DEV.full; try { localStorage.setItem("jt-dev-full", DEV.full ? "1" : "0"); } catch (_) {} uiDraw(Dv); },
     { labelFn: () => "Full level: " + (DEV.full ? "ON" : "off"), sub: "Play as if you had it all (your level is kept)", fs: 40, active: () => !!DEV.full, paintCol: "#3a4a6a" });
   if (0) uiBtn(Dv, 90, 640, 1220, 120, "Geocaching (testing)", () => { setMode("hunt"); set.huntMap = "globe"; renderSetup(); vruiOpen("setup"); }, { sub: "The little planet: caches, gear, food and water. Not public yet.", fs: 46, paintCol: "#6a5a2a" });
+  uiBtn(Dv, 90, 680, 1220, 84, "Photos", () => { PHOTO.sel = -1; vruiOpen("photos"); photoRefresh(); }, { fs: 38, labelFn: () => "Photos" + (PHOTO.list.length ? " (" + PHOTO.list.length + ")" : "") });
   uiBtn(Dv, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 34 });
+  // ---- the Photos page (Dev): a page of six, or one big
+  const Ph = uiPanel("photos", 1400, 900, 2.0, 74, 1.45), TW = 380, TH = 214, tx = i => 90 + (i % 3) * (TW + 30), ty = i => 150 + Math.floor(i / 3) * (TH + 70);
+  const one = () => PHOTO.sel >= 0 && PHOTO.list[PHOTO.sel], fmt = ph => { const d = new Date(ph.id); return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + (ph.at ? " · " + ph.at[0].toFixed(2) + ", " + ph.at[1].toFixed(2) : ""); };
+  const pic = (g, ph, x, y, w, h) => { const im = PHOTO.img.get(ph.id); g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(x, y, w, h); if (im && im.complete && im.naturalWidth) g.drawImage(im, x, y, w, h); };
+  Ph.paint = (g, P) => { uiBg(g, P, one() ? "" : "PHOTOS"); g.textAlign = "center"; g.textBaseline = "alphabetic";
+    const ph = one();
+    if (ph) { pic(g, ph, 90, 40, 1220, 686); g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText(fmt(ph) + "  ·  " + (PHOTO.sel + 1) + " of " + PHOTO.list.length, 90, 768); }
+    else if (!PHOTO.list.length) { g.font = "34px sans-serif"; g.fillStyle = UIC.dim; g.fillText("No photos yet. Hold the binoculars up and pull the trigger.", 700, 420); }
+    else { const n0 = PHOTO.page * 6; for (let i = 0; i < 6; i++) { const q = PHOTO.list[n0 + i]; if (!q) break; pic(g, q, tx(i), ty(i), TW, TH); g.font = "22px sans-serif"; g.fillStyle = UIC.dim; g.fillText(new Date(q.id).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }), tx(i) + TW / 2, ty(i) + TH + 30); }
+      g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Page " + (PHOTO.page + 1) + " of " + Math.max(1, Math.ceil(PHOTO.list.length / 6)) + "  ·  " + PHOTO.list.length + " photos, kept in this headset only", 700, 728); }
+    if (PHOTO.say && performance.now() - PHOTO.sayT < 8000) { g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.textAlign = "center"; g.fillText(PHOTO.say, 700, ph ? 868 : 768); } };
+  for (let i = 0; i < 6; i++) uiBtn(Ph, tx(i), ty(i), TW, TH, "", () => { const k = PHOTO.page * 6 + i; if (PHOTO.list[k]) { PHOTO.sel = k; PHOTO.del = -1; uiDraw(Ph); } }, { paintCol: "rgba(0,0,0,0)", hide: () => !!one() || !PHOTO.list[PHOTO.page * 6 + i] });
+  uiBtn(Ph, 90, 790, 300, 80, "◀ Newer", () => { PHOTO.page = Math.max(0, PHOTO.page - 1); uiDraw(Ph); }, { fs: 32, hide: () => !!one() || PHOTO.page === 0 });
+  uiBtn(Ph, 410, 790, 300, 80, "Older ▶", () => { PHOTO.page++; uiDraw(Ph); }, { fs: 32, hide: () => !!one() || (PHOTO.page + 1) * 6 >= PHOTO.list.length });
+  uiBtn(Ph, 1010, 790, 300, 80, "Dev menu", () => vruiOpen("dev"), { fs: 32, hide: () => !!one() });
+  uiBtn(Ph, 90, 790, 200, 80, "◀", () => { PHOTO.sel = Math.max(0, PHOTO.sel - 1); PHOTO.del = -1; uiDraw(Ph); }, { fs: 40, hide: () => !one() || PHOTO.sel === 0 });
+  uiBtn(Ph, 300, 790, 200, 80, "▶", () => { PHOTO.sel = Math.min(PHOTO.list.length - 1, PHOTO.sel + 1); PHOTO.del = -1; uiDraw(Ph); }, { fs: 40, hide: () => !one() || PHOTO.sel >= PHOTO.list.length - 1 });
+  uiBtn(Ph, 530, 790, 280, 80, "Save to headset", () => { const ph = one(); if (ph) photoSave(ph); uiDraw(Ph); }, { fs: 28, hide: () => !one() });
+  uiBtn(Ph, 830, 790, 230, 80, "", () => { const ph = one(); if (!ph) return; if (PHOTO.del === ph.id) { photoDelete(ph.id).then(() => { PHOTO.sel = Math.min(PHOTO.sel, PHOTO.list.length - 1); if (!PHOTO.list.length) PHOTO.sel = -1; uiDraw(Ph); }); } else { PHOTO.del = ph.id; uiDraw(Ph); } },
+    { fs: 28, hide: () => !one(), labelFn: () => one() && PHOTO.del === one().id ? "Sure? Delete" : "Delete", paintCol: "#6a3a32" });
+  uiBtn(Ph, 1080, 790, 230, 80, "All photos", () => { PHOTO.sel = -1; PHOTO.del = -1; uiDraw(Ph); }, { fs: 28, hide: () => !one() });
   uiBtn(Dv, 930, 780, 380, 90, "Lock Dev Mode", () => devLock(), { fs: 32, paintCol: "#6a3a32" });
   // ---- the Workshop's panel, to the left of the creature
   const Wk = uiPanel("work", 1300, 1170, 1.8, 56, 1.38, 50), x0 = 50, sx = 420, R = () => WS.R, T = k => () => WS.tab !== k;
@@ -17924,6 +17989,7 @@ function loop(now) {
     if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); }
     if (vr.on && TOOL.sightM) toolPrep();                  // the SMG's thermal mini-sight
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
+    if (PHOTO.want) { try { photoShoot(); } catch (e) { PHOTO.want = false; console.warn("photo", e); } }
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
   }
 }

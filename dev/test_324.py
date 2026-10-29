@@ -33,7 +33,10 @@ async def main():
         pg = await (await b.new_context(viewport={"width": 640, "height": 400})).new_page(); errs = []
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)[:300])); pg.on("console", lambda m: errs.append(m.text[:300]) if m.type == "error" else None)
         await pg.goto("file://" + sys.argv[1]); await pg.wait_for_timeout(500)
-        ok0 = await pg.evaluate(GEN); out = {"shore": ok0}
+        for _ in range(6):
+            ok0 = await pg.evaluate(GEN)
+            if ok0: break
+        out = {"shore": ok0}
         out["base"] = await pg.evaluate("""() => { const r = R(); return { inOff: r.M.position.distanceTo(O.pos) < .15, hasReel: !!r.M.userData.knob, ready: r.st, mapOff: true }; }""")
         out["lazy"] = await pg.evaluate("() => { const r = R(); O.trig = 1; step(); step(); O.trig = 0; step(); let n = 0; while (r.st === 'cast' && n++ < 300) step(); const d = r.p ? Math.round(Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z)) : 0; D.geoHeld(null); D.geoHeld('rod'); step(); return [d]; }")
         out["soft"] = await pg.evaluate("() => { const c = cast(9); D.geoHeld(null); D.geoHeld('rod'); step(); return c; }")
@@ -56,7 +59,7 @@ async def main():
               const end = r.st; for (let i = 0; i < 100 && r.st === 'land'; i++) step();
               return { why: r.why, bite, hooked, end, landed: r.st === 'ready' && end === 'land', food: Math.round(D.GEO.food - food0), secs: Math.round(n / 72), minL: Math.round(minL), maxT: +maxT.toFixed(2) }; }""", mode)
         out["fight"] = res
-        print(json.dumps(out)); print("errors:", errs[:5])
+        print(json.dumps(out)); print("errors:", errs[:5] or "none")
         f = out["fight"]
         ok = out["shore"] and out["base"]["inOff"] and out["base"]["hasReel"] and out["lazy"][0] < 4 and out["soft"][0] == "out" and out["hard"][0] == "out" and out["hard"][1] > out["soft"][1] + 5 and 18 < out["hard"][1] < 70 \
              and out["reel"]["locked"] and out["reel"]["bailWas"] and not out["reel"]["bail"] and 3 < out["reel"]["inBy"] < 6 \

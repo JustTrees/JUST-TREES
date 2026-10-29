@@ -39,7 +39,7 @@ async def main():
           let shots = 0; while (!A.dead && shots < 20) { D.hitAnimal(A, 15, 0, false, 'hunt', 1); shots++; } o.sniperShots = shots; o.dead = A.dead;
           D.ugLeave(null); o.cleared = [U.list.length, D.beasts.filter(B => B.ug).length]; return o; }""")
         out["hell"] = r
-        print(json.dumps(out)); print("errors:", errs[:5])
+        print(json.dumps(out)); print("errors:", errs[:5] or "none")
         br, bu, h = out["backrooms"], out["bunker"], out["hell"]
         ok = all(x["at55"] == 0 and x["at95"] == 1 and x["stares"] >= 1 and x["seenFrames"] > 15 and x["minD"] > 1.5 and x["hurt"] == 0 and x["shot"][0] == "run" and x["shot"][1] == "bolt" and x["shot"][2] for x in (br, bu)) \
              and br["eyes"] == 0 and bu["eyes"] == 2 and h["rex"] and h["hp"] <= 500 and h["closedIn"] > 3 and h["maxSpeed"] < 2.6 and h["bitten"] > 0 and h["sniperShots"] <= 4 and h["dead"] and h["cleared"] == [0, 0] and not errs
