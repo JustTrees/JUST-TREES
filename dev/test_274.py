@@ -67,7 +67,7 @@ async def main():
         await pg.evaluate("""() => { D.set.huntMap = 'endless'; D.generate(); D.state = 'play'; }""")
         n = await pg.evaluate("""() => { D.vr.binos = true; D.vr.scoped = false; D.TOOL.on.binos = true; return [D.GEO.on, D.thermalOk(), D.geoSpeedMul()]; }""")
         print("normal", json.dumps(n))
-        ok = r["order"] == ["spray", "tbinos", "rod", "machete", "compass", "tscope"] and r["models"] == 24 and r["thB0"] is False and r["thB1"] is True \
+        ok = r["order"] == ["spray", "tbinos", "rod", "machete", "compass", "tscope"] and r["models"] == 26 and r["thB0"] is False and r["thB1"] is True \
              and r["thS0"] is False and r["thS1"] is True and r["fire"] == [False, True] and r["bush"] and r["slow"] < .95 and r["touch"] >= 1 and r["cut"] == [True, True, True, True] \
              and f["cast"]["cast"][0] == "fly" and f["cast"]["cast"][2] < -3 and f["cast"]["cast"][1] < -.5 and f["cast"]["lazy"] == "idle" \
              and f["play"]["bite"] == "bite" and f["play"]["hooked"] == ["fight", True] and f["play"]["end"][1] >= .9 and f["play"]["end"][2] and f["play"]["landed"][0] == "idle" and f["play"]["landed"][1] > 10 \

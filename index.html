@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.04";              // Just Trees 2.55
+const VERSION = "3.05";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -534,7 +534,7 @@ const LAB_DIRTY = { v: false };                                   // 2.93: the T
 function tuneStep(D, s) { const [k, , , st, lo, hi] = D; TUNE[k] = Math.round(Math.max(lo, Math.min(hi, TUNE[k] + s * st)) * 1000) / 1000; LAB_DIRTY.v = true; }
 function testLabSave() { tuneSave(); gunLabSave(); LAB_DIRTY.v = false; }
 const tuneFmt = (v, st) => st >= 1 ? String(Math.round(v)) : v.toFixed(st >= .1 ? (st % .1 ? 2 : 1) : 2);
-const GEO_N = 100, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
+const GEO_N = 53, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // 2.70: the globe: the sun where you really are
   const doy = month * 30.44 + 15;
@@ -4436,11 +4436,11 @@ function geoPlace() {                                          // the caches: th
     const n = G.regionsP(p, X, Y, Z); let b = EN_RL[0].reg.b; for (let q = 1; q < n; q++) if (EN_RL[q].w > EN_RL[0].w) b = EN_RL[q].reg.b;
     const ll = glLatLon(p); per[gi]++; L.push({ id: L.length + 1, p, lat: ll[0], lon: ll[1], b, diff: 1 + Math.floor(rr() * 5), terr: 1 + Math.floor(rr() * 5) });
   }
-  if (G.isle && L.length >= 80) {                                // 2.99: three of the high caches are out on the dinosaur island
-    const I = G.isle, f = glFrame(I.c), put = [], mv = [L.length - 1, L.length - 13, L.length - 25], others = L.filter((c, k) => !mv.includes(k)); for (let t = 0; t < 2000 && put.length < 3; t++) { const a = rr() * 6.283, d = Math.sqrt(rr()) * I.r * .75;
+  if (G.isle && L.length >= 40) {                                // 2.99: three of the high caches are out on the dinosaur island
+    const I = G.isle, f = glFrame(I.c), put = [], mv = [L.length - 1, L.length - 5, L.length - 9], others = L.filter((c, k) => !mv.includes(k)); for (let t = 0; t < 2000 && put.length < 3; t++) { const a = rr() * 6.283, d = Math.sqrt(rr()) * I.r * .75;
       const q = glNorm([I.c[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * Math.tan(d), I.c[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * Math.tan(d), I.c[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * Math.tan(d)]);
       if (G.landAt(q) > 2 && put.every(o => glArc(o, q) * R > 900) && others.every(c => glArc(c.p, q) * R > 900)) put.push(q); }
-    put.forEach((q, k) => { const c = L[L.length - 1 - k * 12], ll = glLatLon(q); c.p = q; c.lat = ll[0]; c.lon = ll[1]; c.isle = true; });
+    put.forEach((q, k) => { const c = L[L.length - 1 - k * 4], ll = glLatLon(q); c.p = q; c.lat = ll[0]; c.lon = ll[1]; c.isle = true; });
   }
   return L;
 }
@@ -4499,7 +4499,7 @@ function geoMapCaches() {                                     // 2.72: which cac
 function geoTarget() {                                         // the next cache: further away the higher you are (2.99); now and then, high up, one on the dinosaur island
   const G = GLOBE, lv = GEO.found.size, want = (600 + lv * 30) / G.R; let best = null, bd = 1e9;
   const isle = GEO.caches.filter(c => c.isle && !GEO.found.has(c.id));
-  if (isle.length && lv >= 60 && mulberry32(enHash(seed * 3 + 7, lv, 1))() < .2) { for (const c of isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } } GEO.target = best; return; }
+  if (isle.length && lv >= 44 && mulberry32(enHash(seed * 3 + 7, lv, 1))() < .2) { for (const c of isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } } GEO.target = best; return; }
   for (const c of GEO.caches) if (!GEO.found.has(c.id) && !c.isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
   if (best && !best.placed && GEO.found.size) {                 // put it out at this level's distance, somewhere dry (each player's caches are their own)
     const f = glFrame(G.p), rr = mulberry32(enHash(seed * 5 + 3, lv, best.id));
@@ -4681,7 +4681,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
-  if (n === 52) return { item: "bblock" }; if (n === 80) return { item: "tglass" };   // 3.03: the glasses (3.04: the thermal ones are a very high find)
+  if (n === 52) return { item: "bblock" }; if (n === 53) return { item: "tglass" };   // 3.03: the glasses (3.05: 53 levels for now; new finds get added on the end)
   return { refill: true, last: n >= GEO_N };
 }
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
@@ -14076,7 +14076,7 @@ function drawWheel(sel) {
     if (pv && !lock) { const t = k === "bow" ? bowTier() : tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
       for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
     g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
-    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? GEO.found.size + " / " + GEO_N : k === "pack" ? (GEO.held ? GI[GEO.held].name : geoPackItems().length + " items") : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? "Lv " + GEO.found.size : k === "pack" ? (GEO.held ? GI[GEO.held].name : geoPackItems().length + " items") : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;

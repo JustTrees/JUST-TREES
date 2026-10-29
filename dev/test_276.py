@@ -36,7 +36,7 @@ async def main():
           // the meter, low in view
           D.pvpHud(I, 1 / 30); o.hud = D.VHUD.m.visible;
           // after #50: no banners
-          D.VBAN.t = 0; D.geoReward(52); o.quiet = !(D.VBAN.t > 0);
+          D.VBAN.t = 0; D.geoReward(51); o.quiet = !(D.VBAN.t > 0);
           // a death: you wake at least 4 km away
           const p0 = D.GLOBE.p.slice(); D.geoRespawn(); o.away = Math.round(D.glArc(p0, D.GLOBE.p) * D.GLOBE.R);
           D.geoSave(); o.saved = JSON.parse(localStorage.getItem('jt-geochar')).n;

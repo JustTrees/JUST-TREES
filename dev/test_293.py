@@ -27,7 +27,7 @@ async def main():
           return o; }""")
         print(json.dumps(r))
         ok = r["lab"][0] and r["lab"][1] and r["lab"][2] == 6 and r["lab"][3] < 450 and r["lab"][4] and r["lab"][5] and r["tweak"][0] and r["tweak"][1] and r["tweak"][2] is None and r["saved"][0] and r["saved"][1] \
-             and r["full"] == [True, 100, False, True] and r["kept"] == 7 and r["own"] == [False, 7, False]
+             and r["full"] == [True, 53, False, True] and r["kept"] == 7 and r["own"] == [False, 7, False]
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())
