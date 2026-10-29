@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.03";              // Just Trees 2.55
+const VERSION = "3.04";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -952,7 +952,7 @@ uniform float fogDensity;
 #else
 uniform float fogNear; uniform float fogFar;
 #endif
-uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG;   // our own camera position: three.js only sends cameraPosition to some materials
+uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG;   // our own camera position: three.js only sends cameraPosition to some materials
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -975,10 +975,15 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, uHFogCol, clamp(amt, 0.0, 0.97));
   }
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+  if (uBBG > 0.001) {                                                 // 3.04: blue blockers: blues gone, everything orange to red, sharp
+    float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
+  }
   if (uThG > 0.001) {                                                 // 3.03: thermal glasses: the land cold and dark, its shapes traced in dull red
     vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
     float tl = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), trim = smoothstep(0.5, 0.97, 1.0 - abs(dot(tn, tv / td))) * mix(1.0, 0.12, smoothstep(0.55, 0.93, abs(tn.y))), tedge = smoothstep(0.03, 0.12, fwidth(tl));
-    vec3 tc = vec3(0.03) + tl * 0.22 + vec3(0.95, 0.22, 0.08) * (trim * 0.45 + tedge * 0.4) * (1.0 - smoothstep(300.0, 1500.0, td));
+    float tfl = smoothstep(0.55, 0.93, abs(tn.y));                     // (3.04: like the thermal binoculars: black, everything traced in bright red; the open ground quieter)
+    vec3 tc = vec3(0.035, 0.004, 0.004) + tl * vec3(0.18, 0.025, 0.02) + vec3(1.0, 0.12, 0.06) * min(1.0, trim * 1.1 + tedge * mix(0.9, 0.2, tfl)) * (1.0 - smoothstep(600.0, 2500.0, td));
     gl_FragColor.rgb = mix(gl_FragColor.rgb, tc, uThG);
   }
   if (uDream.x > 0.001) {                                             // 2.88: the dream sight: dark, everything traced in light
@@ -1002,9 +1007,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(dc, vec3(0.045, 0.028, 0.09) + lc * 0.035, mist), uDream.x);
   }
 #endif`;
-const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 } };
-const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; };   // 2.88: materials that skip the ground fog still see the dream
-const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; };
+const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 } };
+const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; };   // 2.88: materials that skip the ground fog still see the dream
+const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
 const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
@@ -4668,7 +4673,7 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
-  ["bblock", "Blue blockers", "Warm amber lenses: no glare in the sun or on snow (take them out to put them on or off)", 1], ["tglass", "Thermal glasses", "The world goes dark and anything warm glows (take them out to put them on or off)", 1]
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1]
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
@@ -4676,7 +4681,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
-  if (n === 52) return { item: "bblock" }; if (n === 56) return { item: "tglass" };   // 3.03: the glasses
+  if (n === 52) return { item: "bblock" }; if (n === 80) return { item: "tglass" };   // 3.03: the glasses (3.04: the thermal ones are a very high find)
   return { refill: true, last: n >= GEO_N };
 }
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
@@ -4999,13 +5004,13 @@ function geoWornTick(I) {
   if (!GEO.nvM) { GEO.nvM = new THREE.Mesh(new THREE.SphereGeometry(.25, 16, 10), new THREE.MeshBasicMaterial({ color: 0x66ff77, side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true })); GEO.nvM.renderOrder = 1000; GEO.nvM.frustumCulled = false; scene.add(GEO.nvM); }
   GEO.nvM.visible = GEO.nvK > .02; GEO.nvM.position.copy(I.head);
   // 3.03: blue blockers (an amber tint) and thermal glasses (the world dark, outlines in red, anything warm glowing)
-  const bb = GEO.worn.has("bblock"); GEO.bbK = (GEO.bbK || 0) + ((bb ? 1 : 0) - (GEO.bbK || 0)) * .2;
+  const bb = GEO.worn.has("bblock"), bk0 = GEO.bbK || 0; GEO.bbK = bk0 + ((bb ? 1 : 0) - bk0) * .2; if (Math.abs(GEO.bbK - bk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   // (the sky follows)
   if (!GEO.bbM) { GEO.bbM = new THREE.Mesh(new THREE.SphereGeometry(.245, 16, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true })); GEO.bbM.renderOrder = 1000; GEO.bbM.frustumCulled = false; scene.add(GEO.bbM); }
-  GEO.bbM.visible = GEO.bbK > .02; GEO.bbM.position.copy(I.head); GEO.bbM.material.color.setRGB(1, 1 - .24 * GEO.bbK, 1 - .62 * GEO.bbK);
+  GEO.bbM.visible = GEO.bbK > .02; GEO.bbM.position.copy(I.head); GEO.bbM.material.color.setRGB(1, 1 - .15 * GEO.bbK, 1 - .45 * GEO.bbK); HFOG.uBBG.value = GEO.bbK > .01 ? GEO.bbK : 0;   // (3.04: properly orange, like real BluBlockers)
   const th = GEO.worn.has("tglass") && !GEO.sleep; GEO.thK = (GEO.thK || 0) + ((th ? 1 : 0) - (GEO.thK || 0)) * .2; HFOG.uThG.value = GEO.thK > .01 ? GEO.thK : 0;
   if (GEO.thK > .01) { scene.fog.color.lerp(C("#141414"), GEO.thK); renderer.setClearColor(scene.fog.color); if (!UNDER.on) sky.visible = GEO.thK < .5; }
   else if (GEO.thWas && !UNDER.on) sky.visible = true;
-  GEO.thWas = GEO.thK > .01; if (!GEO.sleep) dreamSouls(I, GEO.thK > .3);
+  GEO.thWas = GEO.thK > .01; if (!GEO.sleep) dreamSouls(I, GEO.thK > .3, true);
 }
 // speed, gliding
 function geoSpeedMul() {
@@ -5132,7 +5137,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; GEO.thK = GEO.bbK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; GEO.thK = GEO.bbK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -5764,12 +5769,13 @@ function hamRestore() {                                             // after the
 // things glow (the more a surface turns away from you, the brighter: ridgelines, trunks, rocks, the shore, all traced in light), faint
 // level-lines slide slowly over everything, the colour drifts violet near to teal and green far, and the distance dissolves into dark mist.
 // Living things glow like souls; slow wisps of coloured mist curl through the air.
-function dreamSouls(I, on) {                                       // animals and players: soft glowing shapes
+function dreamSouls(I, on, hot) {                                  // animals and players: soft glowing shapes (3.04: white-hot through thermal glasses)
   const keep = new Set();
   if (on) {
     const V = GEO.sleep && GEO.sleep.view ? GEO.sleep.view : P;
     for (const A of beasts) { if (A.dead || A.gone || A.x === undefined || Math.hypot(A.x - V.x, A.z - V.z) > 450) continue; keep.add(A);
-      if (!A.soul) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: 0xffc98a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, toneMapped: false })); scene.add(s); A.soul = s; }
+      if (A.soul && A.soul.userData.hot !== !!hot) { scene.remove(A.soul); A.soul.material.dispose(); A.soul = null; }
+      if (!A.soul) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: ORB_TEX(), color: hot ? 0xfff0e0 : 0xffc98a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, toneMapped: false })); scene.add(s); A.soul = s; s.userData.hot = !!hot; }
       const big = A.kind === "bear" || A.kind === "polar" || A.kind === "moose" || A.kind === "bison" || A.kind === "elk" || A.hpMax ? 2.4 : A.kind === "rabbit" || A.kind === "bird" || FLY[A.kind] ? .7 : 1.5;
       A.soul.position.set(A.x, (A.y || groundAt(A.x, A.z)) + big * .55, A.z); A.soul.scale.set(big * 4, big * 3, 1); A.soul.material.opacity = .85 + .15 * Math.sin(performance.now() / 400 + A.x); }
     for (const L of mpOpen()) { if (!L.R || !L.R.cur || Math.hypot(L.R.head.x - V.x, L.R.head.z - V.z) > 4000) continue; keep.add(L);   // (2.92: other players stand out, from far away)
@@ -7470,6 +7476,7 @@ function setLighting(lat, biome, topMix) {
     U.uAur.value = lerp(U.uAur.value, .55, k); U.uAurA.value.lerp(new THREE.Color(.25, 1, .6), k); U.uAurB.value.lerp(new THREE.Color(.7, .3, 1), k); U.uNight.value = Math.max(U.uNight.value, .8 * k); }
   renderer.setClearColor(scene.fog.color);
   starMat.uniforms.uOp.value = (1 - smooth(-12, -2, el)) * (1 - cloudAmt * .6) * (1 - oc);
+  if (GEO.bbK > .01) { const k = GEO.bbK; U.top.value.lerp(C("#c8641e"), .8 * k); U.hor.value.lerp(C("#f0a040"), .8 * k); U.cloudCol.value.lerp(C("#ffb060"), .7 * k); U.cloudDark.value.lerp(C("#8a3a10"), .7 * k); }   // 3.04: through blue blockers, an orange sky
   if (GEO.ghostK > 0) { const k = GEO.ghostK;                          // 2.88: the dream sky: near black, a faint aurora, the stars and the galaxy
     U.top.value.lerp(C("#05030c"), k); U.hor.value.lerp(C("#140a2a"), k); U.sunVis.value *= 1 - k; U.glowAmt.value *= 1 - k; U.uRays.value *= 1 - k; U.uHalo.value *= 1 - k; U.uBow.value *= 1 - k;
     U.cloudCol.value.lerp(C("#1a1030"), k); U.cloudDark.value.lerp(C("#07040e"), k); U.ridgeCol.value.lerp(C("#0a0618"), k); U.uMw.value = Math.max(U.uMw.value, .7 * k);
@@ -17465,7 +17472,7 @@ function loop(now) {
   updateBirds(now);
   if (!vr.on) WIND.value = now / 1000;                 // the trees hold still in a headset (sway makes leaf edges shimmer)
   if (world || (vr.on && VRUI.on)) {
-    GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = (vr.on ? 1.08 : .95) * (1 + GEO.nvK * (.6 + 3 * NIGHT_K)) * (1 + (GEO.ghostK || 0) * .1);   // (2.72: night-vision goggles; 2.86: a spirit sees in the dark)
+    GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = (vr.on ? 1.08 : .95) * (1 + (GEO.bbK || 0) * .25) * (1 + GEO.nvK * (.6 + 3 * NIGHT_K)) * (1 + (GEO.ghostK || 0) * .1);   // (2.72: night-vision goggles; 2.86: a spirit sees in the dark)
     { const fl = vr.on ? NIGHT_K * (weather.storm ? .02 : weather.precip ? .014 : .009) : 0; GRADE.uFloor.value.setRGB(fl * .8, fl * .9, fl * 1.15); }
     if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); }
     if (vr.on && TOOL.sightM) toolPrep();                  // 2.68: the SMG's thermal mini-sight
