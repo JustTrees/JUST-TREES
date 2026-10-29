@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.17";              // Just Trees 2.55
+const VERSION = "3.18";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3505,7 +3505,7 @@ function* enShoreJob(cx, cz) {                              // the water's idea 
   if (WATER_U.uShore.value) WATER_U.uShore.value.dispose(); WATER_U.uShore.value = t; WATER_U.uShoreC.value.set(cx, cz); WATER_U.uMapHalf.value = half;
 }
 // far ground: a coarse sheet of the same land under everything, so nothing is ever missing out at the haze while squares are still being built
-const EN_FAR = 4400, EN_FARN = 110;
+const EN_FAR = 6400, EN_FARN = 140;   // (3.18: the far land reaches further: 6.4 km across, ~46 m detail)
 function* enFarJob(cx, cz) {
   const E = ENDLESS, N = EN_FARN, st = EN_FAR / N, V1 = N + 1, hv = new Float32Array(V1 * V1);
   for (let j = 0; j < V1; j++) { for (let i = 0; i < V1; i++) hv[j * V1 + i] = E.hW(cx - EN_FAR / 2 + i * st, cz - EN_FAR / 2 + j * st); if (enOver()) yield "farH"; }
@@ -3588,6 +3588,7 @@ function endlessTick(dt) {                                   // every frame: bui
   let drops = 0;
   for (const ch of E.dropQ) { E.dropQ.delete(ch); if (E.chunks.get(ch.key) !== ch || (E.job && E.job.ch === ch)) continue; enUnload(ch); enFarSink(ch); if (++drops >= 2) break; }   // a couple a frame
   while (performance.now() - t0 < budget) {
+    if (!E.job && Math.hypot(px - E.farC0[0], pz - E.farC0[1]) > 1500) { E.farC0 = [Math.round(px / 400) * 400, Math.round(pz / 400) * 400]; E.job = { ch: null, far: true, it: enFarJob(E.farC0[0], E.farC0[1]) }; }   // 3.18: flying fast: the far land comes first once it's falling behind
     if (!E.job) {
       let pick = null;
       for (const ch of E.solidQ) { E.solidQ.delete(ch); if (E.chunks.get(ch.key) === ch && ch.tile) { pick = ch; break; } }
@@ -6866,7 +6867,8 @@ function geoTeleport(p) {                                     // the land round 
   enEnsure(P.x, P.z, 260);
   let sx = P.x, sz = P.z; for (let k = 0; k < 200; k++) { const a = k * 2.4, r = k * 1.2, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (H(x, z) > water + 1 && slopeNy(x, z) > .85) { sx = x; sz = z; break; } }
   P.x = sx; P.z = sz; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
-  E.farC0 = [1e9, 1e9]; E.shoreC = [1e9, 1e9]; MAPV.cx = 1e9; E.mapJob = null; E.scanT = 0; E.ambSig = "";
+  E.shoreC = [1e9, 1e9]; MAPV.cx = 1e9; E.mapJob = null; E.scanT = 0; E.ambSig = "";
+  { const sl = E.slice; E.slice = 1e9; E.ts = performance.now(); E.farC0 = [Math.round(P.x / 400) * 400, Math.round(P.z / 400) * 400]; const it = enFarJob(E.farC0[0], E.farC0[1]); while (!it.next().done); E.slice = sl; enFarSink(); }   // 3.18: the far land built for the new spot right away (it used to show the old place's mountains until everything near was done)
   globeTick(0); geoTentRestore(); GEO.reAt = true; GEO.tT = 0; if (typeof enAmbient === "function") enAmbient(true);
 }
 const G0p = () => GLOBE && GLOBE.p ? GLOBE.p.slice() : null;
