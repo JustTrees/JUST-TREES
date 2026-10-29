@@ -304,7 +304,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.06";              // Just Trees 2.55
+const VERSION = "3.07";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -706,7 +706,7 @@ const skyMat = new THREE.ShaderMaterial({
     ridgeCol: { value: new THREE.Color() }, time: { value: 0 },
     uNear: { value: new THREE.Color("#ffc070") }, uMid: { value: new THREE.Color("#ff5a40") }, uFar: { value: new THREE.Color("#7a3a8a") }, uSpread: { value: .5 },
     uRays: { value: 0 }, uBow: { value: 0 }, uHalo: { value: 0 }, uMeteor: { value: 0 },
-    uAur: { value: 0 }, uAurA: { value: new THREE.Color("#3cff9a") }, uAurB: { value: new THREE.Color("#b05aff") },
+    uNeon: { value: 0 }, uNeonSun: { value: new THREE.Vector3(1, .15, 0) }, uAur: { value: 0 }, uAurA: { value: new THREE.Color("#3cff9a") }, uAurB: { value: new THREE.Color("#b05aff") },
     uNight: { value: 0 }, uNightA: { value: new THREE.Color("#0d2a5a") }, uNightB: { value: new THREE.Color("#3a6ab0") }, uNightC: { value: new THREE.Color("#3a1f5a") },
     uMwN: { value: new THREE.Vector3(.3, .5, .8).normalize() }, uMw: { value: .5 }
   },
@@ -717,7 +717,7 @@ const skyMat = new THREE.ShaderMaterial({
     uniform float beltAmt; uniform vec3 beltCol; uniform vec3 shadowCol; uniform vec3 ridgeCol; uniform float time; varying vec3 vDir;
     uniform vec3 uNear; uniform vec3 uMid; uniform vec3 uFar; uniform float uSpread;
     uniform float uRays; uniform float uBow; uniform float uHalo; uniform float uMeteor;
-    uniform float uAur; uniform vec3 uAurA; uniform vec3 uAurB;
+    uniform float uAur; uniform vec3 uAurA; uniform vec3 uAurB; uniform float uNeon; uniform vec3 uNeonSun;
     uniform float uNight; uniform vec3 uNightA; uniform vec3 uNightB; uniform vec3 uNightC; uniform vec3 uMwN; uniform float uMw;
     // smooth gradient noise (no square grid look), rotated between octaves so nothing lines up
     vec2 hash2(vec2 p){ p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3))); return -1.0 + 2.0 * fract(sin(p) * 43758.5453); }
@@ -841,6 +841,23 @@ const skyMat = new THREE.ShaderMaterial({
       float ridge = 0.012 + fbm(vec2(az * 2.2 + skySeed.x, 0.5), 4) * 0.05 + fbm(vec2(az * 9.0, 2.0 + skySeed.y), 3) * 0.012;
       float rm = smoothstep(ridge + 0.002, ridge - 0.002, d.y) * smoothstep(-0.06, 0.0, d.y);
       c = mix(c, ridgeCol, rm * 0.55);
+      if (uNeon > 0.001) {                                            // 3.07: neon shades: the synthwave sky: always dark, a huge striped sun, neon through the sky
+        float y = d.y; vec3 n = mix(vec3(0.42, 0.05, 0.4), vec3(0.07, 0.03, 0.24), smoothstep(-0.02, 0.22, y)); n = mix(n, vec3(0.01, 0.01, 0.07), smoothstep(0.2, 0.85, y));
+        if (y < 0.0) n = mix(vec3(0.3, 0.04, 0.3), vec3(0.04, 0.0, 0.08), smoothstep(0.0, -0.3, y));
+        float r1 = exp(-pow((y - 0.33 - 0.07 * sin(az * 3.0 + time * 0.07)) / 0.012, 2.0)), r2 = exp(-pow((y - 0.55 - 0.09 * sin(az * 2.0 - time * 0.05 + 1.7)) / 0.008, 2.0)), r3 = exp(-pow((y - 0.18 - 0.04 * sin(az * 5.0 + time * 0.1 + 4.0)) / 0.006, 2.0));
+        float r4 = exp(-pow((y - 0.75 - 0.05 * sin(az * 4.0 + time * 0.04 + 2.5)) / 0.006, 2.0));
+        n += vec3(1.0, 0.12, 0.75) * r1 * 0.9 + vec3(0.08, 0.85, 1.0) * r2 * 0.8 + vec3(0.65, 0.2, 1.0) * r3 * 0.7 + vec3(0.08, 0.85, 1.0) * r4 * 0.5;
+        n += vec3(1.0, 0.2, 0.6) * exp(-abs(y) * 22.0) * 0.55;                                   // the horizon glows
+        vec3 sq = floor(d * 320.0); float sh = fract(sin(dot(sq, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        n += vec3(0.85, 0.85, 1.0) * step(0.9982, sh) * smoothstep(0.08, 0.3, y) * (0.6 + 0.4 * sin(time * 2.0 + sh * 60.0));
+        vec3 s = normalize(uNeonSun); float sa = acos(clamp(dot(d, s), -1.0, 1.0)), SR = 0.17, v = (y - s.y) / SR;   // about four times the size of the sun
+        float band = fract(v * 6.5), gap = clamp((0.25 - v) * 0.38, 0.0, 0.62), cut = v < 0.25 ? step(band, gap) : 0.0;
+        float disc = smoothstep(SR, SR - 0.004, sa) * (1.0 - cut) * smoothstep(-0.005, 0.01, y);
+        vec3 sc = mix(vec3(0.95, 0.22, 0.12), vec3(0.88, 0.66, 0.08), smoothstep(-1.0, 0.95, v));    // dark yellow over orange
+        n += vec3(1.0, 0.3, 0.35) * exp(-max(sa - SR, 0.0) / 0.07) * 0.5 * smoothstep(-0.05, 0.02, y);
+        n = mix(n, sc, disc);
+        c = mix(c, n, uNeon);
+      }
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0 * 1.5;   // dither: no colour banding
@@ -979,15 +996,26 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
     gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
   }
-  if (uMVG > 0.001) {                                                 // 3.06: neon shades: Miami Vice, hot pink, purple and electric blue, a neon grid on the flat
+  if (uMVG > 0.001) {                                                 // 3.07: neon shades: a whole new look: the world gone dark, everything drawn in glowing neon
     vec3 mv = vFogW - uCamP; float md = max(length(mv), 0.001); vec3 mn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
-    vec3 c0 = gl_FragColor.rgb; float mfl0 = smoothstep(0.6, 0.93, abs(mn.y)); float ml = dot(c0, vec3(0.3, 0.59, 0.11)), mg = clamp((c0.g - max(c0.r, c0.b)) * 4.0, 0.0, 1.0);
-    vec3 mc = mix(vec3(0.09, 0.02, 0.2), vec3(0.95, 0.12, 0.62), smoothstep(0.04, 0.42, ml)); mc = mix(mc, mix(vec3(0.3, 0.85, 1.0), vec3(1.0, 0.36, 0.82), mfl0), smoothstep(0.5, 0.9, ml)); mc *= (0.5 + 0.2 * ml) * (1.0 - 0.45 * mfl0);
-    mc = mix(mc, mix(vec3(0.02, 0.25, 0.32), vec3(0.15, 0.95, 0.9), smoothstep(0.05, 0.5, ml)), mg * 0.75 * (1.0 - 0.85 * mfl0));   // green things go teal
-    float mfl = smoothstep(0.6, 0.93, abs(mn.y)), mrim = smoothstep(0.55, 0.97, 1.0 - abs(dot(mn, mv / md))) * (1.0 - mfl), far = 1.0 - smoothstep(300.0, 1800.0, md);
-    vec2 gq = vFogW.xz / 6.0, gw = abs(fract(gq - 0.5) - 0.5) / max(fwidth(gq), vec2(0.0001)); float grid = (1.0 - min(min(gw.x, gw.y), 1.0)) * mfl * (1.0 - smoothstep(80.0, 420.0, md));
-    mc += vec3(0.2, 0.9, 1.0) * mrim * 0.55 * far; mc = mix(mc, vec3(1.0, 0.1, 0.7), min(1.0, grid * 1.2));
-    gl_FragColor.rgb = mix(c0, mc, 0.9 * uMVG);
+    vec3 c0 = gl_FragColor.rgb; float ml = dot(c0, vec3(0.3, 0.59, 0.11)), mg = clamp((c0.g - max(c0.r, c0.b)) * 4.0, 0.0, 1.0);
+    float mfl = smoothstep(0.6, 0.93, abs(mn.y)), far = 1.0 - smoothstep(500.0, 2800.0, md);
+    vec3 mc = mix(vec3(0.02, 0.008, 0.06), vec3(0.08, 0.025, 0.18), smoothstep(0.05, 0.7, ml));       // the dark: deep indigo
+    mc = mix(mc, vec3(0.0, 0.07, 0.09) * (0.6 + ml), mg * (1.0 - mfl));                                  // (green things a dark teal)
+    float mrim = smoothstep(0.72, 0.99, 1.0 - abs(dot(mn, mv / md))) * (1.0 - mfl * 0.85);               // outlines: everything that turns away from you glows
+    float medge = smoothstep(0.04, 0.16, fwidth(ml));
+#ifdef DREAM_CARD
+    medge = max(medge, smoothstep(0.08, 0.3, fwidth(gl_FragColor.a)));
+#endif
+    float hy = 0.5 + 0.5 * sin(vFogW.y * 0.06 + vFogW.x * 0.003 + vFogW.z * 0.002);                    // the neon drifts pink to electric blue
+    vec3 neon = mix(vec3(1.0, 0.1, 0.72), vec3(0.08, 0.88, 1.0), hy);
+    mc += neon * (mrim * 1.0 + medge * 0.75 * (1.0 - mfl * 0.6)) * far;
+    vec2 gd = abs(fract(vFogW.xz / 8.0 - 0.5) - 0.5) * 8.0, gf = fwidth(vFogW.xz) * 1.5;              // a thick neon grid over all the flat ground and water
+    float lw = 0.11 + md * 0.0018; vec2 gl2 = 1.0 - smoothstep(vec2(lw), vec2(lw) + gf, gd);
+    float gg = exp(-min(gd.x, gd.y) / (0.35 + md * 0.004)) * 0.3;
+    float grid = (max(gl2.x, gl2.y) + gg) * mfl * (1.0 - smoothstep(250.0, 1500.0, md));
+    mc += vec3(1.0, 0.12, 0.78) * grid * 1.1;
+    gl_FragColor.rgb = mix(c0, mc, uMVG);
   }
   if (uThG > 0.001) {                                                 // 3.03: thermal glasses: the land cold and dark, its shapes traced in dull red
     vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -4683,7 +4711,7 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
-  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the whole world in hot pink, purple and electric blue, a neon grid on the ground (take them out to switch)", 1]
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1]
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
@@ -5022,7 +5050,9 @@ function geoWornTick(I) {
   else if (GEO.thWas && !UNDER.on) sky.visible = true;
   GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, GEO.thK > .3, true);   /* (3.06: the dream glasses keep their own souls) */
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* 3.06: neon shades (the sky follows) */
-  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; if (GEO.mvK > .01) { scene.fog.color.lerp(C("#5a1a6a"), .8 * GEO.mvK); renderer.setClearColor(scene.fog.color); }
+  HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0; skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0;
+  if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* 3.07: the distance melts into dark purple; the big sun sits low where the real one is */
+    const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
 }
 // speed, gliding
 function geoSpeedMul() {
@@ -5149,7 +5179,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;   // 2.90
-  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
+  HFOG.uThG.value = 0; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; skyMat.uniforms.uNeon.value = 0; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;   // 3.03
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;   // 2.86
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -7489,7 +7519,7 @@ function setLighting(lat, biome, topMix) {
     U.uAur.value = lerp(U.uAur.value, .55, k); U.uAurA.value.lerp(new THREE.Color(.25, 1, .6), k); U.uAurB.value.lerp(new THREE.Color(.7, .3, 1), k); U.uNight.value = Math.max(U.uNight.value, .8 * k); }
   renderer.setClearColor(scene.fog.color);
   starMat.uniforms.uOp.value = (1 - smooth(-12, -2, el)) * (1 - cloudAmt * .6) * (1 - oc);
-  if (GEO.mvK > .01) { const k = GEO.mvK; U.top.value.lerp(C("#2a0850"), .85 * k); U.hor.value.lerp(C("#ff5f78"), .85 * k); U.cloudCol.value.lerp(C("#ff8ad8"), .75 * k); U.cloudDark.value.lerp(C("#4a0e6a"), .75 * k); }   /* 3.06: neon shades: a synthwave sunset sky */
+  if (GEO.mvK > .01) { const k = GEO.mvK; U.top.value.lerp(C("#0a0830"), .9 * k); U.hor.value.lerp(C("#5a1458"), .9 * k); }   /* 3.06: neon shades (3.07: always dark; the sky itself is drawn in the sky shader) */
   if (GEO.bbK > .01) { const k = GEO.bbK; U.top.value.lerp(C("#c8641e"), .8 * k); U.hor.value.lerp(C("#f0a040"), .8 * k); U.cloudCol.value.lerp(C("#ffb060"), .7 * k); U.cloudDark.value.lerp(C("#8a3a10"), .7 * k); }   // 3.04: through blue blockers, an orange sky
   if (GEO.ghostK > 0) { const k = GEO.ghostK;                          // 2.88: the dream sky: near black, a faint aurora, the stars and the galaxy
     U.top.value.lerp(C("#05030c"), k); U.hor.value.lerp(C("#140a2a"), k); U.sunVis.value *= 1 - k; U.glowAmt.value *= 1 - k; U.uRays.value *= 1 - k; U.uHalo.value *= 1 - k; U.uBow.value *= 1 - k;
