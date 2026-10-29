@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.19";              // Just Trees 2.55
+const VERSION = "3.20";              // Just Trees 2.55
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -6688,7 +6688,7 @@ function geoHurtTick(dt) {                                    // the red flash w
 // dying (or drowning): you wake somewhere random on the planet
 function geoRandomSpot() {
   const G = GLOBE, R = G.R;
-  for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (t < 3000 && G.p && glArc(p, G.p) * R < 4000) continue; if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }   // (2.76: at least 4 km away)
+  for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (t < 3000 && G.p && glArc(p, G.p) * R < 4000) continue; if (G.isle && glArc(p, G.isle.c) < G.isle.r + 600 / R) continue;   /* (3.20: not onto the dinosaur island) */ if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }   // (2.76: at least 4 km away)
   return G.p.slice();
 }
 function geoTeleport(p) {                                     // the land round you, built fresh at another spot on the planet (behind the dark)
@@ -11059,13 +11059,23 @@ function pcLavaTick(dt) {                                   // PC and phone: ste
   }
   if (PCLAVA.t > 0) { const was = PCLAVA.t; PCLAVA.t -= dt; if (was > .9 && PCLAVA.t <= .9) uwRespawn(); if (PCLAVA.t <= .5 && PCLAVA.el) PCLAVA.el.style.opacity = 0; }
 }
-function uwRespawn() {                                      // wake up somewhere random on dry ground
+function mpNearSpawn() {                                    // 3.20: online Hunting and Hiking: back in somewhere semi-close to another player (60-180 m, safe ground)
+  if (!MP.on || !MP.code || GLOBE || !(gameMode === "hunt" || gameMode === "hike")) return null;
+  const others = [...MP.links.values()].filter(L => L.R && L.R.cur && L.R.alive !== false && L.R.head); if (!others.length) return null;
+  const L = others[Math.floor(Math.random() * others.length)], hx = L.R.head.x, hz = L.R.head.z;
+  for (let k = 0; k < 400; k++) { const a = Math.random() * 6.283, r = 60 + Math.random() * 120 + (k > 250 ? 100 : 0), x = hx + Math.cos(a) * r, z = hz + Math.sin(a) * r;
+    if (!okSpot(x, z) || H(x, z) < water + 2 || inLava(x, z, 30) || slopeNy(x, z) < .8) continue;
+    if (beasts.some(A => A.pred && !A.dead && A.x !== undefined && Math.hypot(A.x - x, A.z - z) < 70)) continue;   // (not next to a predator)
+    return [x, z]; }
+  return null;
+}
+function uwRespawn() {                                      // wake up somewhere random on dry ground (3.20: online Hunting and Hiking, near another player)
   pteroCalm();                                               // 3.01: the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // 2.73: Geocaching: anywhere on the planet
-  let s = arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
+  let s = mpNearSpawn() || arenaSpawnFar(arenaFoes());                          // (2.47: an arena: your side's start point furthest from the others)
   for (let k = 0; k < 400 && !s; k++) { const x = (Math.random() * 2 - 1) * (EDGE - 20), z = (Math.random() * 2 - 1) * (EDGE - 20); if (okSpot(x, z) && H(x, z) > water + 2 && !inLava(x, z, 30) && (k > 300 || vbFarFrom(x, z, Math.min(120, HALF * .4)))) s = [x, z]; }   // (2.48: not next to a bot)
   if (!s) s = [P.x, P.z];
-  P.x = s[0]; P.z = s[1]; P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
+  P.x = s[0]; P.z = s[1]; if (ENDLESS && !GLOBE) enEnsure(P.x, P.z, 200); P.y = groundAt(P.x, P.z); P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.placeAt = true; vr.goodX = undefined;
 }
 function uwAudio(under, dt) {
   if (!SND.ctx || !SND.uw) return;
