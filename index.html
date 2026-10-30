@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.27";              // Just Trees
+const VERSION = "3.28";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -12195,7 +12195,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : gameMode === "pvp" ? (MP.code ? "Deathmatch" : "Bot battle") : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), 960), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : gameMode === "pvp" ? (MP.code ? "Deathmatch" : "Bot battle") : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), MP.code ? 870 : 960), lx + 360, 92);
     { const pv = gameMode === "pvp" && !mpGuest(); wAr.w = pv ? 210 : 250; wRnd.x = rx + (pv ? 444 : 262); wRnd.w = pv ? 210 : 250; wGo.x = rx + (pv ? 664 : 524); wGo.w = pv ? 236 : 376; }   // room for Bots // (an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
@@ -12224,7 +12224,8 @@ function vruiParts() {
       g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("The host starts the game · change your look on the left", P.W - 70, 1112); }
   };
   [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "Bot battle"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 200, 40, 190, 66, l, () => { if (gameMode !== m) { setMode(m); mapRules(); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 30 }));   // Solo picks here (PvP against bots)
-  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 210, 40, 200, 66, l, () => { setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m, hide: () => !MP.code || mpGuest() || geoMode(), fs: 30 }));   // online: the host picks
+  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1320 + i * 178, 40, 172, 66, l, () => { if (set.geoNet) { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; roomsSetPublic(!!MP.pubWas); } setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m && !geoMode(), hide: () => !MP.code || mpGuest(), fs: 28 }));   // (leaving Treeocashing: back to how the room was listed)
+  uiBtn(S2, 1320 + 3 * 178, 40, 172, 66, "Treeocashing", () => { if (set.geoNet) return; MP.pubWas = !!MP.pub; setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; roomsSetPublic(true); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => geoMode(), hide: () => !MP.code || mpGuest() || !DEV.ok, fs: 24 });   // Dev only for now: a public planet, and your lobby starts next to you   // online: the host picks
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -12261,7 +12262,7 @@ function vruiParts() {
   uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp" || pvpEndless();
   const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // maps built in Map Lab
   const wRnd = uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
-  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (geoMode() && MP.code && MP.host) { geoNetLobbyGo(); return; } if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(S2, rx + 220, 1060, 214, 90, "Bots", () => vbOpen(), { hide: () => mpGuest() || gameMode !== "pvp", active: () => vbWant() > 0, fs: 32, labelFn: () => vbWant() ? "Bots · " + vbWant() : "Bots · off" });
   for (const w of S2.widgets) if (([212, 216, 366, 666].includes(w.y) && w.x < rx) || ([196, 346].includes(w.y) && w.x >= rx)) { const d0 = w.disabled; w.disabled = () => !!set.arena || !!(d0 && d0()); }   // an arena sets the land
   // ---- your character: beside the map settings (Solo, and online when you tap your own card), and on its own from the main menu ----
@@ -15568,7 +15569,7 @@ function mpDropLink(L) {
   if (MP.links.get(L.id) === L) MP.links.delete(L.id); mpOnUpdate();
 }
 function mpLeave() {
-  if (MP.host && set.geoNet && mpOpen().length) { const nx = mpOpen().map(L => L.id).sort()[0]; mpSend({ t: "host", id: nx }); }   // the planet goes on without you
+  if (MP.host && set.geoNet && mpOpen().length && !MP.moving) { const nx = mpOpen().map(L => L.id).sort()[0]; mpSend({ t: "host", id: nx }); }   // the planet goes on without you
   vbLeave();
   if (MP.host && MP.pub && MP.code) roomsPost({ op: "gone", code: MP.code }); MP.pub = false; MP.pubKey = "";   // off the list
   mpSend({ t: "bye" });
@@ -15991,13 +15992,31 @@ function mpHostPlay() {                                     // the host's "Play 
 // ---- the others' side
 function pvpEndRound() { if (MP.overShown) { MP.overT = 0; MP.overShown = false; if (MP.boardM) MP.boardM.visible = false; if (UNDER.blk && !UNDER.go) UNDER.blk.visible = false; } if (gameMode === "pvp" || MP.code) { if (MP.code && (state === "play" || state === "pause")) mpBoard(); MP.roundLeft = 0; if (state === "play" || state === "pause" || state === "over") state = "vrmenu"; } }   // the round stops (clock, sending, scoring) when anyone heads back to the menus
 function mpGuestUi(o) { if (state === "play" || state === "pause") mpBoard(); if (o.teams) MP.teams = o.teams; mpApplySet(o.set); MP.revealT = 0; MP.pendingReveal = null; pvpEndRound(); if (vr.on) vruiOpen(o.st === "lobby" ? "lobby" : "setup"); }
+async function geoNetLobbyGo() {                                // the host's Start in a Treeocashing lobby: a running planet with room for all of you first, like the online menu
+  const need = mpOpen().length + 1; let rooms = [];
+  MP.status = "Finding a planet…";
+  try { const o = await (await fetch((MP.roomsUrl || ROOMS_URL) + "?v=" + encodeURIComponent(MP.netV), { cache: "no-store" })).json(); rooms = o && Array.isArray(o.rooms) ? o.rooms : []; } catch (_) {}
+  const r = rooms.filter(q => q.v === MP.netV && q.map === "Treeocashing" && q.st !== "lobby" && q.code !== MP.code && (q.n || 1) + need <= MP_MAX && !(MP.kicked && MP.kicked.has(q.code))).sort((a, b) => (b.n || 0) - (a.n || 0))[0];
+  if (!r || !MP.host || !MP.code) { renderSetup(); startNew(); return; }   // none: your own public planet, everyone starting next to you
+  MP.palTags = new Set(mpOpen().map(L => L.tag).filter(Boolean)); MP.palT = 90;
+  mpSend({ t: "geomove", code: r.code }); MP.moving = true;
+  setTimeout(async () => { MP.moving = false; await mpJoin(r.code); vruiOpen("lobby"); }, 600);
+}
+function geoPalTick(dt) {                                       // a lobby that went into a running planet: the friends land next to the one who was hosting
+  if (!MP.palTags && !MP.palTag) return;
+  if ((MP.palT = (MP.palT || 0) - dt) <= 0) { MP.palTags = null; MP.palTag = ""; MP.palP = null; return; }
+  if (state !== "play" || !geoNet() || !GLOBE) return;
+  if (MP.palTags) for (const L of mpOpen()) if (MP.palTags.has(L.tag) && !L.palSent) { L.palSent = true; mpSendTo(L, { t: "pal", p: glToSphere(P.x, P.z, [0, 0, 0]) }); }
+  if (MP.palTag && MP.palP) { const p = MP.palP; MP.palTag = ""; MP.palP = null; geoTeleport(p); const s2 = enSpawnNear(P.x, P.z, 6, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); vr.placeAt = true; }
+}
 function mpGuestGen(o) {
-  mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true; pvpEndRound();
+  mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true; pvpEndRound(); if (set.geoNet) GLB_JOIN = null;
   $("loading").classList.remove("hidden"); if (vr.on) vruiOpen("loading");
   setTimeout(() => {
     generate(); MP.genBusy = false;
     $("loading").classList.add("hidden"); $("setup").classList.add("hidden"); $("pause").classList.add("hidden");
-    mpRandomSpawn(); showHud(false);
+    if (GLOBE && set.geoNet) { const s2 = enSpawnNear(P.x, P.z, 6, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); mpSendHost({ t: "spawn", x: P.x, z: P.z }); }   // Treeocashing from a lobby: you all start together (after a death, or joining later, it's random)
+    else mpRandomSpawn(); showHud(false);
     if (vr.on) startFly(); else { reveal(); drawMap($("miniMap")); }
     if (MP.pendingReveal) { const l = MP.pendingReveal; MP.pendingReveal = null; mpRevealStart(l); }
   }, vr.on ? 350 : 40);
@@ -16039,7 +16058,7 @@ function mpSendStartTo(L) {                                 // straight into a g
 let GLB_JOIN = null;                                          // a guest's start on the planet, read when the world is made
 function mpGuestStart(o) {
   if (GLOBE) GLOBE.folT = 1e15;
-  GLB_JOIN = !set.geoNet && Array.isArray(o.gf) && o.gf.length === 11 && isFinite(o.hx) ? { seed: o.seed, key: o.gf.join(), F: { c: o.gf.slice(0, 3), e: o.gf.slice(3, 6), n: o.gf.slice(6, 9), ox: o.gf[9], oz: o.gf[10] }, x: o.hx, z: o.hz, u: o.u } : null;                                // (not following the old world's layout while the new one is made)
+  GLB_JOIN = !(o.set && o.set.geoNet) && Array.isArray(o.gf) && o.gf.length === 11 && isFinite(o.hx) ? { seed: o.seed, key: o.gf.join(), F: { c: o.gf.slice(0, 3), e: o.gf.slice(3, 6), n: o.gf.slice(6, 9), ox: o.gf[9], oz: o.gf[10] }, x: o.hx, z: o.hz, u: o.u } : null;                                // (not following the old world's layout while the new one is made)
   mpApplySet(o.set); seed = o.seed; MP.hp = 100; MP.sh = 0; MP.dead = 0; MP.revealT = 0; for (const L of MP.links.values()) L.bumped = false; MP.pendingReveal = null; MP.kills = MP.deaths = MP.pts = 0; MP.dmg = 0; MP.lastDmg = 0; MP.roundLeft = set.geoNet ? 0 : o.left || (set.roundMin || 10) * 60;
   if (vr.on && VRUI.root) vruiOpen("loading");
   setTimeout(() => {
@@ -16090,6 +16109,8 @@ function mpRecv(o, L) {
   if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
   if (o.t === "set") { if (!MP.host) mpApplySet(o.set); return; }
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
+  if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; mpJoin(String(o.code)); vruiOpen("lobby"); } return; }   // your lobby is going into a planet that's already running
+  if (o.t === "pal") { if (MP.palTag && L.tag === MP.palTag && Array.isArray(o.p) && o.p.length === 3) MP.palP = o.p; return; }
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
   if (o.t === "start") { if (!MP.host) mpGuestStart(o); return; }
@@ -17432,7 +17453,7 @@ function mpHurtMesh() {
 }
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {                                       // (also runs offline in VR PvP, for dying and respawning)
-  const now = performance.now();
+  const now = performance.now(); geoPalTick(dt);
   if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 20 seconds is gone
   { const gap = now - (MP.tickT || now); MP.tickT = now; if (gap > 1500) for (const L of MP.links.values()) L.lastRx += gap; }   // my own long pause (a world being made) isn't them going quiet
   for (const L of [...MP.links.values()]) {
