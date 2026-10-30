@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.32";              // Just Trees
+const VERSION = "3.33";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -345,8 +345,8 @@ const TIER_ODDS = [.46, .74, .88, .95];                       // a gun on the ma
 const PICK = { hp: 30, sh: 35, back: 45, gunBack: 20, deadLife: 90 };   // PvP guns come back too (a new one), and a fallen player's refill lasts 90 s // green cross: + health; blue cross: + shield; seconds before a cross comes back
 const LOOT = { nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3, bigHead: 4 };   // (Big heads: how many times bigger)
-const bigHeadK = () => gameMode === "pvp" && set.bigHead ? PVP.bigHead : 1;   // Big heads mode (PvP setup, the host's choice online)
-function charBigHead(C) { const k = bigHeadK(); if (C && C.by.Head && C.by.Head.scale.x !== k) C.by.Head.scale.setScalar(k); }   // the head bone grows from the neck (hair and all); shots hit what you see
+const bigHeadK = L => (gameMode === "pvp" || (set.comp && gameMode === "hunt")) && set.bigHead ? PVP.bigHead : L && L.cbw && COMP.on ? PVP.bigHead : 1;   // (Competitive: a Bigg Wigg's head is always big)   // Big heads mode (PvP setup, the host's choice online)
+function charBigHead(C, L) { const k = bigHeadK(L); if (C && C.by.Head && C.by.Head.scale.x !== k) C.by.Head.scale.setScalar(k); }   // the head bone grows from the neck (hair and all); shots hit what you see
 const ZONE_SPEEDS = [0, 120, 90, 60, 40, 25];               // VR zone: seconds each shrink takes for speed 1 (slow) to 5 (fast)
 const ZONE_STAGES_MAX = 5;                                 // VR zone: most shrinks in one round
 const CAPTURE = { r: 12, every: 20 };                     // capture point: radius (m), seconds held alone for each point
@@ -3262,7 +3262,7 @@ const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || s
 const pvpEndless = () => gameMode === "pvp" && !MP.code && set.pvpMap === "endless";      // a solo Bot battle on endless land
 function mapRules() {                                         // what each mode plays on (VR). Solo: Hike endless; Hunt and Bot battle the 3 km island or endless.
   if (gameMode === "hike") { if (set.hikeMap !== "island") set.hikeMap = "endless"; }   // (Hike: the 3 km island or the planet) // Online: Hiking endless; Hunting the 3 km island or endless; Deathmatch every size; Treeocashing its planet
-  else if (gameMode === "hunt" && set.comp) { set.huntMap = "island"; set.edges = "island"; if (!COMP_SIZES.some(z => z[0] === set.size)) set.size = "medium"; }   // Competitive Treeocashing: M to XXXL
+  else if (gameMode === "hunt" && set.comp) { if (set.huntMap === "globe") set.geoNet = true; else { set.geoNet = false; set.huntMap = "island"; set.edges = "island"; if (!COMP_SIZES.some(z => z[0] === set.size)) set.size = "medium"; } }   // Competitive Treeocashing: M to XXXL
   else if (gameMode === "hunt") { if (set.huntMap !== "endless" && set.huntMap !== "globe") { set.huntMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
   else if (gameMode === "pvp" && !MP.code) { if (set.pvpMap === "endless") { set.zone = "off"; set.capture = "off"; } else { set.pvpMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
 }
@@ -4562,7 +4562,7 @@ function geoChar() {
 }
 function geoLoad() { const c = geoChar(); return c ? { n: c.n, found: Array.from({ length: c.n }, (_, i) => i + 1), score: c.score || 0, kills: c.kills || 0, lat: c.lat, lon: c.lon } : null; }   // (lat/lon: only the tests pick a start spot)
 function geoSave() {
-  if (!GEO.on || !GLOBE || GEO.lab || GEO.full) return;   // (the labs and Full level never save over your character)
+  if (!GEO.on || !GLOBE || GEO.lab || GEO.full || set.comp) return;   // (Competitive: a fresh start each game, nothing saved) (the labs and Full level never save over your character)
   try { localStorage.setItem(geoCharKey, JSON.stringify({ n: GEO.found.size, score: +hunt.score.toFixed(1), kills: hunt.kills })); } catch (_) {}
 }
 function geoRestart() { try { localStorage.setItem(geoCharKey, JSON.stringify({ n: 0, score: 0, kills: 0 })); localStorage.removeItem(geoKey); } catch (_) {} }   // start over at level 0
@@ -4724,7 +4724,7 @@ function geoGpsModel() {
 }
 const geoFmt = (v, pos, neg) => (v < 0 ? neg : pos) + " " + Math.abs(v).toFixed(2) + "°";
 function geoGpsDraw() {
-  if (COMP.on) return compGpsDraw();
+  if (COMP.on && (!COMP.planet || COMP.zone)) return compGpsDraw();
   const g = GEO.gps, cv = g.userData.cv, x = cv.getContext("2d"), G = GLOBE, T = GEO.target, nf = GEO.found.size;
   x.fillStyle = "#0e1a12"; x.fillRect(0, 0, 256, 384); x.textAlign = "left"; x.textBaseline = "alphabetic";
   x.fillStyle = "#9fe0a0"; x.font = "bold 26px sans-serif"; x.fillText("GPS", 12, 32); x.textAlign = "right"; x.fillStyle = MP.hp > 35 ? "#7fe08a" : "#ff6a5a"; x.fillText("♥ " + Math.round(MP.hp), 244, 32);
@@ -4766,6 +4766,9 @@ function geoMapDraw(cv) {
   if (jetOn()) for (const J of JET.list) { if (J.dead) continue; const [mx, my, a] = toMap(J.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue;   // the jet skis
     g.fillStyle = "#3ad0ff"; g.strokeStyle = "#002030"; g.lineWidth = 2; g.beginPath(); g.moveTo(mx, my - 7); g.lineTo(mx + 5, my + 6); g.lineTo(mx - 5, my + 6); g.closePath(); g.fill(); g.stroke(); }
   for (const c of geoMapCaches()) { const [mx, my, a] = toMap(c.p); if (a > Math.PI * .8 || mx < 0 || my < 0 || mx > W || my > W) continue; g.fillStyle = c === GEO.target ? "#ffd65a" : "rgba(255,214,90,.6)"; g.beginPath(); g.arc(mx, my, c === GEO.target ? 7 : 4, 0, 6.283); g.fill(); }
+  if (COMP.on && COMP.planet && COMP.beam) { const [mx, my] = toMap(COMP.beam.p), rr = (COMP.bR || 0) / span * W;   // Competitive: the beam and the zone round it
+    if (rr < W * 40) { g.strokeStyle = "rgba(255,60,40,.85)"; g.lineWidth = 3; g.beginPath(); g.arc(mx, my, rr, 0, 6.283); g.stroke(); }
+    g.fillStyle = "#fff2b0"; g.strokeStyle = "#5a3a00"; g.lineWidth = 2; g.beginPath(); g.arc(Math.max(6, Math.min(W - 6, mx)), Math.max(6, Math.min(W - 6, my)), 8, 0, 6.283); g.fill(); g.stroke(); }
   g.save(); g.translate(W / 2, W / 2); g.rotate(-P.yaw); const sz = W / 26; g.fillStyle = "#F2C14E"; g.strokeStyle = "#000"; g.lineWidth = 1.5;
   g.beginPath(); g.moveTo(0, -sz); g.lineTo(sz * .65, sz * .7); g.lineTo(0, sz * .35); g.lineTo(-sz * .65, sz * .7); g.closePath(); g.fill(); g.stroke(); g.restore();
   if (G.Nf) { const nx = W / 2 + G.Nf[0] * W * .44, ny = W / 2 + G.Nf[1] * W * .44; g.fillStyle = "#fff"; g.font = "700 " + Math.round(W / 16) + "px system-ui"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("N", nx, ny); }
@@ -4799,6 +4802,8 @@ function geoMapTick(I, main, dt) {                              // (each frame w
   if (k > .98) U.spin += dt * .35;
   U.inner.quaternion.setFromAxisAngle(_v1.set(0, 1, 0), -Math.atan2(p[0], p[2]) + U.spin);
   U.dot.position.set(p[0] * .102, p[1] * .102, p[2] * .102);
+  if (!U.beam) { U.beam = new THREE.Mesh(new THREE.CylinderGeometry(.0025, .0025, .03, 8).translate(0, .015, 0), new THREE.MeshBasicMaterial({ color: 0xfff2b0, fog: false, toneMapped: false })); U.inner.add(U.beam); }
+  U.beam.visible = !!(COMP.on && COMP.beam); if (U.beam.visible) { const b = COMP.beam.p; U.beam.position.set(b[0] * .1, b[1] * .1, b[2] * .1); U.beam.quaternion.setFromUnitVectors(_v1.set(0, 1, 0), _v2.set(b[0], b[1], b[2])); }   // Competitive: where the beam came down
   const pa = U.cpts.geometry.attributes.position, ca = U.cpts.geometry.attributes.color; let n = 0;
   for (const c of geoMapCaches()) { pa.setXYZ(n, c.p[0] * .101, c.p[1] * .101, c.p[2] * .101); const t = c === GEO.target; ca.setXYZ(n, 1, t ? .9 : .78, t ? .3 : .2); n++; }
   U.cpts.geometry.setDrawRange(0, n); pa.needsUpdate = ca.needsUpdate = true;
@@ -6870,7 +6875,7 @@ function geoTeleport(p, Fr) {                                     // the land ro
 }
 const G0p = () => GLOBE && GLOBE.p ? GLOBE.p.slice() : null;
 function geoRespawn() {
-  const by = GEO.killedBy; GEO.killedBy = null;
+  const by = GEO.killedBy; GEO.killedBy = null; if (COMP.on && COMP.zone && !COMP.out) compOut(null);   // (Competitive end game: hunger, the cold, an animal: out too)
   if (UNDER.on) ugLeave(null);
   hunt.score = Math.max(0, hunt.score - 10); showHuntScore();
   MP.hp = 60; GEO.food = Math.max(GEO.food, 50); GEO.water = Math.max(GEO.water, 50); GEO.warn = 100; GEO.hurt = 0;
@@ -7024,8 +7029,8 @@ function generate() {
   const EN = HIKEMAP === "endless";
   GLOBE = EN ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // Geocaching: the little globe
   CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !(GLOBE && geoMode())) geoStop();   // (every endless map is the planet; Treeocashing only when it's Treeocashing)
-  const full = !GEO.labWant && DEV.ok && DEV.full && set.geoNet; GEO.fullWant = full;   // Dev: Full level
-  if (GLOBE) GLOBE.sv = !geoMode() ? null : GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_N, found: Array.from({ length: GEO_N }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (the Gear Lab: everything, saved nowhere) // (the planet is this game's own; only your level carries over)
+  const full = !GEO.labWant && DEV.ok && DEV.full && set.geoNet && !set.comp; GEO.fullWant = full;   // Dev: Full level
+  if (GLOBE) GLOBE.sv = !geoMode() || set.comp ? null : GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_N, found: Array.from({ length: GEO_N }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (the Gear Lab: everything, saved nowhere) // (the planet is this game's own; only your level carries over)
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
   starMat.uniforms.uPx.value = renderer.getPixelRatio();
@@ -12249,7 +12254,7 @@ function vruiParts() {
     if (compMode()) { uiLabel(g, rx, 168, "Map size", compSizeName() + " · " + compTop() + " levels"); note(g, rx, 290, compSizeNote()); }
     else if (!geoMode() && (gameMode === "hike" || gameMode === "hunt" || !onl())) { const pl = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(); uiLabel(g, rx, 168, "Map", pl ? "The planet · 50 km round" : "The 3 km island"); if (pl && gameMode === "hike") note(g, rx, 238, "You start in the land of your latitude"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
     else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : $("sizeVal").textContent);
-    if (geoMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
+    if (geoMode() && !compMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
     else if (huntEndless()) note(g, rx, 318, "Land, animals and guns all over the planet");
     else if (gameMode === "pvp" && onl()) uiLabel(g, rx, 318, "Edges"); if (!geoMode()) uiLabel(g, rx + 610, 318, "Landscape");
     uiLabel(g, rx, 468, "Weather", $("weatherVal").textContent);
@@ -12266,8 +12271,8 @@ function vruiParts() {
   [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "Bot battle"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 200, 40, 190, 66, l, () => { if (gameMode !== m) { setMode(m); mapRules(); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 30 }));   // Solo picks here (PvP against bots)
   [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1320 + i * 178, 40, 172, 66, l, () => { if (set.geoNet) { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; roomsSetPublic(!!MP.pubWas); } setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m && !geoMode(), hide: () => !MP.code || mpGuest() || !!set.comp, fs: 28 }));   // (leaving Treeocashing: back to how the room was listed)
   uiBtn(S2, 1320 + 3 * 178, 40, 172, 66, "Treeocashing", () => { if (set.geoNet) return; MP.pubWas = !!MP.pub; setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; roomsSetPublic(true); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => geoMode(), hide: () => !MP.code || mpGuest() || !DEV.ok || !!set.comp, fs: 24 });
-  COMP_SIZES.forEach(([k, l], i) => uiBtn(S2, rx + i * 150, 196, 140, 62, l, () => { set.size = k; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => set.size === k, hide: () => !compMode() || mpGuest(), fs: 30 }));   // Competitive: the map size (and so the top level)
-  uiBtn(S2, rx + 5 * 150, 196, 150, 62, "Planet", () => vrBanner("Competitive on the planet: coming next", 2.5, 1), { hide: () => !compMode() || mpGuest(), fs: 28, paintCol: "#3a3a3a" });   // Dev only for now: a public planet, and your lobby starts next to you   // online: the host picks
+  COMP_SIZES.forEach(([k, l], i) => uiBtn(S2, rx + i * 150, 196, 140, 62, l, () => { set.size = k; set.huntMap = "island"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => set.size === k && !compPlanet(), hide: () => !compMode() || mpGuest(), fs: 30 }));   // Competitive: the map size (and so the top level)
+  uiBtn(S2, rx + 5 * 150, 196, 150, 62, "Planet", () => { set.huntMap = "globe"; mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => compPlanet(), hide: () => !compMode() || mpGuest(), fs: 28 });   // Dev only for now: a public planet, and your lobby starts next to you   // online: the host picks
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -12289,7 +12294,7 @@ function vruiParts() {
   uiBtn(S2, rx, 636, 215, 62, "Free for all", () => { set.teams = "solo"; mpLobSync(true); }, { active: () => set.teams !== "teams", hide: () => gameMode !== "pvp", fs: 28 });
   uiBtn(S2, rx + 225, 636, 215, 62, "2 Teams", () => { set.teams = "teams"; mpTeamFix(); mpLobSync(true); }, { active: () => set.teams === "teams", hide: () => gameMode !== "pvp", fs: 28 });
   uiBtn(S2, rx + 450, 636, 215, 62, "Random teams", () => mpTeamsRandom(), { hide: () => !onl() || !teamsOn(), fs: 26 });
-  uiBtn(S2, rx + 685, 636, 215, 62, "Big heads", () => { set.bigHead = !set.bigHead; mpHostSetSync(); mpLobSync(true); }, { active: () => !!set.bigHead, hide: () => gameMode !== "pvp" || mpGuest(), fs: 28 });   // like GoldenEye
+  uiBtn(S2, rx + 685, 636, 215, 62, "Big heads", () => { set.bigHead = !set.bigHead; mpHostSetSync(); mpLobSync(true); }, { active: () => !!set.bigHead, hide: () => (gameMode !== "pvp" && !compMode()) || mpGuest(), fs: 28 });   // like GoldenEye
   uiSlider(S2, rx, 806, cw, 0, 3, () => set.comms | 0, v => { set.comms = v; mpLobSync(true); }, 1).hide = () => !onl();
   uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => (!onl() && gameMode !== "pvp") || compMode();   // round length (every online mode, 5 to 60 minutes)
   // the extras, in three short rows under the months
@@ -12304,7 +12309,7 @@ function vruiParts() {
   uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp" || pvpEndless();
   const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest() || compMode(), active: () => !!set.arena, fs: 36 });   // maps built in Map Lab
   const wRnd = uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
-  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (geoMode() && MP.code && MP.host) { geoNetLobbyGo(); return; } if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
+  const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (geoMode() && MP.code && MP.host && !set.comp) { geoNetLobbyGo(); return; } if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(S2, rx + 220, 1060, 214, 90, "Bots", () => vbOpen(), { hide: () => mpGuest() || gameMode !== "pvp", active: () => vbWant() > 0, fs: 32, labelFn: () => vbWant() ? "Bots · " + vbWant() : "Bots · off" });
   for (const w of S2.widgets) if (([212, 216, 366, 666].includes(w.y) && w.x < rx) || ([196, 346].includes(w.y) && w.x >= rx)) { const d0 = w.disabled; w.disabled = () => !!set.arena || !!(d0 && d0()); }   // an arena sets the land
   // ---- your character: beside the map settings (Solo, and online when you tap your own card), and on its own from the main menu ----
@@ -16061,13 +16066,14 @@ function geoPalTick(dt) {                                       // a lobby that 
    Finding the cache: M and L a compass from the start; XL and up your position and the cache's as numbers, the arrow later, the distance
    later still (the bigger maps are the geekier ones). ---- */
 const compMode = () => !!set.comp && !!MP.code && gameMode === "hunt";
-const compTop = () => (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[2];
-const compSizeName = () => (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[1];
+const compPlanet = () => !!set.comp && set.huntMap === "globe";   // Competitive on the planet: the whole of Treeocashing, Bigg Wigg at 50
+const compTop = () => compPlanet() ? GEO_N : (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[2];
+const compSizeName = () => compPlanet() ? "Planet" : (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[1];
 const compBig = () => COMP.N >= 20;
 const compArrowAt = () => compBig() ? Math.ceil(COMP.N * .3) : 0, compDistAt = () => compBig() ? Math.ceil(COMP.N * .6) : 1e9;
 const compBW = () => COMP.on && COMP.lv >= COMP.N;
 function compIsBW(id) { const L = id && MP.links.get(id); return !!(L && L.cbw); }
-function compSizeNote() { return compTop() >= 20 ? "GPS: numbers · arrow at lv " + Math.ceil(compTop() * .3) + " · distance at " + Math.ceil(compTop() * .6) : "A compass points at your cache"; }
+function compSizeNote() { return compPlanet() ? "All of Treeocashing: survival, the GPS, 51-55 extra" : compTop() >= 20 ? "GPS: numbers · arrow at lv " + Math.ceil(compTop() * .3) + " · distance at " + Math.ceil(compTop() * .6) : "A compass points at your cache"; }
 async function compGo() {                                         // the main menu button: your own public room, empty, ready to fill
   if (!MP.tag) { VRUI.tagNext = "comp"; vruiOpen("tag"); return; }
   MP.status = ""; await mpHost(); setMode("hunt"); set.comp = true; set.geoNet = false; set.arena = null; set.huntMap = "island"; set.edges = "island"; if (!COMP_SIZES.some(z => z[0] === set.size)) set.size = "medium";
@@ -16089,11 +16095,12 @@ function compRewards(N) {                                          // what each 
   return out;
 }
 function compStart() {                                            // a new Competitive game (a new world)
-  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.items.clear(); COMP.R = compRewards(COMP.N);
-  if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; compPlace();
+  COMP.planet = !!GLOBE && geoNet(); COMP.beam = null; COMP.bwSaid = false; compBeamHide();
+  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = COMP.planet ? GEO.found.size : 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.items.clear(); COMP.R = compRewards(COMP.N);
+  if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; if (!COMP.planet) compPlace();
   vrBanner("Competitive Treeocashing · get to level " + COMP.N + " to be a Bigg Wigg. The " + (compBig() ? "GPS" : "compass") + " is on your wheel", 6, 3);
 }
-function compStop() { if (!COMP.on) return; COMP.on = false; COMP.seed = null; COMP.out = false; if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; for (const m of COMP.marks.values()) scene.remove(m); COMP.marks.clear(); }
+function compStop() { if (!COMP.on) return; compBeamHide(); COMP.beam = null; COMP.on = false; COMP.seed = null; COMP.out = false; if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; for (const m of COMP.marks.values()) scene.remove(m); COMP.marks.clear(); }
 function compPlace() {                                            // your next cache: further out the higher you are, on the map, somewhere you can stand
   if (COMP.lv >= COMP.N) { COMP.c = null; return; }
   const k = COMP.lv / COMP.N, want = Math.max(70, HALF * (.22 + .4 * k)), lim = EDGE - 25;
@@ -16122,7 +16129,9 @@ function compOut(by) {                                            // taken down 
   COMP.out = true; vr.gpsMode = false; if (COMP.obj) { scene.remove(COMP.obj); COMP.obj = null; }
   vrBanner("You're out" + (by ? " · " + (mpTagOf(by) || "a Bigg Wigg") + " got you" : "") + ". Watch the rest", 5, 3);
 }
-function compZoneStart() {                                        // everyone left is a Bigg Wigg: the zone comes in
+function compZoneStart(o) {                                       // everyone left is a Bigg Wigg: the zone comes in
+  if (COMP.planet) { if (!o || !Array.isArray(o.p) || o.p.length !== 3) return; COMP.zone = true; COMP.beam = { p: o.p.slice(), t0: performance.now() - (o.el || 0) * 1000 }; COMP.bOutT = 0; COMP.bDmgT = 0;
+    bing(); vrBanner("THE BEAM HAS HIT · " + (glArc(GLOBE.p, o.p) * GLOBE.R / 1000).toFixed(1) + " km away. The zone closes on it: get there", 7, 9); return; }
   COMP.zone = true; const zo = set.zone, rm = set.roundMin; set.zone = "on"; set.roundMin = { 10: 5, 15: 6, 20: 8, 25: 10, 35: 14 }[COMP.N] || 8; COMP.zoneGo = true;
   try { startZone(); } finally { COMP.zoneGo = false; set.zone = zo; set.roundMin = rm; }
   vrBanner("All Bigg Wiggs! The zone is closing in · last one standing wins", 5, 9);
@@ -16136,7 +16145,15 @@ function compGpsDraw() {                                          // the compass
   x.fillStyle = "#0e1a12"; x.fillRect(0, 0, 256, 384); x.textBaseline = "alphabetic"; x.textAlign = "left";
   x.fillStyle = "#9fe0a0"; x.font = "bold 26px sans-serif"; x.fillText(big ? "GPS" : "COMPASS", 12, 32); x.textAlign = "right"; x.fillStyle = MP.hp > 35 ? "#7fe08a" : "#ff6a5a"; x.fillText("♥ " + Math.round(MP.hp), 244, 32);
   x.textAlign = "center"; x.fillStyle = compBW() ? "#ffd65a" : "#e8f6e0"; x.font = "bold 34px sans-serif"; x.fillText(compBW() ? "BIGG WIGG" : "Level " + COMP.lv + " / " + COMP.N, 128, 78);
-  if (!C) { x.font = "24px sans-serif"; x.fillStyle = "#cfe8c0"; x.fillText(COMP.zone ? "Stay in the zone" : "Hunt them down", 128, 200); }
+  if (COMP.planet && COMP.beam) {                                  // the beam: which way, how far, how big the zone is now
+    const [ux, uz, d] = compBeamDir(), fw = -Math.sin(P.yaw) * ux - Math.cos(P.yaw) * uz, rt = Math.cos(P.yaw) * ux - Math.sin(P.yaw) * uz, ins = d <= COMP.bR;
+    x.textAlign = "center"; x.font = "bold 26px sans-serif"; x.fillStyle = ins ? "#9fe0a0" : "#ff6a5a"; x.fillText(ins ? "INSIDE THE ZONE" : "OUTSIDE! GET IN", 128, 118);
+    x.save(); x.translate(128, 215); x.strokeStyle = "#3a5a40"; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, 62, 0, 6.283); x.stroke(); x.rotate(Math.atan2(rt, fw)); x.fillStyle = "#ffd65a";
+    x.beginPath(); x.moveTo(0, -52); x.lineTo(29, 31); x.lineTo(0, 16); x.lineTo(-29, 31); x.closePath(); x.fill(); x.restore();
+    x.font = "bold 28px sans-serif"; x.fillStyle = "#e8f6e0"; x.fillText("Beam " + (d >= 1000 ? (d / 1000).toFixed(1) + " km" : Math.round(d) + " m"), 128, 318);
+    x.font = "22px sans-serif"; x.fillStyle = "#cfe8c0"; x.fillText("Zone " + (COMP.bR >= 1000 ? (COMP.bR / 1000).toFixed(1) + " km" : Math.round(COMP.bR) + " m") + " round it", 128, 352);
+  }
+  else if (!C) { x.font = "24px sans-serif"; x.fillStyle = "#cfe8c0"; x.fillText(COMP.zone ? "Stay in the zone" : "Hunt them down", 128, 200); }
   else {
     const dx = C.x - P.x, dz = C.z - P.z, fw = -Math.sin(P.yaw) * dx - Math.cos(P.yaw) * dz, rt = Math.cos(P.yaw) * dx - Math.sin(P.yaw) * dz, arrow = !big || COMP.lv >= compArrowAt();
     if (big) { x.textAlign = "left"; x.font = "bold 26px monospace"; x.fillStyle = "#e8f6e0"; x.fillText("You  E" + Math.round(P.x) + " N" + Math.round(-P.z), 12, 124); x.fillStyle = "#ffe9a8"; x.fillText("Cache E" + Math.round(C.x) + " N" + Math.round(-C.z), 12, 158); }
@@ -16149,14 +16166,53 @@ function compGpsDraw() {                                          // the compass
   g.userData.scr.material.map.needsUpdate = true;
 }
 const _cmpMarkGeo = new THREE.OctahedronGeometry(.11, 0);
+/* the beam (Competitive on the planet): it lands somewhere far off; the zone round it closes over an hour, never faster than you can run:
+   the whole planet down to 5 km in 30 minutes, to 300 m by 50, to 40 m at the hour. A column of light shows the way, a red wall the edge. */
+const BEAM = [[0, 1], [1800, 5000], [3000, 300], [3600, 40]];   // (seconds, zone radius in metres; the first is the whole planet)
+function compBeamPick() {                                       // somewhere dry, the further from everyone the better
+  const G = GLOBE, me = G.p; let best = null, bs = -1;
+  for (let t = 0; t < 600; t++) { const q = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(q[1]) > .9 || G.landAt(q) < 1.5 || (G.isle && glArc(q, G.isle.c) < G.isle.r + .05)) continue;
+    const sc = glArc(q, me) + Math.random() * .6; if (sc > bs) { bs = sc; best = q; } }
+  return best || geoRandomSpot();
+}
+function compBeamR(el) {                                        // the zone's radius this many seconds after the beam
+  const R0 = Math.PI * GLOBE.R; let a = [0, R0];
+  for (const [t, r] of BEAM.slice(1)) { if (el < t) { const k = (el - a[0]) / (t - a[0]); return a[1] + (r - a[1]) * k; } a = [t, r]; }
+  return a[1];
+}
+function compBeamDir() {                                        // the beam from here: which way (in the land round you) and how far
+  const G = GLOBE, b = COMP.beam.p, p = G.p, dp = glDot(b, p), t = [b[0] - dp * p[0], b[1] - dp * p[1], b[2] - dp * p[2]], ux = glDot(t, G.ax), uz = glDot(t, G.az), l = Math.hypot(ux, uz) || 1;
+  return [ux / l, uz / l, glArc(p, b) * G.R];
+}
+function compBeamHide() { if (COMP.pillar) COMP.pillar.visible = false; if (COMP.wall) COMP.wall.visible = false; }
+function compBeamTick(dt) {
+  const b = COMP.beam; if (!b || !GLOBE) return;
+  const el = (performance.now() - b.t0) / 1000, r = compBeamR(el), [ux, uz, d] = compBeamDir(); COMP.bR = r;
+  if (!COMP.pillar) { COMP.pillar = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 16, 1, true).translate(0, .5, 0), new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide }));
+    COMP.pillar.frustumCulled = false; scene.add(COMP.pillar);
+    COMP.wall = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 256, 1, true).translate(0, .5, 0), new THREE.MeshBasicMaterial({ color: 0xff3020, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide }));
+    COMP.wall.frustumCulled = false; scene.add(COMP.wall); }
+  const near = d < 3500, cx = near ? null : P.x + ux * Math.min(d, 4000), cz = near ? null : P.z + uz * Math.min(d, 4000), o = [0, 0]; if (near) glFromSphere(b.p, o);
+  const px = near ? o[0] : cx, pz = near ? o[1] : cz, pw = Math.max(6, Math.hypot(px - P.x, pz - P.z) * .004);
+  COMP.pillar.position.set(px, P.y - 300, pz); COMP.pillar.scale.set(pw, 5000, pw); COMP.pillar.visible = true;   // a column of light where the beam came down
+  const ex = near ? o[0] : P.x + ux * d, ez = near ? o[1] : P.z + uz * d;          // the edge: a ring round it (drawn when you're anywhere near it)
+  COMP.wall.visible = Math.abs(d - r) < 1500 && r < Math.PI * GLOBE.R * .9; if (COMP.wall.visible) { COMP.wall.position.set(ex, P.y - 200, ez); COMP.wall.scale.set(r, 700, r); }
+  if (COMP.out || MP.dead > 0 || UW.drown > 0) return;
+  if (d > r) {                                                  // outside: a couple of seconds' grace, then it hurts, more as the hour goes on
+    COMP.bOutT = (COMP.bOutT || 0) + dt; if ((COMP.bSayT = (COMP.bSayT || 0) - dt) <= 0) { COMP.bSayT = 8; vrBanner("Outside the zone! The beam is " + (d / 1000).toFixed(1) + " km away: follow the light", 3, 3); }
+    if (COMP.bOutT > 2 && (COMP.bDmgT = (COMP.bDmgT || 0) + dt) >= 1) { COMP.bDmgT = 0; MP.lastHitBy = null; mpTakeHit(2 + Math.round(4 * Math.min(1, el / 3600)), false, true); zoneCrunch(3); }
+  } else COMP.bOutT = 0;
+}
 function compTick(dt) {                                           // (each frame, from mpTick)
   if (COMP.on && (!compMode() || state === "vrmenu" && !MP.overShown)) { if (!compMode()) compStop(); }
   if (!compMode() || state !== "play") return;
   if (!COMP.on || COMP.seed !== seed) compStart();
   MP.roundLeft = 0;                                               // no round clock
-  if (COMP.out) { MP.hp = 100; MP.dead = Math.min(MP.dead, 0); }
+  if (COMP.out) { MP.hp = 100; MP.dead = Math.min(MP.dead, 0); if (COMP.planet) { GEO.food = GEO.water = 100; } }
+  if (COMP.planet) { COMP.lv = GEO.found.size; if (compBW() && !COMP.bwSaid) { COMP.bwSaid = true; MP.hp = 100; vrBanner("BIGG WIGG! Level " + COMP.N + ". Anyone you take down now is out (51-55 are extra)", 6, 9); } }
+  if (COMP.planet && COMP.zone) compBeamTick(dt);
   // your cache, out on the ground once you're within 500 m
-  const C = COMP.c;
+  const C = COMP.planet ? null : COMP.c;
   if (C && !COMP.out) {
     const d = Math.hypot(C.x - P.x, C.z - P.z);
     if (!COMP.obj && d < 500) { if (!geoCacheClear(C.x, C.z)) for (let k = 1; k < 120; k++) { const a = k * 2.4, r = k * .5, x = C.x + Math.cos(a) * r, z = C.z + Math.sin(a) * r; if (geoCacheClear(x, z)) { C.x = x; C.z = z; break; } }
@@ -16173,7 +16229,8 @@ function compTick(dt) {                                           // (each frame
   if (MP.host && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
     const ps = [{ id: mpMyId(), bw: compBW(), out: COMP.out }, ...mpOpen().map(L => ({ id: L.id, bw: L.cbw, out: L.co }))], alive = ps.filter(q => !q.out);
     if (ps.length >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
-    if (!COMP.zone && alive.length && alive.every(q => q.bw)) { mpSend({ t: "czone" }); compZoneStart(); }
+    if (!COMP.zone && alive.length && alive.every(q => q.bw)) { const m = { t: "czone" }; if (COMP.planet) m.p = compBeamPick(); mpSend(m); compZoneStart(m); }
+    if (COMP.zone && COMP.planet && COMP.beam) for (const L of mpOpen()) if (!L.czS) { L.czS = true; mpSendTo(L, { t: "czone", p: COMP.beam.p, el: (performance.now() - COMP.beam.t0) / 1000 }); }   // (someone new: where it is and how far along)
   }
 }
 function mpGuestGen(o) {
@@ -16182,7 +16239,8 @@ function mpGuestGen(o) {
   setTimeout(() => {
     generate(); MP.genBusy = false;
     $("loading").classList.add("hidden"); $("setup").classList.add("hidden"); $("pause").classList.add("hidden");
-    if (GLOBE && set.geoNet) { const s2 = enSpawnNear(P.x, P.z, 6, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); mpSendHost({ t: "spawn", x: P.x, z: P.z }); }   // Treeocashing from a lobby: you all start together (after a death, or joining later, it's random)
+    if (GLOBE && set.geoNet && set.comp) { geoTeleport(geoRandomSpot()); mpSendHost({ t: "spawn", x: P.x, z: P.z }); }   // Competitive: everyone somewhere different
+    else if (GLOBE && set.geoNet) { const s2 = enSpawnNear(P.x, P.z, 6, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); mpSendHost({ t: "spawn", x: P.x, z: P.z }); }   // Treeocashing from a lobby: you all start together (after a death, or joining later, it's random)
     else mpRandomSpawn(); showHud(false);
     if (vr.on) startFly(); else { reveal(); drawMap($("miniMap")); }
     if (MP.pendingReveal) { const l = MP.pendingReveal; MP.pendingReveal = null; mpRevealStart(l); }
@@ -16278,7 +16336,7 @@ function mpRecv(o, L) {
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
   if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; const code = String(o.code); MP.moving = true; vruiOpen("mp"); MP.status = "Joining your friends' planet…";
     setTimeout(() => { MP.moving = false; mpJoin(code); vruiOpen("lobby"); }, 1800 + (MP.idx | 0) * 1500); } return; }   // your lobby is going into a planet that's already running (one at a time, after the host: everyone already there is told about you, so you all link up)
-  if (o.t === "czone") { if (L.id === mpHostId() && COMP.on && !COMP.zone) compZoneStart(); return; }
+  if (o.t === "czone") { L.czS = true; if (L.id === mpHostId() && COMP.on && !COMP.zone) compZoneStart(o); return; }
   if (o.t === "cend") { if (L.id === mpHostId() && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
   if (o.t === "pal") { if (MP.palTag && L.tag === MP.palTag && Array.isArray(o.p) && o.p.length === 3) MP.palP = o.p; return; }
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
@@ -17317,7 +17375,7 @@ function charRemote(R, L, s, dt) {
   const lk = lookOf(L);
   if (R.C && (lookStr(R.C.lk) !== lookStr(lk) || R.C.uni !== UNIFORMS[mpUni(L)])) { charDrop(R.C); R.C = null; }   // they changed their look
   if (!R.C) { R.C = charMake(lk, UNIFORMS[mpUni(L)]); if (!R.C) return false; }
-  charBigHead(R.C);
+  charBigHead(R.C, L); R.bh = bigHeadK(L);
   const C = R.C, f = _chV.set(0, 0, -1).applyQuaternion(s.h.q), yaw = Math.atan2(-f.x, -f.z), fx = -Math.sin(yaw), fz = -Math.cos(yaw);
   C.top.visible = state === "play";
   if (!s.alive) { if (C.deadT < 0) { const by = L.dieBy, killer = by === mpMyId() ? camera.position : by && MP.links.get(by) && MP.links.get(by).R ? MP.links.get(by).R.head : vbIsId(by) ? vbEnt2(by) : null; charKill(C, killer, L.dieHead); }
@@ -17580,7 +17638,7 @@ function mpRemoteShot(o) {                                  // their bullet and 
 function mpHitOne(R, from, dir, maxT) {                     // did my shot hit this player? (head counts double)
   if (R && R.C && charOn() && R.C.top.visible) return R.alive ? charHit(R.C, from, dir, maxT) : null;   // exactly the body you see (not hair)
   if (!R || !R.cur || !R.alive) return null;
-  const bh = bigHeadK(), hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04 + (bh - 1) * .11, 0)), oc = new THREE.Vector3().subVectors(from, hc);   // (Big heads: a bigger head, grown upward)
+  const bh = R.bh || bigHeadK(), hc = _mpA.copy(R.head).add(new THREE.Vector3(0, -.04 + (bh - 1) * .11, 0)), oc = new THREE.Vector3().subVectors(from, hc);   // (Big heads: a bigger head, grown upward)
   const bq = oc.dot(dir), cq = oc.lengthSq() - (.15 * bh) ** 2, disc = bq * bq - cq;
   let best = null;
   if (disc >= 0) { const t = -bq - Math.sqrt(disc); if (t > 0 && t < maxT) best = { t, head: true }; }
@@ -17606,6 +17664,7 @@ function mpTakeHit(d, head, noShield) {
   const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
   if (MP.hp <= 0 && GEO.on) {                                // on the planet: the dark, then you wake somewhere far off
+    if (COMP.on && (COMP.zone || compIsBW(MP.lastHitBy))) compOut(MP.lastHitBy);   // (Competitive: a Bigg Wigg got you, or it's the end game: out)
     MP.deaths++; mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0 }); GEO.killedBy = mpTagOf(MP.lastHitBy) || "Someone"; if (!(UW.drown > 0)) { UW.drown = .001; UW.red = 1; } return;
   }
   if (MP.hp <= 0) {
