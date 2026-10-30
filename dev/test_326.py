@@ -1,4 +1,4 @@
-"""3.26: the glasses are back, for Dev testing (Full level and the Test Lab: levels 51-56). In those sessions their looks are built into
+"""3.26: the glasses are back, for Dev testing (Full level and the Test Lab: levels 51-55; 3.32: no golden hour). In those sessions their looks are built into
 every material while the world is made (and the animals' neon/white versions a couple of seconds in), so putting them on or off never
 builds anything new mid-play; outside them nothing about the shaders changes. Usage: python3 dev/test_326.py dbg.html"""
 import sys, asyncio, json
@@ -14,7 +14,7 @@ async def main():
           o.plain = [D.JTFX.always === true, !!T.Material.prototype.defines];
           // the Test Lab: a Dev session with the glasses
           D.DEV.ok = true; D.GEO.labWant = true; D.setMode('hunt'); Object.assign(D.set, { huntMap: 'globe', dino: false, geoNet: false }); D.generate(); D.state = 'play';
-          o.lab = [D.GEO.lab, D.JTFX.always, D.GLASSES.filter(k => D.GEO.items.has(k)).length, D.geoRewardOf(51).item, D.geoRewardOf(56).item, D.geoRewardOf(50).item === 'jetski'];
+          o.lab = [D.GEO.lab, D.JTFX.always, D.GLASSES.filter(k => D.GEO.items.has(k)).length, D.geoRewardOf(51).item, D.geoRewardOf(55).item, D.geoRewardOf(50).item === 'jetski'];
           const I = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} };
           for (let i = 0; i < 72 * 3; i++) { D.endlessTick(1 / 72); D.geoTick(1 / 72); D.geoWornTick(I); } R.render(D.scene, D.camera); o.warm = D.JTFX.warm;
           const p0 = R.info.programs.length; const per = {};
@@ -26,7 +26,7 @@ async def main():
           o.after = [D.JTFX.always, !!T.Material.prototype.defines, D.GEO.on];
           return o; }""")
         print(json.dumps(r)); print("errors:", errs[:5] or "none")
-        ok = r["plain"] == [False, False] and r["lab"][:3] == [True, True, 6] and r["lab"][3] == "bblock" and r["lab"][4] == "hlglass" and r["lab"][5] and r["warm"] \
+        ok = r["plain"] == [False, False] and r["lab"][:3] == [True, True, 5] and r["lab"][3] == "bblock" and r["lab"][4] == "hlglass" and r["lab"][5] and r["warm"] \
              and all(v <= 0 for v in r["newPrograms"].values()) and r["after"][:2] == [False, False] and not errs
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

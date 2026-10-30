@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.31";              // Just Trees
+const VERSION = "3.32";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1006,7 +1006,7 @@ uniform float fogDensity;
 #else
 uniform float fogNear; uniform float fogFar;
 #endif
-uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG; uniform float uMVG; uniform float uMVT; uniform float uGHG; uniform float uHLG;   // our own camera position: three.js only sends cameraPosition to some materials
+uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG; uniform float uMVG; uniform float uMVT; uniform float uHLG;   // our own camera position: three.js only sends cameraPosition to some materials
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
@@ -1040,16 +1040,6 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   if (uBBG > 0.001) {                                                 // blue blockers: blues gone, everything orange to red, sharp (a colour change only)
     float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
     gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
-  }
-  if (uGHG > 0.001) {                                                 // golden hour: warm gold light, violet shadows, a golden haze, edges catching the low sun
-    vec3 gv = vFogW - uCamP; float gd = max(length(gv), 0.001); vec3 gn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
-    vec3 c0 = gl_FragColor.rgb; float gl0 = dot(c0, vec3(0.3, 0.59, 0.11));
-    vec3 gw = c0 * vec3(1.2, 0.98, 0.66);
-    vec3 gg = mix(gw * vec3(0.78, 0.66, 0.8), gw * 1.12 + vec3(0.1, 0.06, 0.0) * gl0, smoothstep(0.08, 0.5, gl0));
-    gg = mix(gg, vec3(1.2, 0.85, 0.45) * gl0 * 1.2, 0.22);
-    gg += vec3(1.0, 0.62, 0.24) * fxRim(gn, gv / gd, gd, vFogW) * 0.3 * (1.0 - 0.7 * smoothstep(0.6, 0.93, abs(gn.y)));
-    gg = mix(gg, vec3(1.0, 0.78, 0.52) * 0.85, smoothstep(150.0, 2200.0, gd) * 0.42);
-    gl_FragColor.rgb = mix(c0, gg, uGHG);
   }
   if (uHLG > 0.001) {                                                 // hell: scorched black land split by glowing lava, the edges of things smouldering, red smoke
     vec3 hv = vFogW - uCamP; float hd = max(length(hv), 0.001); vec3 hn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -1158,9 +1148,9 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(dc, vec3(0.045, 0.028, 0.09) + lc * 0.035, mist), uDream.x);
   }
 #endif`;
-const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uGHG: { value: 0 }, uHLG: { value: 0 } };
-const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; sh.uniforms.uHLG = HFOG.uHLG; };   // materials that skip the ground fog still see the dream
-const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uGHG = HFOG.uGHG; sh.uniforms.uHLG = HFOG.uHLG; };
+const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uHLG: { value: 0 } };
+const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };   // materials that skip the ground fog still see the dream
+const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
 const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
@@ -4829,7 +4819,7 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
-  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1],   // (the glasses: Dev levels 51-56 for now)
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1],   // (the glasses: Dev levels 51-56 for now)
   ["jetski", "Jet ski", "Wade into the sea and take it out of your pack: it's there in the water, ready to climb on", 1],   // (the reward for cache #50)
   
 ];
@@ -4843,7 +4833,7 @@ function geoRewardOf(n) {                                     // what the nth fi
   if (n > GEO_N && n <= GEO_N + GLASSES.length) return { item: GLASSES[n - GEO_N - 1] };   // (the glasses: levels 51-56, Dev only for now)
   return { refill: true, last: n >= GEO_N };
 }
-const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "ghglass", "hlglass"];
+const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "hlglass"];   // levels 51-55 (3.32: the golden hour glasses are gone)
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
   const own = {}, items = new Set(); if (GEO.full || GEO.lab) for (const k of GLASSES) items.add(k);   // (Dev: Full level and the Test Lab have the glasses)
   for (let i = 1; i <= n; i++) { const r = geoRewardOf(i); if (r.gun) own[r.gun] = Math.max(own[r.gun] || 0, r.star); if (r.item) items.add(r.item); }
@@ -4902,7 +4892,7 @@ function giModel(k) {                                         // (about hand siz
     case "thermos": P(giCyl(.03, .03, .2, 14), 0x2a6a4a, 0, 0, 0); P(giCyl(.032, .032, .04, 14), 0x999999, 0, .12, 0); break;
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
     case "jetski": { const j = jetModel(); j.scale.setScalar(.12); g.add(j); break; }   // (a little one, for the pack and the reward)
-    case "bblock": case "tglass": case "dglass": case "mvglass": case "ghglass": case "hlglass": { const fr = k === "hlglass" ? 0x161010 : k === "ghglass" ? 0xc89a3a : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "hlglass" ? 0xff2a08 : k === "ghglass" ? 0xffb347 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // (dream glasses, neon shades)
+    case "bblock": case "tglass": case "dglass": case "mvglass": case "hlglass": { const fr = k === "hlglass" ? 0x161010 : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "hlglass" ? 0xff2a08 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // (dream glasses, neon shades)
       for (const sx of [-1, 1]) { P(giCyl(.026, .026, .006, 16), fr, sx * .034, 0, 0, Math.PI / 2); const L = P(giCyl(.022, .022, .007, 16), ln, sx * .034, 0, .001, Math.PI / 2); L.material = new THREE.MeshBasicMaterial({ color: ln }); P(giBox(.004, .006, .1), fr, sx * .062, .005, -.05); }
       P(giBox(.02, .006, .006), fr, 0, .008, 0); break; }
     case "nvg": for (const s of [-1, 1]) P(giCyl(.02, .024, .07, 12), 0x23262a, s * .03, 0, -.03, Math.PI / 2); P(giBox(.1, .03, .04), 0x3a3a3a, 0, 0, 0); P(giCyl(.016, .016, .003, 12), 0x50ff70, .03, 0, -.067, Math.PI / 2); P(giCyl(.016, .016, .003, 12), 0x50ff70, -.03, 0, -.067, Math.PI / 2); break;
@@ -5254,13 +5244,11 @@ function geoWornTick(I) {
   if (GEO.thK > .01) { scene.fog.color.lerp(C("#141414"), GEO.thK); renderer.setClearColor(scene.fog.color); if (GEO.thK > .5 && !UNDER.on) { stars.visible = false; GEO.thHid = true; } } else if (GEO.thHid) { if (!UNDER.on) stars.visible = true; GEO.thHid = false; }
   GEO.thWas = GEO.thK > .01; if (!GEO.sleep && !GEO.worn.has("dglass")) dreamSouls(I, false);   /* (no glowing souls through thermal glasses: the animals and people themselves go white) */   /* (the dream glasses keep their own souls) */
   const mvw = GEO.worn.has("mvglass") && !GEO.sleep, mk0 = GEO.mvK || 0; GEO.mvK = mk0 + ((mvw ? 1 : 0) - mk0) * .2; if (GEO.mvK < .005) GEO.mvK = 0; if (Math.abs(GEO.mvK - mk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* neon shades (the sky follows) */
-  const ghw = GEO.worn.has("ghglass") && !GEO.sleep, gk0 = GEO.ghK || 0; GEO.ghK = gk0 + ((ghw ? 1 : 0) - gk0) * .2; if (GEO.ghK < .005) GEO.ghK = 0; if (Math.abs(GEO.ghK - gk0) > .002 && ENDLESS) ENDLESS.lightT = 0;   /* golden hour glasses (the sky follows) */
-  HFOG.uGHG.value = GEO.ghK > .01 ? GEO.ghK : 0; if (GEO.ghK > .01) { scene.fog.color.lerp(C("#f2c690"), .55 * GEO.ghK); renderer.setClearColor(scene.fog.color); }
   const hlw = GEO.worn.has("hlglass") && !GEO.sleep, hk0 = GEO.hlK || 0; GEO.hlK = hk0 + ((hlw ? 1 : 0) - hk0) * .2; if (GEO.hlK < .005) GEO.hlK = 0;   /* hell glasses */
   HFOG.uHLG.value = GEO.hlK > .01 ? GEO.hlK : 0; skyMat.uniforms.uHell.value = GEO.hlK > .01 && !UNDER.on ? GEO.hlK : 0;
   if (GEO.hlK > .01) { scene.fog.color.lerp(C("#2a0603"), GEO.hlK); renderer.setClearColor(scene.fog.color); if (GEO.hlK > .5 && !UNDER.on) { stars.visible = false; GEO.hlHid = true; } } else if (GEO.hlHid) { if (!UNDER.on) stars.visible = true; GEO.hlHid = false; }
   hellEmbers(I, GEO.hlK);
-  jtFxTick(GEO.mvK > 0 || GEO.ghK > 0 || GEO.hlK > 0 || GEO.worn.has("mvglass") || GEO.worn.has("ghglass") || GEO.worn.has("hlglass"));
+  jtFxTick(GEO.mvK > 0 || GEO.hlK > 0 || GEO.worn.has("mvglass") || GEO.worn.has("hlglass"));
   HFOG.uMVT.value = performance.now() / 1000 % 1000; HFOG.uMVG.value = GEO.mvK > .01 ? GEO.mvK : 0;  bodySwapTick(GEO.mvK > .01 || GEO.thK > .01 || GEO.ghostK > .01); skyMat.uniforms.uNeon.value = GEO.mvK > .01 && !UNDER.on ? GEO.mvK : 0; if (GEO.mvK > .5 && !UNDER.on) { stars.visible = false; GEO.mvHid = true; } else if (GEO.mvHid) { if (!UNDER.on) stars.visible = true; GEO.mvHid = false; }   /* (the sky draws its own pink and blue stars) */
   if (GEO.mvK > .01) { scene.fog.color.lerp(C("#1c0838"), GEO.mvK); renderer.setClearColor(scene.fog.color);   /* the distance melts into dark purple; the big sun sits low where the real one is */
     const sd = skyMat.uniforms.sunDir.value, hz = Math.hypot(sd.x, sd.z) || 1, y = Math.min(.4, Math.max(.07, sd.y)), k = Math.sqrt(1 - y * y) / hz; skyMat.uniforms.uNeonSun.value.set(sd.x * k, y, sd.z * k); }
@@ -5352,7 +5340,7 @@ function geoPackTick(I, main, off, dt) {
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
     if (k === "jetski") { if (jetTakeOut()) { GEO.packOpen = false; m.visible = false; } return; }   // (it isn't held: it appears in the sea)
-    if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "ghglass" || k === "hlglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "ghglass", "hlglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
+    if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "hlglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "hlglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
 }
@@ -5391,7 +5379,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
 }
 function geoGearClear() {
   if (UNDER.on) ugLeave(null); UNDER.go = null; UNDER.labP = null;
-  HFOG.uThG.value = 0; skyMat.uniforms.uThermal.value = 0; if (GEO.thHid && !UNDER.on) stars.visible = true; GEO.thHid = false; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; HFOG.uGHG.value = 0; GEO.ghK = 0; if (JTFX.on) { JTFX.on = false; jtFxSweep(); } HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;
+  HFOG.uThG.value = 0; skyMat.uniforms.uThermal.value = 0; if (GEO.thHid && !UNDER.on) stars.visible = true; GEO.thHid = false; HFOG.uBBG.value = 0; HFOG.uMVG.value = 0; if (JTFX.on) { JTFX.on = false; jtFxSweep(); } HFOG.uHLG.value = 0; GEO.hlK = 0; skyMat.uniforms.uHell.value = 0; hellEmbers(null, 0); if (GEO.hlHid && !UNDER.on) stars.visible = true; GEO.hlHid = false; skyMat.uniforms.uNeon.value = 0; if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } if (GEO.mvHid && !UNDER.on) stars.visible = true; GEO.mvHid = false; GEO.thK = GEO.bbK = GEO.mvK = 0; if (GEO.bbM) GEO.bbM.visible = false; if (GEO.thWas && !UNDER.on) sky.visible = true; GEO.thWas = false;
   hamClear(); if (GEO.beacon) GEO.beacon.visible = false; GEO.sleep = null; GEO.ghostK = 0; HFOG.uDream.value.x = 0; if (GEO.wisps) { for (const w of GEO.wisps) { scene.remove(w.m); w.m.geometry.dispose(); w.m.material.dispose(); } GEO.wisps.length = 0; } dreamSouls(null, false); if (GEO.sfx) for (const o of [GEO.sfx.black, GEO.sfx.tint, GEO.sfx.hint, GEO.sfx.sp]) o.visible = false;
   if (typeof jetClear === "function") jetClear();
   for (const o of [GEO.heldObj, GEO.packM, GEO.fire && GEO.fire.obj, GEO.fire && GEO.fire.pts, GEO.tent && GEO.tent.obj, GEO.show && GEO.show.obj, GEO.rod && GEO.rod.lure, GEO.rod && GEO.rod.line, GEO.rod && GEO.rod.fo, GEO.rod && GEO.rod.M, GEO.fishM, GEO.nvM]) if (o) scene.remove(o);
@@ -6081,7 +6069,7 @@ function neonBeasts(on) {
     A.root.traverse(o => { if (!o.isMesh || !o.material) return; const sw = m => on ? neonMat(m, cls) : m.userData.src || m;
       if (Array.isArray(o.material)) { if (o.material.some(m => !!m.userData.nb !== on)) o.material = o.material.map(sw); } else if (!!o.material.userData.nb !== on) o.material = sw(o.material); }); }
   if (!on) NEON_LIVE.clear(); }
-const JTFX = { on: false, t: 0 };                                       // the neon / golden hour / hell looks are only built into the shaders while one is on (light everywhere else)
+const JTFX = { on: false, t: 0 };                                       // the neon / hell looks are only built into the shaders while one is on (light everywhere else)
 function jtFxSweep(all) { scene.traverse(o => { const ms = o.material; if (!ms) return; for (const m of Array.isArray(ms) ? ms : [ms]) { if (!m || !m.isMaterial) continue; if (all && m.userData.fx !== JTFX.on) { m.userData.fx = JTFX.on; m.needsUpdate = true; } const has = !!(m.defines && "JT_FX" in m.defines);
   if (has === JTFX.on) continue; if (JTFX.on) m.defines = Object.assign({}, m.defines, { JT_FX: "" }); else { m.defines = Object.assign({}, m.defines); delete m.defines.JT_FX; } m.needsUpdate = true; } }); }
 function jtFxTick(want) { want = JTFX.always; if (want !== JTFX.on) { JTFX.on = want; JTFX.t = 0; } if (--JTFX.t <= 0) { JTFX.t = 60; jtFxSweep(); } }   // (only in a Dev session with the glasses, and then all the time)
@@ -6089,7 +6077,7 @@ function jtFxWarm() {                                         // (once the world
   JTFX.warm = true; try { neonBeasts(true); hellEmbers({ head: camera.position }, 1); renderer.compile(scene, camera); } catch (e) { console.warn("fx warm", e); } finally { neonBeasts(false); hellEmbers(null, 0); }
 }
 function glassesForce(k) {                                     // (tests) one look fully on, or none
-  HFOG.uBBG.value = k === "bblock" ? 1 : 0; HFOG.uThG.value = k === "tglass" ? 1 : 0; HFOG.uMVG.value = k === "mvglass" ? 1 : 0; HFOG.uGHG.value = k === "ghglass" ? 1 : 0; HFOG.uHLG.value = k === "hlglass" ? 1 : 0;
+  HFOG.uBBG.value = k === "bblock" ? 1 : 0; HFOG.uThG.value = k === "tglass" ? 1 : 0; HFOG.uMVG.value = k === "mvglass" ? 1 : 0; HFOG.uHLG.value = k === "hlglass" ? 1 : 0;
   HFOG.uDream.value.x = k === "dglass" ? 1 : 0; skyMat.uniforms.uThermal.value = HFOG.uThG.value; skyMat.uniforms.uHell.value = HFOG.uHLG.value; skyMat.uniforms.uNeon.value = HFOG.uMVG.value;
 }
 function jtFxSession(on) {                                     // Dev sessions with the glasses: their looks go into every material as the world is made, not when you put them on
@@ -7929,7 +7917,6 @@ function setLighting(lat, biome, topMix) {
     U.uAur.value = lerp(U.uAur.value, .55, k); U.uAurA.value.lerp(new THREE.Color(.25, 1, .6), k); U.uAurB.value.lerp(new THREE.Color(.7, .3, 1), k); U.uNight.value = Math.max(U.uNight.value, .8 * k); }
   renderer.setClearColor(scene.fog.color);
   starMat.uniforms.uOp.value = (1 - smooth(-12, -2, el)) * (1 - cloudAmt * .6) * (1 - oc);
-  if (GEO.ghK > .01) { const k = GEO.ghK; U.top.value.lerp(C("#8f9cc8"), .55 * k); U.hor.value.lerp(C("#ffbe6a"), .9 * k); U.cloudCol.value.lerp(C("#ffc98a"), .75 * k); U.cloudDark.value.lerp(C("#9a5a5e"), .7 * k); U.glowCol.value.lerp(C("#ffab4a"), k); U.glowAmt.value = Math.max(U.glowAmt.value, .9 * k); U.glowSize.value = Math.max(U.glowSize.value, 1.6 * k); }   /* golden hour glasses: a warm sky, the sun glowing big and gold */
   if (GEO.mvK > .01) { const k = GEO.mvK; U.top.value.lerp(C("#0a0830"), .9 * k); U.hor.value.lerp(C("#5a1458"), .9 * k); }   /* neon shades (always dark; the sky itself is drawn in the sky shader) */
   if (GEO.bbK > .01) { const k = GEO.bbK; U.top.value.lerp(C("#c8641e"), .8 * k); U.hor.value.lerp(C("#f0a040"), .8 * k); U.cloudCol.value.lerp(C("#ffb060"), .7 * k); U.cloudDark.value.lerp(C("#8a3a10"), .7 * k); }   // through blue blockers, an orange sky
   if (GEO.ghostK > 0) { const k = GEO.ghostK;                          // the dream sky: near black, a faint aurora, the stars and the galaxy
