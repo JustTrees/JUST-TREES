@@ -39,7 +39,7 @@ async def main():
         await pg.evaluate("""() => { D.set.huntMap = 'endless'; D.generate(); D.state = 'play'; }""")
         n = await pg.evaluate("""() => { D.vr.binos = true; D.vr.scoped = false; D.TOOL.on.binos = true; return [D.GEO.on, D.thermalOk(), D.geoSpeedMul()]; }""")
         print("normal", json.dumps(n))
-        ok = r["order"] == ["spray", "tbinos", "rod", "machete", "compass", "tscope"] and r["models"] == 24 and r["thB0"] is False and r["thB1"] is True \
+        ok = r["order"] == ["spray", "tbinos", "rod", "machete", "compass", "tscope"] and r["models"] == 30 and r["thB0"] is False and r["thB1"] is True \
              and r["thS0"] is False and r["thS1"] is True and r["fire"] == [False, True] and r["bush"] and r["slow"] < .95 and r["touch"] >= 1 and r["cut"] == [True, True, True, True] \
              and n == [False, False, 1]   # (fishing has its own test now: test_324)
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()

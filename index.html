@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.25";              // Just Trees
+const VERSION = "3.26";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -843,6 +843,56 @@ const skyMat = new THREE.ShaderMaterial({
       float ridge = 0.012 + fbm(vec2(az * 2.2 + skySeed.x, 0.5), 4) * 0.05 + fbm(vec2(az * 9.0, 2.0 + skySeed.y), 3) * 0.012;
       float rm = smoothstep(ridge + 0.002, ridge - 0.002, d.y) * smoothstep(-0.06, 0.0, d.y);
       c = mix(c, ridgeCol, rm * 0.55);
+#ifdef JT_FX
+      c = mix(c, vec3(0.012, 0.01, 0.01), uThermal);                  // through thermal glasses the sky is simply black
+      if (uHell > 0.001) {                                            // hell glasses: a blood-red sky choked with churning smoke, the horizon on fire
+        float y = d.y; vec2 sp = d.xz / max(y + 0.25, 0.08);
+        float sm = fbm(sp * 1.3 + vec2(time * 0.02, time * 0.013), 5), sm2 = fbm(sp * 3.1 - vec2(time * 0.035, 0.0), 4);
+        vec3 hk = mix(vec3(0.75, 0.13, 0.02), vec3(0.18, 0.02, 0.01), smoothstep(-0.02, 0.3, y)); hk = mix(hk, vec3(0.04, 0.0, 0.0), smoothstep(0.25, 0.9, y));
+        hk = mix(hk, vec3(0.02, 0.005, 0.004), smoothstep(0.45, 0.75, sm) * 0.85);                            // smoke rolling over
+        hk += vec3(1.0, 0.3, 0.05) * smoothstep(0.55, 0.85, sm2) * (1.0 - smoothstep(0.0, 0.5, y)) * 0.35;      // firelight catching its undersides
+        hk += vec3(1.0, 0.35, 0.05) * exp(-abs(y) * 14.0) * 0.8;                                                // the horizon burning
+        vec3 hs = normalize(sunDir); float ha = acos(clamp(dot(d, hs), -1.0, 1.0));                            // the sun: a black disc with a ring of fire
+        float hsv = smoothstep(-0.1, 0.02, hs.y);
+        hk = mix(hk, vec3(0.01, 0.0, 0.0), smoothstep(0.075, 0.07, ha) * hsv); hk += vec3(1.0, 0.25, 0.03) * exp(-pow((ha - 0.075) / 0.008, 2.0)) * 1.4 * hsv + vec3(0.6, 0.08, 0.0) * exp(-ha / 0.25) * 0.4 * hsv;
+        c = mix(c, hk, uHell);
+      }
+      if (uNeon > 0.001) {                                            // neon shades: the synthwave sky: always dark, a huge striped sun, neon through the sky
+        float y = d.y; vec3 n = mix(vec3(0.24, 0.07, 0.42), vec3(0.04, 0.05, 0.24), smoothstep(-0.02, 0.22, y)); n = mix(n, vec3(0.008, 0.012, 0.07), smoothstep(0.2, 0.85, y));
+        if (y < 0.0) n = mix(vec3(0.18, 0.05, 0.32), vec3(0.03, 0.0, 0.08), smoothstep(0.0, -0.3, y));
+        float sunK = smoothstep(-0.12, 0.0, normalize(sunDir).y);   /* (the big sun sets at night; the moon takes over) */
+        vec3 s = normalize(uNeonSun); float sa = acos(clamp(dot(d, s), -1.0, 1.0)), SR = 0.17, v = (y - s.y) / SR;   // about four times the size of the sun
+        vec3 mo = normalize(moonDir); mo.y = max(mo.y, 0.1); mo = normalize(mo); float ma = acos(clamp(dot(d, mo), -1.0, 1.0)), MR = 0.11;   // a big moon too (smaller than the sun)
+        float mvis = moonVis * smoothstep(-0.12, 0.0, normalize(moonDir).y);
+        n += vec3(0.55, 0.16, 0.22) * exp(-sa / 0.55) * 0.55 * sunK + vec3(0.6, 0.25, 0.1) * exp(-sa / 0.25) * 0.35 * sunK;    // warm light round the sun
+        n += vec3(0.04, 0.2, 0.42) * exp(-ma / 0.5) * 0.6 * mvis + vec3(0.1, 0.4, 0.6) * exp(-ma / 0.2) * 0.3 * mvis;       // cool light round the moon
+        float r1 = exp(-pow((y - 0.33 - 0.07 * sin(az * 3.0 + time * 0.07)) / 0.022, 2.0)), r2 = exp(-pow((y - 0.55 - 0.09 * sin(az * 2.0 - time * 0.05 + 1.7)) / 0.016, 2.0)), r3 = exp(-pow((y - 0.18 - 0.04 * sin(az * 5.0 + time * 0.1 + 4.0)) / 0.012, 2.0));
+        float r4 = exp(-pow((y - 0.75 - 0.05 * sin(az * 4.0 + time * 0.04 + 2.5)) / 0.012, 2.0)), rf = 0.55 + 0.45 * sin(az * 7.0 + time * 0.2);   // (softer, see-through, they fade in and out along their length)
+        n += (vec3(0.05, 0.9, 0.8) * r1 * 0.34 + vec3(0.2, 0.5, 1.0) * r2 * 0.34 + vec3(0.6, 0.25, 1.0) * r3 * 0.3 + vec3(1.0, 0.2, 0.7) * r4 * 0.16) * rf;
+        n += vec3(0.45, 0.3, 1.0) * exp(-abs(y) * 22.0) * 0.5;                                   // the horizon glows
+        vec3 cq = d * 45.0, cid = floor(cq); float st = 0.0; vec3 stc = vec3(0.0);                // game stars: bright round cores, a soft glow and a little cross sparkle
+        { vec3 cc = cid;
+          float sh = fract(sin(dot(cc, vec3(12.9898, 78.233, 37.719))) * 43758.5453), on = step(sh, mix(0.12, 0.28, uNight));
+          vec3 sp = normalize(cc + 0.25 + 0.5 * vec3(fract(sh * 91.7), fract(sh * 317.3), fract(sh * 731.1))), e = normalize(cross(sp, vec3(0.0, 1.0, 0.0)) + 1e-4), f = cross(e, sp), q = d - sp;
+          float lx = abs(dot(q, e)), ly = abs(dot(q, f)), r = length(vec2(lx, ly)), sz = 0.0016 + 0.0012 * fract(sh * 53.1);
+          float tw = 0.65 + 0.35 * sin(time * (1.5 + 2.0 * fract(sh * 7.3)) + sh * 60.0);
+          float b = smoothstep(sz, sz * 0.5, r) + exp(-r / (sz * 1.2)) * 0.55 + (exp(-lx / 0.0005) * exp(-ly / (sz * 2.2)) + exp(-ly / 0.0005) * exp(-lx / (sz * 2.2))) * 0.5;
+          stc = fract(sh * 913.7) < 0.5 ? vec3(1.0, 0.3, 0.82) : vec3(0.3, 0.85, 1.0); st = b * tw * on; }
+        n += stc * st * smoothstep(0.03, 0.2, y) * mix(0.7, 1.2, uNight) * (1.0 - smoothstep(SR * 1.2, SR * 0.9, sa) * sunK);
+        float band = fract(v * 6.5), gap = clamp((0.25 - v) * 0.38, 0.0, 0.62), cut = v < 0.25 ? step(band, gap) : 0.0;
+        float disc = smoothstep(SR, SR - 0.004, sa) * (1.0 - cut) * smoothstep(-0.005, 0.01, y) * sunK;
+        vec3 sc = mix(vec3(0.95, 0.22, 0.12), vec3(0.88, 0.66, 0.08), smoothstep(-1.0, 0.95, v));    // dark yellow over orange
+        n += vec3(1.0, 0.3, 0.35) * exp(-max(sa - SR, 0.0) / 0.07) * 0.5 * smoothstep(-0.05, 0.02, y) * sunK;
+        n = mix(n, sc, disc);
+        vec3 me = normalize(cross(mo, vec3(0.0, 1.0, 0.0))), mf = cross(me, mo); vec2 ml2 = vec2(dot(d - mo, me), dot(d - mo, mf)) / MR;   // the moon: a cool neon crescent, ringed in light, fine lines across it
+        float mdisc = smoothstep(1.0, 0.97, length(ml2)), mbite = smoothstep(0.86, 0.9, length(ml2 - vec2(0.42, 0.18)));
+        float mline = 0.82 + 0.18 * step(0.5, fract(ml2.y * 9.0));
+        vec3 mcol = mix(vec3(0.05, 0.3, 0.85), vec3(0.45, 0.9, 1.0), smoothstep(-1.0, 1.0, -ml2.x + ml2.y)) * mline;
+        n = mix(n, mix(vec3(0.02, 0.03, 0.12), mcol, mbite), mdisc * mvis * smoothstep(-0.005, 0.01, y));
+        n += vec3(0.2, 0.8, 1.0) * (exp(-pow((length(ml2) - 1.0) / 0.03, 2.0)) * 0.9 + exp(-max(length(ml2) - 1.0, 0.0) / 0.35) * 0.3) * mvis * smoothstep(-0.02, 0.01, y);
+        c = mix(c, n, uNeon);
+      }
+#endif
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0 * 1.5;   // dither: no colour banding
@@ -958,6 +1008,12 @@ uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCa
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(hfH(i), hfH(i + vec2(1.0, 0.0)), f.x), mix(hfH(i + vec2(0.0, 1.0)), hfH(i + vec2(1.0, 1.0)), f.x), f.y); }
+#ifdef JT_FX
+float fxRim(vec3 n, vec3 v, float d, vec3 w) {   // the glasses' outline: a thin glow round the shapes of things (never their textures: that was the glitter), a little uneven like it was drawn
+  float k = 1.0 - abs(dot(n, v)), wob = 0.86 + 0.14 * hfN(w.xz * 0.7 + vec2(w.y * 0.6));
+  return smoothstep(0.80 * wob, 0.97, k) * (1.0 - smoothstep(40.0, 420.0, d));
+}
+#endif
 #endif`;
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   vec3 preFogC = gl_FragColor.rgb;
@@ -978,6 +1034,103 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, uHFogCol, clamp(amt, 0.0, 0.97));
   }
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+#ifdef JT_FX
+  if (uBBG > 0.001) {                                                 // blue blockers: blues gone, everything orange to red, sharp (a colour change only)
+    float bl = dot(gl_FragColor.rgb, vec3(0.45, 0.45, 0.1)); vec3 bo = vec3(1.25, 0.62, 0.16) * pow(bl, 0.9) * 1.25;
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, bo, 0.85 * uBBG);
+  }
+  if (uGHG > 0.001) {                                                 // golden hour: warm gold light, violet shadows, a golden haze, edges catching the low sun
+    vec3 gv = vFogW - uCamP; float gd = max(length(gv), 0.001); vec3 gn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+    vec3 c0 = gl_FragColor.rgb; float gl0 = dot(c0, vec3(0.3, 0.59, 0.11));
+    vec3 gw = c0 * vec3(1.2, 0.98, 0.66);
+    vec3 gg = mix(gw * vec3(0.78, 0.66, 0.8), gw * 1.12 + vec3(0.1, 0.06, 0.0) * gl0, smoothstep(0.08, 0.5, gl0));
+    gg = mix(gg, vec3(1.2, 0.85, 0.45) * gl0 * 1.2, 0.22);
+    gg += vec3(1.0, 0.62, 0.24) * fxRim(gn, gv / gd, gd, vFogW) * 0.3 * (1.0 - 0.7 * smoothstep(0.6, 0.93, abs(gn.y)));
+    gg = mix(gg, vec3(1.0, 0.78, 0.52) * 0.85, smoothstep(150.0, 2200.0, gd) * 0.42);
+    gl_FragColor.rgb = mix(c0, gg, uGHG);
+  }
+  if (uHLG > 0.001) {                                                 // hell: scorched black land split by glowing lava, the edges of things smouldering, red smoke
+    vec3 hv = vFogW - uCamP; float hd = max(length(hv), 0.001); vec3 hn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+    vec3 c0 = gl_FragColor.rgb, cs = preFogC; float hl = dot(cs, vec3(0.3, 0.59, 0.11)), hfl = smoothstep(0.55, 0.92, abs(hn.y)), ht = uMVT;
+    vec3 hc = (vec3(0.035, 0.011, 0.008) + hl * vec3(0.26, 0.06, 0.03)) * (0.7 + 0.6 * hfN(vFogW.xz * 0.35));
+    vec2 hp = vFogW.xz + vec2(hfN(vFogW.xz * 0.6), hfN(vFogW.xz * 0.6 + 5.0)) * 2.2;
+    float vn = abs(hfN(hp * 0.07) + 0.5 * hfN(hp * 0.19 + 7.1) - 0.75), crack = 1.0 - smoothstep(0.0, 0.016 + hd * 0.00004, vn);
+    float vn3 = abs(hfN(hp * 0.12 + 11.7) - 0.5), crack3 = (1.0 - smoothstep(0.0, 0.018 + hd * 0.00004, vn3)) * 0.85; crack = max(crack, crack3); vn = min(vn, vn3 * 1.4);
+    float pulse = 0.75 + 0.25 * sin(ht * 1.7 + hfN(hp * 0.02) * 9.0);
+    float cr = crack * hfl * (1.0 - smoothstep(200.0, 700.0, hd));
+    hc += mix(vec3(1.0, 0.25, 0.03), vec3(1.0, 0.75, 0.25), crack * 0.6) * cr * 1.4 * pulse;
+    hc += vec3(0.5, 0.08, 0.01) * (1.0 - smoothstep(0.0, 0.25, vn)) * hfl * 0.35 * pulse;
+    float flick = 0.8 + 0.2 * sin(ht * 9.0 + vFogW.y * 2.0 + vFogW.x * 0.3);
+    hc += vec3(1.0, 0.3, 0.04) * fxRim(hn, hv / hd, hd, vFogW) * (1.0 - 0.8 * hfl) * 0.9 * flick;
+#ifdef IS_WATER
+    float lf = hfN(hp * 0.05 + vec2(ht * 0.03, ht * 0.02)) * 0.6 + hfN(hp * 0.17 - vec2(ht * 0.05, 0.0)) * 0.4;   // lakes and rivers of lava, slowly churning
+    hc = mix(vec3(0.35, 0.03, 0.0), vec3(1.0, 0.42, 0.05), smoothstep(0.3, 0.75, lf)); hc = mix(hc, vec3(1.0, 0.85, 0.35), smoothstep(0.72, 0.9, lf) * 0.8);
+    hc = mix(hc, vec3(0.08, 0.02, 0.01), smoothstep(0.25, 0.05, abs(lf - 0.5)) * 0.5);
+#endif
+    hc = mix(hc, vec3(0.32, 0.04, 0.015), smoothstep(80.0, 1600.0, hd) * 0.8);
+    gl_FragColor.rgb = mix(c0, hc, uHLG);
+#ifdef IS_WATER
+    gl_FragColor.a = mix(gl_FragColor.a, 1.0, uHLG);
+#endif
+  }
+  if (uMVG > 0.001) {                                                 // neon: the world gone dark, everything drawn in glowing neon
+    vec3 mv = vFogW - uCamP; float md = max(length(mv), 0.001); vec3 mn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+#ifdef NEON_BODY
+    {                                                                 // animals, dinosaurs and players: glowing neon versions of themselves
+      vec3 c0 = gl_FragColor.rgb, cs = preFogC; float mx = max(max(cs.r, cs.g), cs.b), mn0 = min(min(cs.r, cs.g), cs.b), ch = (mx - mn0) / max(mx, 0.02);
+      vec3 hue = (cs - mn0) / max(mx - mn0, 0.001);
+      vec3 nc = mix(vec3(0.35, 0.78, 1.0), hue * 0.92 + 0.08, smoothstep(0.06, 0.25, ch)); nc /= max(max(nc.r, nc.g), max(nc.b, 0.001));
+      float inner = 0.09;
+#if NEON_BODY >= 3
+      inner = 0.07;
+#if NEON_BODY == 3
+      nc = vec3(0.1, 0.9, 1.0);
+#elif NEON_BODY == 4
+      nc = vec3(1.0, 0.12, 0.55);
+#elif NEON_BODY == 5
+      nc = vec3(0.72, 0.35, 1.0);
+#elif NEON_BODY == 6
+      nc = vec3(0.35, 1.0, 0.25);
+#else
+      nc = vec3(1.0, 0.42, 0.08);
+#endif
+#endif
+      float brim = smoothstep(0.3, 0.95, 1.0 - abs(dot(mn, mv / md))), bl = dot(cs, vec3(0.3, 0.59, 0.11));
+      float pulse = 0.88 + 0.12 * sin(uMVT * 2.4 + vFogW.y * 1.3);
+      vec3 bc = nc * (inner + 2.0 * inner * smoothstep(0.08, 0.6, bl)) + nc * brim * 1.35 * pulse;
+#if NEON_BODY == 2
+      bc = vec3(0.07, 0.02, 0.11) + vec3(0.25, 0.08, 0.2) * smoothstep(0.05, 0.6, bl) + vec3(1.0, 0.4, 0.65) * brim * 0.55;
+#endif
+      gl_FragColor.rgb = mix(c0, bc, uMVG);
+    }
+#else
+    vec3 c0 = gl_FragColor.rgb; float ml = dot(c0, vec3(0.3, 0.59, 0.11)), mg = clamp((c0.g - max(c0.r, c0.b)) * 4.0, 0.0, 1.0);
+    float mfl = smoothstep(0.6, 0.93, abs(mn.y));
+    vec3 mc = mix(vec3(0.02, 0.008, 0.06), vec3(0.08, 0.025, 0.18), smoothstep(0.05, 0.7, ml));
+    mc = mix(mc, vec3(0.0, 0.08, 0.1) * (0.6 + ml), mg * (1.0 - mfl)); mc = mix(mc, vec3(0.03, 0.02, 0.1), mfl * 0.4);
+    float hy = 0.5 + 0.5 * sin(vFogW.y * 0.06 + vFogW.x * 0.003 + vFogW.z * 0.002);
+    vec3 neon = mix(vec3(0.05, 0.95, 0.8), vec3(0.2, 0.45, 1.0), hy); neon = mix(neon, vec3(0.62, 0.25, 1.0), smoothstep(0.62, 0.8, hfN(vFogW.xz * 0.004 + 1.3)) * 0.8);
+    mc += neon * fxRim(mn, mv / md, md, vFogW) * (1.0 - mfl * 0.85) * 1.1;
+    float mtree = mg * (1.0 - mfl) * (1.0 - smoothstep(150.0, 700.0, md));                             // trees: a teal glow inside, bands of light rising up them
+    float rise = pow(0.5 + 0.5 * sin(vFogW.y * 1.6 - uMVT * 2.2 + (vFogW.x + vFogW.z) * 0.05), 6.0);
+    mc += mtree * (vec3(0.0, 0.32, 0.36) * (0.35 + ml) + mix(vec3(0.1, 0.95, 1.0), vec3(1.0, 0.2, 0.8), hy) * rise * 0.5);
+    vec2 gd = abs(fract(vFogW.xz / 8.0 - 0.5) - 0.5) * 8.0, gf = fwidth(vFogW.xz) * 1.5;              // the grid over the flat ground and water (thin, fading out before it can shimmer)
+    float lw = 0.025 + md * 0.0004; vec2 gl2 = 1.0 - smoothstep(vec2(lw), vec2(lw) + gf, gd);
+    float grid = max(gl2.x, gl2.y) * mfl * (1.0 - smoothstep(120.0, 600.0, md));
+    mc += mix(vec3(0.15, 0.55, 1.0), vec3(0.1, 0.95, 0.85), 0.5 + 0.5 * sin(vFogW.x * 0.01 + vFogW.z * 0.013)) * grid * 0.9;
+    gl_FragColor.rgb = mix(c0, mc, uMVG);
+#endif
+  }
+  if (uThG > 0.001) {                                                 // thermal: the land cold and dark, its shapes traced in dull red; animals and people white
+    vec3 tv = vFogW - uCamP; float td = max(length(tv), 0.001); vec3 tn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
+    float tl = dot(gl_FragColor.rgb, vec3(0.3, 0.59, 0.11)), tfl = smoothstep(0.55, 0.93, abs(tn.y));
+    vec3 tc = vec3(0.035, 0.004, 0.004) + tl * vec3(0.18, 0.025, 0.02) + vec3(1.0, 0.12, 0.06) * fxRim(tn, tv / td, td, vFogW) * mix(1.0, 0.15, tfl);
+#ifdef NEON_BODY
+    tc = vec3(0.95, 0.93, 0.9) * (0.72 + 0.28 * smoothstep(0.02, 0.5, tl));
+#endif
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, tc, uThG);
+  }
+#endif
   if (uDream.x > 0.001) {                                             // the dream sight: dark, everything traced in light
     vec3 dv = vFogW - uCamP; float dd = max(length(dv), 0.001); float t = uDream.y;
     vec3 dn = normalize(cross(dFdx(vFogW), dFdy(vFogW)));
@@ -4443,7 +4596,7 @@ function geoPlace() {                                          // the caches: th
   return L;
 }
 function geoStart(sv) {
-  GEO.lab = !!GEO.labWant; GEO.labWant = false; GEO.full = !!GEO.fullWant; GEO.fullWant = false;
+  GEO.lab = !!GEO.labWant; GEO.labWant = false; GEO.full = !!GEO.fullWant; GEO.fullWant = false; jtFxSession(GEO.lab || GEO.full);
   GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
   for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = [];
   MP.hp = 100; MP.sh = 0; MP.dead = 0;
@@ -4467,7 +4620,7 @@ function geoStart(sv) {
   if (GEO.lab) { vrBanner("Test Lab: every item and gun; the shooting range is by the yellow poles. Y → Test Lab tools", 6, 3);
   }
 }
-function geoStop() { geoGearClear(); GEO.on = false; for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; vr.gpsMode = false; if (GEO.gps) GEO.gps.visible = false; if (GEO.globe) GEO.globe.visible = false; }
+function geoStop() { geoGearClear(); GEO.on = false; jtFxSession(false); for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = []; vr.gpsMode = false; if (GEO.gps) GEO.gps.visible = false; if (GEO.globe) GEO.globe.visible = false; }
 function geoCacheObj() {                                       // an ammo-can cache with a bright tag and a little glint
   const g = new THREE.Group(), body = new THREE.MeshLambertMaterial({ color: 0x4b5a32 }), dark = new THREE.MeshLambertMaterial({ color: 0x2e3620 }), tag = new THREE.MeshBasicMaterial({ color: 0xffd040 });
   const b = new THREE.Mesh(new THREE.BoxGeometry(.44, .26, .2), body); b.position.y = .13; g.add(b);
@@ -4514,6 +4667,7 @@ function geoCacheClear(x, z) {                                   // a spot you c
 }
 function geoTick(dt) {
   if (!GEO.on || !GLOBE || state !== "play") return;
+  if (JTFX.always && !JTFX.warm && (GEO.warmT = (GEO.warmT || 0) + dt) > 2) { GEO.warmT = 0; jtFxWarm(); }   // (a Dev session with the glasses: everything built a couple of seconds in)
   const G = GLOBE, R = G.R, out = [0, 0];
   // food and water run down as you travel (faster sprinting or flying, food faster in the cold); out of either and your health drops
   if (!(MP.dead > 0)) {
@@ -4671,6 +4825,7 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1]   // (the glasses: Dev levels 51-56 for now)
   
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
@@ -4679,10 +4834,12 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
+  if (n > GEO_N && n <= GEO_N + GLASSES.length) return { item: GLASSES[n - GEO_N - 1] };   // (the glasses: levels 51-56, Dev only for now)
   return { refill: true, last: n >= GEO_N };
 }
+const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "ghglass", "hlglass"];
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
-  const own = {}, items = new Set();
+  const own = {}, items = new Set(); if (GEO.full || GEO.lab) for (const k of GLASSES) items.add(k);   // (Dev: Full level and the Test Lab have the glasses)
   for (let i = 1; i <= n; i++) { const r = geoRewardOf(i); if (r.gun) own[r.gun] = Math.max(own[r.gun] || 0, r.star); if (r.item) items.add(r.item); }
   return { own, items };
 }
@@ -5907,9 +6064,21 @@ function neonBeasts(on) {
       if (Array.isArray(o.material)) { if (o.material.some(m => !!m.userData.nb !== on)) o.material = o.material.map(sw); } else if (!!o.material.userData.nb !== on) o.material = sw(o.material); }); }
   if (!on) NEON_LIVE.clear(); }
 const JTFX = { on: false, t: 0 };                                       // the neon / golden hour / hell looks are only built into the shaders while one is on (light everywhere else)
-function jtFxSweep() { scene.traverse(o => { const ms = o.material; if (!ms) return; for (const m of Array.isArray(ms) ? ms : [ms]) { if (!m || !m.isMaterial) continue; const has = !!(m.defines && "JT_FX" in m.defines);
+function jtFxSweep(all) { scene.traverse(o => { const ms = o.material; if (!ms) return; for (const m of Array.isArray(ms) ? ms : [ms]) { if (!m || !m.isMaterial) continue; if (all && m.userData.fx !== JTFX.on) { m.userData.fx = JTFX.on; m.needsUpdate = true; } const has = !!(m.defines && "JT_FX" in m.defines);
   if (has === JTFX.on) continue; if (JTFX.on) m.defines = Object.assign({}, m.defines, { JT_FX: "" }); else { m.defines = Object.assign({}, m.defines); delete m.defines.JT_FX; } m.needsUpdate = true; } }); }
-function jtFxTick(want) { if (want !== JTFX.on) { JTFX.on = want; JTFX.t = 0; } if (--JTFX.t <= 0) { JTFX.t = 60; jtFxSweep(); } }
+function jtFxTick(want) { want = JTFX.always; if (want !== JTFX.on) { JTFX.on = want; JTFX.t = 0; } if (--JTFX.t <= 0) { JTFX.t = 60; jtFxSweep(); } }   // (only in a Dev session with the glasses, and then all the time)
+function jtFxWarm() {                                         // (once the world's there) build every look now, the animals' neon and white versions too, so nothing stalls later
+  JTFX.warm = true; try { neonBeasts(true); hellEmbers({ head: camera.position }, 1); renderer.compile(scene, camera); } catch (e) { console.warn("fx warm", e); } finally { neonBeasts(false); hellEmbers(null, 0); }
+}
+function glassesForce(k) {                                     // (tests) one look fully on, or none
+  HFOG.uBBG.value = k === "bblock" ? 1 : 0; HFOG.uThG.value = k === "tglass" ? 1 : 0; HFOG.uMVG.value = k === "mvglass" ? 1 : 0; HFOG.uGHG.value = k === "ghglass" ? 1 : 0; HFOG.uHLG.value = k === "hlglass" ? 1 : 0;
+  HFOG.uDream.value.x = k === "dglass" ? 1 : 0; skyMat.uniforms.uThermal.value = HFOG.uThG.value; skyMat.uniforms.uHell.value = HFOG.uHLG.value; skyMat.uniforms.uNeon.value = HFOG.uMVG.value;
+}
+function jtFxSession(on) {                                     // Dev sessions with the glasses: their looks go into every material as the world is made, not when you put them on
+  on = !!on; if (JTFX.always === on) return; JTFX.always = on; JTFX.on = on; JTFX.warm = false;
+  if (on) THREE.Material.prototype.defines = { JT_FX: "" }; else delete THREE.Material.prototype.defines;   // (new materials are born with it)
+  jtFxSweep(true);
+}
 function bodySwapTick(on) { if (on) { if ((GEO.nbT = (GEO.nbT || 0) - 1) <= 0) { GEO.nbT = 20; neonBeasts(true); GEO.nbOn = true; } neonSync(); } else if (GEO.nbOn) { neonBeasts(false); GEO.nbOn = false; } }   // (neon, thermal and the dream redraw the animals themselves)
 function neonSync() { for (const c of NEON_LIVE) { const m = c.userData.src; c.opacity = m.opacity; c.transparent = m.transparent; c.visible = m.visible; if (m.color) c.color.copy(m.color); if (m.emissive) c.emissive.copy(m.emissive); } }   // (fades and hit flashes still show)
 function hellEmbers(I, k) {                                            // embers drifting up all round you (hell glasses)
