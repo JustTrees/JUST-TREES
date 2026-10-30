@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.30";              // Just Trees
+const VERSION = "3.31";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -518,6 +518,8 @@ let hourNow = 10;                            // the hour the world is lit for
 let GLOBE = null;                                              // the Geocaching globe (see globeSetup)
 const GEO = { on: false, caches: [], found: new Set(), target: null, tT: 0, saveT: 0, mz: 0, foods: [], warn: 100, beepT: 0, objs: new Map(), gps: null, reAt: false,
   items: new Set(), food: 100, water: 100, cant: 0, aid: 1, spray: 4, worn: new Set(), sprays: [], frT: 0, sipT: 0, nvK: 0, held: null, heldObj: null, leaves: [], pops: [] };   // (the gear)
+const COMP_SIZES = [["medium", "M", 10], ["large", "L", 15], ["xl", "XL", 20], ["xxl", "XXL", 25], ["xxxl", "XXXL", 35]];   // Competitive Treeocashing: map size → the top level (Bigg Wigg)
+const COMP = { on: false, seed: null, lv: 0, N: 10, out: false, zone: false, zoneGo: false, ended: false, winner: "", items: new Set(), c: null, obj: null, chkT: 0, marks: new Map() };
 // the Treeocashing gear's numbers, tweakable in the Gear Lab (kept on this headset in "jt-tune"; a Dev Mode headset only)
 const TUNE_DEF = [
   ["boots", "Trail boots: speed", 1.15, .05, 1, 2], ["snowSlow", "Deep snow without snowshoes", .7, .05, .3, 1], ["bushSlow", "Pushing through bushes", .8, .05, .3, 1],
@@ -3270,6 +3272,7 @@ const huntEndless = () => gameMode === "hunt" && (set.huntMap === "endless" || s
 const pvpEndless = () => gameMode === "pvp" && !MP.code && set.pvpMap === "endless";      // a solo Bot battle on endless land
 function mapRules() {                                         // what each mode plays on (VR). Solo: Hike endless; Hunt and Bot battle the 3 km island or endless.
   if (gameMode === "hike") { if (set.hikeMap !== "island") set.hikeMap = "endless"; }   // (Hike: the 3 km island or the planet) // Online: Hiking endless; Hunting the 3 km island or endless; Deathmatch every size; Treeocashing its planet
+  else if (gameMode === "hunt" && set.comp) { set.huntMap = "island"; set.edges = "island"; if (!COMP_SIZES.some(z => z[0] === set.size)) set.size = "medium"; }   // Competitive Treeocashing: M to XXXL
   else if (gameMode === "hunt") { if (set.huntMap !== "endless" && set.huntMap !== "globe") { set.huntMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
   else if (gameMode === "pvp" && !MP.code) { if (set.pvpMap === "endless") { set.zone = "off"; set.capture = "off"; } else { set.pvpMap = "island"; set.size = "xxxl"; set.edges = "island"; } }
 }
@@ -4731,6 +4734,7 @@ function geoGpsModel() {
 }
 const geoFmt = (v, pos, neg) => (v < 0 ? neg : pos) + " " + Math.abs(v).toFixed(2) + "°";
 function geoGpsDraw() {
+  if (COMP.on) return compGpsDraw();
   const g = GEO.gps, cv = g.userData.cv, x = cv.getContext("2d"), G = GLOBE, T = GEO.target, nf = GEO.found.size;
   x.fillStyle = "#0e1a12"; x.fillRect(0, 0, 256, 384); x.textAlign = "left"; x.textBaseline = "alphabetic";
   x.fillStyle = "#9fe0a0"; x.font = "bold 26px sans-serif"; x.fillText("GPS", 12, 32); x.textAlign = "right"; x.fillStyle = MP.hp > 35 ? "#7fe08a" : "#ff6a5a"; x.fillText("♥ " + Math.round(MP.hp), 244, 32);
@@ -4831,7 +4835,7 @@ const GI_LIST = [
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
 const GI_GUNS = ["pistol", "smg", "bow", "ar", "hunt"];
-const geoHas = k => GEO.on && GEO.items.has(k);
+const geoHas = k => (GEO.on && GEO.items.has(k)) || (COMP.on && COMP.items.has(k));
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
@@ -5694,7 +5698,7 @@ async function geoNetGo() {                                     // the button: a
   let rooms = []; try { const o = await (await fetch((MP.roomsUrl || ROOMS_URL) + "?v=" + encodeURIComponent(MP.netV), { cache: "no-store" })).json(); rooms = o && Array.isArray(o.rooms) ? o.rooms : []; } catch (_) {}
   const r = rooms.filter(q => q.v === MP.netV && q.map === "Treeocashing" && (q.n || 1) < MP_MAX && !(MP.kicked && MP.kicked.has(q.code))).sort((a, b) => (b.n || 0) - (a.n || 0))[0];
   if (r) { await mpJoin(r.code); vruiOpen("lobby"); return; }
-  await mpHost(); setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; MP.pub = true; MP.pubKey = ""; MP.pubT = 0; renderSetup(); startNew();
+  await mpHost(); setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; set.comp = false; MP.pub = true; MP.pubKey = ""; MP.pubT = 0; renderSetup(); startNew();
 }
 function geoNetSetHost(id) {                                    // who runs the room now (everyone agrees)
   MP.hostId = id; const me = id === mpMyId(), was = MP.host; MP.host = me;
@@ -7959,7 +7963,7 @@ function zoneR(Z, cx, cz, r, x, z, t) {
 }
 function startZone() {
   clearZoneMesh();
-  if (set.zone !== "on" || gameMode !== "pvp" || ENDLESS) { zone = null; return; }
+  if ((set.zone !== "on" || gameMode !== "pvp") && !COMP.zoneGo || ENDLESS) { zone = null; return; }
   const rnd = mulberry32(seed * 7 + 99), r0 = edgeShape.island ? edgeShape.R0 * 1.2 : HALF * 1.45, rf = r0 * ZONE_FINAL;
   let fx = 0, fz = 0;                                                          // the final spot: near the middle, nudged a little each map, on dry land
   if (coin && rnd() < .25 && Math.hypot(coin.x, coin.z) < HALF * .3) { fx = coin.x; fz = coin.z; }
@@ -11005,7 +11009,7 @@ function placeMark(from, dir) {                           // a tall glowing beam
   if (!vr.mark) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd860, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
     m.frustumCulled = false; scene.add(m); vr.mark = m; }
   vr.mark.position.set(hit.p.x, hit.p.y + 35, hit.p.z); vr.mark.visible = true; vr.markT = 45; hitTick(); drawMap($("miniMap"));
-  if (MP.on && !geoNet()) for (const L of mpOpen()) if (gameMode !== "pvp" || (teamsOn() && mpMate(L))) mpSendTo(L, { t: "mk", x: hit.p.x, y: hit.p.y, z: hit.p.z });   // your team sees your mark
+  if (MP.on && !geoNet() && !compMode()) for (const L of mpOpen()) if (gameMode !== "pvp" || (teamsOn() && mpMate(L))) mpSendTo(L, { t: "mk", x: hit.p.x, y: hit.p.y, z: hit.p.z });   // your team sees your mark
 }
 function mpMarkGot(L, o) {                                   // a teammate's mark: a beam in their colour, for 45 seconds
   if (!L.mark) { L.mark = new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, 70, 10, 1, true), new THREE.MeshBasicMaterial({ color: MP_COL[mpColOf(L)], transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
@@ -11110,7 +11114,7 @@ function vrTick(dt) {
     nadeTickArc(main, I.head); if (edge("trig", main.trig)) vrThrowNade(main);
   } else nadeHide();
   if (vr.flareMode && main && state === "play" && !(MP.dead > 0) && !(vr.cl && vr.cl.hold === mainSide) && vr.flares > 0) { flareHand(main); if (edge("trig", main.trig)) flareFire(); } else flareHand(null);   // the flare gun
-  if (vr.gpsMode && GEO.on && main && state === "play" && !(vr.cl && vr.cl.hold === mainSide)) geoGpsHand(main, dt); else if (GEO.gps) GEO.gps.visible = false;   // the GPS
+  if (vr.gpsMode && (GEO.on || COMP.on) && main && state === "play" && !(vr.cl && vr.cl.hold === mainSide)) geoGpsHand(main, dt); else if (GEO.gps) GEO.gps.visible = false;   // the GPS
   if (huntV && gameMode === "hunt" && vr.bowMode && main && off && state === "play" && !P.gliding && !(vr.cl && vr.cl.hold)) bowTick(dt, I, main, off, mainSide, offSide); else bowHide();   // the bow
   // binoculars (Hiking): both hands up at your face, both grips held
   vr.binos = (gameMode === "hike" || !vr.gunOut) && !!main && !!off && main.grip > .5 && off.grip > .5 && main.pos.distanceTo(I.head) < .3 && off.pos.distanceTo(I.head) < .3;
@@ -11244,7 +11248,7 @@ function mpNearSpawn() {                                    // online Hunting an
 function uwRespawn() {                                      // wake up somewhere random on dry ground (online Hunting and Hiking, near another player)
   pteroCalm();                                               // the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // Geocaching: anywhere on the planet
-  let s = mpNearSpawn();
+  let s = COMP.on ? null : mpNearSpawn();   // (Competitive: anywhere)
   if (!s && GLOBE) for (let k = 0; k < 400 && !s; k++) { const a = Math.random() * 6.283, r = 150 + Math.random() * 550, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;   // (the planet: back in somewhere near where you fell)
     if (H(x, z) > water + 2 && slopeNy(x, z) > .8 && !inLava(x, z, 30) && !beasts.some(A => A.pred && !A.dead && A.x !== undefined && Math.hypot(A.x - x, A.z - z) < 70)) s = [x, z]; }
   if (!s) s = arenaSpawnFar(arenaFoes());                          // (an arena: your side's start point furthest from the others)
@@ -11291,7 +11295,7 @@ function uwTick(dt, I) {                                     // runs after you'v
 const _rcF = new THREE.Vector3(), _rcA = new THREE.Vector3();
 function vrFire() {
   let late = 0; if (vr.plHover) return;                      // (pointing at the player list, not shooting)
-  if (state !== "play" || gameMode === "hike" || !vr.gun || !vr.gun.visible || MP.dead > 0) return;   // (flying too)
+  if (state !== "play" || gameMode === "hike" || !vr.gun || !vr.gun.visible || MP.dead > 0 || COMP.out) return;   // (flying too) (out of a Competitive game: watching)
   const huntM = ARMED(), S = GUNSPOT[vr.gunKind], W = huntM ? WEAP[vr.gunKind] : null;
   if (huntM) {
     const A = arms[vr.gunKind]; if (vr.cool > 0 || A.phase || A.mag <= 0) return;
@@ -11316,7 +11320,7 @@ function vrFire() {
     const ms = set.hand === "right" ? "R" : "L"; buzz(ms, 1, 120);
   }
   const spd = W ? W.spd : 715, v = dir.multiplyScalar(spd); v.y += BULLET_G * BULLET_ZERO / (2 * spd);   // sights line up with the bullet at 100 m
-  const online = (gameMode === "pvp" || geoNet()) && MP.on && !!W;
+  const online = (gameMode === "pvp" || geoNet() || compMode()) && MP.on && !!W;
   makeBullet(from, v, { reach: vr.scoped ? 3200 : W ? W.reach : 900, age: late, dmg: W ? Math.round(W.dmg * TIER.dmg[Math.max(1, tierOf(vr.gunKind))]) : 0, gun: W ? vr.gunKind : null, online });
   legendShot(from, v.clone().normalize(), vr.scoped ? 3200 : W ? W.reach : 900, v.length());
   if (MP.on && W) mpSend({ t: "f", o: [from.x, from.y, from.z], v: [v.x, v.y, v.z], k: vr.gunKind });
@@ -11724,7 +11728,7 @@ function thermalLoaded() {                                     // the secret: ev
   if (gameMode === "hunt") return !GEO.on || MP.hp >= 99.5;     // (animals and dinosaurs glow; Geocaching also needs full health)
   return gameMode === "pvp" && MP.hp >= 100 && (MP.sh || 0) >= 100 && !(MP.dead > 0);
 }
-const geoTherm = k => GEO.on && ((k === "hunt" && geoHas("tscope")) || (k === "binos" && geoHas("tbinos")));   // Geocaching: the thermal scope and binoculars are items
+const geoTherm = k => (GEO.on || COMP.on) && ((k === "hunt" && geoHas("tscope")) || (k === "binos" && geoHas("tbinos")));   // Geocaching: the thermal scope and binoculars are items
 function thermalOk() { const L = thermalLoaded(); return (vr.scoped && vr.gunKind === "hunt" && TOOL.on.hunt && (L || geoTherm("hunt"))) || (vr.binos && !vr.scoped && TOOL.on.binos && (L || geoTherm("binos"))); }   // switched on with X // the red sniper's scope, or the binoculars
 function thermHot() {                                          // the warm bodies: animals, bots, other players (looked up twice a second)
   const now = performance.now(); if (now - THERM.hotT < 500) return THERM.hot; THERM.hotT = now;
@@ -11926,7 +11930,7 @@ function raptorRushing(A) { return (A.kind === "raptor" || A.hunter) && ((A.ugs 
 function bayoStab(o, dir) {                                      // what the blade reaches (from the muzzle out past the tip)
   const reach = BAYO.len + BAYO.reach + .4, sd = set.hand === "right" ? "R" : "L"; o = o.clone().addScaledVector(dir, -.4);   // (from a little behind the muzzle: a head already against the blade still counts)
   const [aT, A, aHead] = beasts.length ? animalRay(o, dir, 0, reach) : [1e9, null, false];
-  const ph = MP.on && (gameMode === "pvp" || geoNet()) ? mpHitTest(o, dir, reach) : null;
+  const ph = MP.on && (gameMode === "pvp" || geoNet() || compMode()) ? mpHitTest(o, dir, reach) : null;
   const fake = { dmg: BAYO.pdmg, gun: null, from: o.clone(), bot: null };
   if (A && aT <= reach && (!ph || aT < ph.t)) {
     if (raptorRushing(A) && aHead) { hitAnimal(A, aT, 1e6, true, null); if (!A.dead && !(A.net && mpNetGuest())) { A.hp = 0; killAnimal(A, aT); } vrBanner("Kill strike!", 3, 3); buzz(sd, 1, 140); gunFoley([[0, 900, .04, .5], [.03, 140, .18, .6]]); return; }
@@ -12186,8 +12190,10 @@ function vruiParts() {
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
   // (Treeocashing is online only now: Online → Treeocashing)
-  uiBtn(M, 90, 150, 1220, 230, "Solo", () => { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (Geocaching moved to the Dev menu while it's tested)
-  uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64 });
+  uiBtn(M, 90, 150, 1220, 230, "Solo", () => { set.geoNet = false; set.comp = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (Geocaching moved to the Dev menu while it's tested)
+  uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64, hide: () => DEV.ok });
+  uiBtn(M, 90, 400, 700, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64, hide: () => !DEV.ok });
+  uiBtn(M, 810, 400, 500, 230, "Competitive", () => compGo(), { sub: "Treeocashing to the top, last one standing wins.", fs: 50, hide: () => !DEV.ok, paintCol: "#5a3a1a" });   // (Dev for now)
   uiBtn(M, 90, 660, 560, 150, "Your character", () => vruiOpen("char"), { sub: "How the others see you", fs: 46, personal: true });
   uiBtn(M, 670, 660, 380, 150, "Set height", () => vrHeightCheck("mode"), { sub: "Standing or sitting", fs: 46, personal: true });
   uiBtn(M, 1070, 660, 240, 150, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 40, personal: true });   // read them again
@@ -12203,7 +12209,7 @@ function vruiParts() {
     if (VRUI.newVer) { g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", 700, 740); }
   };
   uiBtn(MPP, 90, 150, 1220, 200, "Treeocashing", () => { MP.status = ""; geoNetGo(); }, { sub: "One shared planet: you're dropped into a room with space (up to 8)", fs: 60, hide: () => !!MP.code, paintCol: "#6a5a2a" });   // live
-  uiBtn(MPP, 90, 370, 590, 220, "Host a room", () => { MP.status = ""; set.geoNet = false; mpHost(); mapRules(); vruiOpen("lobby"); }, { sub: "Deathmatch, hunting or hiking, with a code to share", fs: 54, hide: () => !!MP.code });
+  uiBtn(MPP, 90, 370, 590, 220, "Host a room", () => { MP.status = ""; set.geoNet = false; set.comp = false; mpHost(); mapRules(); vruiOpen("lobby"); }, { sub: "Deathmatch, hunting or hiking, with a code to share", fs: 54, hide: () => !!MP.code });
   uiBtn(MPP, 720, 370, 590, 220, "Join a room", () => { MP.status = ""; MP.rooms = null; MP.roomPg = 0; MP.roomsT = 0; MP.entry = ""; vruiOpen("rooms"); }, { sub: "The open rooms, or type a friend's code.", fs: 60, hide: () => !!MP.code });
   uiBtn(MPP, 405, 250, 590, 150, "Back to your room", () => vruiOpen("lobby"), { primary: true, fs: 44, hide: () => !MP.code });
   uiBtn(MPP, 90, 780, 380, 90, "Main menu", () => vruiOpen("mode"), { fs: 36, personal: true });
@@ -12241,7 +12247,7 @@ function vruiParts() {
   const note = (g, x, y, t) => { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.fillText(t, x, y); };
   S2.paint = (g, P) => {
     uiBg(g, P); g.textAlign = "left"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("JUST TREES", lx, 92);
-    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (geoMode() ? "Treeocashing" : gameMode === "pvp" ? (MP.code ? "Deathmatch" : "Bot battle") : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), MP.code ? 870 : 960), lx + 360, 92);
+    g.font = "bold 40px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, (compMode() ? "Competitive Treeocashing" : geoMode() ? "Treeocashing" : gameMode === "pvp" ? (MP.code ? "Deathmatch" : "Bot battle") : MODE_NAME[gameMode]) + (set.arena ? " · Arena: " + set.arena.name : gameMode === "pvp" && !vbWant() && (!MP.code || !mpOpen().length) ? (MP.code ? " · practice until someone joins" : " · practice, no bots") : ""), MP.code ? 870 : 960), lx + 360, 92);
     { const pv = gameMode === "pvp" && !mpGuest(); wAr.w = pv ? 210 : 250; wRnd.x = rx + (pv ? 444 : 262); wRnd.w = pv ? 210 : 250; wGo.x = rx + (pv ? 664 : 524); wGo.w = pv ? 236 : 376; }   // room for Bots // (an arena)
     const lat = set.lat * set.hemi, sea = seasonOf(lat, set.month);
     uiLabel(g, lx, 168, "Latitude", `${set.lat}° ${set.hemi > 0 ? "N" : "S"}`); note(g, lx, 204, envNote(lat));
@@ -12253,7 +12259,8 @@ function vruiParts() {
       uiLabel(g, lx, 1108, "Capture point"); note(g, lx + 540, 1108, "+1 point per " + CAPTURE.every + " s held alone"); }
     if (gameMode === "hunt") { uiLabel(g, lx, 948, "Prehistoric"); note(g, lx + 500, 948, "Dinosaurs to hunt"); }
     if (spawnPick()) uiLabel(g, lx, 1028, "Start apart");
-    if (!geoMode() && (gameMode === "hike" || gameMode === "hunt" || !onl())) { const pl = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(); uiLabel(g, rx, 168, "Map", pl ? "The planet · 50 km round" : "The 3 km island"); if (pl && gameMode === "hike") note(g, rx, 238, "You start in the land of your latitude"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
+    if (compMode()) { uiLabel(g, rx, 168, "Map size", compSizeName() + " · " + compTop() + " levels"); note(g, rx, 290, compSizeNote()); }
+    else if (!geoMode() && (gameMode === "hike" || gameMode === "hunt" || !onl())) { const pl = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(); uiLabel(g, rx, 168, "Map", pl ? "The planet · 50 km round" : "The 3 km island"); if (pl && gameMode === "hike") note(g, rx, 238, "You start in the land of your latitude"); if (pvpEndless()) note(g, rx, 304, "The bots come at you wherever you go"); }
     else uiLabel(g, rx, 168, "Map size", geoMode() ? "A planet 50 km round" : $("sizeVal").textContent);
     if (geoMode()) { const sv = geoLoad(); note(g, rx, 238, sv && sv.n ? "Level " + sv.n + " · a new planet each game" : "Level 0 · a new planet each game"); note(g, rx, 318, "Hunt for food: your health runs down"); }
     else if (huntEndless()) note(g, rx, 318, "Land, animals and guns all over the planet");
@@ -12264,14 +12271,16 @@ function vruiParts() {
     if (onl()) {
       uiLabel(g, rx, 790, "Comms", COMMS_NAME[set.comms | 0]);
       note(g, rx, 896, ["Everyone hears everyone, anywhere on the map", "Everyone, louder the closer they are", "Teammates only, like a radio", "Silent until you fist bump a teammate (fists together)"][set.comms | 0]);
-      uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min");
+      if (!compMode()) uiLabel(g, rx, 950, "Round", (set.roundMin || 10) + " min"); else uiLabel(g, rx, 950, "Round", "No clock · last one standing");
     }
     if (mpGuest()) { g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = MP_COL[mpColOf(null)]; g.fillText("The host is choosing the map", P.W - 70, 92);
       g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("The host starts the game · change your look on the left", P.W - 70, 1112); }
   };
   [["hike", "Hike"], ["hunt", "Hunt"], ["pvp", "Bot battle"]].forEach(([m, l], i) => uiBtn(S2, 1380 + i * 200, 40, 190, 66, l, () => { if (gameMode !== m) { setMode(m); mapRules(); renderSetup(); vbFit(); mpHostSetSync(); mpLobSync(true); } }, { active: () => gameMode === m, hide: () => !!MP.code, fs: 30 }));   // Solo picks here (PvP against bots)
-  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1320 + i * 178, 40, 172, 66, l, () => { if (set.geoNet) { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; roomsSetPublic(!!MP.pubWas); } setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m && !geoMode(), hide: () => !MP.code || mpGuest(), fs: 28 }));   // (leaving Treeocashing: back to how the room was listed)
-  uiBtn(S2, 1320 + 3 * 178, 40, 172, 66, "Treeocashing", () => { if (set.geoNet) return; MP.pubWas = !!MP.pub; setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; roomsSetPublic(true); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => geoMode(), hide: () => !MP.code || mpGuest() || !DEV.ok, fs: 24 });   // Dev only for now: a public planet, and your lobby starts next to you   // online: the host picks
+  [["hike", "Hiking"], ["hunt", "Hunting"], ["pvp", "Deathmatch"]].forEach(([m, l], i) => uiBtn(S2, 1320 + i * 178, 40, 172, 66, l, () => { if (set.geoNet) { set.geoNet = false; if (set.huntMap === "globe") set.huntMap = "endless"; roomsSetPublic(!!MP.pubWas); } setMode(m); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => gameMode === m && !geoMode(), hide: () => !MP.code || mpGuest() || !!set.comp, fs: 28 }));   // (leaving Treeocashing: back to how the room was listed)
+  uiBtn(S2, 1320 + 3 * 178, 40, 172, 66, "Treeocashing", () => { if (set.geoNet) return; MP.pubWas = !!MP.pub; setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; roomsSetPublic(true); mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); }, { active: () => geoMode(), hide: () => !MP.code || mpGuest() || !DEV.ok || !!set.comp, fs: 24 });
+  COMP_SIZES.forEach(([k, l], i) => uiBtn(S2, rx + i * 150, 196, 140, 62, l, () => { set.size = k; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => set.size === k, hide: () => !compMode() || mpGuest(), fs: 30 }));   // Competitive: the map size (and so the top level)
+  uiBtn(S2, rx + 5 * 150, 196, 150, 62, "Planet", () => vrBanner("Competitive on the planet: coming next", 2.5, 1), { hide: () => !compMode() || mpGuest(), fs: 28, paintCol: "#3a3a3a" });   // Dev only for now: a public planet, and your lobby starts next to you   // online: the host picks
   uiSlider(S2, lx, 216, 640, 0, 85, () => set.lat, v => { set.lat = v; }, 1);
   uiBtn(S2, lx + 690, 212, 100, 60, "N", () => { set.hemi = 1; }, { active: () => set.hemi > 0 });
   uiBtn(S2, lx + 800, 212, 100, 60, "S", () => { set.hemi = -1; }, { active: () => set.hemi < 0 });
@@ -12280,7 +12289,7 @@ function vruiParts() {
   uiSlider(S2, lx, 666, cw, 0, 1, () => set.density, v => { set.density = v; }, .01);
   MONTHS.forEach((m, i) => uiBtn(S2, lx + i * 75, 790, 69, 62, m, () => { set.month = i; }, { active: () => set.month === i, fs: 24 }));   // one row
   [["xs", "XS"], ["small", "S"], ["medium", "M"], ["large", "L"], ["xl", "XL"], ["xxl", "XXL"], ["xxxl", "XXXL"]].forEach(([k, l], i) => uiBtn(S2, rx + i * 112, 196, 106, 62, l, () => { set.size = k; set.huntMap = "island"; }, { active: () => set.size === k && !huntEndless(), hide: () => gameMode !== "pvp" || !onl() || geoMode(), fs: 30 }));   // (every size: online Deathmatch)
-  const mapPl = () => gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(), mapBtns = () => geoMode() || !(gameMode === "hike" || gameMode === "hunt" || (gameMode === "pvp" && !onl()));
+  const mapPl = () => gameMode === "hike" ? set.hikeMap === "endless" : huntEndless() || pvpEndless(), mapBtns = () => geoMode() || compMode() || !(gameMode === "hike" || gameMode === "hunt" || (gameMode === "pvp" && !onl()));
   uiBtn(S2, rx, 196, 300, 62, "Island · 3 km", () => { if (gameMode === "hike") set.hikeMap = "island"; else if (gameMode === "hunt") set.huntMap = "island"; else set.pvpMap = "island"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: () => !mapPl(), hide: mapBtns });   // (Hike too)
   uiBtn(S2, rx + 310, 196, 300, 62, "Planet · 50 km", () => { if (gameMode === "hike") set.hikeMap = "endless"; else if (gameMode === "hunt") set.huntMap = "endless"; else set.pvpMap = "endless"; mapRules(); mpHostSetSync(); mpLobSync(true); }, { active: mapPl, hide: mapBtns });
   if (0) uiBtn(S2, rx, 196, 240, 62, "Start over", () => geoAsk("re", geoRestart), { labelFn: () => geoAsking("re") ? "Sure? Tap" : "Start over", hide: () => !geoMode() || !(geoLoad() && geoLoad().n), fs: 28 });   // back to level 0
@@ -12295,7 +12304,7 @@ function vruiParts() {
   uiBtn(S2, rx + 450, 636, 215, 62, "Random teams", () => mpTeamsRandom(), { hide: () => !onl() || !teamsOn(), fs: 26 });
   uiBtn(S2, rx + 685, 636, 215, 62, "Big heads", () => { set.bigHead = !set.bigHead; mpHostSetSync(); mpLobSync(true); }, { active: () => !!set.bigHead, hide: () => gameMode !== "pvp" || mpGuest(), fs: 28 });   // like GoldenEye
   uiSlider(S2, rx, 806, cw, 0, 3, () => set.comms | 0, v => { set.comms = v; mpLobSync(true); }, 1).hide = () => !onl();
-  uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => !onl() && gameMode !== "pvp";   // round length (every online mode, 5 to 60 minutes)
+  uiSlider(S2, rx + 330, 910, 570, 5, 60, () => set.roundMin || 10, v => { set.roundMin = v; mpLobSync(true); }, 5).hide = () => (!onl() && gameMode !== "pvp") || compMode();   // round length (every online mode, 5 to 60 minutes)
   // the extras, in three short rows under the months
   [[0, "Together"], [50, "50"], [150, "150"], [300, "300"], [500, "500"], [750, "750"], [1000, "1 km"]].forEach(([v, l], i) => uiBtn(S2, i ? 436 + (i - 1) * 98 : 290, 986, i ? 92 : 140, 62, l, () => { set.spawnD = v; }, { active: () => (set.spawnD || 0) === v, hide: () => !spawnPick(), fs: 26 }));
   uiBtn(S2, 340, 1066, 120, 62, "Off", () => { set.capture = "off"; }, { active: () => set.capture !== "on", hide: () => gameMode !== "pvp" || pvpEndless() });   // PvP capture point
@@ -12306,7 +12315,7 @@ function vruiParts() {
   uiBtn(S2, 300, 906, 110, 62, "On", () => { set.zone = "on"; }, { active: () => set.zone === "on", hide: () => gameMode !== "pvp" || pvpEndless() });
   uiSlider(S2, 690, 908, 280, 15, 120, () => set.zoneHold || 60, v => { set.zoneHold = v; }, 5).hide = () => gameMode !== "pvp" || pvpEndless();
   uiSlider(S2, 580, 988, 390, 1, 5, () => set.zoneSpeed || 3, v => { set.zoneSpeed = v; }, 1).hide = () => gameMode !== "pvp" || pvpEndless();
-  const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest(), active: () => !!set.arena, fs: 36 });   // maps built in Map Lab
+  const wAr = uiBtn(S2, rx, 1060, 250, 90, "Arenas", () => arenasOpen(), { hide: () => mpGuest() || compMode(), active: () => !!set.arena, fs: 36 });   // maps built in Map Lab
   const wRnd = uiBtn(S2, rx + 262, 1060, 250, 90, "Randomize", () => { set.arena = null; $("randomBtn").click(); }, { hide: () => mpGuest(), fs: 32 });
   const wGo = uiBtn(S2, rx + 524, 1060, 376, 90, "Start", () => { if (geoMode() && MP.code && MP.host) { geoNetLobbyGo(); return; } if (!geoMode()) mapRules(); renderSetup(); startNew(); }, { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(S2, rx + 220, 1060, 214, 90, "Bots", () => vbOpen(), { hide: () => mpGuest() || gameMode !== "pvp", active: () => vbWant() > 0, fs: 32, labelFn: () => vbWant() ? "Bots · " + vbWant() : "Bots · off" });
@@ -14549,7 +14558,7 @@ function boltSounds() {                        // lift, pull back, push forward,
 }
 /* ---------------- VR Hunting arsenal: four guns, a gun wheel, magazines, reloading (ammo is unlimited) ---------------- */
 const flareOk = () => (gameMode === "pvp" && VR_ON && ["large", "xl", "xxl", "xxxl"].includes(set.size) && (set.comms | 0) === 3) || geoHas("flares");   // the flare gun (VR PvP, L and up); only with Team · fist bump comms (silent teammates: flares find each other)
-const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"].concat(GEO.on ? ["gps"] : [], GEO.on && geoPackItems().length ? ["pack"] : [], GEO.on && flareOk() && vr.flares > 0 ? ["flare"] : []) : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow
+const wheelKeys = () => gameMode === "hunt" ? ["hunt", "ar", "smg", "pistol", "bow", "gren"].concat(GEO.on || (COMP.on && !COMP.out) ? ["gps"] : [], GEO.on && geoPackItems().length ? ["pack"] : [], GEO.on && flareOk() && vr.flares > 0 ? ["flare"] : []) : ["hunt", "ar", "smg", "pistol", "gren"].concat(flareOk() && vr.flares > 0 ? ["flare"] : []);   // clockwise from the top; Hunting has a bow
 const wstep = () => Math.PI * 2 / wheelKeys().length;
 const arms = {};
 function resetArms() { for (const k in WEAP) arms[k] = { mag: WEAP[k].mag, res: WEAP[k].start, phase: 0, k: 0, popping: false }; vr.flares = flareOk() ? FLARE.N : 0; vr.flareMode = false; vr.nades = 0; vr.nadeMode = false; vr.bowMode = false; vr.weapon = "hunt"; vr.rl.grab = null; vr.cool = 0;
@@ -14793,7 +14802,7 @@ function drawWheel(sel) {
     if (pv && !lock) { const t = k === "bow" ? bowTier() : tierOf(k); g.fillStyle = TIER_COL[t]; g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 2;
       for (let j = 0; j < t; j++) { const sx = cx + (j - (t - 1) / 2) * 26, sy = cy + 30; g.beginPath(); for (let q = 0; q < 10; q++) { const a = -Math.PI / 2 + q * Math.PI / 5, rr = q % 2 ? 5 : 11.5; g.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); } }
     g.font = "30px sans-serif"; g.fillStyle = lock ? "rgba(238,243,230,.3)" : on ? "#3a3420" : Wk.col;
-    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? "Lv " + GEO.found.size : k === "pack" ? (GEO.held ? GI[GEO.held].name : geoPackItems().length + " items") : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
+    g.fillText(k === "gren" ? vr.nades + " / " + NADE.MAX : k === "flare" ? vr.flares + " / " + FLARE.N : k === "gps" ? "Lv " + (COMP.on ? COMP.lv : GEO.found.size) : k === "pack" ? (GEO.held ? GI[GEO.held].name : geoPackItems().length + " items") : k === "bow" ? "\u221e arrows" : lock ? "not found" : A.mag + " | " + (INF_AMMO ? "\u221e" : A.res), cx, cy + (pv ? 66 : 40));
   });
   g.beginPath(); g.arc(256, 256, 10, 0, 7); g.fillStyle = "rgba(255,255,255,.6)"; g.fill();
   m.material.map.needsUpdate = true;
@@ -15426,7 +15435,7 @@ function spawnPvpLoot() {                                   // seeded: everyone 
   const AL = ARENA && ARENA.loot, amt = AL && AL.amt !== undefined ? AL.amt : 1, auto = !(AL && AL.mode === "custom") && amt > 0;   // an arena's loot
   const nC = auto ? Math.round((LOOT.cross[0] + HALF / LOOT.cross[1]) * amt) : 0, cell = (LOOT.gunGrid[0] + HALF * LOOT.gunGrid[1]) / Math.sqrt(Math.max(.05, amt)), kinds = ["hunt", "ar", "smg", "ar", "smg", "pistol"];
   let gi = 0;
-  if (auto) for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
+  if (auto && !set.comp) for (let gz = -EDGE + cell / 2; gz < EDGE; gz += cell) for (let gx = -EDGE + cell / 2; gx < EDGE; gx += cell) {   // guns: one in each square of a grid, nudged about, so they're spread evenly
     let sp = null; for (let k = 0; k < 14 && !sp; k++) { const x = gx + (R() - .5) * cell * .85, z = gz + (R() - .5) * cell * .85; if (okSpot(x, z)) sp = [x, z]; }
     if (!sp) continue;
     const r = R(), kind = kinds[Math.floor(R() * kinds.length)], tier0 = Math.min(kind === "hunt" && gameMode === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);   // red sniper: only one, up the tallest tree
@@ -15434,7 +15443,7 @@ function spawnPvpLoot() {                                   // seeded: everyone 
     if (isBow) { dropAdd({ id: "g" + (gi++), type: "gun", kind: "bow", tier, x: sp[0], z: sp[1] }); continue; }
     dropAdd({ id: "g" + (gi++), type: "gun", kind, tier, x: sp[0], z: sp[1] });
   }
-  if (PORCH) dropAdd({ id: "gRed", type: "gun", kind: "hunt", tier: 5, x: PORCH.gun[0], z: PORCH.gun[1], y: PORCH.top });
+  if (PORCH && !set.comp) dropAdd({ id: "gRed", type: "gun", kind: "hunt", tier: 5, x: PORCH.gun[0], z: PORCH.gun[1], y: PORCH.top });
   if (gameMode === "pvp") for (let i = 0; i < nC; i++) { const s = spot(); if (s) dropAdd({ id: "c" + i, type: i % 2 ? "sh" : "hp", x: s[0], z: s[1] }); }
   if (AL && AL.mode !== "auto" && AL.pts) AL.pts.forEach(([x, z, type, kind, tier], i) => {   // loot placed by hand
     if (type === "hp" || type === "sh") dropAdd({ id: "a" + i, type, x, z }); else if (type === "gun") dropAdd({ id: "a" + i, type: "gun", kind: kind || "ar", tier: Math.max(1, Math.min(5, tier || 1)), x, z }); });
@@ -15564,7 +15573,7 @@ function boardShow(on) {
   g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = "#ffffff"; g.font = "bold 52px sans-serif"; g.fillText("ROUND OVER", 512, 70);
   rows.slice(0, 8).forEach((r, i) => { const y = 132 + i * 60; g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(60, y, 15, 0, 6.283); g.fill();
     g.font = (r.me ? "bold " : "") + "36px sans-serif"; g.fillText(fitText(g, (i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : r.bot ? " · bot" : ""), 520), 90, y);
-    g.textAlign = "right"; g.fillStyle = "#e8f0e8"; g.fillText((CAPT ? r.p + " caps · " : "") + r.k + " kills · " + r.d + " deaths", 990, y); });
+    g.textAlign = "right"; g.fillStyle = "#e8f0e8"; g.fillText(MP.boardMode === "comp" ? (r.id === COMP.winner ? "WINNER · " : r.out ? "out · " : "") + "Lv " + (r.lv | 0) + " · " + r.k + " kills" : (CAPT ? r.p + " caps · " : "") + r.k + " kills · " + r.d + " deaths", 990, y); });
   m.material.map.needsUpdate = true;
 }
 function boardTick(dt) {                                       // it hangs in front of you, gently following where you look; the last moment fades out
@@ -15579,7 +15588,8 @@ function mpBoard() {                                         // everyone's score
   const hu = gameMode === "hunt", rows = [{ id: mpMyId(), u: mpUni(null), c: mpColOf(null), tag: MP.tag, team: mpMyTeam(), k: hu ? hunt.kills : MP.kills, d: MP.deaths, p: hu ? hunt.score : MP.pts, m: MP.dmg | 0, me: true }];
   for (const L of mpOpen()) rows.push({ id: L.id, u: mpUni(L), c: mpColOf(L), tag: L.tag || "Player", team: mpTeamOf(L.id), k: L.k || 0, d: L.dd || 0, p: L.pts || 0, m: L.dm || 0 });
   if (gameMode === "pvp") rows.push(...vbBoardRows());
-  rows.sort((a, b) => (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || (b.m || 0) - (a.m || 0) || a.d - b.d); MP.board = rows; MP.boardMode = gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
+  if (COMP.on) { rows[0].lv = COMP.lv; rows[0].out = COMP.out; for (const r of rows) { const L = MP.links.get(r.id); if (L) { r.lv = L.cl | 0; r.out = !!L.co; } } }
+  rows.sort((a, b) => (COMP.on ? (b.id === COMP.winner) - (a.id === COMP.winner) || (a.out ? 1 : 0) - (b.out ? 1 : 0) || (b.lv | 0) - (a.lv | 0) : 0) || (CAPT || hu ? b.p - a.p : 0) || b.k - a.k || (b.m || 0) - (a.m || 0) || a.d - b.d); MP.board = rows; MP.boardMode = COMP.on ? "comp" : gameMode; MP.boardTeams = teamsOn();   // with a capture point (or hunting): points first
 }
 function clearLoot() { vrClearNades(); dropsClear(); if (typeof flaresClear === "function") flaresClear(); }
 function spawnLoot() {                                       // the things lying about the map (seeded: everyone gets the same): grenades, and in VR PvP / Hunting the guns, bows and crosses
@@ -15596,7 +15606,7 @@ Object.defineProperties(MP, {                               // the first other p
   conn: { get() { const h = MP.links.get(mpHostId()); if (h && h.conn) return h.conn; for (const L of MP.links.values()) if (L.conn) return L.conn; return null; } },
   call: { get() { for (const L of MP.links.values()) if (L.call) return L.call; return null; } } });
 const MP_PREFIX = "justtrees-v1-", MP_ICE = [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }];
-const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill", "bigHead", "geoNet"];   // (the arena travels with the settings)
+const MP_SET = ["lat", "hemi", "rough", "hour", "month", "weather", "size", "density", "edges", "hikeMap", "huntMap", "spawnD", "land", "roundMin", "zone", "zoneHold", "zoneSpeed", "capture", "teams", "comms", "dino", "arena", "botFill", "botSkill", "bigHead", "geoNet", "comp"];   // (the arena travels with the settings)
 const mpHostId = () => MP.hostId || (MP_PREFIX + MP.code), mpMyId = () => (MP.peer && MP.peer.id) || "";
 const mpOpen = () => [...MP.links.values()].filter(L => L.open && !L.bad), mpCount = () => 1 + mpOpen().length;
 const mpGuest = () => !!MP.code && !MP.host;                 // (online in every mode)
@@ -15621,7 +15631,7 @@ function mpLeave() {
   mpSend({ t: "bye" });
   for (const L of [...MP.links.values()]) mpDropLink(L);
   try { if (MP.peer) MP.peer.destroy(); } catch (e) {}
-  geoDoorClose(); MP.hostId = ""; set.geoNet = false;
+  geoDoorClose(); MP.hostId = ""; set.geoNet = false; set.comp = false; compStop();
   MP.peer = null; MP.links.clear(); MP.on = false; MP.code = ""; MP.entry = ""; MP.idx = 0; MP.revealT = 0; MP.reveal = MP.pendingReveal = null; MP.lastSet = "";
 }
 const MP_TURN_URL = "https://just-trees-online.ron-bb2.workers.dev/turn";   // our own Cloudflare relay : the Worker keeps the key, hands out 6-hour passes
@@ -15916,7 +15926,7 @@ function mpOnlineTick(dt, playing) {
 /* ---- open games. A Public room checks in with our Cloudflare Worker every 30 s (and when it changes); "Find a game" reads the list every 5 s. ---- */
 const ROOMS_URL = "https://just-trees-online.ron-bb2.workers.dev/rooms";
 const roomAt = i => MP.rooms && MP.rooms[(MP.roomPg || 0) * 6 + i] || null;
-function roomMapName() { if (set.geoNet && gameMode === "hunt" && set.huntMap === "globe") return "Treeocashing"; const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Planet"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
+function roomMapName() { if (set.comp && gameMode === "hunt") return "Competitive · " + compSizeName(); if (set.geoNet && gameMode === "hunt" && set.huntMap === "globe") return "Treeocashing"; const e = gameMode === "hike" ? set.hikeMap === "endless" : huntEndless(); if (e) return "Planet"; if (gameMode === "hike") return "Island · 3 km"; return { xs: "XS", small: "S", medium: "M", large: "L", xl: "XL", xxl: "XXL", xxxl: "XXXL" }[set.size] || "M"; }
 function roomsPost(o) { try { fetch(MP.roomsUrl || ROOMS_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(o), keepalive: true }).catch(() => {}); } catch (e) {} }
 function roomsSetPublic(on) { if (!MP.host) return; MP.pub = !!on; MP.pubKey = ""; MP.pubT = 0; if (!on && MP.code) roomsPost({ op: "gone", code: MP.code }); mpLobSync(true); mpLobbyDraw(); }
 function roomsBeat(dt) {                                      // host: keep a Public room on the list
@@ -15951,6 +15961,7 @@ function mpTagDone() {                                       // the keyboard's O
   MP.tag = (VRUI.tagEdit || "").trim().slice(0, 12) || "PLAYER"; const nx = VRUI.tagNext; VRUI.tagNext = null;
   try { localStorage.setItem("jt-tag", MP.tag); } catch (_) {}
   if (nx === "host") { mpHost(); vruiOpen("lobby"); }
+  else if (nx === "comp") compGo();
   else if (nx && nx.startsWith("join:")) { mpJoin(nx.slice(5)); vruiOpen("lobby"); }
   else if (nx === "geonet") geoNetGo();
   else { mpSendMe(); vruiOpen(MP.code ? "lobby" : "mp"); }
@@ -16055,6 +16066,129 @@ function geoPalTick(dt) {                                       // a lobby that 
   if (MP.palTags) for (const L of mpOpen()) if (MP.palTags.has(L.tag) && !L.palSent) { L.palSent = true; mpSendTo(L, { t: "pal", p: glToSphere(P.x, P.z, [0, 0, 0]) }); }
   if (MP.palTag && MP.palP) { const p = MP.palP; MP.palTag = ""; MP.palP = null; geoTeleport(p); const s2 = enSpawnNear(P.x, P.z, 6, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); vr.placeAt = true; }
 }
+/* ---- Competitive Treeocashing (3.31, Dev). A public room from the main menu; the host picks the size (M 10 levels, L 15, XL 20, XXL 25,
+   XXXL 35; the planet comes later) and Prehistoric. Everyone caches up from nothing: each of you has your own caches, one at a time, further
+   out as you go; the rewards are guns and stars, a few grenades and an armour refill, and the thermals near the top. The top level makes you
+   a Bigg Wigg. Die to anyone else and you're back in somewhere random, level kept; die to a Bigg Wigg and you're out (you watch). Once
+   everyone left is a Bigg Wigg the zone comes in; any death then is out; the last one standing wins. No round clock.
+   Finding the cache: M and L a compass from the start; XL and up your position and the cache's as numbers, the arrow later, the distance
+   later still (the bigger maps are the geekier ones). ---- */
+const compMode = () => !!set.comp && !!MP.code && gameMode === "hunt";
+const compTop = () => (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[2];
+const compSizeName = () => (COMP_SIZES.find(z => z[0] === set.size) || COMP_SIZES[0])[1];
+const compBig = () => COMP.N >= 20;
+const compArrowAt = () => compBig() ? Math.ceil(COMP.N * .3) : 0, compDistAt = () => compBig() ? Math.ceil(COMP.N * .6) : 1e9;
+const compBW = () => COMP.on && COMP.lv >= COMP.N;
+function compIsBW(id) { const L = id && MP.links.get(id); return !!(L && L.cbw); }
+function compSizeNote() { return compTop() >= 20 ? "GPS: numbers · arrow at lv " + Math.ceil(compTop() * .3) + " · distance at " + Math.ceil(compTop() * .6) : "A compass points at your cache"; }
+async function compGo() {                                         // the main menu button: your own public room, empty, ready to fill
+  if (!MP.tag) { VRUI.tagNext = "comp"; vruiOpen("tag"); return; }
+  MP.status = ""; await mpHost(); setMode("hunt"); set.comp = true; set.geoNet = false; set.arena = null; set.huntMap = "island"; set.edges = "island"; if (!COMP_SIZES.some(z => z[0] === set.size)) set.size = "medium";
+  MP.pub = true; MP.pubKey = ""; MP.pubT = 0; mapRules(); renderSetup(); vruiOpen("lobby");
+}
+function compRewards(N) {                                          // what each level gives, 1 .. N-1 (N: Bigg Wigg)
+  const out = new Array(N + 1).fill(null), top = { 10: 2, 15: 3, 20: 3, 25: 4, 35: 5 }[N] || 3;
+  out[N - 1] = { item: "tscope" }; out[N - 2] = { item: "tbinos" };   // the thermals, right near the top
+  for (const f of [.3, .7]) { let k = Math.max(2, Math.round(N * f)); while (out[k]) k++; out[k] = { nades: 3 }; }
+  { let k = Math.round(N * .5); while (out[k]) k--; out[k] = { armor: 1 }; }
+  const steps = []; for (let st = 1; st <= top; st++) for (const g of ["smg", "ar", "hunt", "pistol", "bow"]) if (!(st === 1 && (g === "pistol" || g === "bow"))) steps.push({ gun: g, star: st });
+  const free = []; for (let k = 1; k < N; k++) if (!out[k]) free.push(k);
+  const F = free.length, S = steps.length;
+  if (F >= S) { const got = new Set(); steps.forEach((st, j) => { const i = S > 1 ? Math.round(j * (F - 1) / (S - 1)) : 0; got.add(i); out[free[i]] = Object.assign({}, st); });   // every step once; the gaps between: grenades or armour
+    let alt = 0; free.forEach((k, i) => { if (!got.has(i)) out[k] = alt++ % 2 ? { armor: 1 } : { nades: 2 }; }); }
+  else { const intro = steps.filter(st => st.star === 1).slice(0, F), rest = steps.filter(st => st.star > 1), n = F - intro.length;   // a smaller map: every gun first, then an even pick of the upgrades, up to the top stars
+    const pick = intro.concat(Array.from({ length: n }, (_, i) => rest[n > 1 ? Math.round(i * (rest.length - 1) / (n - 1)) : rest.length - 1]));
+    free.forEach((k, i) => { out[k] = Object.assign({}, pick[i]); }); }
+  return out;
+}
+function compStart() {                                            // a new Competitive game (a new world)
+  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.items.clear(); COMP.R = compRewards(COMP.N);
+  if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; compPlace();
+  vrBanner("Competitive Treeocashing · get to level " + COMP.N + " to be a Bigg Wigg. The " + (compBig() ? "GPS" : "compass") + " is on your wheel", 6, 3);
+}
+function compStop() { if (!COMP.on) return; COMP.on = false; COMP.seed = null; COMP.out = false; if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; for (const m of COMP.marks.values()) scene.remove(m); COMP.marks.clear(); }
+function compPlace() {                                            // your next cache: further out the higher you are, on the map, somewhere you can stand
+  if (COMP.lv >= COMP.N) { COMP.c = null; return; }
+  const k = COMP.lv / COMP.N, want = Math.max(70, HALF * (.22 + .4 * k)), lim = EDGE - 25;
+  for (let t = 0; t < 400; t++) { const a = Math.random() * 6.283, d = want * (.8 + Math.random() * .4) * (t > 200 ? .6 : 1), x = P.x + Math.cos(a) * d, z = P.z + Math.sin(a) * d;
+    if (Math.abs(x) < lim && Math.abs(z) < lim && geoCacheClear(x, z)) { COMP.c = { x, z, id: COMP.lv + 1 }; return; } }
+  for (let t = 0; t < 600; t++) { const x = (Math.random() * 2 - 1) * lim, z = (Math.random() * 2 - 1) * lim; if (okSpot(x, z) && H(x, z) > water + .5) { COMP.c = { x, z, id: COMP.lv + 1 }; return; } }
+  COMP.c = { x: P.x + 40, z: P.z, id: COMP.lv + 1 };
+}
+function compLevelUp() {                                          // a cache found
+  COMP.lv++; hunt.score += 25; showHuntScore(); bing(); if (COMP.obj) { scene.remove(COMP.obj); COMP.obj = null; }
+  const r = COMP.lv >= COMP.N ? null : COMP.R[COMP.lv], sd = set.hand === "right" ? "R" : "L"; buzz(sd, .6, 60);
+  if (!r) { MP.hp = 100; MP.sh = 100; vr.nades = Math.max(vr.nades | 0, 5); vrBanner("BIGG WIGG! Level " + COMP.N + ". Anyone you take down now is out", 6, 9); COMP.c = null; return; }
+  let say = "";
+  if (r.gun) { const was = vr.own[r.gun] || 0; vr.own[r.gun] = Math.max(was, r.star);
+    if (r.gun !== "bow") { const A = arms[r.gun]; A.mag = magOf(r.gun); A.res = Math.max(A.res, WEAP[r.gun].start); if (!was) { vr.weapon = r.gun; vr.gunInit = false; vr.gunOut = true; vr.nadeMode = vr.bowMode = vr.gpsMode = false; } }
+    say = (r.gun === "bow" ? "Bow" : WEAP[r.gun].name) + " " + "★".repeat(vr.own[r.gun]) + (was ? " (upgraded)" : " (new!)"); }
+  else if (r.item) { COMP.items.add(r.item); if (r.item === "tscope") TOOL.on.hunt = true; if (r.item === "tbinos") TOOL.on.binos = true; say = GI[r.item].name + "!"; }
+  else if (r.nades) { vr.nades = Math.min(NADE.MAX, (vr.nades | 0) + r.nades); say = "+" + r.nades + " grenades"; }
+  else if (r.armor) { MP.sh = 100; say = "Full armour"; }
+  vrBanner("Level " + COMP.lv + " / " + COMP.N + " · " + say, 4, 3);
+  if (COMP.lv === compArrowAt() && compBig()) vrBanner("Level " + COMP.lv + " · " + say + " · GPS: direction arrow", 4, 3);
+  if (COMP.lv === compDistAt()) vrBanner("Level " + COMP.lv + " · " + say + " · GPS: distance", 4, 3);
+  compPlace();
+}
+function compOut(by) {                                            // taken down by a Bigg Wigg (or the zone): out of this game
+  COMP.out = true; vr.gpsMode = false; if (COMP.obj) { scene.remove(COMP.obj); COMP.obj = null; }
+  vrBanner("You're out" + (by ? " · " + (mpTagOf(by) || "a Bigg Wigg") + " got you" : "") + ". Watch the rest", 5, 3);
+}
+function compZoneStart() {                                        // everyone left is a Bigg Wigg: the zone comes in
+  COMP.zone = true; const zo = set.zone, rm = set.roundMin; set.zone = "on"; set.roundMin = { 10: 5, 15: 6, 20: 8, 25: 10, 35: 14 }[COMP.N] || 8; COMP.zoneGo = true;
+  try { startZone(); } finally { COMP.zoneGo = false; set.zone = zo; set.roundMin = rm; }
+  vrBanner("All Bigg Wiggs! The zone is closing in · last one standing wins", 5, 9);
+}
+function compEnd(w) {                                             // the last one standing
+  COMP.ended = true; COMP.winner = w; MP.lastD = 0;
+  mpRoundOver(); vrBanner(w === mpMyId() ? "YOU WIN · last one standing!" : (mpTagOf(w) || "Someone") + " wins", 5, 9);
+}
+function compGpsDraw() {                                          // the compass (M, L) or the GPS (XL and up)
+  const g = GEO.gps, cv = g.userData.cv, x = cv.getContext("2d"), C = COMP.c, big = compBig();
+  x.fillStyle = "#0e1a12"; x.fillRect(0, 0, 256, 384); x.textBaseline = "alphabetic"; x.textAlign = "left";
+  x.fillStyle = "#9fe0a0"; x.font = "bold 26px sans-serif"; x.fillText(big ? "GPS" : "COMPASS", 12, 32); x.textAlign = "right"; x.fillStyle = MP.hp > 35 ? "#7fe08a" : "#ff6a5a"; x.fillText("♥ " + Math.round(MP.hp), 244, 32);
+  x.textAlign = "center"; x.fillStyle = compBW() ? "#ffd65a" : "#e8f6e0"; x.font = "bold 34px sans-serif"; x.fillText(compBW() ? "BIGG WIGG" : "Level " + COMP.lv + " / " + COMP.N, 128, 78);
+  if (!C) { x.font = "24px sans-serif"; x.fillStyle = "#cfe8c0"; x.fillText(COMP.zone ? "Stay in the zone" : "Hunt them down", 128, 200); }
+  else {
+    const dx = C.x - P.x, dz = C.z - P.z, fw = -Math.sin(P.yaw) * dx - Math.cos(P.yaw) * dz, rt = Math.cos(P.yaw) * dx - Math.sin(P.yaw) * dz, arrow = !big || COMP.lv >= compArrowAt();
+    if (big) { x.textAlign = "left"; x.font = "bold 26px monospace"; x.fillStyle = "#e8f6e0"; x.fillText("You  E" + Math.round(P.x) + " N" + Math.round(-P.z), 12, 124); x.fillStyle = "#ffe9a8"; x.fillText("Cache E" + Math.round(C.x) + " N" + Math.round(-C.z), 12, 158); }
+    if (arrow) { const cy = big ? 250 : 220, rr = big ? 52 : 86; x.save(); x.translate(128, cy); x.strokeStyle = "#3a5a40"; x.lineWidth = 4; x.beginPath(); x.arc(0, 0, rr + 10, 0, 6.283); x.stroke();
+      x.rotate(Math.atan2(rt, fw)); x.fillStyle = "#ffd65a"; x.beginPath(); x.moveTo(0, -rr); x.lineTo(rr * .55, rr * .6); x.lineTo(0, rr * .3); x.lineTo(-rr * .55, rr * .6); x.closePath(); x.fill(); x.restore(); }
+    else { x.textAlign = "center"; x.font = "20px sans-serif"; x.fillStyle = "#8aa890"; x.fillText("arrow at level " + compArrowAt(), 128, 250); }
+    if (COMP.lv >= compDistAt()) { const d = Math.hypot(dx, dz); x.textAlign = "center"; x.font = "bold 30px sans-serif"; x.fillStyle = "#e8f6e0"; x.fillText(Math.round(d) + " m", 128, 345); }
+    else if (big) { x.textAlign = "center"; x.font = "20px sans-serif"; x.fillStyle = "#8aa890"; x.fillText("distance at level " + compDistAt(), 128, 345); }
+  }
+  g.userData.scr.material.map.needsUpdate = true;
+}
+const _cmpMarkGeo = new THREE.OctahedronGeometry(.11, 0);
+function compTick(dt) {                                           // (each frame, from mpTick)
+  if (COMP.on && (!compMode() || state === "vrmenu" && !MP.overShown)) { if (!compMode()) compStop(); }
+  if (!compMode() || state !== "play") return;
+  if (!COMP.on || COMP.seed !== seed) compStart();
+  MP.roundLeft = 0;                                               // no round clock
+  if (COMP.out) { MP.hp = 100; MP.dead = Math.min(MP.dead, 0); }
+  // your cache, out on the ground once you're within 500 m
+  const C = COMP.c;
+  if (C && !COMP.out) {
+    const d = Math.hypot(C.x - P.x, C.z - P.z);
+    if (!COMP.obj && d < 500) { if (!geoCacheClear(C.x, C.z)) for (let k = 1; k < 120; k++) { const a = k * 2.4, r = k * .5, x = C.x + Math.cos(a) * r, z = C.z + Math.sin(a) * r; if (geoCacheClear(x, z)) { C.x = x; C.z = z; break; } }
+      COMP.obj = geoCacheObj(); scene.add(COMP.obj); }
+    if (COMP.obj) { COMP.obj.position.set(C.x, groundAt(C.x, C.z), C.z); COMP.obj.userData.glint.material.size = .35 + .25 * Math.abs(Math.sin(performance.now() / 300)) + d * .004;
+      if (d < 2 && Math.abs(COMP.obj.position.y - P.y) < 2.5 && !(MP.dead > 0)) compLevelUp(); }
+  }
+  // a gold marker over each Bigg Wigg
+  for (const L of mpOpen()) { let m = COMP.marks.get(L.id); const show = L.cbw && L.R && L.R.alive && !L.co;
+    if (show && !m) { m = new THREE.Mesh(_cmpMarkGeo, new THREE.MeshBasicMaterial({ color: 0xffd040, fog: false, toneMapped: false })); scene.add(m); COMP.marks.set(L.id, m); }
+    if (m) { m.visible = !!show; if (show) { m.position.set(L.R.head.x, L.R.head.y + .55, L.R.head.z); m.rotation.y += dt * 2; } } }
+  for (const [id, m] of COMP.marks) if (!MP.links.get(id)) { scene.remove(m); COMP.marks.delete(id); }
+  // the host keeps the score: everyone left a Bigg Wigg → the zone; one left → the winner
+  if (MP.host && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
+    const ps = [{ id: mpMyId(), bw: compBW(), out: COMP.out }, ...mpOpen().map(L => ({ id: L.id, bw: L.cbw, out: L.co }))], alive = ps.filter(q => !q.out);
+    if (ps.length >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
+    if (!COMP.zone && alive.length && alive.every(q => q.bw)) { mpSend({ t: "czone" }); compZoneStart(); }
+  }
+}
 function mpGuestGen(o) {
   mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true; pvpEndRound(); if (set.geoNet) GLB_JOIN = null;
   $("loading").classList.remove("hidden"); if (vr.on) vruiOpen("loading");
@@ -16155,7 +16289,10 @@ function mpRecv(o, L) {
   if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
   if (o.t === "set") { if (!MP.host) mpApplySet(o.set); return; }
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
-  if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; mpJoin(String(o.code)); vruiOpen("lobby"); } return; }   // your lobby is going into a planet that's already running
+  if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; const code = String(o.code); MP.moving = true; vruiOpen("mp"); MP.status = "Joining your friends' planet…";
+    setTimeout(() => { MP.moving = false; mpJoin(code); vruiOpen("lobby"); }, 1800 + (MP.idx | 0) * 1500); } return; }   // your lobby is going into a planet that's already running (one at a time, after the host: everyone already there is told about you, so you all link up)
+  if (o.t === "czone") { if (L.id === mpHostId() && COMP.on && !COMP.zone) compZoneStart(); return; }
+  if (o.t === "cend") { if (L.id === mpHostId() && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
   if (o.t === "pal") { if (MP.palTag && L.tag === MP.palTag && Array.isArray(o.p) && o.p.length === 3) MP.palP = o.p; return; }
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
@@ -16164,7 +16301,7 @@ function mpRecv(o, L) {
   if (o.t === "hr") { if (!MP.host && GLOBE && typeof o.u === "number") { const d = ((o.u - GLOBE.utc + 36) % 24) - 12; GLOBE.utc = Math.abs(d) > .1 ? o.u : (GLOBE.utc + d * .5 + 24) % 24; } else if (!MP.host && ENDLESS) enClockSet(o.h); return; }
   if (o.t === "s" && ENDLESS && !GLOBE && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
-  if (o.t === "s") { L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.cl = o.cl | 0; L.cbw = !!o.cbw; L.co = !!o.co; L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (or the host's bot)
   if (o.t === "die") { if (Array.isArray(o.dd) && o.dd.length === 4) dropDead(String(o.dd[0]), +o.dd[1], +o.dd[2], +o.dd[3]); if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
@@ -17477,7 +17614,7 @@ function mpHitTest(from, dir, maxT) {                       // the nearest playe
   return best;
 }
 function mpTakeHit(d, head, noShield) {
-  if (MP.dead > 0 || state !== "play" || MP.overT > 0) return;
+  if (MP.dead > 0 || state !== "play" || MP.overT > 0 || COMP.out) return;
   MP.lastHitHead = !!head;
   const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
@@ -17485,6 +17622,7 @@ function mpTakeHit(d, head, noShield) {
     MP.deaths++; mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0 }); GEO.killedBy = mpTagOf(MP.lastHitBy) || "Someone"; if (!(UW.drown > 0)) { UW.drown = .001; UW.red = 1; } return;
   }
   if (MP.hp <= 0) {
+    if (COMP.on && (COMP.zone || compIsBW(MP.lastHitBy))) compOut(MP.lastHitBy);   // Competitive: a Bigg Wigg got you (or the zone): you're out
     MP.dead = PVP.respawn; MP.deaths++; MP.deathPos = [P.x, P.y, P.z]; const did = "dd" + mpMyId() + "_" + MP.deaths; dropDead(did, P.x, P.y, P.z);
     mpSend({ t: "die", by: MP.lastHitBy, hd: MP.lastHitHead ? 1 : 0, dd: [did, +P.x.toFixed(2), +P.y.toFixed(2), +P.z.toFixed(2)] });
     vbCredit(MP.lastHitBy);                                    // a bot got you
@@ -17499,7 +17637,7 @@ function mpHurtMesh() {
 }
 const pose7 = (p, q) => [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3), +q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)];
 function mpTick(dt) {                                       // (also runs offline in VR PvP, for dying and respawning)
-  const now = performance.now(); geoPalTick(dt);
+  const now = performance.now(); geoPalTick(dt); compTick(dt);
   if (MP.on && (MP.pingT = (MP.pingT || 0) - dt) <= 0) { MP.pingT = 2; mpSend({ t: "ping" }); }   // a small heartbeat; a player silent for 20 seconds is gone
   { const gap = now - (MP.tickT || now); MP.tickT = now; if (gap > 1500) for (const L of MP.links.values()) L.lastRx += gap; }   // my own long pause (a world being made) isn't them going quiet
   for (const L of [...MP.links.values()]) {
@@ -17517,8 +17655,8 @@ function mpTick(dt) {                                       // (also runs offlin
     MP.sendT = (vr.cl && vr.cl.air) || Math.hypot(sense.v || 0, P.vy || 0) > 14 ? 1 / 45 : P.gliding || sense.v > 6 ? 1 / 30 : .05; /* 45 a second while flung */ const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (30 a second while moving fast)
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // asleep, the others see your body in the hammock (not where your spirit is)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: SB ? SB.h : pose7(I.head, I.headQ), l: SB ? SB.l : Lh ? pose7(Lh.pos, Lh.q) : null, r: SB ? SB.r : Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
-      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0 && !COMP.out, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
+      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), cl: COMP.on ? COMP.lv : undefined, cbw: compBW() ? 1 : undefined, co: COMP.out ? 1 : undefined, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);
