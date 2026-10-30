@@ -1,5 +1,6 @@
-"""3.23: underground beasts (online Treeocashing). The Backrooms: no raptor for the first minute; then one that runs the halls, stops to
-stare and screech at you, never touches you, and runs off when shot. The bunker: the same, with red eyes. The hellscape: a dark, slow
+"""3.23 (3.27: the raptor hunts now): underground beasts (online Treeocashing). The Backrooms: no raptor for the first minute; then one
+that tears round the halls hunting you: it comes at you and bites, then darts off and comes again; shots hurt it and two sniper hits drop
+it; it's sized for the halls. The bunker: the same, with red eyes. The hellscape: a dark, slow
 T. rex that comes for you, bites if it reaches you, and goes down in a few shots. Leaving a level takes them away.
 Usage: python3 dev/test_323.py dbg.html"""
 import sys, asyncio, json
@@ -23,13 +24,19 @@ async def main():
             r = await pg.evaluate("""(lvl) => { D.ugEnter(lvl); standGrid(); const U = D.UGB, o = {};
               run(55); o.at55 = U.list.length;
               run(40); const A = U.list[0]; o.at95 = U.list.length; o.eyes = A && A.eyes ? A.eyes.length : 0; if (!A) return o;
-              let minD = 1e9, stares = 0, seen = 0, ph = '', runs = 0, hp0 = D.MP.hp;
-              run(240, () => { const L = D.UNDER.cur, [px, pz] = D.ugLocal(D.P.x, D.P.z), d = Math.hypot(A.ul[0] - px, A.ul[1] - pz); if (A.root.visible) minD = Math.min(minD, d);
-                if (A.ugs.ph !== ph) { if (A.ugs.ph === 'stare') stares++; if (A.ugs.ph === 'run') runs++; ph = A.ugs.ph; }
+              let minD = 1e9, seen = 0, bites = 0, hp = 100, charges = 0, g0 = '';
+              run(180, () => { const L = D.UNDER.cur, [px, pz] = D.ugLocal(D.P.x, D.P.z), d = Math.hypot(A.ul[0] - px, A.ul[1] - pz); minD = Math.min(minD, d);
+                if (D.MP.hp < hp) bites++; D.MP.hp = hp = 100; if (A.ugs.goal === 'charge' && g0 !== 'charge') charges++; g0 = A.ugs.goal;
                 if (A.root.visible && d < 30 && D.ugLos(L, px, pz, A.ul[0], A.ul[1])) seen++; });
-              o.minD = Math.round(minD * 10) / 10; o.stares = stares; o.runs = runs; o.seenFrames = seen; o.hurt = hp0 - D.MP.hp;
-              // shot: off it goes, and it's out of sight for a while
-              A.ugs.ph = 'roam'; run(.2); D.hitAnimal(A, 10, 0, false, 'hunt', 1); o.shot = [A.ugs.ph, A.ugs.goal, !A.dead]; run(20); o.after = A.ugs.ph;
+              o.minD = Math.round(minD * 10) / 10; o.seenFrames = seen; o.bites = bites; o.charges = charges; o.size = +(A.scale || 1).toFixed(2);
+              // a bullet down the hall: it reaches the raptor; one into a wall stops there
+              { const L = D.UNDER.cur, G = L.g, [px, pz] = D.ugLocal(D.P.x, D.P.z), pk = D.ugCellOf(G, px, pz); let spot = null;
+                for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { let k = pk, n = 0; while (n < 6) { const i = k % G.N, j = (k - i) / G.N, k2 = (i + di) + (j + dj) * G.N; if (!D.ugLos(L, px, pz, ...D.ugCellXZ(G, k2))) break; k = k2; n++; } if (n >= 3 && !spot) spot = D.ugCellXZ(G, k); }
+                if (spot) { A.ul = spot.slice(); A.x = D.UG_X + spot[0]; A.z = D.UG_Z + spot[1]; A.y = L.Y + L.fy; A.root.position.set(A.x, A.y, A.z); A.root.updateMatrixWorld(true);
+                  const from = new D.THREE.Vector3(D.P.x, D.P.y + 1.0, D.P.z), dir = new D.THREE.Vector3(A.x - from.x, A.y + .6 - from.y, A.z - from.z).normalize(); const h = D.castShot(from, dir, 60); o.bullet = h.kind;
+                  const back = dir.clone().negate(); back.y = 0; back.normalize(); const w = D.castShot(from, back, 60); o.wall = [w.kind, +w.p.distanceTo(from).toFixed(1)]; } }
+              // shot: it's hurt, and two sniper hits drop it
+              const hp0 = A.hp; D.hitAnimal(A, 10, 0, false, 'hunt', 1); o.shot = [A.hp < hp0, !A.dead]; D.hitAnimal(A, 10, 0, false, 'hunt', 1); o.dead = A.dead;
               return o; }""", lvl)
             out["backrooms" if lvl == 1 else "bunker"] = r
         r = await pg.evaluate("""() => { D.ugEnter(3); const U = D.UGB, A = U.list[0], o = { rex: !!A && A.kind === 'trex', hp: A && A.hpMax };
@@ -41,7 +48,7 @@ async def main():
         out["hell"] = r
         print(json.dumps(out)); print("errors:", errs[:5] or "none")
         br, bu, h = out["backrooms"], out["bunker"], out["hell"]
-        ok = all(x["at55"] == 0 and x["at95"] == 1 and x["stares"] >= 1 and x["seenFrames"] > 15 and x["minD"] > 1.5 and x["hurt"] == 0 and x["shot"][0] == "run" and x["shot"][1] == "bolt" and x["shot"][2] for x in (br, bu)) \
+        ok = all(x["at55"] == 0 and x["at95"] == 1 and x["seenFrames"] > 15 and x["bites"] >= 1 and x["charges"] >= 1 and x["size"] < 1 and x["shot"] == [True, True] and x["dead"] and x.get("bullet") == "animal" and x["wall"][0] == "rock" and x["wall"][1] < 40 for x in (br, bu)) \
              and br["eyes"] == 0 and bu["eyes"] == 2 and h["rex"] and h["hp"] <= 500 and h["closedIn"] > 3 and h["maxSpeed"] < 2.6 and h["bitten"] > 0 and h["sniperShots"] <= 4 and h["dead"] and h["cleared"] == [0, 0] and not errs
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

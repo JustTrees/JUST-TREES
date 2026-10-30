@@ -110,7 +110,7 @@ async def main():
               const V = D.vr, hs = D.vrHandsObj, hide = [V.meC && V.meC.top, V.avatar && V.avatar.group, D.VHUD.m, ...Object.values(V.guns || {}), hs && hs.L.g, hs && hs.R.g].filter(Boolean); for (const o of hide) o.visible = false;
               const y = gy(P.x, P.z) + 1.7; const u = look([P.x - 1, y, P.z + 1.5], [P.x + 1, y - .7, P.z - 7], 55, 1400, 800); return u; }"""))
         # the round ends: the board has them
-        out["over"] = await A.evaluate("() => { D.MP.roundLeft = .02; play(2); return [D.state, D.VRUI.stage, (D.MP.board || []).length, (D.MP.board || []).filter(r => r.bot).length]; }")
+        out["over"] = await A.evaluate("() => { D.MP.roundLeft = .02; play(2); const mid = [D.state, D.MP.overT > 0, !!(D.MP.boardM && D.MP.boardM.visible)]; play(330); return [D.state, D.VRUI.stage, (D.MP.board || []).length, (D.MP.board || []).filter(r => r.bot).length, mid]; }")   # (3.27: 10 s of scoreboard while you can still move, then the round-over screen)
         if OUT: save("t248_board.jpg", await A.evaluate("() => { D.uiDraw(D.VRUI.panels.over); return pic('over'); }"))
         await A.close()
         # ================= online =================
@@ -180,7 +180,7 @@ async def main():
               and out["meet"] and out["meet"]["firstHit"] is not None and out["meet"]["by"] == "b:0" and (not out["meet"]["dead"] or out["meet"]["botK"] == 1) and out["meet"]["back"][1] == 100
               and out["shoot"] and out["shoot"]["down"] and out["shoot"]["myKills"] == 1 and out["shoot"]["back"][0] and out["shoot"]["back"][1] == 100 and out["shoot"]["back"][2] > 40 and out["shoot"]["back"][3] == 2
               and out["shoot"]["nade"][1] < out["shoot"]["nade"][0]
-              and out["over"][1] == "over" and out["over"][2] == 6 and out["over"][3] == 5
+              and out["over"][1] == "over" and out["over"][2] == 6 and out["over"][3] == 5 and out["over"][4] == ["play", True, True]
               and out["hostAlone"] and out["connected"] and out["roomBots"] == [True, True] and out["sameBots"] and out["lobby"] == [4, 2] and out["preview"] and out["playing"]
               and out["puppets"][0] == 2 and out["puppets"][1] and out["puppets"][2] < 8
               and out["friendShot"][0] and out["friendShot"][2][0] is False and out["friendShot"][2][1] >= 1 and out["friendShot"][3] == [1, False]

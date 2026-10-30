@@ -14,7 +14,7 @@ async def main():
           o.plain = [D.JTFX.always === true, !!T.Material.prototype.defines];
           // the Test Lab: a Dev session with the glasses
           D.DEV.ok = true; D.GEO.labWant = true; D.setMode('hunt'); Object.assign(D.set, { huntMap: 'globe', dino: false, geoNet: false }); D.generate(); D.state = 'play';
-          o.lab = [D.GEO.lab, D.JTFX.always, D.GLASSES.filter(k => D.GEO.items.has(k)).length, D.geoRewardOf(51).item, D.geoRewardOf(56).item, D.geoRewardOf(50).refill === true];
+          o.lab = [D.GEO.lab, D.JTFX.always, D.GLASSES.filter(k => D.GEO.items.has(k)).length, D.geoRewardOf(51).item, D.geoRewardOf(56).item, D.geoRewardOf(50).item === 'jetski'];
           const I = { head: new T.Vector3(D.P.x, D.P.y + 1.7, D.P.z), headQ: new T.Quaternion(), hands: {} };
           for (let i = 0; i < 72 * 3; i++) { D.endlessTick(1 / 72); D.geoTick(1 / 72); D.geoWornTick(I); } R.render(D.scene, D.camera); o.warm = D.JTFX.warm;
           const p0 = R.info.programs.length; const per = {};

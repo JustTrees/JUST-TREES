@@ -88,8 +88,8 @@ async def main():
           o.resume = [D.GEO.found.size, D.GEO.items.size, Object.keys(D.vr.own).filter(k => D.vr.own[k] > 0).sort().join(','), Math.round(D.GEO.food), Math.round(D.GEO.water)];
           return o; }""")
         print("world", json.dumps(w))
-        ok = r["startOwn"] == [] and r["startItems"] == 0 and r["first"] < 160 and r["order"] == ["pistol1", "canteen", "smg1", "campfire", "bow1", "hunt1", "pistol2", "ar5", "tscope", "hunt5", "refill"] \
-             and r["at49"] == [True, 24] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 30 \
+        ok = r["startOwn"] == [] and r["startItems"] == 0 and r["first"] < 160 and r["order"] == ["pistol1", "canteen", "smg1", "campfire", "bow1", "hunt1", "pistol2", "ar5", "tscope", "hunt5", "jetski"] \
+             and r["at49"] == [True, 24] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 31 \
              and r["g48"][:6] == [24, 10, 16, 10, .42, 7] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \
              and r["packOpen"] and not r["xEarly"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \

@@ -44,7 +44,7 @@ async def main():
         out["seen"] = await A.evaluate(f"""() => {{ const L = [...D.MP.links.values()].find(q => q.R && q.R.cur); if (!L) return null; const s = D.glToSphere(L.R.head.x, L.R.head.z, [0, 0, 0]); return Math.round(D.glArc(s, {json.dumps(bp)}) * D.GLOBE.R * 100) / 100; }}""")
         out["near"] = await A.evaluate("""() => { const L = [...D.MP.links.values()].find(q => q.R && q.R.cur); const P = D.P, o = [], hd = () => D.vr.head.copy(new D.THREE.Vector3(P.x, P.y + 1.6, P.z));
           hd(); L.n1k = L.n500 = false; L.R.head.set(P.x, P.y + 1.6, P.z - 1500); D.geoNetNear(); o.push(!!L.n1k, D.mpHear(L)[0]);
-          L.R.head.set(P.x + 600, P.y + 1.6, P.z - 600); D.D_V = D.VBAN.t = 0; D.geoNetNear(); o.push(!!L.n1k, D.VBAN.t > 0, D.mpHear(L)[0]);
+          L.R.head.set(P.x + 850, P.y + 1.6, P.z - 850); D.D_V = D.VBAN.t = 0; D.geoNetNear(); o.push(!!L.n1k, D.VBAN.t > 0, D.mpHear(L)[0]);
           L.R.head.set(P.x + 200, P.y + 1.6, P.z); D.geoNetNear(); o.push(!!L.n500, +D.mpHear(L)[0].toFixed(2)); return o; }""")
         out["count"] = await A.evaluate("""() => { const cv = document.createElement('canvas'); cv.width = cv.height = 512; D.geoMapDraw(cv); const d = cv.getContext('2d').getImageData(8, 8, 300, 40).data; let y = 0;
           for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] > 170 && d[i + 2] < 140) y++; return y; }""")   # 3.02: the count of players on the map

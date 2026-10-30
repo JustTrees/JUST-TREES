@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.26";              // Just Trees
+const VERSION = "3.27";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -342,7 +342,7 @@ const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
 const TIER_ODDS = [.46, .74, .88, .95];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
-const PICK = { hp: 30, sh: 35, back: 45, gunBack: 45, deadLife: 90 };   // PvP guns come back too (a new one), and a fallen player's refill lasts 90 s // green cross: + health; blue cross: + shield; seconds before a cross comes back
+const PICK = { hp: 30, sh: 35, back: 45, gunBack: 20, deadLife: 90 };   // PvP guns come back too (a new one), and a fallen player's refill lasts 90 s // green cross: + health; blue cross: + shield; seconds before a cross comes back
 const LOOT = { nade: [24, 5.5], cross: [10, 15], gunGrid: [22, .02] };   // grenades/crosses: a + (half the map width) / b on a map; guns: one in every grid square of a + b × half-width metres (about 350 on medium)
 const PVP = { respawn: 4, bodyGone: 3, flags: 3, bigHead: 4 };   // (Big heads: how many times bigger)
 const bigHeadK = () => gameMode === "pvp" && set.bigHead ? PVP.bigHead : 1;   // Big heads mode (PvP setup, the host's choice online)
@@ -366,7 +366,7 @@ function applySize() {                      // map size from the setup screen; d
   SEG = Math.round(S / (S > 2000 ? 4 : isTouch ? 3.76 : 2.78)); /* 3 km: a vertex every 4 m (XXL: 2.8 m) */ TILE = S > 2000 ? 200 : 160; /* XXXL: a bit bigger squares */ NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
   if (HIKEMAP === "endless") { S = EN_WIN; HALF = S / 2; EDGE = 1e9; SEG = 800; TILE = EN_C; NT = 0; AREA = (EN_C / 640) * (EN_C / 640); }   // counts per 200 m square; no edge
 }
-const EYE = 1.65;
+const EYE = 1.65, CH_BIG = 1.1;                             // (other players and bots are drawn 10% bigger)
 /* ---- map shape: an organic outline inside the square (a coastline on islands, a soft boundary on endless maps) ---- */
 let edgeShape = { island: false, R0: 1e9, f: () => 1e9 };
 /* an arena = a map built in Map Lab: the usual settings and seed plus its own shape (length, width, roundness, coast wobble), a slide
@@ -3761,7 +3761,7 @@ function enLootFill(i, j) {
   for (let a = 0; a < EL_G; a++) for (let b = 0; b < EL_G; b++) {
     let sp = null; for (let k = 0; k < 10 && !sp; k++) { const x = i * EA_C + (a + .5 + (R() - .5) * .85) * cell, z = j * EA_C + (b + .5 + (R() - .5) * .85) * cell; if (enAnimOk(x, z)) sp = [x, z]; }
     const r = R(), kind = kinds[Math.floor(R() * kinds.length)], bow = R() < .16, red = R() < .0015, id = "e" + wi + "_" + wj + "_" + a + "_" + b;
-    if (!sp || E.taken.has(id)) continue;
+    if (!sp || (E.taken.has(id) && gameMode !== "pvp")) continue;   // (deathmatch: guns always come back, even after you've been away)
     const tier0 = Math.min(kind === "hunt" ? 4 : 5, 1 + TIER_ODDS.filter(o => r >= o).length);
     dropAdd(red ? { id, type: "gun", kind: "hunt", tier: 5, x: sp[0], z: sp[1] } : bow ? { id, type: "gun", kind: "bow", tier: Math.max(2, tier0), x: sp[0], z: sp[1] } : { id, type: "gun", kind, tier: tier0, x: sp[0], z: sp[1] });   // (the red sniper: a few in all the land)
     ids.push(id);
@@ -4825,7 +4825,8 @@ const GI_LIST = [
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
-  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1]   // (the glasses: Dev levels 51-56 for now)
+  ["bblock", "Blue blockers", "Orange lenses: the whole world goes orange and red, sharp and bright (take them out to switch)", 1], ["tglass", "Thermal glasses", "Like the thermal binoculars, the whole view, no zoom: everything in red outlines, anything warm glows (take them out to switch)", 1], ["dglass", "Dream glasses", "See the world the way the ghost does, wide awake: dark, everything traced in light, souls glowing (take them out to switch)", 1], ["hlglass", "Hell glasses", "The world as a fiery hell: scorched black land split by glowing lava, burning edges, lakes of lava, a blood-red sky choked with smoke, embers rising all around (take them out to switch)", 1], ["ghglass", "Golden hour glasses", "The world in golden hour light, any time of day: warm gold light, soft warm shadows, glowing edges, a golden haze and sky (take them out to switch)", 1], ["mvglass", "Neon shades", "Miami Vice: the world goes dark and everything glows in neon, a neon grid on the ground, a huge sunset sun in a dark synthwave sky, day or night (take them out to switch)", 1],   // (the glasses: Dev levels 51-56 for now)
+  ["jetski", "Jet ski", "Wade into the sea and take it out of your pack: it's there in the water, ready to climb on", 1],   // (the reward for cache #50)
   
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
@@ -4834,6 +4835,7 @@ const geoHas = k => GEO.on && GEO.items.has(k);
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
+  if (n === GEO_N) return { item: "jetski", last: true };     // the last cache: your own jet ski
   if (n > GEO_N && n <= GEO_N + GLASSES.length) return { item: GLASSES[n - GEO_N - 1] };   // (the glasses: levels 51-56, Dev only for now)
   return { refill: true, last: n >= GEO_N };
 }
@@ -4895,6 +4897,7 @@ function giModel(k) {                                         // (about hand siz
     case "headlamp": P(giCyl(.065, .065, .02, 18, 1), 0x222222, 0, 0, 0); P(giBox(.04, .03, .02), 0x3a3a3a, 0, 0, -.07); P(giCyl(.012, .012, .006, 12), 0xfff6c0, 0, 0, -.081, Math.PI / 2); break;
     case "thermos": P(giCyl(.03, .03, .2, 14), 0x2a6a4a, 0, 0, 0); P(giCyl(.032, .032, .04, 14), 0x999999, 0, .12, 0); break;
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
+    case "jetski": { const j = jetModel(); j.scale.setScalar(.12); g.add(j); break; }   // (a little one, for the pack and the reward)
     case "bblock": case "tglass": case "dglass": case "mvglass": case "ghglass": case "hlglass": { const fr = k === "hlglass" ? 0x161010 : k === "ghglass" ? 0xc89a3a : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "hlglass" ? 0xff2a08 : k === "ghglass" ? 0xffb347 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // (dream glasses, neon shades)
       for (const sx of [-1, 1]) { P(giCyl(.026, .026, .006, 16), fr, sx * .034, 0, 0, Math.PI / 2); const L = P(giCyl(.022, .022, .007, 16), ln, sx * .034, 0, .001, Math.PI / 2); L.material = new THREE.MeshBasicMaterial({ color: ln }); P(giBox(.004, .006, .1), fr, sx * .062, .005, -.05); }
       P(giBox(.02, .006, .006), fr, 0, .008, 0); break; }
@@ -5344,6 +5347,7 @@ function geoPackTick(I, main, off, dt) {
     const L = geoPackItems();
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
+    if (k === "jetski") { if (jetTakeOut()) { GEO.packOpen = false; m.visible = false; } return; }   // (it isn't held: it appears in the sea)
     if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "ghglass" || k === "hlglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "ghglass", "hlglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
@@ -5397,8 +5401,9 @@ function geoGearClear() {
    at dry land close by and pull the trigger. ---- */
 const JET = { list: [], ride: null, aim: null, ring: null, snd: null };
 const JET_N = 8, JET_MAX = 20, JET_UNLOCK = 50, JET_SEAT = new THREE.Vector3(0, .78, .25), JET_GRIP = { L: new THREE.Vector3(-.34, .98, -.42), R: new THREE.Vector3(.34, .98, -.42) };
-const jetOn = () => GEO.on && !!GLOBE && (GEO.found.size >= JET_UNLOCK || GEO.lab);
-function jetPlace() {                                          // the spots: just off the sea coasts, far apart (the same ones for this planet)
+const jetOn = () => GEO.on && !!GLOBE && (geoHas("jetski") || GEO.lab);
+function jetPlace() { return []; }                             // (no more jet skis waiting round the planet: yours comes out of your backpack)
+function jetPlaceOld() {                                       // the spots: just off the sea coasts, far apart (the same ones for this planet)
   const G = GLOBE, R = G.R, rr = mulberry32(seed * 313 + 9), L = [], step = 220 / R;
   for (let t = 0; t < 80000 && L.length < JET_N; t++) {
     const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .82) continue;   // (no ice seas)
@@ -5552,6 +5557,15 @@ function jetRide(dt) {                                          // (instead of w
   if (both && (Rd.buzzT = (Rd.buzzT || 0) - dt) <= 0) { Rd.buzzT = .1; const k = .04 + .2 * thr; buzz("L", k, 15); buzz("R", k, 15); }
   input.run = Rd.sp > 12;                                       // (hard riding makes you hungry like running)
 }
+function jetTakeOut() {                                       // out of the pack: standing in the sea, your jet ski appears in the water by you, facing the way you face
+  const g = H(P.x, P.z);
+  if (!(g < water - .15) || !geoSalty(P) || (ENDLESS && enIcedAt(P.x, P.z))) { vrBanner("Wade into the sea first (your feet in the water)", 2, 0); return false; }
+  let J = JET.list.find(q => q.mine); if (!J) { J = { id: 900, mine: true, p: null, ok: true, dead: false, yaw: 0, x: 0, z: 0, obj: null }; JET.list.push(J); }
+  if (JET.ride && JET.ride.J === J) return false;
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw); J.x = P.x + fx * 1.6; J.z = P.z + fz * 1.6; J.yaw = P.yaw; J.p = glToSphere(J.x, J.z, [0, 0, 0]); J.dead = false;
+  if (J.obj) { scene.remove(J.obj); J.obj = null; } GEO.tT = 0; jetsTick(0);
+  geoPop(new THREE.Vector3(J.x, water, J.z), 0xd8f0ff, 14, "splash"); gunFoley([[0, 300, .2, .12], [.05, 700, .12, .1]]); vrBanner("Your jet ski: point at it and pull the trigger to climb on", 3, 1); return true;
+}
 function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; }   // (the spots stay: a new game makes new ones)
 /* ---- the Gear Lab (Dev menu): a Treeocashing planet with every item and every gun at red, nothing saved to your character. Y →
    "Gear Lab tools": quick helpers (go to a lake or a sea beach, a jet ski here, predators, day or night, refill, the next cache close) and
@@ -5633,15 +5647,15 @@ function glabPanel() {
    own). The host can hand the planet to someone else; if the host leaves, the next player takes over and the room carries on. ---- */
 const geoNet = () => GEO.on && !!MP.code && !!set.geoNet;
 const GEO_DIRS = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
-function geoNetNear() {                                         // no markers anywhere: just a heads-up at 1 km (which way), and their voice from 500 m
+function geoNetNear() {                                         // no markers anywhere: just a heads-up at 1.5 km (which way), and their voice from 1 km
   if (!geoNet() || !GLOBE || !GLOBE.p) return;
   for (const L of mpOpen()) { if (!L.R || !L.R.cur || !L.R.alive || L.ugAway) continue; const h = L.R.head, d = Math.hypot(h.x - P.x, h.z - P.z);
-    if (d < 1000 && !L.n1k) { L.n1k = true; const q = glToSphere(h.x, h.z, [0, 0, 0]), p = GLOBE.p, f = glFrame(p), t = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+    if (d < 1500 && !L.n1k) { L.n1k = true; const q = glToSphere(h.x, h.z, [0, 0, 0]), p = GLOBE.p, f = glFrame(p), t = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
       const b = Math.atan2(glDot(t, f.E), glDot(t, f.N)), k = Math.round(((b / (2 * Math.PI)) * 8 + 8)) % 8;
-      vrBanner("There's another player about " + (d > 850 ? "1 km" : Math.round(d / 100) * 100 + " m") + " to your " + GEO_DIRS[k], 5, 2); buzz("L", .3, 60); buzz("R", .3, 60); gunFoley([[0, 900, .2, .1], [.15, 1300, .2, .08]]); }
-    else if (d > 1200) L.n1k = false;
-    if (d < 500 && !L.n500) { L.n500 = true; vrBanner("Comms open: they can hear you now", 3, 1); gunFoley([[0, 2200, .08, .1], [.1, 2200, .08, .1]]); }
-    else if (d > 650) L.n500 = false; }
+      vrBanner("There's another player about " + (d > 1250 ? "1.5 km" : d > 850 ? "1 km" : Math.round(d / 100) * 100 + " m") + " to your " + GEO_DIRS[k], 5, 2); buzz("L", .3, 60); buzz("R", .3, 60); gunFoley([[0, 900, .2, .1], [.15, 1300, .2, .08]]); }
+    else if (d > 1700) L.n1k = false;
+    if (d < 1000 && !L.n500) { L.n500 = true; vrBanner("Comms open: they can hear you now", 3, 1); gunFoley([[0, 2200, .08, .1], [.1, 2200, .08, .1]]); }
+    else if (d > 1150) L.n500 = false; }
 }
 function geoFrameArr() {                                        // my layout of the planet, for the others to read my positions with
   const G = GLOBE; if (!G) return null; const key = G.reN + "|" + G.ox + "|" + G.oz;
@@ -6515,6 +6529,7 @@ function ugBlocked(L, x, z, rad = .3, y) {
       if (j1 !== j0) { const ej = Math.max(j0, j1); if (G.eH[i0 + ej * G.N] || G.eH[i1 + ej * G.N]) return true; } } }
   return false;
 }
+function ugCeilAt(L, x, z, fl) { if (L.hell) return fl + 80; const G = L.g, c = ugIn(L, x, z); if (G && c === G) { const k = ugCellOf(G, x, z); return L.fy + (k >= 0 ? G.ceil[k] : 3); } return fl + 3.4; }
 function ugFloor(L, x, z) { if (L.hell) return Math.max(ugHellFloor(L, x, z), UG_LAVA - .8); const c = ugIn(L, x, z); return c && c.f ? c.f(x, z) : L.fy; }
 const ugHB = (x, y, z) => { const L = UNDER.cur; if (!L) return false; const [lx, lz] = ugLocal(x, z); return ugBlocked(L, lx, lz, .12); };
 function ugMove(dt) {                                         // walking underground (instead of the land's own walking)
@@ -6611,8 +6626,8 @@ function ugLos(L, ax, az, bx, bz) {                           // a clear line fr
         const a = pi + j * G.N, b = i + pj * G.N; if (!((nb.includes(a) && ugNbrs(G, a).includes(k)) || (nb.includes(b) && ugNbrs(G, b).includes(k)))) return false; } pk = k; } }
   return true;
 }
-function ugBeastMake(kind, L, lx, lz) {
-  const A = addGround(kind, UG_X + lx, UG_Z + lz); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset)
+function ugBeastMake(kind, L, lx, lz, size) {
+  const A = addGround(kind, UG_X + lx, UG_Z + lz, null, size); if (!A) return null; MP.byNid.delete(A.nid); A.nid = 0;   // (only in this headset)
   Object.assign(A, { ug: L.idx, ul: [lx, lz], grp: -1, look: 0, mode: "walk", want: 0, speed: 0, fleeT: 99, jawK: .04 });
   A.y = L.Y + ugFloor(L, lx, lz); A.root.position.set(A.x, A.y, A.z); UGB.list.push(A); return A;
 }
@@ -6632,8 +6647,8 @@ function ugRaptorSpawn(L) {                                    // somewhere far 
   const G = L.g, [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz); if (pk < 0) { UGB.wait = 5; return; }
   const B = ugBfs(G, pk), c = []; for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 22 && B.D[k] <= 45) c.push(k); if (!c.length) for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 10) c.push(k);
   if (!c.length) { UGB.wait = 10; return; }
-  const k = c[Math.floor(Math.random() * c.length)], [x, z] = ugCellXZ(G, k), A = ugBeastMake("raptor", L, x, z); if (!A) return;
-  A.ugs = { ph: "roam", t: 0, path: null, pi: 0, goal: "roam", showT: 8 + Math.random() * 10, stareCool: 0, callT: 10 + Math.random() * 20 };
+  const k = c[Math.floor(Math.random() * c.length)], [x, z] = ugCellXZ(G, k), A = ugBeastMake("raptor", L, x, z, .78); if (!A) return;   // (sized for the halls)
+  A.hp = A.hpMax = 300; A.ugs = { t: 0, path: null, pi: 0, goal: "wild", callT: 4 + Math.random() * 6 };
   if (L.name === "bunker") ugEyes(A);
 }
 function ugEyes(A) {                                           // two red points that shine in the dark
@@ -6647,50 +6662,33 @@ function ugEyesTick(A) {
   if (Q && Q.head) Q.head.getWorldPosition(_ugE); else _ugE.set(A.x + fx * 1.2 * sc, A.y + 1.3 * sc, A.z + fz * 1.2 * sc);
   for (let s = 0; s < 2; s++) { const e = A.eyes[s], sd = s ? 1 : -1; e.visible = on; e.position.set(_ugE.x + fx * .34 * sc + fz * sd * .075 * sc, _ugE.y + .1 * sc, _ugE.z + fz * .34 * sc - fx * sd * .075 * sc); }
 }
-function ugRaptorHit(A) {                                      // shot: a yelp, and it's off for a while
-  const K = A.ugs; if (!K || K.ph === "hide") return; A.flinch = 1; dinoCall(A, "hurt"); ugRaptorBolt(A, true);
+function ugRaptorPick(A, K, pk) {                              // where to run next: often toward you (somewhere round you), sometimes off down some other hall
+  const L = UGB.L, G = L.g, ak = ugCellOf(G, A.ul[0], A.ul[1]); if (ak < 0) return;
+  const Ba = ugBfs(G, ak), c = [];
+  if (pk >= 0 && !(K.veerT > 0) && Math.random() < .6) { const Bp = ugBfs(G, pk); for (let k = 0; k < Bp.D.length; k++) if (Bp.D[k] >= 1 && Bp.D[k] <= 6 && Ba.D[k] >= 0) c.push(k); }
+  if (!c.length) for (let k = 0; k < Ba.D.length; k++) if (Ba.D[k] >= 5 && Ba.D[k] <= 22) c.push(k);
+  if (!c.length) return; const k = c[Math.floor(Math.random() * c.length)];
+  K.path = ugRoute(Ba, k); K.pi = 0; K.goal = "wild"; K.sp = 7.5 + Math.random() * 4.5; K.t = 0;
 }
-function ugRaptorBolt(A, fast) {                               // away from you, a long way down the halls
-  const L = UGB.L, G = L.g, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz), ak = ugCellOf(G, A.ul[0], A.ul[1]); if (ak < 0) { K.ph = "hide"; K.t = 20; return; }
-  const Bp = pk >= 0 ? ugBfs(G, pk) : null, Ba = ugBfs(G, ak); let best = -1, bs = -1;
-  for (let k = 0; k < Ba.D.length; k++) { if (Ba.D[k] < 6 || Ba.D[k] > 40) continue; const sc = (Bp ? Bp.D[k] : 20) - Ba.D[k] * .3 + Math.random() * 4; if (sc > bs) { bs = sc; best = k; } }
-  if (best < 0) { K.ph = "hide"; K.t = 25 + Math.random() * 20; A.root.visible = false; return; }
-  K.ph = "run"; K.goal = "bolt"; K.path = ugRoute(Ba, best); K.pi = 0; K.sp = fast ? 11 : 9.5; K.t = 0;
-}
-function ugRaptorRoam(A) {                                     // off to somewhere else in the halls (or, now and then, to where you'll see it)
-  const L = UGB.L, G = L.g, K = A.ugs, ak = ugCellOf(G, A.ul[0], A.ul[1]); if (ak < 0) return;
-  const [px, pz] = ugLocal(P.x, P.z), pk = ugCellOf(G, px, pz), Ba = ugBfs(G, ak);
-  if (K.showT <= 0 && pk >= 0) {                               // a scare: run to a spot down a hall from you, in plain view
-    const Bp = ugBfs(G, pk), c = []; for (let k = 0; k < Bp.D.length; k++) if (Bp.D[k] >= 4 && Bp.D[k] <= 10 && Ba.D[k] >= 0) { const [x, z] = ugCellXZ(G, k); if (ugLos(L, px, pz, x, z)) c.push(k); }
-    if (c.length) { const k = c[Math.floor(Math.random() * c.length)]; K.ph = "run"; K.goal = "show"; K.path = ugRoute(Ba, k); K.pi = 0; K.sp = 9.5; K.showT = 25 + Math.random() * 25; return; }
-    K.showT = 5; }
-  const c = []; for (let k = 0; k < Ba.D.length; k++) if (Ba.D[k] >= 8 && Ba.D[k] <= 28) c.push(k); if (!c.length) return;
-  const k = c[Math.floor(Math.random() * c.length)]; K.ph = "run"; K.goal = "roam"; K.path = ugRoute(Ba, k); K.pi = 0; K.sp = Math.random() < .5 ? 9 : 4.5;
-}
-function ugRaptorTick(A, dt) {
-  const L = UGB.L, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), [ax, az] = A.ul, dx = px - ax, dz = pz - az, d = Math.hypot(dx, dz), toP = Math.atan2(dx, dz);
-  K.t += dt; K.showT -= dt; K.stareCool -= dt; A.rearT = Math.max(0, (A.rearT || 0) - dt);
-  if (K.ph === "hide") { A.root.visible = false; A.speed = 0; if (K.t <= 0) return; K.t -= dt * 2; if (K.t <= 0) { const G = L.g, pk = ugCellOf(G, px, pz); if (pk >= 0) { const B = ugBfs(G, pk), c = []; for (let k = 0; k < B.D.length; k++) if (B.D[k] >= 18 && B.D[k] <= 40) c.push(k);
-      if (c.length) { const [x, z] = ugCellXZ(G, c[Math.floor(Math.random() * c.length)]); A.ul = [x, z]; } } K.ph = "roam"; K.t = 0; K.showT = 10 + Math.random() * 15; } return; }
-  const sees = d < 30 && ugLos(L, ax, az, px, pz);
-  if (K.ph === "stare") {                                      // stopped, staring right at you
-    A.speed *= Math.exp(-dt * 10); A.mode = "idle"; A.yaw += angDiff(toP, A.yaw) * Math.min(1, dt * 8); A.look += (0 - A.look) * Math.min(1, dt * 6);
-    if (!K.said && K.t > .35) { K.said = true; A.rearT = .9; dinoCall(A, Math.random() < .5 ? "screech" : "s_bark"); if (vr.on && d < 14) { buzz("L", .6, 120); buzz("R", .6, 120); } }
-    if (d < 5 && K.t > .3) { dinoCall(A, "rush"); ugRaptorBolt(A, true); return; }
-    if (K.t > K.hold || !sees) ugRaptorBolt(A, false);
-    ugBeastPlace(A, L); return; }
-  if (K.ph === "roam") { ugRaptorRoam(A); if (K.ph === "roam") { A.speed *= Math.exp(-dt * 6); ugBeastPlace(A, L); return; } }
-  // running down the halls
-  if (sees && K.goal !== "bolt" && K.stareCool <= 0 && (K.goal === "show" ? d < 34 : d < 22 && Math.random() < dt * 2)) { K.ph = "stare"; K.t = 0; K.said = false; K.hold = 1.3 + Math.random() * 1.4; K.stareCool = 14; ugBeastPlace(A, L); return; }
-  const G = L.g, nxt = K.path && K.path[K.pi]; if (nxt === undefined) { if (K.goal === "bolt") { K.ph = "hide"; K.t = 30 + Math.random() * 30; } else K.ph = "roam"; ugBeastPlace(A, L); return; }
+function ugRaptorTick(A, dt) {                                 // it hunts you, tearing round the halls; close and in sight it charges and bites, then darts off again
+  const L = UGB.L, G = L.g, K = A.ugs, [px, pz] = ugLocal(P.x, P.z), [ax, az] = A.ul, dx = px - ax, dz = pz - az, d = Math.hypot(dx, dz), toP = Math.atan2(dx, dz);
+  K.t += dt; K.biteT = (K.biteT || 0) - dt; K.veerT = (K.veerT || 0) - dt; K.callT -= dt; A.rearT = Math.max(0, (A.rearT || 0) - dt);
+  const sees = d < 26 && ugLos(L, ax, az, px, pz), pk = ugCellOf(G, px, pz);
+  if (sees && d < 15 && !(K.veerT > 0) && !(MP.dead > 0) && (K.goal !== "charge" || K.t > .5)) {   // there you are: straight at you
+    const ak = ugCellOf(G, ax, az); if (pk >= 0 && ak >= 0) { const B = ugBfs(G, ak); if (B.D[pk] >= 0) { if (K.goal !== "charge") dinoCall(A, "screech"); K.path = ugRoute(B, pk); K.pi = 0; K.goal = "charge"; K.sp = 11.5; K.t = 0; } } }
+  if (d < 1.9 && K.biteT <= 0 && !(MP.dead > 0)) {               // the bite (then off it goes, to come at you again)
+    K.biteT = 1.5; A.rearT = .7; dinoCall(A, "charge"); MP.hp -= 22; MP.hurt = Math.max(MP.hurt || 0, .85); buzz("L", 1, 160); buzz("R", 1, 160);
+    gunFoley([[0, 160, .25, .4], [.02, 420, .15, .25]]); K.veerT = 2 + Math.random() * 2.5; K.path = null; }
+  if (!K.path || K.pi >= K.path.length || (K.goal === "wild" && Math.random() < dt * .25)) ugRaptorPick(A, K, pk);   // (now and then it just changes its mind)
+  if ((K.callT) <= 0) { K.callT = 12 + Math.random() * 18; dinoCall(A, sees ? "s_bark" : "stalk"); }
+  const nxt = K.path && K.path[K.pi]; if (nxt === undefined) { A.speed *= Math.exp(-dt * 6); ugBeastPlace(A, L); return; }
   const [tx, tz] = ugCellXZ(G, nxt), gx = tx - ax, gz = tz - az, gd = Math.hypot(gx, gz);
   if (gd < .45) { K.pi++; ugBeastPlace(A, L); return; }
-  const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 8, Math.min(dt * 8, angDiff(h, A.yaw)));
-  const turn = Math.max(.35, Math.cos(angDiff(h, A.yaw))); A.speed += (K.sp * turn - A.speed) * Math.min(1, dt * 4); A.mode = "walk";
+  const h = Math.atan2(gx, gz); A.yaw += Math.max(-dt * 9, Math.min(dt * 9, angDiff(h, A.yaw)));
+  const turn = Math.max(.35, Math.cos(angDiff(h, A.yaw))), wob = 1 + .15 * Math.sin(K.t * 7.3);   // (a little ragged, never quite steady)
+  A.speed += (K.sp * turn * wob - A.speed) * Math.min(1, dt * 4); A.mode = "walk";
   const st = Math.min(gd, A.speed * dt); A.ul = [ax + gx / gd * st, az + gz / gd * st];
   A.look += ((sees ? Math.max(-1.4, Math.min(1.4, angDiff(toP, A.yaw))) : 0) - A.look) * Math.min(1, dt * 5);
-  if ((K.callT -= dt) <= 0) { K.callT = 25 + Math.random() * 35; if (!sees) dinoCall(A, "stalk"); }   // now and then you hear it somewhere in the halls
-  if (K.goal === "bolt" && d > 45 && !sees && K.t > 3) { K.ph = "hide"; K.t = 30 + Math.random() * 30; }
   ugBeastPlace(A, L);
 }
 function ugRexTick(A, dt) {                                    // slow and heavy: it comes for you, and bites if it gets there
@@ -6718,7 +6716,7 @@ function ugBeastsTick(dt) {                                    // each frame und
     if (A.dead) { deadPose(A, dt); ugEyesTick(A); continue; }
     if (A.kind === "raptor") ugRaptorTick(A, dt); else ugRexTick(A, dt);
     const cd = Math.hypot(A.x - camera.position.x, A.z - camera.position.z);
-    if (!(A.ugs && A.ugs.ph === "hide")) A.root.visible = cd < far;
+    A.root.visible = cd < far;
     A.root.position.set(A.x, A.y, A.z); A.root.rotation.set(0, A.yaw, 0);
     if (A.root.visible && QD_KINDS[A.kind]) qdTick(A, dt, cd);
     if (A.dark !== true && A.qd && A.kind === "trex") { A.dark = true; A.qd.wrap.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.multiplyScalar(.5); if (o.material.emissive) o.material.emissive.setHex(0x2a0d06); } }); }   // a dark one, lit a little by the lava (you can still make it out)
@@ -9290,14 +9288,13 @@ function hitAnimal(A, dist, dmg, head, gun, tier) {         // a bullet (or a gr
   if (GEO.on && PRED[A.kind] && !A.hpMax) { const tough = PRED_TOUGH[A.kind];   // Geocaching: a bear takes several shots, and comes for you
     if (tough) { A.geoHp = (A.geoHp ?? tough) - (dmg >= 100 ? 3 : gun === "hunt" || head ? 2 : 1); if (A.geoHp > 0) { A.flinch = 1; hitTick(head); predAnger(A); return; } } }
   if (A.spook) { spookScare(A); return; }                    // a spook isn't hurt, it just bolts
-  if (A.ug && A.kind === "raptor") { ugRaptorHit(A); return; }   // (nor is the raptor in the halls)
   if (A.net && mpNetGuest()) { mpSendHost({ t: "ah", n: A.nid, d: dist || 0, dmg: dmg || 0, hd: head ? 1 : 0, g: gun || null, ti: gun ? tierOf(gun) : 0 }); if (A.hpMax) { A.flinch = 1; hitTick(); } return; }
   if (!A.hpMax) { killAnimal(A, dist); return; }
-  const tbl = A.hunter || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
+  const tbl = A.hunter || A.ug || A.kind === "trex" ? RAPTOR_DMG : DINO_DMG, base = gun && tbl[gun] ? tbl[gun] * TIER.dmg[Math.max(1, tier || tierOf(gun))] : dmg > 0 ? dmg : 100, hit = base * (head ? 1.5 : 1);
   if (A.ptero) A.aggro = A.killBy || "me";                     // (a shot pteranodon comes for the shooter)
   if (A.giant && gun === "hunt") { A.hp = 0; killAnimal(A, dist); dinoCall(A, "die"); return; }   // the giant pteranodon: one sniper shot
   A.hp -= hit; A.flinch = 1;                                  // it reacts with its body, not a cry every time
-  if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
+  if (A.hp <= 0) { A.hp = 0; killAnimal(A, dist); dinoBar(A); dinoCall(A, "die"); if (A.hunter || (A.ug && A.kind === "raptor")) vrBanner("Raptor down!", 3, 1); if (A.kind === "trex") vrBanner("T. rex down!", 4, 3); return; }
   dinoBar(A); hitTick(head);
   const now = performance.now() / 1000; if (now - (A.painT || -99) > 6 && Math.random() < .35) { A.painT = now; dinoCall(A, "hurt"); }   // only now and then a pain call
   if (A.kind === "trex" && !A.ug) rexStart(A);
@@ -15181,7 +15178,6 @@ function arrowsTick(dt) {
 function arrowHit(A, R, p, head, spd) {
   if (!A || A.dead) return;
   if (A.spook) { spookScare(A); return; }
-  if (A.ug && A.kind === "raptor") { ugRaptorHit(A); return; }
   const dist = R.from.distanceTo(p), k = Math.min(1, spd / (BOW_V[bowTier()] || BOW.vMax)), tier = Math.max(1, bowTier());
   for (const O of beasts) if (O !== A && !O.dead && !O.hpMax && !LEGEND[O.kind] && Math.hypot(O.x - p.x, O.z - p.z) < 35) fleeFrom(O, p.x, p.z, O.run * 1.1, 8, 80);   // the ones close by bolt
   if (!A.hpMax) {
@@ -15500,14 +15496,37 @@ function pvpHud(I, dt) {
   VHUD.m.material.map.needsUpdate = true;
 }
 // ---- the end of a round: the clock hits zero, everyone sees the kills
+const ROUND_SHOW = 10;                                       // the end of a round: seconds of scoreboard while you can still run about (no damage), then a fade to the lobby
 function mpRoundOver() {
   MP.roundLeft = 0; mpBoard();
-  if (MP.code) {                                             // online, the board shows back in the lobby (after 4 s of "Round over")
-    const w = MP.board && MP.board[0]; MP.overT = 4;
-    if (vr.on) vrBanner("ROUND OVER" + (w && mpOpen().length ? (w.me ? " · You win!" : " · " + (w.tag || "Player") + " wins") : ""), 4.2, 9); else flashHint("Round over");
-    return;
-  }
-  state = "over"; if (vr.on) vruiOpen("over");
+  if (vr.on) { MP.overT = ROUND_SHOW; MP.overShown = true; boardShow(true); const w = MP.board && MP.board[0];
+    vrBanner("ROUND OVER" + (w && (mpOpen().length || VB.list.length) ? (w.me ? " · You win!" : " · " + (w.tag || "Player") + " wins") : ""), 3, 9); return; }
+  if (MP.code) { MP.overT = 4; flashHint("Round over"); return; }
+  state = "over";
+}
+function boardMesh() {                                         // the scoreboard, floating in front of you at the end of a round
+  if (MP.boardM) return MP.boardM;
+  const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 640;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.96, .6), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  m.renderOrder = 999; m.frustumCulled = false; m.visible = false; m.userData.cv = cv; scene.add(m); return MP.boardM = m;
+}
+function boardShow(on) {
+  const m = boardMesh(); m.visible = on; if (!on) return; m.userData.placed = false;
+  const g = m.userData.cv.getContext("2d"), rows = MP.board || []; g.clearRect(0, 0, 1024, 640);
+  g.fillStyle = "rgba(14,24,18,.86)"; uiRound(g, 4, 4, 1016, 632, 30); g.fill(); g.strokeStyle = "rgba(255,255,255,.25)"; g.lineWidth = 4; uiRound(g, 6, 6, 1012, 628, 28); g.stroke();
+  g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = "#ffffff"; g.font = "bold 52px sans-serif"; g.fillText("ROUND OVER", 512, 70);
+  rows.slice(0, 8).forEach((r, i) => { const y = 132 + i * 60; g.textBaseline = "middle"; g.textAlign = "left"; g.fillStyle = MP_COL[r.c] || "#fff"; g.beginPath(); g.arc(60, y, 15, 0, 6.283); g.fill();
+    g.font = (r.me ? "bold " : "") + "36px sans-serif"; g.fillText(fitText(g, (i + 1) + ". " + (r.tag || MP_COLN[r.c] || "Player") + (r.me ? " (you)" : r.bot ? " · bot" : ""), 520), 90, y);
+    g.textAlign = "right"; g.fillStyle = "#e8f0e8"; g.fillText((CAPT ? r.p + " caps · " : "") + r.k + " kills · " + r.d + " deaths", 990, y); });
+  m.material.map.needsUpdate = true;
+}
+function boardTick(dt) {                                       // it hangs in front of you, gently following where you look; the last moment fades out
+  const m = MP.boardM; if (!m || !m.visible || !vr.I) return;
+  const I = vr.I, f = _v1.set(0, 0, -1).applyQuaternion(I.headQ); f.y = 0; if (f.lengthSq() < 1e-6) f.set(0, 0, -1); f.normalize();
+  const want = _v2.copy(I.head).addScaledVector(f, 1.3).add(_v3c.set(0, -.12, 0));
+  if (!m.userData.placed) { m.position.copy(want); m.userData.placed = true; } else m.position.lerp(want, Math.min(1, dt * 2.5));
+  m.lookAt(I.head);
+  const blk = ugBlack(), k = MP.overT < .9 ? 1 - MP.overT / .9 : 0; blk.visible = k > 0; blk.material.opacity = k; blk.position.copy(I.head);
 }
 function mpBoard() {                                         // everyone's score this round
   const hu = gameMode === "hunt", rows = [{ id: mpMyId(), u: mpUni(null), c: mpColOf(null), tag: MP.tag, team: mpMyTeam(), k: hu ? hunt.kills : MP.kills, d: MP.deaths, p: hu ? hunt.score : MP.pts, m: MP.dmg | 0, me: true }];
@@ -15728,7 +15747,7 @@ function mpRoster() {
   return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx)).concat(gameMode === "pvp" ? vbRows() : []);   // (then the bots)
 }
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
-  if (geoNet()) { const d = L.R && L.R.cur ? L.R.head.distanceTo(vr.head) : 1e9; return [d > 500 ? 0 : d < 40 ? 1 : Math.pow((500 - d) / 460, 1.5), true]; }   // online Treeocashing: you start to hear someone 500 m out, louder as you close in
+  if (geoNet()) { const d = L.R && L.R.cur ? L.R.head.distanceTo(vr.head) : 1e9; return [d > 1000 ? 0 : d < 40 ? 1 : Math.pow((1000 - d) / 960, 1.5), true]; }   // (their voice reaches 1 km)   // online Treeocashing: you start to hear someone 500 m out, louder as you close in
   const c = set.comms === undefined ? 1 : set.comms | 0;
   if (c === 0) return [1, true]; if (c === 1) return [1, false]; if (!mpMate(L)) return [0, true]; if (c === 2) return [1, true]; return [L.bumped ? 1 : 0, true];
 }
@@ -15970,7 +15989,7 @@ function mpHostPlay() {                                     // the host's "Play 
   mpSend({ t: "reveal", list }); mpRevealStart(list);
 }
 // ---- the others' side
-function pvpEndRound() { if (gameMode === "pvp" || MP.code) { if (MP.code && (state === "play" || state === "pause")) mpBoard(); MP.roundLeft = 0; if (state === "play" || state === "pause" || state === "over") state = "vrmenu"; } }   // the round stops (clock, sending, scoring) when anyone heads back to the menus
+function pvpEndRound() { if (MP.overShown) { MP.overT = 0; MP.overShown = false; if (MP.boardM) MP.boardM.visible = false; if (UNDER.blk && !UNDER.go) UNDER.blk.visible = false; } if (gameMode === "pvp" || MP.code) { if (MP.code && (state === "play" || state === "pause")) mpBoard(); MP.roundLeft = 0; if (state === "play" || state === "pause" || state === "over") state = "vrmenu"; } }   // the round stops (clock, sending, scoring) when anyone heads back to the menus
 function mpGuestUi(o) { if (state === "play" || state === "pause") mpBoard(); if (o.teams) MP.teams = o.teams; mpApplySet(o.set); MP.revealT = 0; MP.pendingReveal = null; pvpEndRound(); if (vr.on) vruiOpen(o.st === "lobby" ? "lobby" : "setup"); }
 function mpGuestGen(o) {
   mpApplySet(o.set); seed = o.seed; MP.revealT = 0; MP.pendingReveal = null; MP.genBusy = true; pvpEndRound();
@@ -16032,6 +16051,7 @@ function mpGuestStart(o) {
     { const as = arenaSpawnFar(far); if (as) { P.x = as[0]; P.z = as[1]; P.y = groundAt(P.x, P.z); } }   // an arena: your side's start point
     if (GLOBE && GLOBE.folKey && GLOBE.folKey === (o.gf || []).join()) {   // a hike or hunt on the planet: made in the host's layout (GLB_JOIN): start next to them, wherever they've got to
       const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = groundAt(P.x, P.z); }
+    else if (GLOBE && geoNet()) { geoTeleport(geoRandomSpot()); }   // online Treeocashing: you join somewhere random on the planet
     else if (GLOBE) { const a = Math.random() * 6.283, r = 20 + Math.random() * 60; for (let k = 0; k < 30; k++) { const x = Math.cos(a + k) * r, z = Math.sin(a + k) * r; if (H(x, z) > water + .5) { P.x = x; P.z = z; P.y = groundAt(x, z); break; } } }   // the planet's start, a little apart
     else if (ENDLESS) { const s2 = enSpawnNear(o.hx, o.hz, set.spawnD || 0, MP.idx); P.x = s2[0]; P.z = s2[1]; P.y = H(P.x, P.z); }   // joining endless land: near the host (as far as chosen)
     if (zone && zone.vr) { zoneSeek(zone, (set.roundMin || 10) * 60 - MP.roundLeft); zoneSpawnInside(); }   // joining late: start inside the zone
@@ -16638,7 +16658,7 @@ function vbBlast(p) {                                                          /
   }
 }
 function vbDamage(B, dmg, head, by, from) {                                  // host / solo: a hit on a bot (shield first, like a player)
-  if (!B.alive) return;
+  if (!B.alive || MP.overT > 0) return;
   const s = Math.min(B.sh, dmg); B.sh -= s; B.hp -= dmg - s;
   B.stress = Math.min(1, B.stress + .25 + dmg / 120); B.hitBy = by; B.hitT = VB.now;
   if (by !== null && by !== undefined) { const e = vbEnt(by); if (e) vbNoise(B, by, e.x, e.y, e.z, Math.hypot(e.x - B.x, e.z - B.z) * .4, .95); }
@@ -16812,7 +16832,7 @@ function vbChar(B, dt) {
   const C = B.C; C.top.visible = true;
   if (!B.alive) { if (B.hold) B.hold.visible = false; if (C.deadT < 0) charKill(C, B.killFrom || null, B.killHead); C.top.visible = B.deadT < PVP.bodyGone; if (C.top.visible) charDeath(C, dt); return true; }
   if (C.deadT >= 0) vbRevive(C);
-  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)));
+  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)) * CH_BIG);   // (10% bigger: easier to see)
   const sp = S.speed || 0, aimYaw = S.yaw; let legYaw = aimYaw, back = false;
   if (sp > .5) { const mv = Math.atan2(-S.vx, -S.vz), d = angDiff(mv, aimYaw); if (Math.abs(d) < 1.9) legYaw = mv; else { legYaw = mv + Math.PI; back = true; } }
   C.legY = C.legY === undefined ? legYaw : C.legY + angDiff(legYaw, C.legY) * Math.min(1, dt * 8);
@@ -17151,7 +17171,15 @@ const _vrN = new THREE.Vector3(), _vrP = new THREE.Vector3(), _vrF = new THREE.V
 // st: { head (world), headQ, feet (ground y), dt, air (falling), crouchMax }
 function charVR(C, st) {
   const dt = st.dt, R = C.rest, sc = C.top.scale.x, up = _chUp;
-  const f = _chV.set(0, 0, -1).applyQuaternion(st.headQ), hy = Math.atan2(-f.x, -f.z), hfx = -Math.sin(hy), hfz = -Math.cos(hy);
+  const f = _chV.set(0, 0, -1).applyQuaternion(st.headQ), fh = Math.hypot(f.x, f.z), uq = _chV2.set(0, 1, 0).applyQuaternion(st.headQ);
+  const wx = f.x * fh - uq.x * Math.max(0, f.y) + uq.x * Math.max(0, -f.y), wz = f.z * fh - uq.z * Math.max(0, f.y) + uq.z * Math.max(0, -f.y);   // which way the head faces, steady even looking straight down or up (the top of the head points the way)
+  const hy0 = Math.hypot(wx, wz) > 1e-4 ? Math.atan2(-wx, -wz) : (C.chestY ?? 0);
+  if (C.chestY === undefined) C.chestY = hy0;
+  { const d = angDiff(hy0, C.chestY), lim = 1.5;                                       // the body keeps its facing: the head turns up to ~90 degrees either way first
+    if (Math.abs(d) > lim) C.chestY = hy0 - Math.sign(d) * lim;
+    if (C.hx0 !== undefined) { const v = Math.hypot(st.head.x - C.hx0, st.head.z - C.hz0) / Math.max(dt, 1e-3); C.hsp = (C.hsp || 0) + (Math.min(9, v) - (C.hsp || 0)) * Math.min(1, dt * 5); } C.hx0 = st.head.x; C.hz0 = st.head.z;
+    if ((C.hsp || 0) > .6) C.chestY += angDiff(hy0, C.chestY) * Math.min(1, dt * 2.5); }   // (walking it comes round to face the way you look; just turning your head doesn't)
+  const hy = C.chestY, hfx = -Math.sin(hy0), hfz = -Math.cos(hy0);
   // where the neck is: just behind and below the eyes, turning with the head
   _vrN.set(0, -(R.eye - R.neck) * sc, (st.back || .1) * sc).applyQuaternion(st.headQ).add(st.head);
   // how they're moving (from where the neck goes), smoothed
@@ -17277,6 +17305,8 @@ function mpRemoteGun(R, k) {
 }
 function mpRemoteTick(L, dt) {
   const s = mpSample(L); if (!s) return;
+  if (charOn()) { const bx = s.h.p.x, bz = s.h.p.z, k = CH_BIG, up = p => { p.x = bx + (p.x - bx) * k; p.y = s.feet + (p.y - s.feet) * k; p.z = bz + (p.z - bz) * k; };   // drawn 10% bigger, from the feet up (shots hit the body you see)
+    up(s.h.p); if (s.l) up(s.l.p); if (s.r) up(s.r.p); if (s.g) up(s.g.pose.p); }
   if (L.R && L.R.uni !== mpUni(L)) { const R0 = L.R; scene.remove(R0.S.group, R0.S.shadow); for (const k in R0.guns) scene.remove(R0.guns[k]); disposeSoldier(R0.S); charDrop(R0.C); L.R = null; }   // they changed uniform
   if (!L.R) L.R = mpRemoteMake(L);
   const R = L.R, S = R.S; R.cur = s; R.head.copy(s.h.p); R.feet = s.feet; R.alive = s.alive;
@@ -17380,7 +17410,7 @@ function mpHitTest(from, dir, maxT) {                       // the nearest playe
   return best;
 }
 function mpTakeHit(d, head, noShield) {
-  if (MP.dead > 0 || state !== "play") return;
+  if (MP.dead > 0 || state !== "play" || MP.overT > 0) return;
   MP.lastHitHead = !!head;
   const s = noShield ? 0 : Math.min(MP.sh || 0, d); MP.sh = (MP.sh || 0) - s; MP.hp = Math.max(0, MP.hp - (d - s));   // the shield soaks it up first
   MP.hurt = Math.min(1, MP.hurt + .4 + d / 80); buzz("L", .6, 60); buzz("R", .6, 60); vr.wristT = 0;
@@ -17411,9 +17441,11 @@ function mpTick(dt) {                                       // (also runs offlin
   }
   if (MP.revealT > 0 && (MP.revealT -= dt) <= 0) mpRevealEnd();
   const playing = state === "play" && (gameMode === "pvp" || !!MP.code);
-  if (MP.overT > 0) { if ((MP.overT -= dt) <= 0) { MP.overT = 0; if (state === "play" || state === "pause") { state = "vrmenu"; if (vr.on) vruiOpen("lobby"); } } return; }   // the banner, then the lobby
-  if (playing && MP.roundLeft > 0 && (MP.roundLeft -= dt) <= 0) { mpRoundOver(); return; }   // the round clock
-  captScore(dt);
+  if (MP.overT > 0) { boardTick(dt); if ((MP.overT -= dt) <= 0) { MP.overT = 0; MP.overShown = false; boardShow(false); const blk = ugBlack(); blk.visible = false;   // the scoreboard, then the lobby
+      if (state === "play" || state === "pause") { if (MP.code) { state = "vrmenu"; if (vr.on) vruiOpen("lobby"); } else { state = "over"; if (vr.on) vruiOpen("over"); } } }
+      if (!MP.overShown) return; }
+  else if (playing && MP.roundLeft > 0 && (MP.roundLeft -= dt) <= 0) { mpRoundOver(); if (!MP.overShown) return; }   // the round clock
+  if (!(MP.overT > 0)) captScore(dt);
   if (playing && MP.on && (MP.sendT -= dt) <= 0 && vr.I) {  // 20 updates a second
     MP.sendT = (vr.cl && vr.cl.air) || Math.hypot(sense.v || 0, P.vy || 0) > 14 ? 1 / 45 : P.gliding || sense.v > 6 ? 1 / 30 : .05; /* 45 a second while flung */ const I = vr.I, Lh = I.hands.left, Rh = I.hands.right, G = vr.gun && vr.gun.visible ? vr.gun : null;   // (30 a second while moving fast)
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // asleep, the others see your body in the hammock (not where your spirit is)
@@ -17699,6 +17731,9 @@ function castShot(o, dir, maxD, cs) {                      // cs: a flying bulle
     const st = cs ? Math.min(cs.st, max - dist + .001) : dist < 40 ? .25 : .6; p.addScaledVector(dir, st); dist += st;
     if (dist >= bT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
     if (dist >= aT) return { p: o.clone().addScaledVector(dir, aT), kind: "animal", animal: aWho, head: aHead };
+    if (UNDER.on && UNDER.cur) {                              // underground: the walls, floors and ceilings down there (not the land far above)
+      const L = UNDER.cur, lx = p.x - UG_X, lz = p.z - UG_Z, y = p.y - L.Y, fl = ugFloor(L, lx, lz);
+      if (y <= fl || ugBlocked(L, lx, lz, .02) || y >= ugCeilAt(L, lx, lz, fl)) return { p, kind: "rock" }; continue; }
     if (outMap(p.x, p.z)) break;
     const g = H(p.x, p.z);
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
