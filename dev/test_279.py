@@ -29,7 +29,7 @@ async def main():
           return o; }""")
         png = r.pop("png"); open(sys.argv[2] if len(sys.argv) > 2 else "/dev/null", "wb").write(base64.b64decode(png.split(",")[1]))
         print("lab", json.dumps(r))
-        ok = r["lab"] == [True, 30, 5, True] and r["charKept"] == 7 and r["tweak"][1] > r["tweak"][0] and r["tweak"][2] == 1.2 and (r["night"] >= 22 or r["night"] <= 0) \
+        ok = r["lab"] == [True, 29, 5, True] and r["charKept"] == 7 and r["tweak"][1] > r["tweak"][0] and r["tweak"][2] == 1.2 and (r["night"] >= 22 or r["night"] <= 0) \
              and r["refill"] == [100, 100, 4] and r["lake"][0] and r["lake"][1] < 130 and r["sea"][0] == 1 and r["sea"][1] and r["sea"][2] < 40 and r["pred"] >= 1 and r["cache"] < 60
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)

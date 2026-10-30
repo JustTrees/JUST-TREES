@@ -1,6 +1,6 @@
 """2.75 (3.27: the jet ski is the reward for cache #50: wade into the sea and take it out of your pack, and it's there in the water): jet skis in Geocaching; point at one (it glows)
-and pull the trigger to sit on it; both grips on the bars start the engine; the trigger is the throttle, the bars steer; your eyes never
-move up or down while the hull bobs; it slides up a sandy beach and stops; let go, point at the sand and pull the trigger to hop off.
+and pull the trigger to sit on it; both grips on the bars start the engine; the trigger is the throttle, the bars steer; (3.34) you sit lower,
+ride the swells in smooth ups and downs (your view too), lean into turns, and pumping the bars at full speed builds the bounce into a jump; it slides up a sandy beach and stops; let go, point at the sand and pull the trigger to hop off.
 Usage: python3 dev/test_275.py dbg.html"""
 import sys, asyncio, json
 from playwright.async_api import async_playwright
@@ -43,9 +43,13 @@ async def main():
           const Rd = D.JET.ride, x0 = J.x, z0 = J.z, ys = new Set(), hy = new Set();
           frame(120, (h, gp) => { h.pos.copy(gp); h.grip = 1; h.trig = 1; }); frame(1, (h, gp) => { ys.add(+J.obj.position.y.toFixed(3)); hy.add(+P.y.toFixed(4)); });
           for (let i = 0; i < 30; i++) frame(1, (h, gp) => { h.pos.copy(gp); h.grip = 1; h.trig = 1; ys.add(+J.obj.position.y.toFixed(3)); hy.add(+P.y.toFixed(4)); });
-          o.drive = [Math.round(Math.hypot(J.x - x0, J.z - z0)), +Rd.sp.toFixed(1), ys.size > 3, hy.size === 1, +Math.hypot(P.x - J.x, P.z - J.z).toFixed(2)];
+          o.drive = [Math.round(Math.hypot(J.x - x0, J.z - z0)), +Rd.sp.toFixed(1), ys.size > 3, hy.size > 3, +Math.hypot(P.x - J.x, P.z - J.z).toFixed(2)];
+          // smooth: at full speed, no pumping, the view never jolts; then pumping the bars in time builds a jump
+          let vmax = 0, py = P.y, airS = 0; for (let i = 0; i < 150; i++) { frame(1, (h, gp) => { h.pos.copy(gp); h.grip = 1; h.trig = 1; }); vmax = Math.max(vmax, Math.abs(P.y - py) * 30); py = P.y; if (Rd.air) airS++; }
+          let airP = 0, top = 0; for (let i = 0; i < 300; i++) { const ph = Math.sin(i / 30 * 2 * Math.PI * .87); frame(1, (h, gp) => { h.pos.copy(gp); h.pos.y += .16 * ph; h.grip = 1; h.trig = 1; }); if (Rd.air) airP++; top = Math.max(top, Rd.hy - D.water); }
+          o.bounce = [+vmax.toFixed(2), airS, airP, +top.toFixed(2)];
           // steer: right hand back
-          const y0 = J.yaw; frame(45, (h, gp, s) => { h.pos.copy(gp); if (s === 'R') h.pos.add(new T.Vector3(-Math.sin(J.yaw), 0, -Math.cos(J.yaw)).multiplyScalar(-.15)); h.grip = 1; h.trig = 1; }); o.turn = +(J.yaw - y0).toFixed(2);
+          const y0 = J.yaw; frame(45, (h, gp, s) => { h.pos.copy(gp); if (s === 'R') h.pos.add(new T.Vector3(-Math.sin(J.yaw), 0, -Math.cos(J.yaw)).multiplyScalar(-.15)); h.grip = 1; h.trig = 1; }); o.turn = +(J.yaw - y0).toFixed(2); o.lean = +Rd.roll.toFixed(2);
           // head back for the beach it came from: it slides up and stops in the shallows
           const b = D.jetFindBeach(x0, z0); J.x = b.x; J.z = b.z; J.yaw = b.yaw + Math.PI; P.x = J.x; P.z = J.z; Rd.sp = 0;
           frame(240, (h, gp) => { h.pos.copy(gp); h.grip = 1; h.trig = 1; }); o.beach = [+Rd.sp.toFixed(1), +(D.H(J.x, J.z) - D.water).toFixed(2), Rd.beachT > 0];
@@ -58,8 +62,8 @@ async def main():
           return o; }""")
         print("ride", json.dumps(r))
         ok = g0[1:] == [False, False] and g[0] == 50 and g[1] is True and g[2] is True and r.get("dry") is False and "J" in r.get("placed", "") and r["where"][0] < -.3 and r["where"][1] \
-             and r["glow"] and r["on"] and r["eng"] and 1.4 < r["sitY"] < 1.7 and r["drive"][0] > 25 and r["drive"][1] > 12 and r["drive"][2] and r["drive"][3] and r["drive"][4] < 1.2 \
-             and r["turn"] < -.3 and r["beach"][0] < .5 and -1 < r["beach"][1] < .5 and r["beach"][2] and r["engOff"] and r["off"][0] and r["off"][1] > 0
+             and r["glow"] and r["on"] and r["eng"] and 1.0 < r["sitY"] < 1.6 and r["drive"][0] > 25 and r["drive"][1] > 12 and r["drive"][2] and r["drive"][3] and r["drive"][4] < 1.2 \
+             and r["turn"] < -.3 and r["lean"] < -.2 and r["bounce"][0] < 2.5 and r["bounce"][2] > 10 and r["bounce"][3] > .6 and r["beach"][0] < .5 and -1 < r["beach"][1] < .5 and r["beach"][2] and r["engOff"] and r["off"][0] and r["off"][1] > 0
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)
 asyncio.run(main())

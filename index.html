@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.33";              // Just Trees
+const VERSION = "3.34";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4988,8 +4988,9 @@ function geoTentRestore() {                                   // after re-laying
 // the water into your other hand.
 const FISH_KINDS = [["perch", .4, .9, 0x9ab040], ["trout", .7, 2.4, 0x8a9aa8], ["bass", 1, 3.2, 0x4a6a3a], ["pike", 2, 6, 0x6a7a4a], ["salmon", 2.5, 7, 0xc8a090]];
 const SEA_FISH = [["mackerel", .5, 1.4, 0x5a8ab0], ["snapper", 1, 4, 0xd05a4a], ["tuna", 4, 12, 0x3a4a6a]];
+const SEA_BIG = [["mahi-mahi", 6, 20, 0x3ab06a], ["yellowfin tuna", 15, 70, 0x2a3a7a], ["marlin", 40, 160, 0x2a4a9a], ["shark", 30, 120, 0x7a8a96]];   // out deep (from the jet ski): the big ones
 function geoFishModel(col, kg) {
-  const g = new THREE.Group(), s = .22 + Math.min(.5, kg * .05), b = new THREE.Mesh(giBall(.5, 10), giMat(col)); b.scale.set(.32, .42, 1); g.add(b);
+  const g = new THREE.Group(), s = .22 + Math.min(.5, kg * .05) + Math.min(.9, Math.max(0, kg - 10) * .008), b = new THREE.Mesh(giBall(.5, 10), giMat(col)); b.scale.set(.32, .42, 1); g.add(b);   // (a marlin is a big one)
   const t = new THREE.Mesh(new THREE.ConeGeometry(.22, .3, 4), giMat(col)); t.rotation.x = -Math.PI / 2; t.scale.set(.25, 1, 1); t.position.z = .58; g.add(t);
   const e = new THREE.Mesh(giBall(.05, 6), giMat(0x111111)); e.position.set(.12, .05, -.32); g.add(e); const e2 = e.clone(); e2.position.x = -.12; g.add(e2);
   g.scale.setScalar(s); return g;
@@ -5103,7 +5104,7 @@ function geoRodTick(I, main, dt) {
     if (R.p.y <= Math.max(g, water0)) { const wet = g < water0 - .3 && !(ENDLESS && enIcedAt(R.p.x, R.p.z)); R.p.y = wet ? water0 : g + .03; R.st = "out"; R.t = 0; R.wet = wet;
       if (wet) { geoPop(R.p.clone(), 0xd8f0ff, 10, "splash"); gunFoley([[0, 700, .1, .1]]);
         const depth = water0 - g, dawn = Math.min(Math.abs(hourNow - 6), Math.abs(hourNow - 18)) < 2 ? 1.6 : 1, spot = .6 + .4 * Math.abs(Math.sin(R.p.x * .013 + R.p.z * .017));
-        R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot * TUNE.bite; R.salt = geoSalty(R.p); } else gunFoley([[0, 300, .06, .08]]); }
+        R.rate = Math.min(.3, .05 + depth * .012) * dawn * spot * TUNE.bite; R.salt = geoSalty(R.p); R.depth = depth; } else gunFoley([[0, 300, .06, .08]]); }
     return;
   }
   // the lure is out there: crank to bring it back along the water (or the ground)
@@ -5122,7 +5123,7 @@ function geoRodTick(I, main, dt) {
     // a bite: strike (jerk the rod up or back toward you)
     const back = R.tvS.dot(_v2.copy(R.p).sub(tip).setY(0).normalize()) < -2.2;
     if (R.tvS.y > 2.2 || back) {
-      const Lf = R.salt ? SEA_FISH : FISH_KINDS, f = Lf[Math.floor(Math.random() * Lf.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
+      const Lf = R.salt ? (R.depth > 15 && Math.random() < .7 ? SEA_BIG : SEA_FISH) : FISH_KINDS, f = Lf[Math.floor(Math.random() * Lf.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
       R.st = "fight"; R.t = 0; R.bail = false; R.fish = { name: f[0], kg, col: f[3] };
       R.F = { T: .3, stam: 1, s: Math.min(1.4, (.6 + kg / 8) * TUNE.fishStr / 1.3), mode: "run", modeT: 1.5, run: .8, side: Math.random() < .5 ? 1 : -1, fa: Math.atan2(R.p.x - P.x, R.p.z - P.z), snapT: 0, slackT: 0, pay: 0 };
       vrBanner("Fish on!", 1.2, 1); buzz(os, .9, 160); buzz(ms, .5, 80);
@@ -5397,7 +5398,8 @@ function geoGearClear() {
    but stops dead at cliffs and rocks. The jet ski bobs on the waves; your view doesn't move at all. To get off, let go of the bars, point
    at dry land close by and pull the trigger. ---- */
 const JET = { list: [], ride: null, aim: null, ring: null, snd: null };
-const JET_N = 8, JET_MAX = 20, JET_UNLOCK = 50, JET_SEAT = new THREE.Vector3(0, .78, .25), JET_GRIP = { L: new THREE.Vector3(-.34, .98, -.42), R: new THREE.Vector3(.34, .98, -.42) };
+const JET_N = 8, JET_MAX = 20, JET_UNLOCK = 50, JET_SEAT = new THREE.Vector3(0, .66, .3), JET_GRIP = { L: new THREE.Vector3(-.33, .88, -.36), R: new THREE.Vector3(.33, .88, -.36) };   // (3.34: you sit lower, the bars closer)
+const JET_EYE = 1.32;                                          // your eyes above the water, sitting on it (was 1.55: perched up high)
 const jetOn = () => GEO.on && !!GLOBE && (geoHas("jetski") || GEO.lab);
 function jetPlace() { return []; }                             // (no more jet skis waiting round the planet: yours comes out of your backpack)
 function jetPlaceOld() {                                       // the spots: just off the sea coasts, far apart (the same ones for this planet)
@@ -5426,21 +5428,39 @@ function jetFindBeach(x0, z0) {                                // a sandy beach 
   }
   return null;
 }
+function jetDecal() {                                          // the side graphic: an orange-and-pink splash with purple bits (made up, no lettering)
+  if (JET.decal) return JET.decal; const cv = document.createElement("canvas"); cv.width = 512; cv.height = 128; const x = cv.getContext("2d");
+  x.clearRect(0, 0, 512, 128);
+  x.fillStyle = "#ff7a2a"; x.beginPath(); x.moveTo(30, 96); x.lineTo(150, 40); x.lineTo(205, 62); x.lineTo(330, 18); x.lineTo(470, 30); x.lineTo(360, 70); x.lineTo(250, 88); x.lineTo(190, 74); x.lineTo(70, 112); x.closePath(); x.fill();
+  x.strokeStyle = "#e0307a"; x.lineWidth = 9; x.lineJoin = "round"; x.beginPath(); x.moveTo(20, 104); x.lineTo(140, 50); x.lineTo(200, 72); x.lineTo(330, 30); x.lineTo(480, 38); x.stroke();
+  x.fillStyle = "#5a2a9a"; for (const [a, b, r] of [[95, 92, 7], [250, 58, 6], [395, 44, 8], [430, 70, 5], [160, 98, 5]]) { x.beginPath(); x.arc(a, b, r, 0, 6.283); x.fill(); }
+  x.strokeStyle = "#2a1a5a"; x.lineWidth = 3; x.beginPath(); x.moveTo(60, 70); x.quadraticCurveTo(120, 30, 170, 52); x.stroke();
+  const t = new THREE.CanvasTexture(cv); t.anisotropy = 4; return JET.decal = t;
+}
 function jetModel() {
-  const g = new THREE.Group(), hull = new THREE.MeshLambertMaterial({ color: 0xf2f2ee }), trim = new THREE.MeshLambertMaterial({ color: 0xf2b21a }), dark = new THREE.MeshLambertMaterial({ color: 0x22252a });
+  const g = new THREE.Group(), hull = new THREE.MeshLambertMaterial({ color: 0xf2f2ee }), teal = new THREE.MeshLambertMaterial({ color: 0x1fa2b0 }), purple = new THREE.MeshLambertMaterial({ color: 0x5a3aa8 }),
+    grip = new THREE.MeshLambertMaterial({ color: 0x3a2a6a }), dark = new THREE.MeshLambertMaterial({ color: 0x2a2d32 }), red = new THREE.MeshBasicMaterial({ color: 0xff3a2a });
   const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); g.add(o); return o; };
   const hullG = (w, len, d) => { const sh = new THREE.Shape(); sh.moveTo(0, -len); sh.quadraticCurveTo(w * .9, -len * .55, w, -len * .25); sh.lineTo(w, len * .55); sh.quadraticCurveTo(w, len * .7, w * .8, len * .7); sh.lineTo(-w * .8, len * .7);
     sh.quadraticCurveTo(-w, len * .7, -w, len * .55); sh.lineTo(-w, -len * .25); sh.quadraticCurveTo(-w * .9, -len * .55, 0, -len);
     const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 2, curveSegments: 8 }); g.rotateX(Math.PI / 2); g.translate(0, d, 0); return g; };
-  add(hullG(.5, 1.7, .14), trim, 0, -.06, 0);                                            // the yellow lower hull at the waterline
-  add(hullG(.52, 1.65, .3), hull, 0, .1, 0);                                              // the white deck
-  const seat = add(new THREE.CapsuleGeometry(.2, .85, 4, 10), dark, 0, .5, .45, Math.PI / 2); seat.scale.set(1.1, 1, .55);   // the seat
-  const hood = add(hullG(.36, .62, .16), trim, 0, .44, -.62); hood.scale.set(1, 1, .9);    // the hood
-  const bars = new THREE.Group(); bars.position.set(0, .86, -.5); g.add(bars);
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, .2, 8), dark); post.position.y = .02; bars.add(post);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .74, 8), dark); bar.rotation.z = Math.PI / 2; bar.position.set(0, .12, .08); bars.add(bar);
-  for (const s of [-1, 1]) { const gr = new THREE.Mesh(new THREE.CylinderGeometry(.024, .024, .13, 8), trim); gr.rotation.z = Math.PI / 2; gr.position.set(s * .31, .12, .08); bars.add(gr); }
-  g.userData = { bars, mats: [hull, trim] }; g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  add(hullG(.48, 1.66, .16), hull, 0, -.08, 0);                                           // the white hull
+  add(hullG(.52, 1.7, .05), purple, 0, .07, 0);                                           // the purple rail round the waterline
+  add(hullG(.49, 1.6, .2), hull, 0, .12, 0);                                              // the white deck
+  const hood = add(new THREE.SphereGeometry(.5, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), teal, 0, .36, -.72); hood.scale.set(.82, .5, 1.25);   // the teal hood, a rounded cowl
+  add(new THREE.BoxGeometry(.5, .05, .5), teal, 0, .38, -.12);                            // the deck in front of the seat
+  const base = add(new THREE.BoxGeometry(.46, .14, 1.0), hull, 0, .42, .45);               // the seat's white base
+  const seat = add(new THREE.CapsuleGeometry(.2, .78, 4, 12), teal, 0, .54, .46, Math.PI / 2); seat.scale.set(1.15, 1, .5);   // the teal seat (you sit on top of it)
+  add(new THREE.BoxGeometry(.5, .04, .26), purple, 0, .13, 1.2);                          // the step at the back
+  add(new THREE.BoxGeometry(.18, .06, .03), red, 0, .34, 1.16);                           // the tail light
+  add(new THREE.BoxGeometry(.13, .46, .1), teal, 0, .6, -.47, .5);                       // the steering column, leaning back up to the bars
+  const bars = new THREE.Group(); bars.position.set(0, .8, -.36); g.add(bars);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.017, .017, .6, 8), dark); bar.rotation.z = Math.PI / 2; bar.position.set(0, .08, 0); bars.add(bar);
+  const hub = new THREE.Mesh(new THREE.BoxGeometry(.16, .07, .1), teal); hub.position.set(0, .06, 0); bars.add(hub);
+  for (const sd of [-1, 1]) { const gr = new THREE.Mesh(new THREE.CylinderGeometry(.026, .026, .14, 10), grip); gr.rotation.z = Math.PI / 2; gr.position.set(sd * .33, .08, 0); bars.add(gr); }
+  const dm = new THREE.MeshBasicMaterial({ map: jetDecal(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, side: THREE.DoubleSide });
+  for (const sd of [-1, 1]) { const d = add(new THREE.PlaneGeometry(1.5, .36), dm, sd * .545, .24, -.15, 0, sd * Math.PI / 2); if (sd < 0) d.scale.x = -1; }   // the splash on both sides
+  g.userData = { bars, mats: [hull, teal] }; g.traverse(m => { if (m.isMesh && m.material !== dm) m.castShadow = true; });
   return g;
 }
 function jetGlow(J, on) { if (!J.obj) return; for (const m of J.obj.userData.mats) m.emissive.setHex(on ? 0x5a4410 : 0x000000); }
@@ -5457,29 +5477,55 @@ function jetsTick(dt) {                                       // (in geoTick: th
     J.x = out[0]; J.z = out[1]; J.obj.position.set(J.x, Math.max(water, H(J.x, J.z)) - .05, J.z); J.obj.rotation.set(0, J.yaw, 0);
   }
 }
-function jetBob(J, t, sp, steer) {                            // the hull on the waves (only the jet ski: never your view)
-  const o = J.obj, gnd = H(J.x, J.z), afloat = gnd < water - .3, k = afloat ? 1 : .15;
-  const y = Math.max(water, gnd) + (.06 * Math.sin(t * 1.7 + J.id) + .035 * Math.sin(t * 3.1) + (sp > 6 ? .05 * Math.sin(t * 9) * Math.min(1, sp / 15) : 0)) * k - .05;
-  o.position.set(J.x, y, J.z); o.rotation.set((.05 * Math.sin(t * 1.3 + J.id) * k) + Math.min(.09, sp / TUNE.jetMax * .09), J.yaw, (.04 * Math.sin(t * 1.1) * k) + steer * .22 * Math.min(1, sp / 6), "YXZ");
+const jetSwell = (x, z, t) => .2 * Math.sin(.16 * x + .11 * z + .9 * t) + .13 * Math.sin(-.09 * x + .21 * z + 1.3 * t + 1) + .04 * Math.sin(.37 * x - .29 * z + 2.1 * t + 2);   // long smooth swells
+function jetBob(J, t, sp, steer) {                            // a jet ski sitting on the water (riding: jetPhys)
+  const o = J.obj, gnd = H(J.x, J.z), afloat = gnd < water - .3, k = afloat ? 1 : .1, sw = jetSwell(J.x, J.z, t) * k;
+  o.position.set(J.x, Math.max(water + sw, gnd) - .05, J.z); o.rotation.set(.04 * Math.sin(t * .9 + J.id) * k, J.yaw, .035 * Math.sin(t * .7) * k + steer * .3, "YXZ");
   o.userData.bars.rotation.y = -steer * .5; o.updateMatrixWorld(true);
 }
+/* riding (3.34): the hull floats on a spring over the swells, so it rides them in smooth ups and downs, quicker the faster you go; it leans
+   into turns; and pumping the bars up and down at speed, in time with the bounce, builds it up until you leave the water: a jump. */
+function jetPhys(Rd, dt, pump) {
+  const J = Rd.J, o = J.obj, gnd = H(J.x, J.z), afloat = gnd < water - .3, sk = Math.min(1, Math.abs(Rd.sp) / TUNE.jetMax);
+  const surf = afloat ? water + jetSwell(J.x, J.z, Rd.t) : gnd, rest = surf - .05 + .07 * sk;   // (planing a little higher at speed)
+  if (Rd.hy === undefined) { Rd.hy = rest; Rd.vy = 0; Rd.air = false; Rd.pitch = 0; Rd.roll = 0; }
+  const inW = Rd.hy <= rest + .02;
+  if (inW || !afloat) {
+    if (Rd.air && Rd.vy < -2.5) { const hit = Math.min(1, -Rd.vy / 7); geoPop(new THREE.Vector3(J.x, water, J.z), 0xd8f0ff, 10 + Math.round(18 * hit), "splash"); gunFoley([[0, 120, .25, .18 * hit + .08], [.02, 600, .2, .1 * hit]]); buzz("L", .5 + .5 * hit, 90); buzz("R", .5 + .5 * hit, 90); Rd.vy *= .35; Rd.sp *= 1 - .12 * hit; }
+    Rd.air = false;
+    let acc = 30 * (rest - Rd.hy) - 3 * Rd.vy;                     // the water holds it up, springy
+    if (afloat) acc += 14 * pump * Math.max(0, Math.min(1, (sk - .45) / .4));   // pumping the bars at speed, in time, builds the bounce
+    Rd.vy += acc * dt; if (!afloat) { Rd.hy = rest; Rd.vy = 0; }
+  } else { Rd.vy -= 9.8 * dt; if (!Rd.air && Rd.vy > 1.2) { Rd.air = true; Rd.airT = 0; } }   // out of the water: flying
+  if (Rd.air) Rd.airT = (Rd.airT || 0) + dt;
+  Rd.hy += Rd.vy * dt; if (Rd.hy < rest - .6) { Rd.hy = rest - .6; Rd.vy = Math.max(0, Rd.vy); }
+  const ahead = afloat ? jetSwell(J.x - Math.sin(J.yaw) * 1.2, J.z - Math.cos(J.yaw) * 1.2, Rd.t) - jetSwell(J.x + Math.sin(J.yaw) * 1.2, J.z + Math.cos(J.yaw) * 1.2, Rd.t) : 0;
+  const wantP = Math.max(-.35, Math.min(.4, (Rd.air ? .07 * Rd.vy : .4 * ahead) + .06 * sk)), wantR = Math.max(-.5, Math.min(.5, -Rd.steer * .62 * Math.min(1, Math.abs(Rd.sp) / 8)));   // nose up on a rise; leaning into the turn
+  Rd.pitch += (wantP - Rd.pitch) * Math.min(1, dt * 4); Rd.roll += (wantR - Rd.roll) * Math.min(1, dt * 3);
+  o.position.set(J.x, Rd.hy, J.z); o.rotation.set(Rd.pitch, J.yaw, Rd.roll + (afloat ? .025 * Math.sin(Rd.t * .8) : 0), "YXZ");
+  o.userData.bars.rotation.y = -Rd.steer * .5; o.updateMatrixWorld(true);
+  return afloat ? Rd.hy - (water - .05) : 0;                     // how high it rides (your eyes go up and down with it: the swells, the bounce, the jumps)
+}
 function jetGripAt(side) { const Rd = JET.ride; return Rd && Rd.J.obj ? Rd.J.obj.localToWorld(JET_GRIP[side].clone()) : null; }
-function jetEngine(on, k, thr) {                               // a looped motor: higher and louder with speed and throttle
+function jetEngine(on, k, thr) {                               // a soft motor: a low rounded hum that rises with speed, and the hiss of the water going by
   if (!SND.ctx) return; const c = SND.ctx;
   if (on && !JET.snd) {
-    const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain();
-    o.type = "sawtooth"; o2.type = "square"; o2.detune.value = 9; lp.type = "lowpass"; lp.frequency.value = 500; g.gain.value = 0;
-    const nb = c.createBufferSource(); nb.buffer = SND.noise; nb.loop = true; const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1400; bp.Q.value = .8; const ng = c.createGain(); ng.gain.value = 0;
-    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(SND.master); nb.connect(bp).connect(ng).connect(SND.master); o.start(); o2.start(); nb.start();
-    JET.snd = { o, o2, lp, g, nb, ng }; gunFoley([[0, 160, .25, .2], [.12, 220, .3, .16], [.25, 300, .2, .12]]);   // (it starts up)
+    const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = "triangle"; o2.type = "sine"; lp.type = "lowpass"; lp.frequency.value = 300; lp.Q.value = .3; g.gain.value = 0;
+    lfo.type = "sine"; lfo.frequency.value = 9; lg.gain.value = 0; lfo.connect(lg).connect(g.gain);   // (a gentle putter at idle)
+    const nb = c.createBufferSource(); nb.buffer = SND.noise; nb.loop = true; const wf = c.createBiquadFilter(); wf.type = "lowpass"; wf.frequency.value = 700; const ng = c.createGain(); ng.gain.value = 0;
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(SND.master); nb.connect(wf).connect(ng).connect(SND.master); o.start(); o2.start(); lfo.start(); nb.start();
+    JET.snd = { o, o2, lp, g, nb, ng, wf, lfo, lg }; gunFoley([[0, 110, .3, .12], [.18, 150, .3, .1]]);   // (it starts up)
   }
   const S = JET.snd; if (!S) return; const t = c.currentTime;
-  if (!on) { S.g.gain.setTargetAtTime(0, t, .15); S.ng.gain.setTargetAtTime(0, t, .15); const s = S; JET.snd = null; setTimeout(() => { try { s.o.stop(); s.o2.stop(); s.nb.stop(); } catch (_) {} }, 600); return; }
-  const f = 38 + 70 * k + 28 * thr; S.o.frequency.setTargetAtTime(f, t, .08); S.o2.frequency.setTargetAtTime(f * .5, t, .08); S.lp.frequency.setTargetAtTime(380 + 1400 * Math.max(k, thr), t, .1);
-  S.g.gain.setTargetAtTime(.05 + .09 * Math.max(k, thr), t, .1); S.ng.gain.setTargetAtTime(.06 * k, t, .1);
+  if (!on) { S.g.gain.setTargetAtTime(0, t, .2); S.ng.gain.setTargetAtTime(0, t, .2); S.lg.gain.setTargetAtTime(0, t, .2); const s = S; JET.snd = null; setTimeout(() => { try { s.o.stop(); s.o2.stop(); s.nb.stop(); s.lfo.stop(); } catch (_) {} }, 800); return; }
+  const f = 48 + 52 * k + 14 * thr; S.o.frequency.setTargetAtTime(f, t, .15); S.o2.frequency.setTargetAtTime(f * .5, t, .15); S.lp.frequency.setTargetAtTime(260 + 520 * Math.max(k, thr * .7), t, .2);
+  const air = JET.ride && JET.ride.air ? .5 : 1;
+  S.g.gain.setTargetAtTime((.035 + .045 * Math.max(k, thr * .8)) * air, t, .15); S.lg.gain.setTargetAtTime(.012 * (1 - k), t, .2);
+  S.ng.gain.setTargetAtTime((JET.ride && JET.ride.air ? 0 : .035 * k), t, .12); S.wf.frequency.setTargetAtTime(500 + 900 * k, t, .2);
 }
 function jetMount(J) {
-  const Rd = JET.ride = { J, sp: 0, steer: 0, eng: false, grab: { L: false, R: false }, t: 0, floor: water + 1.55 - Math.max(1, Math.min(1.9, vr.headLocalY || 1.6)), beachT: 0, bumpT: 0, said: false };
+  const Rd = JET.ride = { J, sp: 0, steer: 0, eng: false, grab: { L: false, R: false }, t: 0, floor: water + JET_EYE - Math.max(1, Math.min(1.9, vr.headLocalY || 1.6)), beachT: 0, bumpT: 0, said: false };
   jetGlow(J, false); geoHeld(null); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; vr.binos = vr.scoped = false;
   jetBob(J, 0, 0, 0); const seat = J.obj.localToWorld(JET_SEAT.clone());
   let d = J.yaw - P.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; Rd.turn0 = d;   // (you sit facing the front)
@@ -5530,6 +5576,7 @@ function jetRide(dt) {                                          // (instead of w
   let st = 0;
   if (both) { const vx = Rh.pos.x - L.pos.x, vz = Rh.pos.z - L.pos.z, lx = vx * rx + vz * rz, back = -(vx * fx + vz * fz); st = Math.max(-1, Math.min(1, Math.atan2(back, Math.max(.05, lx)) / .55)); }   // right hand back: turn right
   Rd.steer += (st - Rd.steer) * Math.min(1, dt * 8);
+  let pump = 0; if (both) { const hy = (L.pos.y + Rh.pos.y) / 2 - I.head.y; if (Rd.hy0 !== undefined) pump = Math.max(-2, Math.min(2, (hy - Rd.hy0) / Math.max(dt, 1e-3))); Rd.hy0 = hy; } else Rd.hy0 = undefined;   // the bars going up and down (against your head, so the bounce itself doesn't count)
   const want = thr * TUNE.jetMax; Rd.sp += (want - Rd.sp) * Math.min(1, dt * (want > Rd.sp ? .8 : .45));
   const turn = -Rd.steer * (.35 + 1.05 * Math.min(1, Math.abs(Rd.sp) / 7)) * TUNE.jetTurn * dt * (Math.abs(Rd.sp) > .3 || both ? 1 : 0);
   J.yaw += turn;
@@ -5547,9 +5594,10 @@ function jetRide(dt) {                                          // (instead of w
   const ox = J.x, oz = J.z; J.x += nfx * mv; J.z += nfz * mv;
   // you ride along: turned with it about its middle, carried with it, and your eyes stay at exactly the same height
   const px = P.x - ox, pz = P.z - oz, c = Math.cos(turn), s = Math.sin(turn);
-  P.x = J.x + px * c + pz * s; P.z = J.z - px * s + pz * c; P.y = Rd.floor; P.vy = 0; P.onGround = true; P.gliding = false; P.crouch = false;
+  const lift = jetPhys(Rd, dt, pump);
+  P.x = J.x + px * c + pz * s; P.z = J.z - px * s + pz * c; P.y = Rd.floor + Math.max(-.25, lift); P.vy = 0; P.onGround = true; P.gliding = false; P.crouch = false;
   vr.pendTurn = turn + (Rd.turn0 || 0); Rd.turn0 = 0;
-  jetBob(J, Rd.t, Math.abs(Rd.sp), Rd.steer);
+  if (Rd.air && Rd.airT > .25 && !Rd.airSaid) { Rd.airSaid = true; vrBanner("Air!", 1, 2); } if (!Rd.air) Rd.airSaid = false;
   if (Rd.eng) jetEngine(true, Math.min(1, Math.abs(Rd.sp) / TUNE.jetMax), thr); else if (JET.snd) jetEngine(false);
   if (both && (Rd.buzzT = (Rd.buzzT || 0) - dt) <= 0) { Rd.buzzT = .1; const k = .04 + .2 * thr; buzz("L", k, 15); buzz("R", k, 15); }
   input.run = Rd.sp > 12;                                       // (hard riding makes you hungry like running)
