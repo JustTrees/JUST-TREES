@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.29";              // Just Trees
+const VERSION = "3.30";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -11822,7 +11822,7 @@ function photoShoot() {                                       // (after the fram
    sniper scope and binoculars = thermal, AK = flashlight, SMG = a thermal mini-sight, pistol = laser, bow (Hunting) = flaming arrows.
    Everyone sees your flashlight and laser. Lose the full load (hurt, a grenade thrown) and the tools go dark until you're topped up. ---- */
 const TOOL = { on: { hunt: false, ar: false, smg: false, pistol: false, bow: false, binos: false }, saidW: null, fx: null, sight: null, rtT: 0,
-  name: { hunt: "Thermal scope", ar: "Flashlight", smg: "Thermal sight", pistol: "Laser", bow: "Flaming arrows", binos: "Thermal binoculars" },
+  name: { hunt: "Thermal scope", ar: "Flashlight", bayo: "Bayonet", smg: "Thermal sight", pistol: "Laser", bow: "Flaming arrows", binos: "Thermal binoculars" },
   click: { on: [[0, 2600, .015, .12], [.045, 3500, .015, .1]], off: [[0, 3400, .015, .1], [.045, 2100, .015, .1]] },
   LIGHT: { reach: 60, spread: .26, beam: 35 }, LASER: 160 };
 function toolKey() {                                           // which tool X works on right now (null: nothing in your hands with one)
@@ -11882,21 +11882,59 @@ function toolFxShow(F, kind, G, muzzle, far) {                 // kind 1 = flash
 function toolSight(G, S) {                                     // the SMG's thermal mini-sight: a little round screen on top, just in front of your eye
   let M = G.userData.tsight;
   if (!M) {
-    if (!TOOL.sight) { const N = 256, rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); rt.depthTexture.type = THREE.UnsignedIntType;
-      TOOL.sight = { rt, cam: new THREE.PerspectiveCamera(14, 1, .5, 1500), N,
+    if (!TOOL.sight) { const N = 384, rt = new THREE.WebGLRenderTarget(N, N, { depthTexture: new THREE.DepthTexture(N, N) }); rt.depthTexture.type = THREE.UnsignedIntType;
+      TOOL.sight = { rt, cam: new THREE.PerspectiveCamera(28, 1, .5, 1500), N,
         mat: new THREE.ShaderMaterial({ uniforms: { uDepth: { value: rt.depthTexture }, uCol: { value: rt.texture }, uTime: { value: 0 }, uNear: { value: .5 }, uFar: { value: 1500 }, uPx: { value: 1 / N }, uSpan: { value: .5 }, uLive: { value: 0 } },
           vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
           fragmentShader: `uniform sampler2D uDepth; uniform sampler2D uCol; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uPx; uniform float uSpan; uniform float uLive; varying vec2 vUv;
             ${THERM_FN}
             void main(){ vec2 c = vUv - 0.5; float r = length(c); vec3 col = uLive > 0.5 ? thermal(c * 2.0 * uSpan) : vec3(0.05, 0.0, 0.0);
-              col = mix(col, vec3(1.0, 0.15, 0.08), smoothstep(0.03, 0.018, r)); col *= smoothstep(0.5, 0.43, r); gl_FragColor = vec4(col, 1.0); }` }) }; }
+              vec2 q = abs(c) - vec2(0.38); float e = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.1;   // a square with rounded corners
+              col = mix(col, vec3(1.0, 0.15, 0.08), smoothstep(0.016, 0.009, r)); col *= smoothstep(0.0, -0.035, e); gl_FragColor = vec4(col, 1.0); }` }) }; }
     M = new THREE.Group(); const dark = new THREE.MeshLambertMaterial({ color: 0x1b1d20 });
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(.021, 28), TOOL.sight.mat); disc.position.z = .016; M.add(disc);
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(.025, .025, .034, 20, 1, true).rotateX(Math.PI / 2), dark); tube.material.side = THREE.DoubleSide; M.add(tube);
-    const foot = new THREE.Mesh(new THREE.BoxGeometry(.014, .03, .03), dark); foot.position.y = -.03; M.add(foot);
+    const disc = new THREE.Mesh(new THREE.PlaneGeometry(.084, .084), TOOL.sight.mat); disc.position.z = .016; M.add(disc);   // (3.30: a rounded square, twice as wide as the old round one)
+    const box = new THREE.Mesh(new THREE.BoxGeometry(.09, .09, .028), dark); box.position.z = -.001; M.add(box);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(.016, .03, .03), dark); foot.position.y = -.055; M.add(foot);
     M.position.set(0, S.eye[1] + .01, S.eye[2] - .14); M.visible = false; G.add(M); G.userData.tsight = M;   // (a touch above the iron sights, so they don't block it)
   }
   return M;
+}
+/* 3.30 (Dev): the AK's bayonet. A blade under the muzzle; thrust the gun forward (a quick jab, the tip moving 1.8 m/s or more along the barrel)
+   and whatever the blade reaches is stabbed: animals, players, bots. The hidden move: a raptor coming at you, stabbed in the head, drops at once. */
+const BAYO = { len: .2, jab: 1.8, cool: .45, reach: .38, dmg: 120, pdmg: 60 };
+const bayoDev = () => DEV.ok;
+function bayoBlade(G, muzzle) {                                  // the blade on this gun (made once, hidden until fixed)
+  let B = G.userData.bayo; if (B) return B;
+  const steel = new THREE.MeshLambertMaterial({ color: 0xb9c0c6, emissive: 0x1a1d20 }), dark = new THREE.MeshLambertMaterial({ color: 0x1b1d20 });
+  B = new THREE.Group();
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(.004, .016, BAYO.len - .03), steel); blade.position.z = -(BAYO.len - .03) / 2; B.add(blade);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.0085, .03, 4).rotateX(-Math.PI / 2), steel); tip.scale.set(.35, 1, 1); tip.position.z = -(BAYO.len - .015); B.add(tip);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(.011, .011, .022, 12).rotateX(Math.PI / 2), dark); ring.position.set(0, .022, .02); B.add(ring);
+  const lug = new THREE.Mesh(new THREE.BoxGeometry(.008, .02, .04), dark); lug.position.set(0, .01, .01); B.add(lug);
+  B.position.set(muzzle[0], muzzle[1] - .026, muzzle[2]); B.visible = false; G.add(B); G.userData.bayo = B; return B;
+}
+const _byT = new THREE.Vector3(), _byD = new THREE.Vector3(), _byO = new THREE.Vector3();
+function bayoTick(G, S) {                                        // a jab: the tip racing forward along the barrel
+  if (state !== "play" || MP.dead > 0) { TOOL.bayoLast = null; return; }
+  const now = performance.now() / 1000, tip = G.localToWorld(_byT.set(S.muzzle[0], S.muzzle[1] - .026, S.muzzle[2] - BAYO.len)), dir = _byD.set(0, 0, -1).applyQuaternion(G.getWorldQuaternion(_q1));
+  const last = TOOL.bayoLast, lt = TOOL.bayoLt || now; TOOL.bayoLast = tip.clone(); TOOL.bayoLt = now; if (!last) return;
+  const dt = Math.max(1 / 120, now - lt), fwd = (tip.x - last.x) * dir.x + (tip.y - last.y) * dir.y + (tip.z - last.z) * dir.z;
+  if (fwd / dt < BAYO.jab || now < (TOOL.bayoCool || 0)) return;
+  TOOL.bayoCool = now + BAYO.cool; bayoStab(G.localToWorld(_byO.set(S.muzzle[0], S.muzzle[1] - .026, S.muzzle[2])), dir.clone());
+}
+function raptorRushing(A) { return (A.kind === "raptor" || A.hunter) && ((A.ugs && A.ugs.goal === "charge") || A.hs === "charge" || A.speed > 4); }
+function bayoStab(o, dir) {                                      // what the blade reaches (from the muzzle out past the tip)
+  const reach = BAYO.len + BAYO.reach + .4, sd = set.hand === "right" ? "R" : "L"; o = o.clone().addScaledVector(dir, -.4);   // (from a little behind the muzzle: a head already against the blade still counts)
+  const [aT, A, aHead] = beasts.length ? animalRay(o, dir, 0, reach) : [1e9, null, false];
+  const ph = MP.on && (gameMode === "pvp" || geoNet()) ? mpHitTest(o, dir, reach) : null;
+  const fake = { dmg: BAYO.pdmg, gun: null, from: o.clone(), bot: null };
+  if (A && aT <= reach && (!ph || aT < ph.t)) {
+    if (raptorRushing(A) && aHead) { hitAnimal(A, aT, 1e6, true, null); if (!A.dead && !(A.net && mpNetGuest())) { A.hp = 0; killAnimal(A, aT); } vrBanner("Kill strike!", 3, 3); buzz(sd, 1, 140); gunFoley([[0, 900, .04, .5], [.03, 140, .18, .6]]); return; }
+    hitAnimal(A, aT, BAYO.dmg, aHead, null); buzz(sd, .9, 90); gunFoley([[0, 700, .03, .4], [.02, 180, .12, .5]]); return;
+  }
+  if (ph) { const dm = Math.round(BAYO.pdmg * (ph.head ? 1.6 : 1)); mpSendTo(ph.L, { t: "hit", d: dm, hd: ph.head }); myDmg(dm, null); hitTick(ph.head); buzz(sd, .9, 90); gunFoley([[0, 700, .03, .4], [.02, 180, .12, .5]]); return; }
+  if (VB.list.length && gameMode === "pvp" && vbBullet(fake, o, dir, reach)) { buzz(sd, .9, 90); gunFoley([[0, 700, .03, .4], [.02, 180, .12, .5]]); return; }
+  gunFoley([[0, 1400, .05, .12]]); buzz(sd, .2, 20);                // a jab at the air: just the swish
 }
 function toolPrep() {                                          // before the frame is drawn: the mini-sight's thermal picture (30 times a second, only while it's near your eye)
   const T = TOOL.sight, M = TOOL.sightM; if (!T || !M || !M.visible || state !== "play") return;
@@ -11917,17 +11955,22 @@ function toolTick(off) {                                       // (each frame, i
   if (off && xTap(off) && key && state === "play") {
     const sd = set.hand === "right" ? "L" : "R";
     if (!full && !geoTherm(key)) { vrBanner(GEO.on ? "Tools: all guns red, 10 grenades, full health (or find the thermal scope and binoculars)" : gameMode === "pvp" ? "Tools: all guns red, 10 grenades, full health + shield" : "Tools: all guns red + 10 grenades", 3, 1); buzz(sd, .15, 20); }
-    else { TOOL.on[key] = !TOOL.on[key]; gunFoley(TOOL.click[TOOL.on[key] ? "on" : "off"]); buzz(sd, .35, 25); vrBanner(TOOL.name[key] + (TOOL.on[key] ? " on" : " off"), 1.5, 1); }
+    else { TOOL.on[key] = !TOOL.on[key]; gunFoley(TOOL.click[TOOL.on[key] ? "on" : "off"]); buzz(sd, .35, 25); vrBanner(TOOL.name[key === "ar" && bayoDev() ? "bayo" : key] + (TOOL.on[key] ? (key === "ar" && bayoDev() ? " fixed" : " on") : " off"), 1.5, 1); }
   }
   const G = vr.gun && vr.gun.visible ? vr.gun : null, gk = G ? vr.gunKind : "", S = G && GUNSPOT[gk];
-  const fk = G && !vr.scoped && (gk === "ar" || gk === "pistol") && toolOn(gk) ? (gk === "ar" ? 1 : 2) : 0;
+  const bay = !!G && gk === "ar" && toolOn("ar") && bayoDev();   // (Dev: the AK's tool is a bayonet, not a flashlight)
+  if (TOOL.bayoG && TOOL.bayoG !== (bay ? G : null)) { if (TOOL.bayoG.userData.bayo) TOOL.bayoG.userData.bayo.visible = false; TOOL.bayoG = null; }
+  if (bay) { bayoBlade(G, S.muzzle).visible = true; TOOL.bayoG = G; bayoTick(G, S); } else TOOL.bayoLast = null;
+  const fk = G && !vr.scoped && (gk === "ar" || gk === "pistol") && toolOn(gk) && !bay ? (gk === "ar" ? 1 : 2) : 0;
   if (fk) { TOOL.fx = TOOL.fx || toolFxMake(); toolFxShow(TOOL.fx, fk, G, S.muzzle, false); } else toolFxHide(TOOL.fx);
   if (TOOL.sightM && TOOL.sightM !== (G && G.userData.tsight)) TOOL.sightM.visible = false;
   if (G && gk === "smg" && toolOn("smg")) { const M = toolSight(G, S); M.visible = true; TOOL.sightM = M; } else if (TOOL.sightM) TOOL.sightM.visible = false;
 }
-function toolNet() { const G = vr.gun && vr.gun.visible; return G && !vr.scoped && (vr.gunKind === "ar" || vr.gunKind === "pistol") && toolOn(vr.gunKind) ? (vr.gunKind === "ar" ? 1 : 2) : 0; }   // what the others see
+function toolNet() { const G = vr.gun && vr.gun.visible; return G && !vr.scoped && (vr.gunKind === "ar" || vr.gunKind === "pistol") && toolOn(vr.gunKind) ? (vr.gunKind === "ar" ? (bayoDev() ? 3 : 1) : 2) : 0; }   // what the others see
 function toolRemote(R, s, G) {                                 // another player's flashlight or laser
+  if (G && G.userData.bayo && (!s || !s.alive || s.tl !== 3)) G.userData.bayo.visible = false;
   if (!s || !s.alive || !s.g || !s.tl || !G) { toolFxHide(R.tfx); return; }
+  if (G.userData.bayo) G.userData.bayo.visible = s.tl === 3; if (s.tl === 3) { bayoBlade(G, (GUNSPOT0[s.g.k] || GUNSPOT0.ar).muzzle).visible = true; toolFxHide(R.tfx); return; }   // (a bayonet: no light)
   R.tfx = R.tfx || toolFxMake(); toolFxShow(R.tfx, s.tl, G, (GUNSPOT0[s.g.k] || GUNSPOT0.ar).muzzle, G.position.distanceTo(camera.position) > 250);
 }
 /* flaming arrows: a fire at the point, embers behind it, a little fire where it lands; a burning dinosaur takes a few more hits of damage */
