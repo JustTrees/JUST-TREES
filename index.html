@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.34";              // Just Trees
+const VERSION = "3.35";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4998,7 +4998,7 @@ function geoFishModel(col, kg) {
 function geoFishUI() {
   if (GEO.fishM) return GEO.fishM;
   const cv = document.createElement("canvas"); cv.width = 256; cv.height = 256;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(.16, .16), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(.21, .21), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false, depthWrite: false, fog: false, toneMapped: false }));   // (3.35: a bit bigger)
   m.renderOrder = 997; m.frustumCulled = false; m.visible = false; m.userData.cv = cv; scene.add(m); GEO.fishM = m; return m;
 }
 function geoFishDraw(F, L) {                                  // a small dial by the reel: how hard the line is pulling, and how much is out
@@ -5047,7 +5047,7 @@ function geoRodModel() {
   g.userData = { segs, tip, crank, knob, bail, spool, reel };
   return g;
 }
-function geoRodReset(R) { R.st = "ready"; R.bail = false; R.L = .4; R.F = null; if (R.line) R.line.visible = true; if (R.lure) R.lure.visible = true; if (GEO.fishM) GEO.fishM.visible = false; if (R.fo) { scene.remove(R.fo); R.fo = null; } R.lp = null; }
+function geoRodReset(R) { if (R.jo) { scene.remove(R.jo); R.jo = null; } R.st = "ready"; R.bail = false; R.L = .4; R.F = null; if (R.line) R.line.visible = true; if (R.lure) R.lure.visible = true; if (GEO.fishM) GEO.fishM.visible = false; if (R.fo) { scene.remove(R.fo); R.fo = null; } R.lp = null; }
 function geoRodLine(R, a, b, sag, T) {                         // the line: tip to lure, drooping when it's slack, colour by the strain
   const pa = R.line.geometry.attributes.position, n = pa.count, d = a.distanceTo(b);
   for (let i = 0; i < n; i++) { const t = i / (n - 1); pa.setXYZ(i, a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t - Math.sin(t * Math.PI) * sag * d, a.z + (b.z - a.z) * t); }
@@ -5124,19 +5124,31 @@ function geoRodTick(I, main, dt) {
     const back = R.tvS.dot(_v2.copy(R.p).sub(tip).setY(0).normalize()) < -2.2;
     if (R.tvS.y > 2.2 || back) {
       const Lf = R.salt ? (R.depth > 15 && Math.random() < .7 ? SEA_BIG : SEA_FISH) : FISH_KINDS, f = Lf[Math.floor(Math.random() * Lf.length)], kg = f[1] + Math.random() * (f[2] - f[1]);
-      R.st = "fight"; R.t = 0; R.bail = false; R.fish = { name: f[0], kg, col: f[3] };
-      R.F = { T: .3, stam: 1, s: Math.min(1.4, (.6 + kg / 8) * TUNE.fishStr / 1.3), mode: "run", modeT: 1.5, run: .8, side: Math.random() < .5 ? 1 : -1, fa: Math.atan2(R.p.x - P.x, R.p.z - P.z), snapT: 0, slackT: 0, pay: 0 };
+      R.st = "fight"; R.t = 0; R.bail = false; R.fish = { name: f[0], kg, col: f[3], big: Lf === SEA_BIG };
+      R.F = { T: .3, stam: 1, s: Math.min(1.4, (.6 + kg / 8) * TUNE.fishStr / 1.3), mode: "run", modeT: 1.5, run: .8, side: Math.random() < .5 ? 1 : -1, fa: Math.atan2(R.p.x - P.x, R.p.z - P.z), snapT: 0, slackT: 0, pay: 0,
+        jumpT: 1.2 + Math.random() * 1.5, air: null, stun: 0, seen: false };   // (it jumps soon: you see what you've got)
       vrBanner("Fish on!", 1.2, 1); buzz(os, .9, 160); buzz(ms, .5, 80);
     } else if (R.t > 1.4) { R.st = "out"; R.t = 0; vrBanner("Missed it: strike when the tip jerks", 1.8, 0); }
     return;
   }
   if (R.st === "fight") {
-    const F = R.F, s = F.s, h = Math.max(.5, tip.y - water0);
+    const F = R.F, s = F.s, h = Math.max(.5, tip.y - water0), big = R.fish.big;
+    // (3.35) now and then it leaps clear of the water (the big sea fish high and often): you see what it is; jerk the rod while it's in the air and it's stunned a while: reel!
+    if (!F.air && !(F.stun > 0) && (F.jumpT -= dt) <= 0) { F.air = { t: 0, T: big ? .9 + Math.random() * .5 : .55 + Math.random() * .25, H: big ? 1.6 + Math.random() * 1.6 : .45 + Math.min(.6, R.fish.kg * .08), hit: false };
+      F.jumpT = big ? 2.5 + Math.random() * 3 : 4 + Math.random() * 4; geoPop(R.p.clone().setY(water0), 0xd8f0ff, big ? 22 : 10, "splash"); gunFoley([[0, 420, .18, big ? .2 : .1]]);
+      if (!R.jo) { R.jo = geoFishModel(R.fish.col, R.fish.kg); scene.add(R.jo); } R.jo.visible = true;
+      if (!F.seen) { F.seen = true; vrBanner((big ? "A " : "") + R.fish.name[0].toUpperCase() + R.fish.name.slice(1) + "! About " + Math.round(R.fish.kg) + " kg" + (big ? " · jerk the rod while it's in the air" : ""), 3, big ? 3 : 1); } }
+    if (F.air) {
+      F.air.t += dt; const back = R.tvS.dot(_v2.copy(R.p).sub(tip).setY(0).normalize()) < -2.2;
+      if (!F.air.hit && (R.tvS.y > 2.2 || back)) { F.air.hit = true; F.stun = big ? 3.5 : 2.5; vrBanner("Stunned! Reel it in!", 1.6, 2); buzz(ms, .8, 90); buzz(os, .8, 90); gunFoley([[0, 900, .05, .14], [.04, 300, .15, .12]]); }
+      if (F.air.t >= F.air.T) { geoPop(R.p.clone().setY(water0), 0xd8f0ff, big ? 26 : 12, "splash"); gunFoley([[0, 260, .25, big ? .22 : .1]]); F.air = null; if (R.jo) R.jo.visible = false; }
+    }
+    if (F.stun > 0) { F.stun -= dt; F.mode = "rest"; F.modeT = Math.max(F.modeT, .2); F.slackT = 0; F.stam = Math.max(0, F.stam - dt * .05); }
     if ((F.modeT -= dt) <= 0) { const r = Math.random();     // what the fish does next: a run, a rest, or swimming at you
       if (r < .15 + .5 * F.stam) { F.mode = "run"; F.modeT = 1 + Math.random() * 2.5; F.run = .5 + Math.random() * .5; F.side = Math.random() < .5 ? 1 : -1; }
       else if (r < .8) { F.mode = "rest"; F.modeT = 1.2 + Math.random() * 2; } else { F.mode = "come"; F.modeT = .8 + Math.random() * 1.8; } }
     const pow = .35 + .65 * F.stam, rr = R.reelV;
-    let pull = F.mode === "run" ? (.3 + .45 * F.run) * s * pow : F.mode === "rest" ? .12 * s * pow : 0, give = F.mode === "come" ? .9 : 0;
+    let pull = F.stun > 0 || F.air ? .05 : F.mode === "run" ? (.3 + .45 * F.run) * s * pow : F.mode === "rest" ? .12 * s * pow : 0, give = F.mode === "come" ? .9 : 0;   // (in the air or stunned: hardly pulling)
     if (F.mode === "come") pull = Math.max(0, rr - give) / 3 + (rr > .15 ? .07 : 0) + (rodDir.y > .5 ? .04 : 0);   // swimming at you: keep reeling (and the rod up) or the line goes slack
     const crankLoad = F.mode === "come" ? 0 : rr / 2.4 * (F.mode === "run" ? .6 : .22);
     const lineDir = R.lure.position.clone().sub(tip).normalize(), aim = Math.acos(Math.max(-1, Math.min(1, rodDir.dot(lineDir))));
@@ -5156,6 +5168,7 @@ function geoRodTick(I, main, dt) {
     F.stam = Math.max(0, Math.min(1, F.stam - dt * (F.T * .085 + (against ? .035 : 0)) / s + (F.mode === "rest" ? dt * .008 : 0)));
     if (F.mode === "run") F.fa += F.side * (1.5 + 2.5 * F.run) / Math.max(4, R.L) * dt * pow;
     const dh = Math.sqrt(Math.max(.2, R.L * R.L - h * h)); R.p = new THREE.Vector3(P.x + Math.sin(F.fa) * dh, water0 - .08, P.z + Math.cos(F.fa) * dh);
+    if (F.air && R.jo) { const k = F.air.t / F.air.T; R.p.y = water0 + F.air.H * Math.sin(Math.PI * k); R.jo.position.copy(R.p); R.jo.rotation.set(-1.2 + 2.4 * k, F.fa + Math.PI, F.side * .5 * Math.sin(k * 6)); }   // up, arching over, back in
     { const g = H(R.p.x, R.p.z); if (g > water0 - .2 && dh > 3) { F.fa -= F.side * .05; } }   // (it keeps to the water)
     R.lure.position.copy(R.p); R.lure.visible = false;
     if ((F.splT = (F.splT || 0) - dt) <= 0 && (F.mode === "run" || R.L < 8)) { F.splT = .5 + Math.random(); geoPop(R.p.clone().setY(water0), 0xd8f0ff, 8, "splash"); }
@@ -5163,7 +5176,8 @@ function geoRodTick(I, main, dt) {
     if ((R.uiT = (R.uiT || 0) - dt) <= 0) { R.uiT = 1 / 12; geoFishDraw(F, R.L); }
     const Mu = geoFishUI(); Mu.position.copy(R.M.position).add(_v1.set(0, .1, 0)).addScaledVector(_v2.set(1, 0, 0).applyQuaternion(I.headQ), set.hand === "right" ? -.17 : .17); Mu.lookAt(I.head); Mu.visible = true;   // (beside the rod hand, out of the way)
     if ((R.buzzT = (R.buzzT || 0) - dt) <= 0) { R.buzzT = .1; buzz(os, .08 + .6 * F.T, 18); }
-    if (dh < 2.6 && (R.tvS.y > 1.6 || tip.y > I.head.y)) {   // close in and lift: out it comes, into your hand
+    if (dh < 2.6 && !F.air && (R.tvS.y > 1.6 || tip.y > I.head.y)) {   // close in and lift: out it comes, into your hand
+      if (R.jo) { scene.remove(R.jo); R.jo = null; }
       R.st = "land"; R.t = 0; Mu.visible = false; const fo = geoFishModel(R.fish.col, R.fish.kg); fo.position.copy(R.p); scene.add(fo); R.fo = fo; R.from = R.p.clone(); gunFoley([[0, 500, .3, .1]]); }
     return;
   }

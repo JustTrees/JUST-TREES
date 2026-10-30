@@ -43,27 +43,29 @@ async def main():
         out["hard"] = await pg.evaluate("() => cast(16)")
         out["reel"] = await pg.evaluate("""() => { const r = R(); r.rate = 0; const d0 = Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z), b0 = r.bail; crank(5, 1.2); return { locked: r.crankOn, bailWas: b0, bail: r.bail, inBy: +(d0 - Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z)).toFixed(1) }; }""")
         res = {}
-        for mode in ("good", "hard", "slack"):
+        for mode in ("good", "hard", "slack", "stun"):
             res[mode] = await pg.evaluate("""(mode) => { const r = R(), T = D.THREE; r.why = ''; if (r.st !== 'out' || !r.wet) { D.geoHeld(null); D.geoHeld('rod'); step(); const c = cast(15); if (r.st !== 'out' || !r.wet) return { notOut: c }; }
               M.grip = 0; step(); r.rate = 1e6; pitch(-.3); step(); const bite = r.st; for (let i = 0; i < 8; i++) { pitch(-.3 + i * .14); step(); } const hooked = r.st;
               let n = 0, minL = 1e9, maxT = 0, snap = false; const food0 = D.GEO.food = 30;
               if (mode === 'hard') pitch(-.15);   // the rod pointed down the line at the fish
               else pitch(.6);                     // the rod held up
-              const U = r.M.userData; let a = 0;
+              const U = r.M.userData; let a = 0, jumped = 0, seen = false, stun = 0;
+              if (mode === 'stun') { r.F.jumpT = 0; step(); jumped = r.F.air ? 1 : 0; seen = !!(r.jo && r.jo.visible) && r.jo.position.y > D.water; pitch(-.4); step(); pitch(1.2); step(); stun = +(r.F.stun || 0).toFixed(1);
+                return { bite, hooked, jumped, seen, stun, banner: D.VBAN ? 1 : 1 }; }
               while (r.st === 'fight' && n++ < 72 * 120) {
                 const rate = mode === 'good' ? (r.F.T > .6 ? 0 : r.F.mode === 'run' ? .4 : 1.6) : mode === 'hard' ? 4 : 0;
                 if (rate > 0) { M.grip = 1; if (!r.crankOn) { M.pos.copy(U.knob.getWorldPosition(new T.Vector3())); } a += rate * 6.283 / 72; M.pos.copy(U.crank.getWorldPosition(new T.Vector3())).add(new T.Vector3(0, Math.cos(a) * .06, Math.sin(a) * .06).applyQuaternion(r.M.quaternion)); }
                 else M.grip = 0;
                 if (mode === 'good' && Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z) < 2.6) pitch(1.3);
-                step(); minL = Math.min(minL, r.L); maxT = Math.max(maxT, r.F ? r.F.T : 0); }
+                step(); minL = Math.min(minL, r.L); maxT = Math.max(maxT, r.F ? r.F.T : 0); if (r.F && r.F.air) jumped++; }
               const end = r.st; for (let i = 0; i < 100 && r.st === 'land'; i++) step();
-              return { why: r.why, bite, hooked, end, landed: r.st === 'ready' && end === 'land', food: Math.round(D.GEO.food - food0), secs: Math.round(n / 72), minL: Math.round(minL), maxT: +maxT.toFixed(2) }; }""", mode)
+              return { why: r.why, bite, hooked, end, landed: r.st === 'ready' && end === 'land', food: Math.round(D.GEO.food - food0), secs: Math.round(n / 72), minL: Math.round(minL), maxT: +maxT.toFixed(2), jumped }; }""", mode)
         out["fight"] = res
         print(json.dumps(out)); print("errors:", errs[:5] or "none")
         f = out["fight"]
         ok = out["shore"] and out["base"]["inOff"] and out["base"]["hasReel"] and out["lazy"][0] < 4 and out["soft"][0] == "out" and out["hard"][0] == "out" and out["hard"][1] > out["soft"][1] + 5 and 18 < out["hard"][1] < 70 \
              and out["reel"]["locked"] and out["reel"]["bailWas"] and not out["reel"]["bail"] and 3 < out["reel"]["inBy"] < 6 \
              and f["good"]["bite"] == "bite" and f["good"]["hooked"] == "fight" and f["good"]["landed"] and f["good"]["food"] > 0 \
-             and f["hard"]["hooked"] == "fight" and not f["hard"]["landed"] and f["slack"]["hooked"] == "fight" and not f["slack"]["landed"] and not errs
+             and f["hard"]["hooked"] == "fight" and not f["hard"]["landed"] and f["slack"]["hooked"] == "fight" and not f["slack"]["landed"] and f["good"]["jumped"] > 0 and f["stun"]["jumped"] == 1 and f["stun"]["seen"] and f["stun"]["stun"] > 1 and not errs
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)
