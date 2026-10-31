@@ -26,7 +26,7 @@ async def main():
           o.after = [D.JTFX.always, !!T.Material.prototype.defines, D.GEO.on];
           return o; }""")
         print(json.dumps(r)); print("errors:", errs[:5] or "none")
-        ok = r["plain"] == [False, False] and r["lab"][:3] == [True, True, 5] and r["lab"][3] == "bblock" and r["lab"][4] == "hlglass" and r["lab"][5] and r["warm"] \
+        ok = r["plain"] == [False, False] and r["lab"][:3] == [True, True, 6] and r["lab"][3] == "bblock" and r["lab"][4] == "hlglass" and r["lab"][5] and r["warm"] \
              and all(v <= 0 for v in r["newPrograms"].values()) and r["after"][:2] == [False, False] and not errs
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

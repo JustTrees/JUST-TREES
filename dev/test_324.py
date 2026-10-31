@@ -21,7 +21,7 @@ GEN = """() => { window.FREEZE = true; D.renderer.setAnimationLoop(null); try { 
   M.rayQ.copy(yawQ); O.rayQ.copy(yawQ); window.I = { head, headQ: yawQ.clone(), hands: { right: M, left: O } }; window.yawQ = yawQ; window.fwd = fwd;
   window.step = () => D.geoHeldTick(I, M, 1 / 72); window.R = () => D.GEO.rod; step(); step();
   window.pitch = a => { O.rayQ.copy(yawQ).multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), a)); };
-  window.cast = (w) => { const r = R(); pitch(1.2); for (let i = 0; i < 20; i++) step(); O.trig = 1; step(); let a = 1.2; while (a > .3) { a -= w / 72; pitch(a); step(); } O.trig = 0; step();
+  window.cast = (w) => { const r = R(); pitch(1.2); for (let i = 0; i < 20; i++) step(); O.trig = 1; step(); let a = 1.2; while (a > .7) { a -= w / 72; pitch(a); step(); } O.trig = 0; step();   // (3.36: let go with the rod still high, like a real cast: the weight flies where it's going)
     let n = 0; while (r.st === 'cast' && n++ < 72 * 8) { pitch(-.3); step(); } return [r.st, Math.round(Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z)), r.wet, Math.round(r.v0)]; };
   window.crank = (turns, rate) => { const r = R(), U = r.M.userData, hub = U.crank.getWorldPosition(new T.Vector3()); M.pos.copy(U.knob.getWorldPosition(new T.Vector3())); M.grip = 1; step();
     const n = Math.round(turns / rate * 72); let a = 0; for (let i = 0; i < n; i++) { a += rate * 6.283 / 72; const q = r.M.quaternion, h = U.crank.getWorldPosition(new T.Vector3());
@@ -44,7 +44,7 @@ async def main():
         out["reel"] = await pg.evaluate("""() => { const r = R(); r.rate = 0; const d0 = Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z), b0 = r.bail; crank(5, 1.2); return { locked: r.crankOn, bailWas: b0, bail: r.bail, inBy: +(d0 - Math.hypot(r.p.x - D.P.x, r.p.z - D.P.z)).toFixed(1) }; }""")
         res = {}
         for mode in ("good", "hard", "slack", "stun"):
-            res[mode] = await pg.evaluate("""(mode) => { const r = R(), T = D.THREE; r.why = ''; if (r.st !== 'out' || !r.wet) { D.geoHeld(null); D.geoHeld('rod'); step(); const c = cast(15); if (r.st !== 'out' || !r.wet) return { notOut: c }; }
+            res[mode] = await pg.evaluate("""(mode) => { const r = R(), T = D.THREE; r.why = ''; if (r.st !== 'out' || !r.wet) { D.geoHeld(null); D.geoHeld('rod'); step(); const c = cast(10); if (r.st !== 'out' || !r.wet) return { notOut: c }; }
               M.grip = 0; step(); r.rate = 1e6; pitch(-.3); step(); const bite = r.st; for (let i = 0; i < 8; i++) { pitch(-.3 + i * .14); step(); } const hooked = r.st;
               let n = 0, minL = 1e9, maxT = 0, snap = false; const food0 = D.GEO.food = 30;
               if (mode === 'hard') pitch(-.15);   // the rod pointed down the line at the fish
