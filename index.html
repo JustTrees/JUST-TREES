@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.36";              // Just Trees
+const VERSION = "3.37";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3144,6 +3144,20 @@ function reveal() {
 }
 let mapDirty = true;
 const FPSM = { t: 0, n: 0, worst: 0, fps: 0, low: 0 };
+/* (3.37, Dev) the speed check: how long the game's own work takes each frame, split up (the rest of the frame is the headset drawing it),
+   and switches to leave things out of the picture, to see what's costing the most. */
+const SPD = { acc: {}, n: 0, show: {}, calls: 0, tris: 0, off: {}, scale: (() => { try { return +localStorage.getItem("jt-dev-scale") || 0; } catch (_) { return 0; } })(), fov: 1 };
+const perfT = () => performance.now();
+function perfAdd(k, ms) { SPD.acc[k] = (SPD.acc[k] || 0) + ms; }
+function perfFrame() { SPD.n++; const t = performance.now(); if (SPD.n >= 60 || t - (SPD.t0 || 0) > 1000) { SPD.t0 = t; for (const k in SPD.acc) SPD.show[k] = SPD.acc[k] / SPD.n; SPD.acc = {}; SPD.n = 0; } }
+function perfApply() {                                             // what's switched off for the speed check (every frame, after the game set things up)
+  const O = SPD.off;
+  if (NEAR) for (const NS of [NEAR.trees, NEAR.lo, NEAR.small, NEAR.mid]) for (const it of NS.items) if (it.mesh) { if (O.trees) it.mesh.visible = false; else if (O.treesWas) it.mesh.visible = it.mesh.count > 0; }
+  O.treesWas = !!O.trees;
+  for (const t of tiles) { if (t.lo) t.lo.visible = !O.cards; if (t.group && t.group.children[0]) t.group.children[0].visible = !O.ground; }
+  if (ENDLESS && ENDLESS.far) ENDLESS.far.visible = !O.far; if (ENDLESS && ENDLESS.water) ENDLESS.water.visible = !O.water;
+  if (animalGroup) animalGroup.visible = !O.animals; if (sky) sky.visible = !O.sky && !UNDER.on;
+}
 function fpsTick(raw) { if (!(raw > 0) || raw > 2) return; FPSM.t += raw; FPSM.n++; FPSM.worst = Math.max(FPSM.worst, raw); if (FPSM.t >= 2) { FPSM.fps = Math.round(FPSM.n / FPSM.t); FPSM.low = Math.round(FPSM.worst * 1000); FPSM.t = 0; FPSM.n = 0; FPSM.worst = 0; } }
 function mapMates() {                                       /* your teammates (people and bots) as dots on the VR map; PvP with teams only, never with Team · fist bump comms online */
   const out = []; if (typeof MP === "undefined" || typeof VB === "undefined" || !teamsOn() || state !== "play" || (MP.on && (set.comms | 0) === 3)) return out;
@@ -3195,7 +3209,10 @@ function drawMap(canvas) {
     ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(mx, mz - r * 1.6, r * .28, 0, 6.3); ctx.fill(); ctx.restore();
   }
   ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.max(10, W / 18)}px system-ui`; ctx.textAlign = "center"; ctx.fillText("N", W / 2, Math.max(12, W / 16));
-  if (canvas.id === "vrMap" && FPSM.fps) { ctx.textAlign = "left"; ctx.font = `600 ${Math.max(10, W / 30)}px system-ui`; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4, W * .36, W / 22); ctx.fillStyle = FPSM.low > 30 ? "#ff8a6a" : "#cfe8c0"; ctx.fillText(FPSM.fps + " fps · worst " + FPSM.low + " ms", 10, 4 + W / 30); }   // how smooth it's running
+  if (canvas.id === "vrMap" && FPSM.fps) { ctx.textAlign = "left"; ctx.font = `600 ${Math.max(10, W / 30)}px system-ui`; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4, W * .36, W / 22); ctx.fillStyle = FPSM.low > 30 ? "#ff8a6a" : "#cfe8c0"; ctx.fillText(FPSM.fps + " fps · worst " + FPSM.low + " ms", 10, 4 + W / 30);
+    if (DEV.ok && SPD.show.all !== undefined) { const S = SPD.show, f = v => (v || 0).toFixed(1), fr = FPSM.fps ? 1000 / FPSM.fps : 0;   // (Dev: where each frame's time goes)
+      const l2 = "game " + f(S.all) + " ms (move " + f(S.move) + " · land " + f(S.land) + " · animals " + f(S.anim) + " · send " + f(S.draw) + ")", l3 = "headset drawing ≈ " + f(Math.max(0, fr - S.all)) + " ms · " + SPD.calls + " draws · " + (SPD.tris / 1e6).toFixed(2) + "M tris";
+      ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4 + W / 22, W * .92, W / 11); ctx.fillStyle = "#cfe8c0"; ctx.font = `600 ${Math.max(9, W / 38)}px system-ui`; ctx.fillText(l2, 10, 4 + W / 22 + W / 30); ctx.fillText(l3, 10, 4 + W / 22 + W / 30 * 2.1); } }   // how smooth it's running
   if (gameMode !== "hunt" && canvas.id === "vrMap") {   // what the wrist used to show, along the bottom
     const f = Math.max(12, W / 16), pad = W * .03, bh = gameMode === "pvp" ? f * 2.6 : f * 1.4;
     ctx.fillStyle = "rgba(8,12,10,.72)"; ctx.fillRect(pad * .5, Hh - bh - pad, W - pad, bh + pad * .5); ctx.textAlign = "left";
@@ -12462,6 +12479,20 @@ function vruiParts() {
   uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiSettings(), { fs: 40, hide: () => mpGuest() });
   uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
   mpLobbyPanels();
+  // ---- (Dev) the speed check: switch things off and back on, then look at the numbers on your wrist ----
+  const Pf = uiPanel("perf", 1300, 1000, 1.9, 58, 1.4);
+  Pf.paint = (g, P) => { uiBg(g, P, "SPEED CHECK"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
+    uiWrap(g, "Turn something off, go back to the game and look at your wrist: if the fps jumps, that's what's costing. 'game' is our own work each frame; the rest of the frame is the headset drawing the picture.", 650, 140, 1150, 36);
+    const S = SPD.show, f = v => (v || 0).toFixed(1); g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun;
+    g.fillText(FPSM.fps + " fps · game " + f(S.all) + " ms (move " + f(S.move) + ", land " + f(S.land) + ", animals " + f(S.anim) + ", send " + f(S.draw) + ") · " + SPD.calls + " draws", 650, 262); };
+  const tog = (k, l, x, y) => uiBtn(Pf, x, y, 360, 96, "", () => { SPD.off[k] = !SPD.off[k]; uiDraw(Pf); }, { labelFn: () => l + ": " + (SPD.off[k] ? "OFF" : "on"), active: () => !SPD.off[k], fs: 32, personal: true });
+  tog("trees", "Trees near", 90, 300); tog("cards", "Trees far", 470, 300); tog("ground", "Ground", 850, 300);
+  tog("far", "Far land", 90, 410); tog("water", "Water", 470, 410); tog("animals", "Animals", 850, 410); tog("sky", "Sky", 90, 520);
+  [[0, "Fov 0"], [.5, "Fov ½"], [1, "Fov 1"]].forEach(([v, l], i) => uiBtn(Pf, 470 + i * 250, 520, 230, 96, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 30, personal: true }));
+  [[.6, "Sharp .6"], [.7, ".7"], [.8, ".8 (now)"], [1, "1.0"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 290, 650, 270, 96, l, () => { SPD.scale = v; try { localStorage.setItem("jt-dev-scale", String(v)); } catch (_) {} uiDraw(Pf); }, { active: () => (SPD.scale || .8) === v, fs: 30, personal: true }));
+  uiBtn(Pf, 90, 770, 1120, 60, "", () => {}, { ghost: true, labelFn: () => "Sharpness takes effect the next time you go into VR (exit VR and come back)", fs: 24 });
+  uiBtn(Pf, 90, 860, 380, 96, "Back", () => vruiOpen("pause"), { fs: 34, personal: true });
+  uiBtn(Pf, 830, 860, 380, 96, "Resume", () => vruiResume(), { fs: 34, primary: true, personal: true });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 140, 1000, 34);
@@ -12472,6 +12503,7 @@ function vruiParts() {
    ["Test Lab: guns", () => vruiOpen("gunlab"), { personal: true, hide: () => !GUNLAB.on || GEO.lab }],
    ["Test Lab tools", () => vruiOpen("glab"), { personal: true, hide: () => !(GEO.on && GEO.lab) }],
    ["Set height", () => vrHeightCheck("pause"), { personal: true }],
+   ["Speed check", () => vruiOpen("perf"), { personal: true, hide: () => !DEV.ok }],
    ["New map, same settings", () => { pvpEndRound(); startNew(); }, { hide: () => mpGuest() || LAB.testing }],
    ["Change settings", () => { pvpEndRound(); vruiSettings(); }, { hide: () => mpGuest() || LAB.testing, labelFn: () => MP.code ? "Exit to lobby · change settings" : "Change settings" }],
    ["Main menu", () => vruiOpen("mode"), { personal: true, labelFn: () => MP.code ? "Leave room" : "Main menu" }],
@@ -13759,11 +13791,11 @@ async function enterVR(menu) {
   initSound();
   try {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(.8);
+    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(DEV.ok && SPD.scale ? SPD.scale : .8);   // (Dev speed check: another sharpness)
     await renderer.xr.setSession(session);
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true;
     try { vr.base.addEventListener("reset", () => { vr.resetPend = true; vr.reUI = true; }); } catch (_) {}   // holding the headset's button recenters: the menus come round in front of you, the game world stays put vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
-    try { renderer.xr.setFoveation(1); } catch (_) {}
+    try { renderer.xr.setFoveation(DEV.ok ? SPD.fov : 1); } catch (_) {}
     session.addEventListener("end", () => {
       const wasMenu = state === "vrmenu"; vruiClose(); VRUI.fadeGo = null; VRUI.fadeV = 0; if (VRUI.fade) VRUI.fade.visible = false;
       if (wasMenu) { state = "setup"; $("loading").classList.add("hidden"); $("setup").classList.remove("hidden"); renderSetup(); }
@@ -18500,19 +18532,21 @@ function cullTiles() {
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 let last = performance.now(), infoT = 0, mapT = 0;
 function loop(now) {
-  fpsTick((now - last) / 1000);
+  fpsTick((now - last) / 1000); const pf0 = DEV.ok ? perfT() : 0;
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;
   if (state === "play" || state === "fly") { if (!UNDER.on) updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
   if (MP.peer || (vr.on && gameMode === "pvp")) mpTick(dt);
   if (VB.shown && state !== "play" && state !== "pause") vbHide();
   if (state === "play") {
+    const pu0 = pf0 ? perfT() : 0;
     if (vr.on) vrTick(dt);
     if (!(vr.on && vr.climbing)) update(dt);
     if (vr.on) vrAfterMove(dt);
+    if (pf0) perfAdd("move", perfT() - pu0);
     updateZone(dt);
     if (fireHeld && GUN.auto && GUN.cool <= 0) fire();                      // only the PvP rifle is automatic
-    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); if (!UNDER.on) updateAnimals(dt); else ugBeastsTick(dt);
+    updateNades(dt); flareTick(dt); updateHud(); updateHurt(dt); updateSquad(dt); { const pa0 = pf0 ? perfT() : 0; if (!UNDER.on) updateAnimals(dt); else ugBeastsTick(dt); if (pf0) perfAdd("anim", perfT() - pa0); }
     if (vr.on && gameMode === "pvp") vbTick(dt);                            // bots
     updateCoin(dt, now);
     if (PORCH && !PORCH.found && Math.abs(P.y - PORCH.top) < .4 && Math.hypot(P.x - PORCH.x, P.z - PORCH.z) < PORCH.rOut + .3) {   // you found it
@@ -18558,12 +18592,16 @@ function loop(now) {
   if (world || (vr.on && VRUI.on)) {
     GRADE.uLift.value = vr.on ? .75 : 0; renderer.toneMappingExposure = (vr.on ? 1.08 : .95) * (1 + (GEO.bbK || 0) * .25) * (1 + GEO.nvK * (.6 + 3 * NIGHT_K)) * (1 + (GEO.ghostK || 0) * .1);   // (night-vision goggles; a spirit sees in the dark)
     { const fl = vr.on ? NIGHT_K * (weather.storm ? .02 : weather.precip ? .014 : .009) : 0; GRADE.uFloor.value.setRGB(fl * .8, fl * .9, fl * 1.15); }
-    if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); }
+    { const pl0 = pf0 ? perfT() : 0; if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); } if (pf0) perfAdd("land", perfT() - pl0); }
     if (vr.on && TOOL.sightM) toolPrep();                  // the SMG's thermal mini-sight
+    if (DEV.ok) perfApply();
+    const pr0 = pf0 ? perfT() : 0;
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
+    if (pf0) { perfAdd("draw", perfT() - pr0); SPD.calls = renderer.info.render.calls; SPD.tris = renderer.info.render.triangles; }
     if (PHOTO.want) { try { photoShoot(); } catch (e) { PHOTO.want = false; console.warn("photo", e); } }
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
   }
+  if (pf0) { perfAdd("all", perfT() - pf0); perfFrame(); }
 }
 setMode("hike");                               // the menu picks the real mode; this just sets a tidy default
 renderer.setAnimationLoop(loop);               // works for both the screen and a VR headset
