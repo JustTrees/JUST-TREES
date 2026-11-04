@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.37";              // Just Trees
+const VERSION = "3.38";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1921,8 +1921,9 @@ function addInstances(geo, mat, list, useColor, parent = world) {
   if (m.instanceColor) m.instanceColor.needsUpdate = true;
   parent.add(m);
 }
+const obK = (cx, cz) => (cx + 1048576) * 2097152 + (cz + 1048576);   // (3.38) the 8 m square a tree is in, as a number (strings here cost a lot: animals look these up all the time)
 function addObstacle(x, z, r, soft = false, h = 1e4) {
-  const k = Math.floor(x / 8) + "," + Math.floor(z / 8);
+  const k = obK(Math.floor(x / 8), Math.floor(z / 8));
   if (!obstacles.has(k)) obstacles.set(k, []);
   const o = { x, z, r, soft, h }; obstacles.get(k).push(o);
   return o;
@@ -1930,7 +1931,7 @@ function addObstacle(x, z, r, soft = false, h = 1e4) {
 function nearObstacle(x, z, pad) {
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) if (Math.hypot(x - o.x, z - o.z) < o.r + pad) return true;
   }
   return false;
@@ -3064,7 +3065,7 @@ function soundTick(dt) {
   if (T.near < 0) {                                   // look around: trees nearby, water nearby
     T.near = .4; let trees = 0;
     const cx = Math.floor(P.x / 8), cz = Math.floor(P.z / 8);
-    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const l = obstacles.get((cx + i) + "," + (cz + j)); if (l) trees += l.length; }
+    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const l = obstacles.get(obK(cx + i, cz + j)); if (l) trees += l.length; }
     T.trees = Math.min(1, trees / 40);
     let wd = 99;
     for (let k = 0; k < 16; k++) {
@@ -3411,7 +3412,7 @@ function enUnload(ch) {                                      // let a far square
   for (const k of ch.cells) E.cells.delete(k);
   if (ch.near.length) E.nearDirty = true;
   const drop = (map, key, o) => { const l = map.get(key); if (!l) return; const i = l.indexOf(o); if (i >= 0) l.splice(i, 1); if (!l.length) map.delete(key); };
-  for (const o of ch.obs) drop(obstacles, Math.floor(o.x / 8) + "," + Math.floor(o.z / 8), o);
+  for (const o of ch.obs) drop(obstacles, obK(Math.floor(o.x / 8), Math.floor(o.z / 8)), o);
   for (const [k, o] of ch.lg) drop(limbGrid, k, o);
   for (const [k, o] of ch.lh) drop(limbHold, k, o);
   if (ch.snd.length) { const s = new Set(ch.snd); soundSpots.birds = soundSpots.birds.filter(o => !s.has(o)); soundSpots.crickets = soundSpots.crickets.filter(o => !s.has(o)); }
@@ -3569,8 +3570,12 @@ function enEnsureHere() { if (ENDLESS) { enEnsure(P.x, P.z, 260); if (ENDLESS.ac
 function endlessTick(dt) {                                   // every frame: build what's missing near you, let go of what's far, keep the water, map and far ground with you
   const E = ENDLESS; if (!E) return;
   if (GLOBE) globeTick(dt);
-  const t0 = performance.now(), play = state === "play", budget = (E.bud || 1) * (GEO.sleep && GEO.sleep.view ? 2 : 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11), FC = GLOBE ? geoFocus() : P, px = FC.x, pz = FC.z;   // (dreaming, the land grows round your spirit)
+  const t0 = performance.now(), play = state === "play", FC = GLOBE ? geoFocus() : P, px = FC.x, pz = FC.z;
+  let budget = (E.bud || 1) * (GEO.sleep && GEO.sleep.view ? 2 : 1) * (play ? (vr.on ? (FPSM.fps && FPSM.fps < 62 ? 2 : 3) : 4.5) : 11);   // (dreaming, the land grows round your spirit)
   E.slice = play ? 1.4 : 5;
+  { const lx = E.lpx === undefined ? px : E.lpx, lz = E.lpz === undefined ? pz : E.lpz, k = Math.min(1, dt * 2), jump = Math.hypot(px - lx, pz - lz) > 300;   // (3.38) how fast and which way you're going (a jump, like a teleport, doesn't count)
+    E.vx = jump ? 0 : (E.vx || 0) + ((px - lx) / Math.max(dt, 1e-3) - (E.vx || 0)) * k; E.vz = jump ? 0 : (E.vz || 0) + ((pz - lz) / Math.max(dt, 1e-3) - (E.vz || 0)) * k; E.lpx = px; E.lpz = pz; }
+  const spd = Math.hypot(E.vx, E.vz), ahead = Math.min(6, 600 / Math.max(1, spd)) * Math.min(1, spd / 6), ax = px + E.vx * ahead, az = pz + E.vz * ahead;   // where you'll be in a few seconds
   if (E.water) E.water.position.set(px, water, pz);
   if ((E.ambT = (E.ambT || 0) - dt) <= 0) {                   // the weather, sky and footsteps of the regions round you; the lava nearest you
     E.ambT = .25; enAmbient(false); LAVA = enLavaAt(px, pz);
@@ -3581,7 +3586,7 @@ function endlessTick(dt) {                                   // every frame: bui
     const L = EN_LOAD(), D = EN_DROP(), n = Math.ceil(L / EN_C) + 1, ci = Math.floor(px / EN_C), cj = Math.floor(pz / EN_C), want = [];
     for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) {
       const d = Math.hypot((i + .5) * EN_C - px, (j + .5) * EN_C - pz); if (d > L + EN_C * .72) continue;
-      const ch = E.chunks.get(enKey(i, j)); if (!ch || !ch.tile || ch.stale) want.push([d, i, j]);
+      const ch = E.chunks.get(enKey(i, j)); if (!ch || !ch.tile || (ch.stale && d < 560)) want.push([Math.min(d, Math.hypot((i + .5) * EN_C - ax, (j + .5) * EN_C - az) * .8), i, j]);   // (moving: what's in front of you comes first)   // (3.38) after the planet's patch is laid again only the land near you is rebuilt; further off it stays as it was until you come close
     }
     want.sort((a, b) => a[0] - b[0]); E.want = want;
     const ring = new Set();
@@ -3597,13 +3602,15 @@ function endlessTick(dt) {                                   // every frame: bui
       if (ch.tile && !ch.shDone && enNbBuilt(ch)) E.shQ.add(ch);
     }
   }
+  if (play && spd > 10 && E.want.length && E.want[0][0] < 650) budget *= 1 + Math.min(1.5, spd / 25);   // (3.38) moving fast with the land ahead not ready: it gets more of each frame till it is
   let drops = 0;
   for (const ch of E.dropQ) { E.dropQ.delete(ch); if (E.chunks.get(ch.key) !== ch || (E.job && E.job.ch === ch)) continue; enUnload(ch); enFarSink(ch); if (++drops >= 2) break; }   // a couple a frame
   while (performance.now() - t0 < budget) {
     if (!E.job && Math.hypot(px - E.farC0[0], pz - E.farC0[1]) > 1500) { E.farC0 = [Math.round(px / 400) * 400, Math.round(pz / 400) * 400]; E.job = { ch: null, far: true, it: enFarJob(E.farC0[0], E.farC0[1]) }; }   // flying fast: the far land comes first once it's falling behind
     if (!E.job) {
       let pick = null;
-      for (const ch of E.solidQ) { E.solidQ.delete(ch); if (E.chunks.get(ch.key) === ch && ch.tile) { pick = ch; break; } }
+      const rush = spd > 10 && E.want.length && E.want[0][0] < 700;   // (3.38) moving fast with land missing ahead: the ground's rock-and-log detail waits, except right round you
+      for (const ch of E.solidQ) { if (rush && Math.hypot(ch.x0 + 100 - px, ch.z0 + 100 - pz) > 260) continue; E.solidQ.delete(ch); if (E.chunks.get(ch.key) === ch && ch.tile) { pick = ch; break; } }
       if (pick) E.job = { ch: null, it: enSolidGen(pick) };
       else {
         while (E.want.length) { const [, i, j] = E.want.shift(); const ch = E.chunks.get(enKey(i, j)) || enNew(i, j);
@@ -4534,7 +4541,7 @@ function enSwap(old, nc) {                                     // a rebuilt squa
   for (const [it, k] of old.near) { const s = mine.get(it); if (!s || !s.has(k)) it.blocks.delete(k); }
   for (const k of old.cells) if (!nc.cells.has(k)) E.cells.delete(k);
   const drop = (map, key, o) => { const l = map.get(key); if (!l) return; const i = l.indexOf(o); if (i >= 0) l.splice(i, 1); if (!l.length) map.delete(key); };
-  for (const o of old.obs) drop(obstacles, Math.floor(o.x / 8) + "," + Math.floor(o.z / 8), o);
+  for (const o of old.obs) drop(obstacles, obK(Math.floor(o.x / 8), Math.floor(o.z / 8)), o);
   for (const [k, o] of old.lg) drop(limbGrid, k, o);
   for (const [k, o] of old.lh) drop(limbHold, k, o);
   if (old.snd.length) { const s = new Set(old.snd); soundSpots.birds = soundSpots.birds.filter(o => !s.has(o)); soundSpots.crickets = soundSpots.crickets.filter(o => !s.has(o)); }
@@ -5970,7 +5977,7 @@ const giNm = k => geoNet() && k === "tent" ? "Hammock" : GI[k].name, giDesc = k 
 const sleepNight = () => hourNow >= 21 || hourNow < 5;
 function hamTrunk(p) {                                             // the tree trunk your hand is at (from the trees' footprints)
   let best = null; const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const L = obstacles.get((cx + i) + "," + (cz + j)); if (!L) continue;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const L = obstacles.get(obK(cx + i, cz + j)); if (!L) continue;
     for (const o of L) { if (!(o.tr > .1)) continue; const d = Math.hypot(p.x - o.x, p.z - o.z); if (d < o.tr + .85 && (!best || d < best.d)) best = { o, d }; } }   // (easier to hit)
   if (!best) return null; const g = groundAt(best.o.x, best.o.z); return p.y > g - .3 && p.y < g + 3.2 ? best.o : null;
 }
@@ -5997,7 +6004,7 @@ function hamGlow(A) {                                               // once it's
     vertexShader: "varying vec2 vU; void main(){ vU = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
     fragmentShader: "uniform float uT; varying vec2 vU; void main(){ float a = (0.35 + 0.25 * sin(uT * 3.0 - vU.y * 6.0)) * smoothstep(0.0, 0.25, vU.y) * smoothstep(1.0, 0.6, vU.y); gl_FragColor = vec4(vec3(1.0, 0.8, 0.45) * a, a); }" }));
   const cx = Math.floor(A.x / 8), cz = Math.floor(A.z / 8); let best = null, bd = 1e9;   // the nearest other tree is the one (not too close, not far)
-  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const L = obstacles.get((cx + i) + "," + (cz + j)); if (!L) continue;
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const L = obstacles.get(obK(cx + i, cz + j)); if (!L) continue;
     for (const o of L) { if (!(o.tr > .1) || o === A || o.soft) continue; const d = Math.hypot(o.x - A.x, o.z - A.z), gap = d - o.tr - A.tr; if (gap < HAMMOCK.min || d > HAMMOCK.max) continue; if (d < bd) { bd = d; best = o; } } }
   GEO.hmB = best; if (!best) return;
   const m = new THREE.Mesh(new THREE.CylinderGeometry(best.tr + .12, best.tr + .12, 3.2, 14, 1, true), M); m.position.set(best.x, groundAt(best.x, best.z) + 1.6, best.z); m.renderOrder = 3; scene.add(m); GEO.hmGlow.push(m);
@@ -6891,7 +6898,7 @@ function ugPortalTick(I, dt) {
 function glabPortal() {                                         // (Gear Lab) a doorway on the nearest tree; underground, the next level down
   if (UNDER.on) { const n = UNDER.idx + 1; if (n <= 3) { ugGo(n, "up"); glabSay("Down to level " + n); } else glabSay("This is the bottom"); vruiResume(); return; }
   let best = null, bd = 60; const c = Math.floor(P.x / 8), cz = Math.floor(P.z / 8);
-  for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) { const l = obstacles.get((c + i) + "," + (cz + j)); if (l) for (const o of l) if (o.tr > .15 && !o.soft) { const d = Math.hypot(o.x - P.x, o.z - P.z); if (d < bd) { bd = d; best = o; } } }
+  for (let i = -8; i <= 8; i++) for (let j = -8; j <= 8; j++) { const l = obstacles.get(obK(c + i, cz + j)); if (l) for (const o of l) if (o.tr > .15 && !o.soft) { const d = Math.hypot(o.x - P.x, o.z - P.z); if (d < bd) { bd = d; best = o; } } }
   if (!best) { glabSay("No tree near you"); return; }
   UNDER.labP = { x: best.x, z: best.z, tr: best.tr, a: Math.atan2(P.z - best.z, P.x - best.x) }; UNDER.scanT = 0; glabSay("A doorway on the tree " + Math.round(bd) + " m away"); vruiResume();
 }
@@ -8697,10 +8704,39 @@ $("intro").addEventListener("click", () => {
 });
 
 /* ---------------- Animals (Hunting): placeholder shapes, real hit boxes ---------------- */
-const beasts = []; let animalGroup = null;
+const beasts = []; let animalGroup = null, ANIM_N = 0;
+/* (3.38) far animals as statues: past ~200 m (further through a scope) an animal is drawn as one still copy of itself, all of its kind in
+   a single batch, instead of its ten moving parts each drawn on their own. Only while the picture is drawn: everything else sees it as usual. */
+const STAT = { kinds: new Map(), hid: [], M: new THREE.Matrix4(), Mi: new THREE.Matrix4() };
+function statueOf(A) {
+  let S = STAT.kinds.get(A.kind); if (S !== undefined) return S;
+  let mat = null; const pos = [], nrm = [], col = []; A.root.updateMatrixWorld(true); STAT.Mi.copy(A.root.matrixWorld).invert();
+  A.root.traverse(m => { if (!m.isMesh || m.isSkinnedMesh) return; if (!mat) mat = m.material; if (m.material !== mat) return;
+    const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(STAT.M.multiplyMatrices(STAT.Mi, m.matrixWorld)), P0 = g.attributes.position, N0 = g.attributes.normal, C0 = g.attributes.color;
+    for (let i = 0; i < P0.count; i++) { pos.push(P0.getX(i), P0.getY(i), P0.getZ(i)); if (N0) nrm.push(N0.getX(i), N0.getY(i), N0.getZ(i)); else nrm.push(0, 1, 0); if (C0) col.push(C0.getX(i), C0.getY(i), C0.getZ(i)); else col.push(1, 1, 1); }
+    g.dispose(); });
+  if (!mat || !pos.length || Array.isArray(mat)) { STAT.kinds.set(A.kind, null); return null; }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3)); if (mat.vertexColors) geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+  const im = new THREE.InstancedMesh(geo, mat, 96); im.count = 0; im.frustumCulled = false; scene.add(im);
+  S = { im, mat }; STAT.kinds.set(A.kind, S); return S;
+}
+function statuesBefore() {                                        // (just before drawing) far animals: their statue instead
+  for (const S of STAT.kinds.values()) if (S) S.im.count = 0;
+  if (!animalGroup || !animalGroup.visible || state !== "play" || UNDER.on) return;
+  const lim = 200 * (vr.on && vr.zoomK > 1.3 ? vr.zoomK * .7 : 1), cx = camera.position.x, cz = camera.position.z;
+  for (const A of beasts) {
+    if (!A.root || !A.root.visible || A.dead || A.faded || A.ptero || FLY[A.kind] || A.kind === "monkey" || A.qr || A.ug || A.hunter || A.kind === "trex" || A.spook) continue;
+    const d = Math.hypot(A.x - cx, A.z - cz); if (d < lim) continue;
+    const S = statueOf(A); if (!S || S.im.count >= 96) continue;
+    A.root.updateMatrix(); A.root.updateWorldMatrix(true, false); S.im.setMatrixAt(S.im.count++, A.root.matrixWorld); A.root.visible = false; A.root.matrixWorldAutoUpdate = false; STAT.hid.push(A);   // (its parts aren't even worked out this frame)
+  }
+  for (const S of STAT.kinds.values()) if (S) { S.im.visible = S.im.count > 0; if (S.im.count) S.im.instanceMatrix.needsUpdate = true; }
+}
+function statuesAfter() { for (const A of STAT.hid) { A.root.visible = true; A.root.matrixWorldAutoUpdate = true; } STAT.hid.length = 0; }
 function clearAnimals() {
   if (animalGroup) { scene.remove(animalGroup); animalGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); if (o.skeleton) o.skeleton.dispose(); }); }
   animalGroup = null; beasts.length = 0; if (typeof MP !== "undefined") { MP.byNid.clear(); MP.nb.clear(); }
+  for (const S of STAT.kinds.values()) if (S) { scene.remove(S.im); S.im.geometry.dispose(); S.im.dispose(); } STAT.kinds.clear(); STAT.hid.length = 0;
 }
 /* ---- the old hand-built animals: kept as hidden rigs . Every animal is still built here first: the pack-style models (models/animals) take their
    size from it and hide it, the from-scratch ones (birds, ground birds, seal, monkey, Bigfoot, Yeti) are skinned onto its moving parts, its hit boxes
@@ -10083,7 +10119,7 @@ function habInit(peak) {
   for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
     const x = -HALF + i * c, z = -HALF + j * c, h = H(x, z), o = (i * n + j) * 5; if (h < water + .2) continue;
     let trees = 0; const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
-    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = obstacles.get((cx + a) + "," + (cz + b)); if (L) for (const t of L) if (t.tr !== undefined) trees++; }
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) { const L = obstacles.get(obK(cx + a, cz + b)); if (L) for (const t of L) if (t.tr !== undefined) trees++; }
     const forest = smooth(5, 12, trees), open = 1 - smooth(1, 4, trees);
     g[o] = open; g[o + 1] = smooth(1, 4, trees) * (1 - smooth(7, 14, trees)); g[o + 2] = forest;
     g[o + 3] = nearWater(x, z) ? 1 : 0; g[o + 4] = Math.max(smooth(.45, .75, (h - water) / span), 1 - smooth(.66, .82, slopeNy(x, z)));
@@ -10138,7 +10174,7 @@ function targetOk(A, x, z) {                            // somewhere it could st
 function trunkNear(x, z, pad) {                            // trees and other solid things it must go round
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) if (!o.soft && Math.hypot(x - o.x, z - o.z) < (o.tr !== undefined ? o.tr : o.r * .6) + pad) return true;
   }
   return false;
@@ -10457,10 +10493,14 @@ function updateAnimals(dt) {
   if (!animalGroup) return;
   if (ENDLESS) enAnimTick(dt);
   senseTick(dt); if (!mpNetGuest()) { appearTick(dt); stockTick(dt); legendAwayTick(dt); } legendWatch(dt); dinoTick(dt); fleeQTick();
-  const far = fogFar() + 40, T = performance.now() / 1000;
+  const far = fogFar() + 40, T = performance.now() / 1000, dt0 = dt, cx0 = camera.position.x, cz0 = camera.position.z; ANIM_N++;
   deadFade(dt);
   for (const A of beasts) {
     if (A.faded) continue;
+    // (3.38) the further off, the less often it's updated (its time adds up meanwhile): every frame close by, every 2nd past 80 m, 3rd past 220 m, 5th past 500 m
+    A.lodAcc = (A.lodAcc || 0) + dt0; const dB = Math.abs(A.x - cx0) + Math.abs(A.z - cz0), every = !A.lodSeen || A.hunter || A.pred || A.spook || A.swerve || A.kind === "trex" || A.ptero || A.noticeT > 0 || A.boltIn > 0 ? 1 : dB < 110 ? 1 : dB < 300 ? 2 : dB < 680 ? 3 : 5;
+    if (every > 1 && (ANIM_N + (A.lodK || (A.lodK = 1 + Math.floor(Math.random() * 97)))) % every) continue;
+    const dt = Math.min(.2, A.lodAcc); A.lodAcc = 0; A.lodSeen = true;
     if (A.ptero) { pteroTick(A, dt); continue; }                 // the pteranodons fly their own way
     if (QR_KINDS[A.kind] && !A.qr) qrAttach(A);
     if (A.kind === "monkey") { updateMonkey(A, dt, T); continue; }
@@ -11537,7 +11577,7 @@ function climbableAt(p) {                                  // is this point insi
   if (limbHit(p, .01)) return { kind: "limb" };
   const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) {
       const d = Math.hypot(p.x - o.x, p.z - o.z);
       if (o.t && o.t.hold) { if (d > o.r + .6) continue; const k = treeHit(p, o.t, .012, false); if (k) return { kind: k, o }; }
@@ -11555,7 +11595,7 @@ function headBlocked(x, y, z) {                            // your face can't go
   if (limbHit(_hd, .1)) return true;
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-    const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+    const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) if (o.t && o.t.hold && Math.hypot(x - o.x, z - o.z) < o.tr + .5 && treeHit(_hd, o.t, .2, true)) return true;
   }
   return false;
@@ -13897,7 +13937,7 @@ function update(dt) {
     // push out of trees and big rocks
     const cx = Math.floor(P.x / 8), cz = Math.floor(P.z / 8);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-      const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+      const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
       for (const o of list) {
         const ox = P.x - o.x, oz = P.z - o.z, d = Math.hypot(ox, oz), min = o.tr !== undefined ? o.tr + .3 : o.r + .35;   // trunks block at their real size
         if (!o.soft && d < min && d > 1e-4) { P.x = o.x + ox / d * min; P.z = o.z + oz / d * min; }
@@ -14436,7 +14476,7 @@ function losClear(ax, ay, az, bx, by, bz) {              // can they see each ot
   for (let i = 1; i < n; i++) {
     const t = i / n, x = ax + dx * t, y = ay + dy * t, z = az + dz * t;
     if (H(x, z) > y - .15) return false;
-    const list = obstacles.get(Math.floor(x / 8) + "," + Math.floor(z / 8));
+    const list = obstacles.get(obK(Math.floor(x / 8), Math.floor(z / 8)));
     if (list) for (const o of list) if (!o.soft && (x - o.x) ** 2 + (z - o.z) ** 2 < o.r * o.r * .7 && y < H(o.x, o.z) + o.h * .85) return false;   // the same rule that stops your bullets
   }
   return true;
@@ -14608,7 +14648,7 @@ function updateSquad(dt) {
     if (S.onGround && groundY(nx + fx * .6, nz + fz * .6) - groundY(S.x, S.z) > .8) { S.mode = "idle"; S.timer = .5; nx = S.x; nz = S.z; S.speed = 0; }   // too steep: stop and rethink
     const cx = Math.floor(nx / 8), cz = Math.floor(nz / 8);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
-      const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+      const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
       for (const o of list) { const ox = nx - o.x, oz = nz - o.z, dd = Math.hypot(ox, oz), mn = (o.tr !== undefined ? o.tr + .3 : o.r + .35);
         if (!o.soft && dd < mn && dd > 1e-4) { nx = o.x + ox / dd * mn; nz = o.z + oz / dd * mn; } }
     }
@@ -15088,7 +15128,7 @@ function nadeStop(p) {                                      // what a flying gre
   if (outMap(p.x, p.z)) return "out";
   const g = H(p.x, p.z);
   if (p.y <= g + .04 || p.y <= rockTopAt(p.x, p.z, p.y, -.4) + .04 || (!iced && p.y <= water && g < water)) return "ground";
-  const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
+  const l = obstacles.get(obK(Math.floor(p.x / 8), Math.floor(p.z / 8)));
   if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return "tree";
   return null;
 }
@@ -15446,7 +15486,7 @@ function startCapture() {
     if (!okSpot(x, z)) continue;
     const h = H(x, z); let ring = 0; for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283; ring += H(x + Math.cos(a) * 45, z + Math.sin(a) * 45); } ring /= 8;
     let trees = 0; const gx = Math.floor(x / 8), gz = Math.floor(z / 8);
-    for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const l = obstacles.get((gx + i) + "," + (gz + j)); if (l) for (const o of l) if (o.t && (o.x - x) ** 2 + (o.z - z) ** 2 < 324) trees++; }
+    for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) { const l = obstacles.get(obK(gx + i, gz + j)); if (l) for (const o of l) if (o.t && (o.x - x) ** 2 + (o.z - z) ** 2 < 324) trees++; }
     const sc = (h - ring) + Math.min(trees, 25) * 1.2 + rnd() * 3;        // higher than its surroundings, or in among the trees, beats an open valley
     if (!best || sc > best[2]) best = [x, z, sc];
   }
@@ -16922,7 +16962,7 @@ function vbCoverSpot(B) {                                                     //
   const e = B.foe && B.foe.e; const th = e ? [e.hx, e.hy, e.hz] : null; if (!th) return null;
   const away = Math.atan2(B.x - th[0], B.z - th[2]), cands = [];
   const cx = Math.floor(B.x / 8), cz = Math.floor(B.z / 8);
-  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) { const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) { if (o.soft || o.r < .25) continue; const a = Math.atan2(o.x - th[0], o.z - th[2]), r = (o.tr !== undefined ? o.tr : o.r) + .7; cands.push([o.x + Math.sin(a) * r, o.z + Math.cos(a) * r]); } }
   for (let q = 0; q < 12; q++) for (const r of [6, 11, 16]) { const a = away + (q / 12 - .5) * 3.4; cands.push([B.x + Math.sin(a) * r, B.z + Math.cos(a) * r]); }
   let best = null, bs = 1e9, n = 0;
@@ -17089,7 +17129,7 @@ function vbEnt2(id) {                                                         //
 // ---- moving: steer round trees, steep ground, water and lava; get unstuck
 function vbSolid(x, z, pad) {                                                 // a trunk or a rock here (bushes don't stop anyone)
   const cx = Math.floor(x / 8), cz = Math.floor(z / 8);
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) if (!o.soft) { const r = (o.tr !== undefined ? o.tr : o.r) + pad; if ((x - o.x) * (x - o.x) + (z - o.z) * (z - o.z) < r * r) return true; } }
   return false;
 }
@@ -17123,7 +17163,7 @@ function vbMove(B, dt) {
   const k = Math.min(1, dt * 6); B.vx += (hx * want - B.vx) * k; B.vz += (hz * want - B.vz) * k;
   let nx = B.x + B.vx * dt, nz = B.z + B.vz * dt;
   const cx = Math.floor(nx / 8), cz = Math.floor(nz / 8);                     // trunks push them out (as they do you)
-  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get((cx + i) + "," + (cz + j)); if (!list) continue;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const list = obstacles.get(obK(cx + i, cz + j)); if (!list) continue;
     for (const o of list) { const ox = nx - o.x, oz = nz - o.z, dd = Math.hypot(ox, oz), mn = (o.tr !== undefined ? o.tr + .3 : o.r + .35); if (!o.soft && dd < mn && dd > 1e-4) { nx = o.x + ox / dd * mn; nz = o.z + oz / dd * mn; } } }
   const gN = groundY(nx, nz), g0 = groundY(B.x, B.z);
   if (gN - g0 > (B.trap && B.trap.n >= 2 ? 1.3 : .7) && B.onGround !== false) { nx = B.x; nz = B.z; B.vx *= .3; B.vz *= .3; B.steerT = 0; }   // a ledge: stop (and look for a way round)
@@ -17959,7 +17999,7 @@ function updateNades(dt) {
         if (n.v.y < -2) { n.v.y = -n.v.y * .3; n.v.x *= .55; n.v.z *= .55; n.spin.multiplyScalar(.6); }
         else { n.v.y = 0; n.v.x *= 1 - Math.min(1, h * 3); n.v.z *= 1 - Math.min(1, h * 3); n.spin.multiplyScalar(1 - Math.min(1, h * 3)); }
       }
-      const l = obstacles.get(Math.floor(n.p.x / 8) + "," + Math.floor(n.p.z / 8));      // bounce off trunks
+      const l = obstacles.get(obK(Math.floor(n.p.x / 8), Math.floor(n.p.z / 8)));      // bounce off trunks
       if (l) for (const o of l) {
         if (o.soft) continue;
         const rad = (o.tr !== undefined ? o.tr : o.r * .8) + .07, dx = n.p.x - o.x, dz = n.p.z - o.z, d = Math.hypot(dx, dz);
@@ -18139,7 +18179,7 @@ function castShot(o, dir, maxD, cs) {                      // cs: a flying bulle
     if (p.y <= g) return { p, kind: footEnv.snow || (p.y > footEnv.snowLine) ? "snow" : "ground" };
     if (!iced && p.y <= water && g < water) { if (!VR_ON || (wet += st) > WATER_PEN) return { p, kind: "water" }; if (cs) cs.wet = wet; }   // in a headset a bullet goes about 1.5 m into water before stopping
     if (p.y <= rockTopAt(p.x, p.z, p.y, -.4)) return { p, kind: "rock" };   // bullets pass under overhangs
-    const l = obstacles.get(Math.floor(p.x / 8) + "," + Math.floor(p.z / 8));
+    const l = obstacles.get(obK(Math.floor(p.x / 8), Math.floor(p.z / 8)));
     if (l) for (const ob of l) if (!ob.soft && (p.x - ob.x) ** 2 + (p.z - ob.z) ** 2 < ob.r * ob.r * .7 && p.y < H(ob.x, ob.z) + ob.h * .85) return { p, kind: "wood" };
   }
   if (bT < max && bT < aT) return { p: o.clone().addScaledVector(dir, bT), kind: "bot", bot: bWho, head: bHead };
@@ -18595,8 +18635,10 @@ function loop(now) {
     { const pl0 = pf0 ? perfT() : 0; if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); } if (pf0) perfAdd("land", perfT() - pl0); }
     if (vr.on && TOOL.sightM) toolPrep();                  // the SMG's thermal mini-sight
     if (DEV.ok) perfApply();
+    statuesBefore();
     const pr0 = pf0 ? perfT() : 0;
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
+    statuesAfter();
     if (pf0) { perfAdd("draw", perfT() - pr0); SPD.calls = renderer.info.render.calls; SPD.tris = renderer.info.render.triangles; }
     if (PHOTO.want) { try { photoShoot(); } catch (e) { PHOTO.want = false; console.warn("photo", e); } }
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }

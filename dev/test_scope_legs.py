@@ -9,8 +9,8 @@ async def main():
         await pg.goto('file://' + os.path.abspath(sys.argv[1])); await pg.wait_for_timeout(800)
         r = await pg.evaluate("""() => { window.FREEZE = true; D.setSeed(5); D.setVR(true); D.setMode('hunt'); D.set.dino = false; D.set.env = 'climate'; D.set.size = 'large'; D.set.lat = 42; D.generate(); D.state = 'play';
           const A = D.beasts.find(a => a.legs && a.legs.length && !a.wings); D.camera.position.set(A.x + 300, A.y + 2, A.z); D.camera.updateMatrixWorld();
-          const out = {}; D.vr.on = true; D.vr.scoped = false; D.vr.binos = false; D.updateAnimals(1/30); out.plain = A.legs[0].visible;
-          D.vr.scoped = true; D.updateAnimals(1/30); out.scope = A.legs[0].visible; D.vr.scoped = false; D.vr.binos = true; D.updateAnimals(1/30); out.binos = A.legs[0].visible; D.vr.binos = false; D.vr.on = false; return out; }""")
+          const out = {}; D.vr.on = true; D.vr.scoped = false; D.vr.binos = false; for (let i = 0; i < 6; i++) D.updateAnimals(1/30); out.plain = A.legs[0].visible;   // (3.38: a far animal is updated every few frames)
+          D.vr.scoped = true; for (let i = 0; i < 6; i++) D.updateAnimals(1/30); out.scope = A.legs[0].visible; D.vr.scoped = false; D.vr.binos = true; for (let i = 0; i < 6; i++) D.updateAnimals(1/30); out.binos = A.legs[0].visible; D.vr.binos = false; D.vr.on = false; return out; }""")
         print(json.dumps(r)); ok = not r['plain'] and r['scope'] and r['binos']; print('PASS' if ok else 'FAIL'); await b.close()
         if not ok: sys.exit(1)
 asyncio.run(main())
