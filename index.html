@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.38";              // Just Trees
+const VERSION = "3.39";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3586,7 +3586,8 @@ function endlessTick(dt) {                                   // every frame: bui
     const L = EN_LOAD(), D = EN_DROP(), n = Math.ceil(L / EN_C) + 1, ci = Math.floor(px / EN_C), cj = Math.floor(pz / EN_C), want = [];
     for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) {
       const d = Math.hypot((i + .5) * EN_C - px, (j + .5) * EN_C - pz); if (d > L + EN_C * .72) continue;
-      const ch = E.chunks.get(enKey(i, j)); if (!ch || !ch.tile || (ch.stale && d < 560)) want.push([Math.min(d, Math.hypot((i + .5) * EN_C - ax, (j + .5) * EN_C - az) * .8), i, j]);   // (moving: what's in front of you comes first)   // (3.38) after the planet's patch is laid again only the land near you is rebuilt; further off it stays as it was until you come close
+      const ch = E.chunks.get(enKey(i, j)), far = ch && ch.tile && ch.stale && d >= 560;
+      if (!ch || !ch.tile || ch.stale) want.push([far ? d + 3000 : Math.min(d, Math.hypot((i + .5) * EN_C - ax, (j + .5) * EN_C - az) * .8), i, j]);   // (moving: what's in front of you comes first) (after the planet's patch is laid again: the land near you is rebuilt first, then anything missing, and the far land last, once there's nothing else to do: 3.38 left it as it was, which could leave far hills slightly out of place until you came close)
     }
     want.sort((a, b) => a[0] - b[0]); E.want = want;
     const ring = new Set();
@@ -11413,6 +11414,7 @@ function mpNearSpawn() {                                    // online Hunting an
 function uwRespawn() {                                      // wake up somewhere random on dry ground (online Hunting and Hiking, near another player)
   pteroCalm();                                               // the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // Geocaching: anywhere on the planet
+  if (COMP.on && COMP.zone && !COMP.out) compOut(null);       // (3.39: Competitive end game on the flat maps: a dinosaur or the water puts you out too)
   let s = COMP.on ? null : mpNearSpawn();   // (Competitive: anywhere)
   if (!s && GLOBE) for (let k = 0; k < 400 && !s; k++) { const a = Math.random() * 6.283, r = 150 + Math.random() * 550, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;   // (the planet: back in somewhere near where you fell)
     if (H(x, z) > water + 2 && slopeNy(x, z) > .8 && !inLava(x, z, 30) && !beasts.some(A => A.pred && !A.dead && A.x !== undefined && Math.hypot(A.x - x, A.z - z) < 70)) s = [x, z]; }
@@ -15984,6 +15986,7 @@ function mpRoster() {
   return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx)).concat(gameMode === "pvp" ? vbRows() : []);   // (then the bots)
 }
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
+  if (COMP.on && L.co && !COMP.out) return [0, true];        // (3.39: Competitive: someone who's out can't call things out to those still in)
   if (geoNet()) { const d = L.R && L.R.cur ? L.R.head.distanceTo(vr.head) : 1e9; return [d > 1000 ? 0 : d < 40 ? 1 : Math.pow((1000 - d) / 960, 1.5), true]; }   // (their voice reaches 1 km)   // online Treeocashing: you start to hear someone 500 m out, louder as you close in
   const c = set.comms === undefined ? 1 : set.comms | 0;
   if (c === 0) return [1, true]; if (c === 1) return [1, false]; if (!mpMate(L)) return [0, true]; if (c === 2) return [1, true]; return [L.bumped ? 1 : 0, true];
@@ -16260,6 +16263,10 @@ const compSizeName = () => compPlanet() ? "Planet" : (COMP_SIZES.find(z => z[0] 
 const compBig = () => COMP.N >= 20;
 const compArrowAt = () => compBig() ? Math.ceil(COMP.N * .3) : 0, compDistAt = () => compBig() ? Math.ceil(COMP.N * .6) : 1e9;
 const compBW = () => COMP.on && COMP.lv >= COMP.N;
+/* (3.39) who keeps the score: the host; if the host has gone (the flat maps have no hand-over), whoever is left with the lowest id. */
+function compHostHere() { if (MP.host) return true; const H = MP.links.get(mpHostId()); return !!(H && H.open && !H.bad); }
+function compRef() { if (MP.host) return true; if (compHostHere()) return false; const me = mpMyId(); return mpOpen().every(L => me < L.id); }
+function compRefIs(L) { if (L.id === mpHostId()) return true; if (compHostHere()) return false; const me = mpMyId(); return L.id < me && mpOpen().every(M => M === L || L.id < M.id); }
 function compIsBW(id) { const L = id && MP.links.get(id); return !!(L && L.cbw); }
 function compSizeNote() { return compPlanet() ? "All of Treeocashing: survival, the GPS, 51-55 extra" : compTop() >= 20 ? "GPS: numbers · arrow at lv " + Math.ceil(compTop() * .3) + " · distance at " + Math.ceil(compTop() * .6) : "A compass points at your cache"; }
 async function compGo() {                                         // the main menu button: your own public room, empty, ready to fill
@@ -16284,7 +16291,7 @@ function compRewards(N) {                                          // what each 
 }
 function compStart() {                                            // a new Competitive game (a new world)
   COMP.planet = !!GLOBE && geoNet(); COMP.beam = null; COMP.bwSaid = false; compBeamHide();
-  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = COMP.planet ? GEO.found.size : 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.items.clear(); COMP.R = compRewards(COMP.N);
+  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = COMP.planet ? GEO.found.size : 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.maxN = 0; COMP.zt0 = 0; COMP.items.clear(); COMP.R = compRewards(COMP.N);
   if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; if (!COMP.planet) compPlace();
   vrBanner("Competitive Treeocashing · get to level " + COMP.N + " to be a Bigg Wigg. The " + (compBig() ? "GPS" : "compass") + " is on your wheel", 6, 3);
 }
@@ -16322,6 +16329,7 @@ function compZoneStart(o) {                                       // everyone le
     bing(); vrBanner("THE BEAM HAS HIT · " + (glArc(GLOBE.p, o.p) * GLOBE.R / 1000).toFixed(1) + " km away. The zone closes on it: get there", 7, 9); return; }
   COMP.zone = true; const zo = set.zone, rm = set.roundMin; set.zone = "on"; set.roundMin = { 10: 5, 15: 6, 20: 8, 25: 10, 35: 14 }[COMP.N] || 8; COMP.zoneGo = true;
   try { startZone(); } finally { COMP.zoneGo = false; set.zone = zo; set.roundMin = rm; }
+  const el = o && o.el > 0 ? +o.el : 0; COMP.zt0 = performance.now() - el * 1000; if (el && zone) zoneSeek(zone, el);   // (joined late: the zone where it's got to)
   vrBanner("All Bigg Wiggs! The zone is closing in · last one standing wins", 5, 9);
 }
 function compEnd(w) {                                             // the last one standing
@@ -16414,11 +16422,13 @@ function compTick(dt) {                                           // (each frame
     if (m) { m.visible = !!show; if (show) { m.position.set(L.R.head.x, L.R.head.y + .55, L.R.head.z); m.rotation.y += dt * 2; } } }
   for (const [id, m] of COMP.marks) if (!MP.links.get(id)) { scene.remove(m); COMP.marks.delete(id); }
   // the host keeps the score: everyone left a Bigg Wigg → the zone; one left → the winner
-  if (MP.host && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
+  if (compRef() && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
     const ps = [{ id: mpMyId(), bw: compBW(), out: COMP.out }, ...mpOpen().map(L => ({ id: L.id, bw: L.cbw, out: L.co }))], alive = ps.filter(q => !q.out);
-    if (ps.length >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
+    COMP.maxN = Math.max(COMP.maxN || 0, ps.length);              // (3.39: someone leaving doesn't stop there being a winner)
+    if (COMP.maxN >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
     if (!COMP.zone && alive.length && alive.every(q => q.bw)) { const m = { t: "czone" }; if (COMP.planet) m.p = compBeamPick(); mpSend(m); compZoneStart(m); }
     if (COMP.zone && COMP.planet && COMP.beam) for (const L of mpOpen()) if (!L.czS) { L.czS = true; mpSendTo(L, { t: "czone", p: COMP.beam.p, el: (performance.now() - COMP.beam.t0) / 1000 }); }   // (someone new: where it is and how far along)
+    if (COMP.zone && !COMP.planet && COMP.zt0) for (const L of mpOpen()) if (!L.czS) { L.czS = true; mpSendTo(L, { t: "czone", el: (performance.now() - COMP.zt0) / 1000 }); }   // (3.39: the flat maps too)
   }
 }
 function mpGuestGen(o) {
@@ -16524,8 +16534,8 @@ function mpRecv(o, L) {
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
   if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; const code = String(o.code); MP.moving = true; vruiOpen("mp"); MP.status = "Joining your friends' planet…";
     setTimeout(() => { MP.moving = false; mpJoin(code); vruiOpen("lobby"); }, 1800 + (MP.idx | 0) * 1500); } return; }   // your lobby is going into a planet that's already running (one at a time, after the host: everyone already there is told about you, so you all link up)
-  if (o.t === "czone") { L.czS = true; if (L.id === mpHostId() && COMP.on && !COMP.zone) compZoneStart(o); return; }
-  if (o.t === "cend") { if (L.id === mpHostId() && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
+  if (o.t === "czone") { L.czS = true; if (compRefIs(L) && COMP.on && !COMP.zone) compZoneStart(o); return; }
+  if (o.t === "cend") { if (compRefIs(L) && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
   if (o.t === "pal") { if (MP.palTag && L.tag === MP.palTag && Array.isArray(o.p) && o.p.length === 3) MP.palP = o.p; return; }
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
