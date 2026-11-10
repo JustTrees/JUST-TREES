@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.40";              // Just Trees
+const VERSION = "3.38";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1819,24 +1819,7 @@ function nearTick(NS, flags) {                              // refill only when 
    from one to the next over a stretch of distance (a fine screen-door dither, per tree), so nothing pops. Cards now turn toward the
    middle of your head (one point for both eyes) instead of each eye on its own, which made them look flat and twisted in a headset. */
 const FADE = { uHead: { value: new THREE.Vector3() }, uFA: { value: new THREE.Vector2(170, 200) }, uFB: { value: new THREE.Vector2(430, 480) } };
-/* (3.40) the headset's detail level, 3 (full) to 0, picked by itself from the frame rate: under 58 fps for a few seconds it steps down,
-   steady at 68+ for a while it tries a step back up (and if that was too much, stays down for five minutes). Each step brings in the
-   distances where full trees turn into simple ones and simple ones into flat cards, how far out rocks are drawn, and where far animals
-   turn into their block copies. PC and phone never use it. Remembered for next time. */
-const QV = { lv: (() => { try { const v = localStorage.getItem("jt-vr-q"); return v === null ? 3 : Math.max(0, Math.min(3, v | 0)); } catch (_) { return 3; } })(), lock: -1, t: 0, n: 0, bad: 0, good: 0, upAt: -1e9, block: 0, warm: 6 };
-const QV_FADE = [[65, 85, 200, 240], [80, 105, 260, 310], [100, 125, 340, 390], [120, 150, 430, 480]], QV_MID = [420, 480, 540, 600], QV_STAT = [140, 160, 180, 200];
-const qvL = () => QV.lock >= 0 ? QV.lock : QV.lv;
-function qvSet(l) { l = Math.max(0, Math.min(3, l)); if (l === QV.lv) return; QV.lv = l; QV.bad = QV.good = 0; try { localStorage.setItem("jt-vr-q", String(l)); } catch (_) {} }
-function qvTick(dt) {                                             // (each frame, in the headset, while playing)
-  if (QV.warm > 0) { QV.warm -= dt; QV.t = QV.n = 0; return; }     // (not while the world is still settling in)
-  QV.t += dt; QV.n++; if (QV.t < 3) return;
-  const fps = QV.n / QV.t, now = performance.now(); QV.t = QV.n = 0; QV.fps = fps;
-  if (fps < 58) { QV.good = 0; if (++QV.bad >= 2 && QV.lv > 0) { if (now - QV.upAt < 20000) QV.block = now + 300000; qvSet(QV.lv - 1); } }
-  else if (fps >= 68) { QV.bad = 0; if (++QV.good >= 7 && QV.lv < 3 && now > QV.block) { qvSet(QV.lv + 1); QV.upAt = now; } }
-  else QV.bad = QV.good = 0;
-}
-const midD = () => VR_ON ? QV_MID[qvL()] : MID_D;
-const FADE_D = () => VR_ON ? QV_FADE[qvL()] : isTouch ? [140, 170, 330, 380] : [240, 270, 620, 680];   // detail -> simple (a0..a1), simple -> card (b0..b1), metres
+const FADE_D = () => VR_ON ? [120, 150, 430, 480] : isTouch ? [140, 170, 330, 380] : [240, 270, 620, 680];   // detail -> simple (a0..a1), simple -> card (b0..b1), metres
 const FADE_VS = role => `
   #ifdef USE_INSTANCING
     vec3 fdC = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -3229,7 +3212,7 @@ function drawMap(canvas) {
   ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.max(10, W / 18)}px system-ui`; ctx.textAlign = "center"; ctx.fillText("N", W / 2, Math.max(12, W / 16));
   if (canvas.id === "vrMap" && FPSM.fps) { ctx.textAlign = "left"; ctx.font = `600 ${Math.max(10, W / 30)}px system-ui`; ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4, W * .36, W / 22); ctx.fillStyle = FPSM.low > 30 ? "#ff8a6a" : "#cfe8c0"; ctx.fillText(FPSM.fps + " fps · worst " + FPSM.low + " ms", 10, 4 + W / 30);
     if (DEV.ok && SPD.show.all !== undefined) { const S = SPD.show, f = v => (v || 0).toFixed(1), fr = FPSM.fps ? 1000 / FPSM.fps : 0;   // (Dev: where each frame's time goes)
-      const l2 = "game " + f(S.all) + " ms (move " + f(S.move) + " · land " + f(S.land) + " · animals " + f(S.anim) + " · send " + f(S.draw) + ")", l3 = "headset ≈ " + f(Math.max(0, fr - S.all)) + " ms · " + SPD.calls + " draws · " + (SPD.tris / 1e6).toFixed(2) + "M tris · detail " + qvL() + (QV.lock >= 0 ? " (pinned)" : "");
+      const l2 = "game " + f(S.all) + " ms (move " + f(S.move) + " · land " + f(S.land) + " · animals " + f(S.anim) + " · send " + f(S.draw) + ")", l3 = "headset drawing ≈ " + f(Math.max(0, fr - S.all)) + " ms · " + SPD.calls + " draws · " + (SPD.tris / 1e6).toFixed(2) + "M tris";
       ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillRect(4, 4 + W / 22, W * .92, W / 11); ctx.fillStyle = "#cfe8c0"; ctx.font = `600 ${Math.max(9, W / 38)}px system-ui`; ctx.fillText(l2, 10, 4 + W / 22 + W / 30); ctx.fillText(l3, 10, 4 + W / 22 + W / 30 * 2.1); } }   // how smooth it's running
   if (gameMode !== "hunt" && canvas.id === "vrMap") {   // what the wrist used to show, along the bottom
     const f = Math.max(12, W / 16), pad = W * .03, bh = gameMode === "pvp" ? f * 2.6 : f * 1.4;
@@ -3410,12 +3393,12 @@ function enNearRebuild(NS, act) {
   }
 }
 function enNearTick(cx, cz, a0, a1, b0, b1, zk) {             // which cells each near batch takes (like the island maps' 80 m squares)
-  const E = ENDLESS, rr = EN_CELL * .72, reach = Math.max(midD(), b1 * zk, a1 * zk) + rr, n = Math.ceil(reach / EN_CELL) + 1, ci = Math.floor(cx / EN_CELL), cj = Math.floor(cz / EN_CELL);
+  const E = ENDLESS, rr = EN_CELL * .72, reach = Math.max(MID_D, b1 * zk, a1 * zk) + rr, n = Math.ceil(reach / EN_CELL) + 1, ci = Math.floor(cx / EN_CELL), cj = Math.floor(cz / EN_CELL);
   const T = [], L = [], Sm = [], Md = [];
   for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) {
     const k = enKey(i, j); if (!E.cells.has(k)) continue;
     const d = Math.hypot((i + .5) * EN_CELL - cx, (j + .5) * EN_CELL - cz);
-    if (d < a1 * zk + rr) T.push(k); if (d < b1 * zk + rr && d > a0 * zk - rr) L.push(k); if (d < SMALL_D + rr) Sm.push(k); if (d < midD() + rr) Md.push(k);
+    if (d < a1 * zk + rr) T.push(k); if (d < b1 * zk + rr && d > a0 * zk - rr) L.push(k); if (d < SMALL_D + rr) Sm.push(k); if (d < MID_D + rr) Md.push(k);
   }
   const sig = [T.join(), L.join(), Sm.join(), Md.join()], sets = [NEAR.trees, NEAR.lo, NEAR.small, NEAR.mid], lists = [T, L, Sm, Md];
   for (let q = 0; q < 4; q++) if (sets[q].sig !== sig[q] || E.nearDirty) { sets[q].sig = sig[q]; enNearRebuild(sets[q], lists[q]); }
@@ -3603,8 +3586,7 @@ function endlessTick(dt) {                                   // every frame: bui
     const L = EN_LOAD(), D = EN_DROP(), n = Math.ceil(L / EN_C) + 1, ci = Math.floor(px / EN_C), cj = Math.floor(pz / EN_C), want = [];
     for (let i = ci - n; i <= ci + n; i++) for (let j = cj - n; j <= cj + n; j++) {
       const d = Math.hypot((i + .5) * EN_C - px, (j + .5) * EN_C - pz); if (d > L + EN_C * .72) continue;
-      const ch = E.chunks.get(enKey(i, j)), far = ch && ch.tile && ch.stale && d >= 560;
-      if (!ch || !ch.tile || ch.stale) want.push([far ? d + 3000 : Math.min(d, Math.hypot((i + .5) * EN_C - ax, (j + .5) * EN_C - az) * .8), i, j]);   // (moving: what's in front of you comes first) (after the planet's patch is laid again: the land near you is rebuilt first, then anything missing, and the far land last, once there's nothing else to do: 3.38 left it as it was, which could leave far hills slightly out of place until you came close)
+      const ch = E.chunks.get(enKey(i, j)); if (!ch || !ch.tile || (ch.stale && d < 560)) want.push([Math.min(d, Math.hypot((i + .5) * EN_C - ax, (j + .5) * EN_C - az) * .8), i, j]);   // (moving: what's in front of you comes first)   // (3.38) after the planet's patch is laid again only the land near you is rebuilt; further off it stays as it was until you come close
     }
     want.sort((a, b) => a[0] - b[0]); E.want = want;
     const ring = new Set();
@@ -4046,7 +4028,7 @@ function* enPrepGen(b) {
 }
 function* enKindReady(K, k) {                                // a tree kind's batches, limbs and cards
   const E = ENDLESS;
-  K.sl = []; K.vars.forEach((v, vi) => { K.sl.push({ tree: enSlot(NEAR.trees, v.geo, K.mats[vi % 2]), lo: VR_ON && vi >= 2 ? K.sl[vi % 2].lo : enSlot(NEAR.lo, v.geoLow || v.geo, K.loMats[vi % 2]) }); });   // (3.40, headset: past ~150 m every shape of a kind shares two simple ones: far fewer separate draws)
+  K.sl = K.vars.map((v, vi) => ({ tree: enSlot(NEAR.trees, v.geo, K.mats[vi % 2]), lo: enSlot(NEAR.lo, v.geoLow || v.geo, K.loMats[vi % 2]) }));
   K.slb = K.bush.map((geo, vi) => enSlot(NEAR.small, geo, K.mats[vi % 2]));
   if (k === "fir" || k === "broad" || k === "bare") {
     const keep = rndF; rndF = mulberry32(enHash(seed * 29 + 3, strHash(K.kid), 2));
@@ -4308,8 +4290,7 @@ function* enMake(ch) {
   }
   if (enOver()) { yield "geo"; E.cur = ch; }
   const byV = new Map(); for (const t of trees) { const sl = t.K.sl[t.vi]; if (!byV.has(sl)) byV.set(sl, []); byV.get(sl).push(t); }
-  { const loBy = new Map(); for (const [sl, list] of byV) { enNearAdd(ch, sl.tree, list); let a = loBy.get(sl.lo); if (!a) loBy.set(sl.lo, a = []); for (const t of list) a.push(t); }
-    for (const [it, list] of loBy) enNearAdd(ch, it, list); }
+  for (const [sl, list] of byV) { enNearAdd(ch, sl.tree, list); enNearAdd(ch, sl.lo, list); }
   for (const [sl, list] of limbRecs) enNearAdd(ch, sl, list);
   for (const [sl, list] of bushRecs) enNearAdd(ch, sl, list, !!GLOBE);
   if (GLOBE) { const bg = ch.bgrid = new Map(); for (const list of bushRecs.values()) for (const t of list) { const k = Math.floor(t.x / 4) * 100003 + Math.floor(t.z / 4); let L = bg.get(k); if (!L) bg.set(k, L = []); L.push(t); } }   // for the machete
@@ -8727,15 +8708,12 @@ const beasts = []; let animalGroup = null, ANIM_N = 0;
 /* (3.38) far animals as statues: past ~200 m (further through a scope) an animal is drawn as one still copy of itself, all of its kind in
    a single batch, instead of its ten moving parts each drawn on their own. Only while the picture is drawn: everything else sees it as usual. */
 const STAT = { kinds: new Map(), hid: [], M: new THREE.Matrix4(), Mi: new THREE.Matrix4() };
-function statueOf(A) {                                             // (3.40) a kind's far copy: one box per body part, in that part's own colour (about 130 triangles instead of thousands; it's a few pixels tall out there)
+function statueOf(A) {
   let S = STAT.kinds.get(A.kind); if (S !== undefined) return S;
-  let mat = null; const pos = [], nrm = [], col = [], bx = new THREE.Box3(), c3 = new THREE.Vector3(), s3 = new THREE.Vector3(); A.root.updateMatrixWorld(true); STAT.Mi.copy(A.root.matrixWorld).invert();
+  let mat = null; const pos = [], nrm = [], col = []; A.root.updateMatrixWorld(true); STAT.Mi.copy(A.root.matrixWorld).invert();
   A.root.traverse(m => { if (!m.isMesh || m.isSkinnedMesh) return; if (!mat) mat = m.material; if (m.material !== mat) return;
-    const g0 = m.geometry, P0 = g0.attributes.position, C0 = g0.attributes.color; if (!P0 || !P0.count) return;
-    if (!g0.boundingBox) g0.computeBoundingBox(); bx.copy(g0.boundingBox); bx.getCenter(c3); bx.getSize(s3);
-    let r = 1, gg = 1, b = 1; if (C0) { r = gg = b = 0; const st = Math.max(1, Math.floor(C0.count / 60)); let n = 0; for (let q = 0; q < C0.count; q += st) { r += C0.getX(q); gg += C0.getY(q); b += C0.getZ(q); n++; } r /= n; gg /= n; b /= n; }
-    const g = new THREE.BoxGeometry(Math.max(.01, s3.x * .86), Math.max(.01, s3.y * .9), Math.max(.01, s3.z * .86)).toNonIndexed().translate(c3.x, c3.y, c3.z).applyMatrix4(STAT.M.multiplyMatrices(STAT.Mi, m.matrixWorld)), Pb = g.attributes.position, Nb = g.attributes.normal;
-    for (let q = 0; q < Pb.count; q++) { pos.push(Pb.getX(q), Pb.getY(q), Pb.getZ(q)); nrm.push(Nb.getX(q), Nb.getY(q), Nb.getZ(q)); col.push(r, gg, b); }
+    const g = (m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()).applyMatrix4(STAT.M.multiplyMatrices(STAT.Mi, m.matrixWorld)), P0 = g.attributes.position, N0 = g.attributes.normal, C0 = g.attributes.color;
+    for (let i = 0; i < P0.count; i++) { pos.push(P0.getX(i), P0.getY(i), P0.getZ(i)); if (N0) nrm.push(N0.getX(i), N0.getY(i), N0.getZ(i)); else nrm.push(0, 1, 0); if (C0) col.push(C0.getX(i), C0.getY(i), C0.getZ(i)); else col.push(1, 1, 1); }
     g.dispose(); });
   if (!mat || !pos.length || Array.isArray(mat)) { STAT.kinds.set(A.kind, null); return null; }
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3)); if (mat.vertexColors) geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
@@ -8744,8 +8722,8 @@ function statueOf(A) {                                             // (3.40) a k
 }
 function statuesBefore() {                                        // (just before drawing) far animals: their statue instead
   for (const S of STAT.kinds.values()) if (S) S.im.count = 0;
-  if (!animalGroup || !animalGroup.visible || state !== "play" || UNDER.on || !vr.on) return;   // (the headset only: PC and phone draw every animal in full, as before 3.38)
-  const lim = QV_STAT[qvL()] * (vr.zoomK > 1.3 ? vr.zoomK : 1), cx = camera.position.x, cz = camera.position.z;   // (through a scope: that much further out, so it never looks nearer than this)
+  if (!animalGroup || !animalGroup.visible || state !== "play" || UNDER.on) return;
+  const lim = 200 * (vr.on && vr.zoomK > 1.3 ? vr.zoomK * .7 : 1), cx = camera.position.x, cz = camera.position.z;
   for (const A of beasts) {
     if (!A.root || !A.root.visible || A.dead || A.faded || A.ptero || FLY[A.kind] || A.kind === "monkey" || A.qr || A.ug || A.hunter || A.kind === "trex" || A.spook) continue;
     const d = Math.hypot(A.x - cx, A.z - cz); if (d < lim) continue;
@@ -11435,7 +11413,6 @@ function mpNearSpawn() {                                    // online Hunting an
 function uwRespawn() {                                      // wake up somewhere random on dry ground (online Hunting and Hiking, near another player)
   pteroCalm();                                               // the pteranodons don't pick you straight back up
   if (GEO.on && GLOBE) { if (!GEO.killedBy && UW.under) GEO.killedBy = "The water"; geoRespawn(); return; }   // Geocaching: anywhere on the planet
-  if (COMP.on && COMP.zone && !COMP.out) compOut(null);       // (3.39: Competitive end game on the flat maps: a dinosaur or the water puts you out too)
   let s = COMP.on ? null : mpNearSpawn();   // (Competitive: anywhere)
   if (!s && GLOBE) for (let k = 0; k < 400 && !s; k++) { const a = Math.random() * 6.283, r = 150 + Math.random() * 550, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r;   // (the planet: back in somewhere near where you fell)
     if (H(x, z) > water + 2 && slopeNy(x, z) > .8 && !inLava(x, z, 30) && !beasts.some(A => A.pred && !A.dead && A.x !== undefined && Math.hypot(A.x - x, A.z - z) < 70)) s = [x, z]; }
@@ -12553,8 +12530,7 @@ function vruiParts() {
   tog("far", "Far land", 90, 410); tog("water", "Water", 470, 410); tog("animals", "Animals", 850, 410); tog("sky", "Sky", 90, 520);
   [[0, "Fov 0"], [.5, "Fov ½"], [1, "Fov 1"]].forEach(([v, l], i) => uiBtn(Pf, 470 + i * 250, 520, 230, 96, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 30, personal: true }));
   [[.6, "Sharp .6"], [.7, ".7"], [.8, ".8 (now)"], [1, "1.0"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 290, 650, 270, 96, l, () => { SPD.scale = v; try { localStorage.setItem("jt-dev-scale", String(v)); } catch (_) {} uiDraw(Pf); }, { active: () => (SPD.scale || .8) === v, fs: 30, personal: true }));
-  uiBtn(Pf, 90, 760, 700, 80, "", () => { QV.lock = QV.lock < 0 ? 3 : QV.lock - 1; uiDraw(Pf); }, { labelFn: () => "Detail: " + (QV.lock < 0 ? "automatic (now " + QV.lv + ")" : "pinned at " + QV.lock), fs: 30, personal: true });   // (automatic → 3 → 2 → 1 → 0 → automatic)
-  uiBtn(Pf, 800, 770, 420, 60, "", () => {}, { ghost: true, labelFn: () => "Sharpness: next time in VR", fs: 22 });
+  uiBtn(Pf, 90, 770, 1120, 60, "", () => {}, { ghost: true, labelFn: () => "Sharpness takes effect the next time you go into VR (exit VR and come back)", fs: 24 });
   uiBtn(Pf, 90, 860, 380, 96, "Back", () => vruiOpen("pause"), { fs: 34, personal: true });
   uiBtn(Pf, 830, 860, 380, 96, "Resume", () => vruiResume(), { fs: 34, primary: true, personal: true });
   // ---- paused ----
@@ -13855,7 +13831,7 @@ async function enterVR(menu) {
   initSound();
   try {
     const session = await navigator.xr.requestSession("immersive-vr", { optionalFeatures: ["local-floor", "bounded-floor"] });
-    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(DEV.ok && SPD.scale ? SPD.scale : [.7, .75, .8, .8][QV.lv]);   // (Dev speed check: another sharpness)
+    VR_ON = true; renderer.xr.setReferenceSpaceType("local-floor"); renderer.xr.setFramebufferScaleFactor(DEV.ok && SPD.scale ? SPD.scale : .8);   // (Dev speed check: another sharpness)
     await renderer.xr.setSession(session);
     vr.base = renderer.xr.getReferenceSpace(); vr.on = true;
     try { vr.base.addEventListener("reset", () => { vr.resetPend = true; vr.reUI = true; }); } catch (_) {}   // holding the headset's button recenters: the menus come round in front of you, the game world stays put vr.yaw = 0; vr.gunInit = false; vr.gunOut = true;
@@ -16008,7 +15984,6 @@ function mpRoster() {
   return rows.sort((a, b) => (b.host - a.host) || (a.idx - b.idx)).concat(gameMode === "pvp" ? vbRows() : []);   // (then the bots)
 }
 function mpHear(L) {                                         // [volume 0..1, heard from anywhere?]
-  if (COMP.on && L.co && !COMP.out) return [0, true];        // (3.39: Competitive: someone who's out can't call things out to those still in)
   if (geoNet()) { const d = L.R && L.R.cur ? L.R.head.distanceTo(vr.head) : 1e9; return [d > 1000 ? 0 : d < 40 ? 1 : Math.pow((1000 - d) / 960, 1.5), true]; }   // (their voice reaches 1 km)   // online Treeocashing: you start to hear someone 500 m out, louder as you close in
   const c = set.comms === undefined ? 1 : set.comms | 0;
   if (c === 0) return [1, true]; if (c === 1) return [1, false]; if (!mpMate(L)) return [0, true]; if (c === 2) return [1, true]; return [L.bumped ? 1 : 0, true];
@@ -16285,10 +16260,6 @@ const compSizeName = () => compPlanet() ? "Planet" : (COMP_SIZES.find(z => z[0] 
 const compBig = () => COMP.N >= 20;
 const compArrowAt = () => compBig() ? Math.ceil(COMP.N * .3) : 0, compDistAt = () => compBig() ? Math.ceil(COMP.N * .6) : 1e9;
 const compBW = () => COMP.on && COMP.lv >= COMP.N;
-/* (3.39) who keeps the score: the host; if the host has gone (the flat maps have no hand-over), whoever is left with the lowest id. */
-function compHostHere() { if (MP.host) return true; const H = MP.links.get(mpHostId()); return !!(H && H.open && !H.bad); }
-function compRef() { if (MP.host) return true; if (compHostHere()) return false; const me = mpMyId(); return mpOpen().every(L => me < L.id); }
-function compRefIs(L) { if (L.id === mpHostId()) return true; if (compHostHere()) return false; const me = mpMyId(); return L.id < me && mpOpen().every(M => M === L || L.id < M.id); }
 function compIsBW(id) { const L = id && MP.links.get(id); return !!(L && L.cbw); }
 function compSizeNote() { return compPlanet() ? "All of Treeocashing: survival, the GPS, 51-55 extra" : compTop() >= 20 ? "GPS: numbers · arrow at lv " + Math.ceil(compTop() * .3) + " · distance at " + Math.ceil(compTop() * .6) : "A compass points at your cache"; }
 async function compGo() {                                         // the main menu button: your own public room, empty, ready to fill
@@ -16313,7 +16284,7 @@ function compRewards(N) {                                          // what each 
 }
 function compStart() {                                            // a new Competitive game (a new world)
   COMP.planet = !!GLOBE && geoNet(); COMP.beam = null; COMP.bwSaid = false; compBeamHide();
-  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = COMP.planet ? GEO.found.size : 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.maxN = 0; COMP.zt0 = 0; COMP.items.clear(); COMP.R = compRewards(COMP.N);
+  COMP.on = true; COMP.seed = seed; COMP.N = compTop(); COMP.lv = COMP.planet ? GEO.found.size : 0; COMP.out = false; COMP.zone = false; COMP.ended = false; COMP.winner = ""; COMP.items.clear(); COMP.R = compRewards(COMP.N);
   if (COMP.obj) scene.remove(COMP.obj); COMP.obj = null; COMP.c = null; if (!COMP.planet) compPlace();
   vrBanner("Competitive Treeocashing · get to level " + COMP.N + " to be a Bigg Wigg. The " + (compBig() ? "GPS" : "compass") + " is on your wheel", 6, 3);
 }
@@ -16351,7 +16322,6 @@ function compZoneStart(o) {                                       // everyone le
     bing(); vrBanner("THE BEAM HAS HIT · " + (glArc(GLOBE.p, o.p) * GLOBE.R / 1000).toFixed(1) + " km away. The zone closes on it: get there", 7, 9); return; }
   COMP.zone = true; const zo = set.zone, rm = set.roundMin; set.zone = "on"; set.roundMin = { 10: 5, 15: 6, 20: 8, 25: 10, 35: 14 }[COMP.N] || 8; COMP.zoneGo = true;
   try { startZone(); } finally { COMP.zoneGo = false; set.zone = zo; set.roundMin = rm; }
-  const el = o && o.el > 0 ? +o.el : 0; COMP.zt0 = performance.now() - el * 1000; if (el && zone) zoneSeek(zone, el);   // (joined late: the zone where it's got to)
   vrBanner("All Bigg Wiggs! The zone is closing in · last one standing wins", 5, 9);
 }
 function compEnd(w) {                                             // the last one standing
@@ -16444,13 +16414,11 @@ function compTick(dt) {                                           // (each frame
     if (m) { m.visible = !!show; if (show) { m.position.set(L.R.head.x, L.R.head.y + .55, L.R.head.z); m.rotation.y += dt * 2; } } }
   for (const [id, m] of COMP.marks) if (!MP.links.get(id)) { scene.remove(m); COMP.marks.delete(id); }
   // the host keeps the score: everyone left a Bigg Wigg → the zone; one left → the winner
-  if (compRef() && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
+  if (MP.host && !COMP.ended && (COMP.chkT -= dt) <= 0) { COMP.chkT = 1;
     const ps = [{ id: mpMyId(), bw: compBW(), out: COMP.out }, ...mpOpen().map(L => ({ id: L.id, bw: L.cbw, out: L.co }))], alive = ps.filter(q => !q.out);
-    COMP.maxN = Math.max(COMP.maxN || 0, ps.length);              // (3.39: someone leaving doesn't stop there being a winner)
-    if (COMP.maxN >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
+    if (ps.length >= 2 && alive.length <= 1) { const w = alive[0] ? alive[0].id : ""; mpSend({ t: "cend", w }); compEnd(w); return; }
     if (!COMP.zone && alive.length && alive.every(q => q.bw)) { const m = { t: "czone" }; if (COMP.planet) m.p = compBeamPick(); mpSend(m); compZoneStart(m); }
     if (COMP.zone && COMP.planet && COMP.beam) for (const L of mpOpen()) if (!L.czS) { L.czS = true; mpSendTo(L, { t: "czone", p: COMP.beam.p, el: (performance.now() - COMP.beam.t0) / 1000 }); }   // (someone new: where it is and how far along)
-    if (COMP.zone && !COMP.planet && COMP.zt0) for (const L of mpOpen()) if (!L.czS) { L.czS = true; mpSendTo(L, { t: "czone", el: (performance.now() - COMP.zt0) / 1000 }); }   // (3.39: the flat maps too)
   }
 }
 function mpGuestGen(o) {
@@ -16556,8 +16524,8 @@ function mpRecv(o, L) {
   if (o.t === "gen") { if (!MP.host) mpGuestGen(o); return; }
   if (o.t === "geomove") { if (!MP.host && L.id === mpHostId() && o.code) { MP.palTag = L.tag || ""; MP.palT = 90; MP.palP = null; const code = String(o.code); MP.moving = true; vruiOpen("mp"); MP.status = "Joining your friends' planet…";
     setTimeout(() => { MP.moving = false; mpJoin(code); vruiOpen("lobby"); }, 1800 + (MP.idx | 0) * 1500); } return; }   // your lobby is going into a planet that's already running (one at a time, after the host: everyone already there is told about you, so you all link up)
-  if (o.t === "czone") { L.czS = true; if (compRefIs(L) && COMP.on && !COMP.zone) compZoneStart(o); return; }
-  if (o.t === "cend") { if (compRefIs(L) && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
+  if (o.t === "czone") { L.czS = true; if (L.id === mpHostId() && COMP.on && !COMP.zone) compZoneStart(o); return; }
+  if (o.t === "cend") { if (L.id === mpHostId() && COMP.on && !COMP.ended) compEnd(o.w || ""); return; }
   if (o.t === "pal") { if (MP.palTag && L.tag === MP.palTag && Array.isArray(o.p) && o.p.length === 3) MP.palP = o.p; return; }
   if (o.t === "spawn") { L.spawn = [o.x, o.z]; return; }
   if (o.t === "reveal") { if (!MP.host) { if (VRUI.stage === "preview" && !MP.genBusy) mpRevealStart(o.list); else MP.pendingReveal = o.list; } return; }
@@ -18598,7 +18566,7 @@ function cullTiles() {
   else if (NEAR) {                                                  // which 80 m cells each near batch takes
     const rr = CELL * .72, cx0 = camera.position.x + HALF, cz0 = camera.position.z + HALF;
     for (let i = 0; i < NCELL; i++) for (let j = 0; j < NCELL; j++) { const q = i * NCELL + j, d = Math.hypot((i + .5) * CELL - cx0, (j + .5) * CELL - cz0);
-      fT[q] = d < a1 * zk + rr; fL[q] = d < b1 * zk + rr && d > a0 * zk - rr; fS[q] = d < SMALL_D + rr; fM[q] = d < midD() + rr; }
+      fT[q] = d < a1 * zk + rr; fL[q] = d < b1 * zk + rr && d > a0 * zk - rr; fS[q] = d < SMALL_D + rr; fM[q] = d < MID_D + rr; }
     nearTick(NEAR.trees, fT); nearTick(NEAR.lo, fL); nearTick(NEAR.small, fS); nearTick(NEAR.mid, fM); }   // refill the near batches only when the squares around you change
 }
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
@@ -18612,8 +18580,6 @@ function loop(now) {
   if (VB.shown && state !== "play" && state !== "pause") vbHide();
   if (state === "play") {
     const pu0 = pf0 ? perfT() : 0;
-    if (now - (QV.last || 0) > 1000) QV.warm = 8;                  // (just dropped in, or back from a menu: let it settle first)
-    if (vr.on && renderer.xr.isPresenting) qvTick((now - (QV.last || now)) / 1000); QV.last = now;
     if (vr.on) vrTick(dt);
     if (!(vr.on && vr.climbing)) update(dt);
     if (vr.on) vrAfterMove(dt);
