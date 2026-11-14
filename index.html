@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.38";              // Just Trees
+const VERSION = "3.39";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -5833,8 +5833,11 @@ async function geoNetGo() {                                     // the button: a
   if (r) { await mpJoin(r.code); vruiOpen("lobby"); return; }
   await mpHost(); setMode("hunt"); set.huntMap = "globe"; set.geoNet = true; set.comp = false; MP.pub = true; MP.pubKey = ""; MP.pubT = 0; renderSetup(); startNew();
 }
-function geoNetSetHost(id) {                                    // who runs the room now (everyone agrees)
+function geoNetSetHost(id, pub) {                               // who runs the room now (everyone agrees)
   MP.hostId = id; const me = id === mpMyId(), was = MP.host; MP.host = me;
+  if (state !== "play" && pub !== undefined) {                   // 3.39: handed over in the menus (a party's host swap)
+    if (me) { MP.pub = !!pub; MP.pubKey = ""; MP.pubT = 0; MP.lastSet = ""; MP.lastLob = ""; geoDoorOpen(); mpLobSync(true); } else geoDoorClose();
+    if (VRUI.on && !VRUI.inWorld) vruiShow(); return; }
   if (me) { MP.pub = true; MP.pubKey = ""; MP.pubT = 0; geoDoorOpen(); if (!was) vrBanner("You're the host of this planet now", 3, 1); }
   else { geoDoorClose(); const L = MP.links.get(id); vrBanner(((L && L.tag) || "Someone") + " is the host now", 2.5, 0); }
 }
@@ -12354,6 +12357,7 @@ function vruiParts() {
   // ---- the main menu: Solo · Online, and your character, height and the rules ----
   const M = uiPanel("mode", 1400, 1000, 2.0, 74, 1.45);
   M.paint = (g, P) => { uiBg(g, P, "CHOOSE YOUR WAY"); if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun; uiWrap(g, "Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", DEV.ok ? 770 : 890, 885, DEV.ok ? 540 : 780, 36); } };
+  uiBtn(M, 490, 850, 250, 90, "New menu", () => { VRUI.classic = false; vruiOpen("mode"); }, { fs: 34, hide: () => !DEV.ok || !!VRUI.newVer, paintCol: "#3a4a6a" });
   // (Treeocashing is online only now: Online → Treeocashing)
   uiBtn(M, 90, 150, 1220, 230, "Solo", () => { set.geoNet = false; set.comp = false; if (set.huntMap === "globe") set.huntMap = "endless"; mapRules(); renderSetup(); vruiOpen("setup"); }, { sub: "Just you: hike, hunt or a bot battle.", fs: 64 });   // (Geocaching moved to the Dev menu while it's tested)
   uiBtn(M, 90, 400, 1220, 230, "Online", () => { MP.status = ""; vruiOpen("mp"); }, { sub: "Up to 8 of you: Treeocashing, deathmatch, hunting or hiking.", fs: 64, hide: () => DEV.ok });
@@ -12518,7 +12522,7 @@ function vruiParts() {
   uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiSettings(), { fs: 40, hide: () => mpGuest() });
   uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
-  mpLobbyPanels();
+  mpLobbyPanels(); homePanels();
   // ---- (Dev) the speed check: switch things off and back on, then look at the numbers on your wrist ----
   const Pf = uiPanel("perf", 1300, 1000, 1.9, 58, 1.4);
   Pf.paint = (g, P) => { uiBg(g, P, "SPEED CHECK"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
@@ -12609,7 +12613,7 @@ function charPanel(name, yaw, side) {                          // the Character 
     uiBtn(Pn, 50, 1076, 300, 76, "Main menu", () => vruiOpen("mode"), { personal: true, fs: 34, hide: () => !!MP.code });
     uiBtn(Pn, 370, 1076, 260, 76, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true, fs: 32, hide: () => !!MP.code });
     uiBtn(Pn, 50, 1076, 420, 76, "Done", () => { VRUI.edit = false; vruiShow(); }, { primary: true, fs: 38, personal: true, hide: () => !MP.code });   // back to the lobby
-  } else uiBtn(Pn, 50, 1076, 420, 76, "Done", () => vruiOpen("mode"), { primary: true, fs: 38, personal: true });
+  } else uiBtn(Pn, 50, 1076, 420, 76, "Done", () => vruiMain(), { primary: true, fs: 38, personal: true });
   return Pn;
 }
 // ---- your own body is your character: the head (and hair, eyes) left out so you never see inside it, the hands are the gloves
@@ -12655,7 +12659,7 @@ function chpRender(rt, cam, bg) {                               // into a pictur
   r.setRenderTarget(prevRT); r.setClearColor(pc, pa); r.autoClear = pauto; r.xr.enabled = xrOn;
 }
 function chpTick(dt) {                                          // while the Character screen is up: you, slowly turning
-  const Pn = ["char", "me"].map(k => VRUI.panels[k]).find(q => q && q.mesh.visible) || null;
+  const Pn = ["char", "me", "hme"].map(k => VRUI.panels[k]).find(q => q && q.mesh.visible) || null;
   let shown = false;
   if (Pn && charOn()) {
     chpScene(); const key = lookStr(MP.look) + "|" + mpUni(null);
@@ -12666,7 +12670,7 @@ function chpTick(dt) {                                          // while the Cha
       CHP.cam.position.set(0, .92, 3.7); CHP.cam.lookAt(0, .88, 0); chpRender(CHP.rt, CHP.cam, 0x22392b); shown = true;
     }
   }
-  for (const k of ["char", "me"]) { const q = VRUI.panels[k]; if (q && q.view) q.view.visible = shown && q === Pn; }
+  for (const k of ["char", "me", "hme"]) { const q = VRUI.panels[k]; if (q && q.view) q.view.visible = shown && q === Pn; }
 }
 function charPortrait(lk, uni) {                                // head and shoulders, for the lobby cards
   const key = lookStr(lk) + "|" + uni; if (CHP.cache.has(key)) return CHP.cache.get(key);
@@ -13590,7 +13594,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], home: ["hme", "hplay", "hfr"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -13608,11 +13612,12 @@ const ageOk = () => !!VRUI.ageOk || ageGet() === "ok", ageNo = () => !!VRUI.ageN
 const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
 function vruiOpen(stage) {
   vruiParts();
-  if (stage === "mode" && !rulesOk()) stage = "rules";       // the rules come first, once
+  if (stage === "mode" && DEV.ok && !VRUI.classic) { if (MP.code) mpLeave(); stage = "home"; }   // (Dev for now) the new first menu
+  if ((stage === "mode" || stage === "home") && !rulesOk()) stage = "rules";       // the rules come first, once
   if (stage !== "tag") VRUI.keyFor = null;
   if (LAB.on && stage !== "lab" && stage !== "tag" && stage !== "pause" && stage !== "height") labLeave();   // out of Map Lab // the keyboard types a gamer tag unless it was opened for the dev key or a creature's name
   if (stage === "mode" && MP.code) mpLeave();                    // back to the main menu leaves an online game
-  if (stage === "mode" || stage === "mp" || stage === "rooms") verCheck();
+  if (stage === "mode" || stage === "home" || stage === "mp" || stage === "rooms") verCheck();
   if (stage === "setup" && MP.code) stage = "lobby";             // online, the map settings sit beside the lobby
   if (stage !== "lobby" || VRUI.stage !== "lobby") VRUI.edit = false;
   const I = vr.readInputs ? vr.readInputs() : null;
@@ -13631,7 +13636,7 @@ function vruiOpen(stage) {
   if (VRUI.dio && stage !== "preview") { VRUI.root.remove(VRUI.dio); VRUI.dio = null; }
   if (stage === "preview") { if (VRUI.dio) VRUI.root.remove(VRUI.dio); VRUI.dio = buildDiorama(); VRUI.root.add(VRUI.dio); }
   if (stage === "intro") { intro.t0 = performance.now(); paintIntroHi(0); introSounds(true); }
-  if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : VRUI.keyFor === "arena" ? LAB.A.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
+  if (stage === "tag") { VRUI.tagEdit = VRUI.keyFor === "dev" || VRUI.keyFor === "friend" ? "" : VRUI.keyFor === "name" ? WS.R.name || "" : VRUI.keyFor === "arena" ? LAB.A.name || "" : MP.tag; uiDraw(VRUI.panels.tag); }
   if (!inWorld) state = "vrmenu";                                // (leaving a game that kept going, too)
   mpHostStage(stage);
 }
@@ -13652,7 +13657,7 @@ function vrHeightDone(measured) {
     buzz("L", .4, 40); buzz("R", .4, 40);
   } else if (isFinite(vr.hOff)) vr.hCal = vr.hOff !== 0;
   const a = VRUI.afterH; VRUI.afterH = null;
-  if (a === "intro") vruiOpen("intro"); else if (a === "start") startNew(); else if (a === "pause") vruiOpen("pause"); else vruiOpen("mode");
+  if (a === "intro") vruiOpen("intro"); else if (a === "start") startNew(); else if (a === "pause") vruiOpen("pause"); else if (a === "home") vruiOpen("home"); else vruiOpen("mode");
 }
 function vrHeadLocal(I) {                                        // the head in the bare play space (undoing our walking offset)
   const cy = Math.cos(vr.yaw), sy = Math.sin(vr.yaw), dx = I.head.x - vr.ox, dz = I.head.z - vr.oz;
@@ -13689,7 +13694,7 @@ function vruiTick(dt) {
   const st = VRUI.stage;
   if (st === "lobby" && !MP.code) { vruiOpen(MP.host ? "mp" : "rooms"); return; }   // the room is gone (or never opened): back, with the reason
   if (st === "pause" && vr.off && edge("ymenu", vr.off.b)) { vruiResume(); return; } // tap Y again: back to the game
-  if (st === "setup" || st === "lobby" || st === "char") chpTick(dt);
+  if (st === "setup" || st === "lobby" || st === "char" || st === "home") chpTick(dt);
   if (st === "work") wsTick(dt);
   if (st === "lab") labTick(dt);
   if (st === "bots" && (VRUI.bpT = (VRUI.bpT || 0) - dt) <= 0) { VRUI.bpT = 1; uiDraw(VRUI.panels.bots); }   // the pictures arrive
@@ -15893,7 +15898,7 @@ function mpWire(c, out) {
     pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && L.conn === c) { try { c.close(); } catch (e) {} } }); };
   watchIce();
   c.on("open", () => { clearTimeout(stuck); L.lastRx = performance.now(); L.open = true; mpOnUpdate(); if (!MP.host && id === mpHostId()) { MP.kills = MP.deaths = 0; }
-    try { c.send({ t: "hi", door: out && id === MP_PREFIX + MP.code && !MP.host ? 1 : 0, v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); } catch (e) {} });
+    try { c.send({ t: "hi", door: out && id === MP_PREFIX + MP.code && !MP.host ? 1 : 0, v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: DEV.ok ? FRD.code : undefined }); } catch (e) {} });
   c.on("data", o => mpRecv(o, L));
   c.on("close", () => { if (L.conn === c) mpLinkGone(L, false); });
   c.on("error", () => {});
@@ -15965,7 +15970,7 @@ function verCheck() {                                         // a newer version
   fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(r => r.text()).then(t => { const m = t.match(/const VERSION = "([\d.]+)"/);
     if (m && verNum(m[1]) > verNum(VERSION)) { VRUI.newVer = m[1]; for (const k of ["mode", "mp", "rooms", "lobby"]) if (VRUI.panels[k] && VRUI.panels[k].mesh.visible) uiDraw(VRUI.panels[k]); } }).catch(() => {});
 }
-function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look) }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
+function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: DEV.ok ? FRD.code : undefined }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
 function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the side with fewer people
   if (!MP.host && MP.code) return; const people = [mpMyId(), ...mpOpen().map(L => L.id)], bots = VB.list.map(B => B.id), ids = people.concat(bots);   // (solo too)
   for (const id of Object.keys(MP.teams)) if (!ids.includes(id)) delete MP.teams[id];
@@ -16064,7 +16069,7 @@ function mpNetBeast(A, dt) {                                 // guest: where the
 function mpNetLocal() { for (const A of beasts) if (A.net) { A.net = false; A.mode = "idle"; A.timer = 1 + Math.random() * 3; A.target = null; A.home = [A.x, A.z]; A.want = 0; A.hunter = false; A.rexOn = false; A.doomT = 0; A.rearT = 0; } MP.nb.clear(); }
 function mpRecv2(o, L) {                                     // more messages
   switch (o.t) {
-    case "me": if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look; mpLobbyDraw(); return true;
+    case "me": if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look; if (o.fc) frSeen(o.fc, L.tag); mpLobbyDraw(); return true;
     case "lob": if (!MP.host) { MP.teams = o.teams || {}; mpApplySet(o.set); mpLobbyDraw(); } return true;
     case "bump": if (!L.bumped) { L.bumped = true; mpBumpFx(L); } return true;
     case "an": mpBeastRecv(o.a); return true;
@@ -16144,6 +16149,7 @@ function mpTagDone() {                                       // the keyboard's O
   else if (nx === "comp") compGo();
   else if (nx && nx.startsWith("join:")) { mpJoin(nx.slice(5)); vruiOpen("lobby"); }
   else if (nx === "geonet") geoNetGo();
+  else if (nx === "home") { mpSendMe(); vruiOpen("home"); }
   else { mpSendMe(); vruiOpen(MP.code ? "lobby" : "mp"); }
 }
 function mpLobbyPanels() {
@@ -16188,22 +16194,300 @@ function mpLobbyPanels() {
     uiBtn(Lb, x, y, CW, CH, "", () => { const r = rowAt(i); if (r && r.me) { VRUI.edit = true; vruiShow(); } }, { personal: true, paintCol: "rgba(0,0,0,0)", hide: () => !rowAt(i) || !rowAt(i).me }); }
   uiBtn(Lb, 330, 112, 180, 56, "Private", () => { roomsSetPublic(false); }, { active: () => !MP.pub, hide: hostOnly, fs: 28 });   // listed for everyone, or code only
   uiBtn(Lb, 520, 112, 180, 56, "Public", () => { roomsSetPublic(true); }, { active: () => !!MP.pub, hide: hostOnly, fs: 28 });
+  uiBtn(Lb, 50, 112, 180, 56, "Friends", () => vruiOpen("home"), { hide: () => !DEV.ok, fs: 28, personal: true, paintCol: "#3a4a6a" });   // (Dev) the home screen, still in your room
   uiBtn(Lb, lx, 1048, 380, 80, "Change tag", () => { VRUI.tagNext = null; vruiOpen("tag"); }, { personal: true, fs: 30, labelFn: () => "Tag · " + MP.tag });
   uiBtn(Lb, lx + 400, 1048, 300, 80, "Leave room", () => vruiOpen("mode"), { personal: true, fs: 34 });
   uiBtn(Lb, lx + 720, 1048, 260, 80, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true, fs: 32 });
   // ---- your gamer tag: a big simple keyboard ----
   const Tg = uiPanel("tag", 1500, 940, 2.0, 74, 1.42);
   Tg.paint = (g, P) => { const kf = VRUI.keyFor, txt = VRUI.tagEdit || "";
-    uiBg(g, P, kf === "dev" ? "DEV KEY" : kf === "name" ? "NAME THIS CREATURE" : kf === "arena" ? "NAME THIS MAP" : "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((kf === "dev" ? "•".repeat(txt.length) : txt) + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
+    uiBg(g, P, kf === "dev" ? "DEV KEY" : kf === "name" ? "NAME THIS CREATURE" : kf === "arena" ? "NAME THIS MAP" : kf === "friend" ? "ADD A FRIEND" : "YOUR GAMER TAG"); g.textAlign = "center"; g.font = "bold 84px sans-serif"; g.fillStyle = UIC.sun; g.fillText((kf === "dev" ? "•".repeat(txt.length) : txt) + (Math.floor(VRUI.t * 2) % 2 ? "_" : " "), 750, 210);
     g.font = "28px sans-serif"; g.fillStyle = kf === "dev" && DEV.msg ? UIC.sun : UIC.dim;
-    g.fillText(kf === "dev" ? DEV.msg || "Type the dev key and press OK (OK with nothing typed goes back)" : kf === "name" || kf === "arena" ? "Up to 24 letters and numbers" : "Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
-  const type = ch => { VRUI.tagEdit = ((VRUI.tagEdit || "") + ch).slice(0, VRUI.keyFor ? 24 : 12); uiDraw(Tg); };
+    g.fillText(kf === "dev" ? DEV.msg || "Type the dev key and press OK (OK with nothing typed goes back)" : kf === "friend" ? "Type their friend code (6 letters and numbers) and press OK" : kf === "name" || kf === "arena" ? "Up to 24 letters and numbers" : "Up to 12 letters and numbers · it shows on the player list and the scoreboard", 750, 262); };
+  const type = ch => { VRUI.tagEdit = ((VRUI.tagEdit || "") + ch).slice(0, VRUI.keyFor === "friend" ? 6 : VRUI.keyFor ? 24 : 12); uiDraw(Tg); };
   ["1234567890", "QWERTYUIOP", "ASDFGHJKL_", "ZXCVBNM-."].forEach((row, j) => row.split("").forEach((ch, i) => uiBtn(Tg, 70 + i * 136 + j * 30, 300 + j * 112, 124, 100, ch, () => type(ch), { fs: 44, personal: true })));
   uiBtn(Tg, 70, 760, 300, 110, "Space", () => type(" "), { fs: 38, personal: true });
   uiBtn(Tg, 390, 760, 300, 110, "Delete", () => { VRUI.tagEdit = (VRUI.tagEdit || "").slice(0, -1); uiDraw(Tg); }, { fs: 38, personal: true });
   uiBtn(Tg, 710, 760, 300, 110, "Clear", () => { VRUI.tagEdit = ""; uiDraw(Tg); }, { fs: 38, personal: true });
-  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => { const t = (VRUI.tagEdit || "").trim(); if (VRUI.keyFor === "dev") devTryKey(t); else if (VRUI.keyFor === "name") wsNamed(t); else if (VRUI.keyFor === "arena") { LAB.A.name = t.slice(0, 24); labChange(false); LAB.tab = "file"; vruiOpen("lab"); } else mpTagDone(); }, { primary: true, fs: 48, personal: true });
+  uiBtn(Tg, 1030, 760, 400, 110, "OK", () => { const t = (VRUI.tagEdit || "").trim(); if (VRUI.keyFor === "dev") devTryKey(t); else if (VRUI.keyFor === "name") wsNamed(t); else if (VRUI.keyFor === "arena") { LAB.A.name = t.slice(0, 24); labChange(false); LAB.tab = "file"; vruiOpen("lab"); } else if (VRUI.keyFor === "friend") { if (t) frAdd(t); vruiOpen("home"); } else mpTagDone(); }, { primary: true, fs: 48, personal: true });
 }
+/* ---- 3.39 (Dev for now): friends, and the home screen (you on the left, the ways to play in the middle, your friends on the right) ----
+   Everyone has a friend code (6 letters and numbers, made once, kept on this headset). Friends find each other with no server of our own:
+   each player holds a second PeerJS line named after their code, and friends call each other on it to swap "what I'm doing" and invites.
+   The caller's line name is given by the PeerJS service, so a message from code X really came from the line named X.
+   A request only completes while both are online (nothing is stored anywhere but the two headsets). */
+const FR_ABC = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", FR_RE = /^[A-HJ-NP-Z2-9]{6}$/, FR_MAX = 40;
+const frLoad = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return Array.isArray(v) ? v : d; } catch (_) { return d; } };
+const frName = n => typeof n === "string" ? n.replace(/[^\w .\-]/g, "").slice(0, 14) : "";
+const FRD = { code: "", list: [], recent: [], peer: null, up: false, starting: false, tryT: 0, dialT: 0, stT: 0, beatAt: 0, reqs: [], invs: [], no: new Set(), tab: "friends", pg: 0, msg: "", msgT: 0, ask: "", dirty: false };
+FRD.code = (() => { let c = ""; try { c = localStorage.getItem("jt-fcode") || ""; } catch (_) {}
+  if (!FR_RE.test(c)) { c = ""; const r = new Uint32Array(6); crypto.getRandomValues(r); for (let i = 0; i < 6; i++) c += FR_ABC[r[i] % 32]; try { localStorage.setItem("jt-fcode", c); } catch (_) {} }
+  return c; })();
+FRD.list = frLoad("jt-friends", []).filter(f => f && FR_RE.test(f.c) && f.c !== FRD.code).slice(0, FR_MAX).map(f => ({ c: f.c, n: frName(f.n), p: !!f.p, conn: null, on: false, st: null }));
+FRD.recent = frLoad("jt-recent", []).filter(f => f && FR_RE.test(f.c) && f.c !== FRD.code).slice(0, 20).map(f => ({ c: f.c, n: frName(f.n) }));
+const frSave = () => { try { localStorage.setItem("jt-friends", JSON.stringify(FRD.list.map(f => ({ c: f.c, n: f.n, p: f.p ? 1 : 0 })))); localStorage.setItem("jt-recent", JSON.stringify(FRD.recent)); } catch (_) {} };
+const frGet = c => FRD.list.find(f => f.c === c);
+const frShow = c => c.slice(0, 3) + " " + c.slice(3);
+function frDraw() { if (!VRUI.panels) return; for (const k of ["hfr", "hme", "hplay"]) { const Pn = VRUI.panels[k]; if (Pn && Pn.mesh.visible) uiDraw(Pn); } }
+function frNote(m) { FRD.msg = m; FRD.msgT = performance.now(); frDraw(); }
+function frStatus() {                                           // what my friends see next to my name
+  const w = state === "play" || state === "fly" ? (set.comp ? "Competitive" : set.geoNet || geoMode() ? "Treeocashing" : gameMode === "pvp" ? "Deathmatch" : gameMode === "hunt" ? "Hunting" : "Hiking") : MP.code ? "In a lobby" : "In the menus";
+  return { t: "st", n: MP.tag, room: MP.code || "", w, k: MP.code ? mpCount() : 1, full: !!MP.code && mpCount() >= MP_MAX };
+}
+const frSendOn = (c, o) => { try { if (c && c.open) c.send(o); } catch (_) {} };
+const frSend = (f, o) => { if (f && f.on) frSendOn(f.conn, o); };
+const frShut = c => { try { if (c) c.close(); } catch (_) {} };
+function frWire(c, dialed) {                                    // a line to (or from) another player's friend code
+  const code = String(c.peer || "").slice(4);
+  if (String(c.peer || "").slice(0, 4) !== "jtf-" || !FR_RE.test(code) || code === FRD.code) { frShut(c); return; }
+  const f = frGet(code);
+  if (f && f.conn && f.conn !== c) {                             // we called each other at once: the line made by the lower code stays
+    if (f.dialed === dialed || dialed === (FRD.code < code)) { const old = f.conn; f.conn = c; f.dialed = dialed; f.on = false; frShut(old); }
+    else { c.on("open", () => frShut(c)); return; }
+  } else if (f) { f.conn = c; f.dialed = dialed; f.on = false; }
+  c.on("open", () => { const g = frGet(code);
+    if (g && g.conn === c) { g.on = true; g.rx = performance.now(); g.stJ = ""; frSendOn(c, { t: "hi", n: MP.tag }); FRD.stT = 0; }   // (someone I don't know hears nothing from me until I accept)
+    FRD.dirty = true; });
+  c.on("data", o => { if (o && typeof o === "object") frIn(code, c, o); });
+  const gone = () => { const g = frGet(code); if (g && g.conn === c) { g.conn = null; g.on = false; g.st = null; FRD.dirty = true; } for (const r of FRD.reqs) if (r.conn === c) r.conn = null; };
+  c.on("close", gone); c.on("error", gone);
+}
+function frIn(code, c, o) {
+  const f = frGet(code), nm = frName(o.n), now = performance.now();
+  if (f && f.conn === c) f.rx = now;
+  if (o.t === "hi") {
+    if (f) { if (nm) f.n = nm; if (f.p) { f.p = false; frNote((f.n || "They") + " is your friend now"); } frSave(); frSendOn(c, { t: "acc", n: MP.tag }); f.stJ = ""; FRD.stT = 0; }
+    else {                                                        // not a friend yet: a request, waiting for my answer
+      if (FRD.no.has(code)) { frShut(c); return; }
+      let r = FRD.reqs.find(q => q.c === code);
+      if (!r) { if (FRD.reqs.length >= 5) { frShut(c); return; } r = { c: code }; FRD.reqs.push(r); if (state === "play") vrBanner((nm || "Someone") + " wants to be your friend", 3, 0); }
+      r.n = nm || "Someone"; r.conn = c;
+    }
+    FRD.dirty = true; return;
+  }
+  if (!f) return;
+  if (o.t === "acc") { if (nm) f.n = nm; if (f.p) { f.p = false; frNote((f.n || "They") + " is your friend now"); } frSave(); f.stJ = ""; FRD.stT = 0; FRD.dirty = true; return; }
+  if (o.t === "no") { if (f.p) { FRD.list = FRD.list.filter(q => q !== f); frSave(); frShut(c); frNote("That friend request wasn't accepted"); } return; }
+  if (o.t === "bye") { FRD.list = FRD.list.filter(q => q !== f); FRD.invs = FRD.invs.filter(v => v.c !== code); frSave(); frShut(c); FRD.dirty = true; return; }
+  if (f.p) return;
+  if (o.t === "st") {
+    if (nm && nm !== f.n) { f.n = nm; frSave(); }
+    f.st = { room: /^\d{4}$/.test(o.room) ? o.room : "", w: String(o.w || "").replace(/[^\w ]/g, "").slice(0, 24), k: Math.max(1, Math.min(MP_MAX, o.k | 0)), full: !!o.full };
+    FRD.invs = FRD.invs.filter(v => v.c !== code || v.room === f.st.room);   // (they left that room: the invite is gone)
+    FRD.dirty = true; return;
+  }
+  if (o.t === "inv" && /^\d{4}$/.test(o.room)) {
+    FRD.invs = FRD.invs.filter(v => v.c !== code); FRD.invs.push({ c: code, n: f.n || nm || "A friend", room: o.room, w: String(o.w || "").replace(/[^\w ]/g, "").slice(0, 24), t: now });
+    if (state === "play") vrBanner((f.n || "A friend") + " invited you to play. Main menu, then Friends, to join.", 5, 1);
+    FRD.dirty = true;
+  }
+}
+function frDial(f) {
+  if (!FRD.peer || !FRD.up || f.conn) return;
+  try { const c = FRD.peer.connect("jtf-" + f.c, { reliable: true, serialization: "json" }); if (!c) return; f.dialAt = performance.now(); frWire(c, true); } catch (_) {}
+}
+function frStop() { const p = FRD.peer; FRD.peer = null; FRD.up = false; try { if (p) p.destroy(); } catch (_) {} for (const f of FRD.list) { f.conn = null; f.on = false; f.st = null; } for (const r of FRD.reqs) r.conn = null; FRD.dirty = true; }
+async function frStart() {
+  if (FRD.peer || FRD.starting || typeof Peer === "undefined") return;
+  FRD.starting = true; try { await mpRelay(); } catch (_) {} FRD.starting = false;
+  if (FRD.peer || !DEV.ok) return;
+  const p = mpNewPeer("jtf-" + FRD.code); if (!p) return; FRD.peer = p; FRD.up = false;
+  p.on("open", () => { if (FRD.peer === p) { FRD.up = true; FRD.dialT = 0; } });
+  p.on("connection", c => { if (FRD.peer === p) frWire(c, false); });
+  p.on("disconnected", () => { if (FRD.peer !== p) return; FRD.up = false; setTimeout(() => { try { if (FRD.peer === p && !p.destroyed) p.reconnect(); } catch (_) {} }, 3000); });
+  p.on("error", e => { if (FRD.peer !== p) return;
+    if (e.type === "peer-unavailable") { const m = /jtf-([A-Z2-9]{6})/.exec(String(e.message || "")), f = m && frGet(m[1]); if (f && !f.on) f.conn = null; return; }   // that friend is offline
+    if (e.type === "unavailable-id" || e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") { frStop(); FRD.tryT = 25; } });
+}
+function frTick(dt) {                                           // every frame (cheap: it only acts every couple of seconds)
+  if (!DEV.ok || !vr.on) return;
+  if (VRUI.on && VRUI.stage === "home" && (FRD.drawT = (FRD.drawT || 0) - dt) <= 0) { FRD.drawT = 1; FRD.dirty = false; frDraw(); }   // the party and the friends stay fresh
+  if (!FRD.peer) { if ((FRD.tryT -= dt) <= 0) { FRD.tryT = 20; frStart(); } return; }
+  if (!FRD.up) return;
+  const now = performance.now();
+  if ((FRD.dialT -= dt) <= 0) { FRD.dialT = state === "play" ? 120 : 30;
+    for (const f of FRD.list) { if (f.conn && !f.on && now - (f.dialAt || 0) > 20000) { const c = f.conn; f.conn = null; frShut(c); } if (!f.conn) frDial(f); } }
+  if ((FRD.stT -= dt) <= 0) { FRD.stT = 2;
+    const s = frStatus(), j = JSON.stringify(s), beat = now - FRD.beatAt > 20000; if (beat) FRD.beatAt = now;
+    for (const f of FRD.list) { if (!f.on) continue;
+      if (now - (f.rx || 0) > 70000) { const c = f.conn; f.conn = null; f.on = false; f.st = null; frShut(c); FRD.dirty = true; continue; }   // gone quiet: offline
+      if (!f.p && (beat || f.stJ !== j)) { f.stJ = j; frSend(f, s); } }
+    const n0 = FRD.invs.length; FRD.invs = FRD.invs.filter(v => now - v.t < 300000); if (FRD.invs.length !== n0) FRD.dirty = true;
+    if (FRD.msg && now - FRD.msgT > 7000) { FRD.msg = ""; FRD.dirty = true; }
+    if (FRD.dirty) { FRD.dirty = false; frDraw(); }
+  }
+}
+function frAdd(raw) {                                           // typed on the keyboard, or "Add" beside someone you played with
+  const c = String(raw || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!FR_RE.test(c)) return frNote("That isn't a friend code. It's 6 letters and numbers.");
+  if (c === FRD.code) return frNote("That's your own code.");
+  const f = frGet(c); if (f) return frNote(f.p ? "Already asked. Waiting for them to accept." : (f.n || "They") + " is already your friend.");
+  if (FRD.reqs.some(q => q.c === c)) return frAccept(c);
+  if (FRD.list.length >= FR_MAX) return frNote("Your friends list is full (" + FR_MAX + ").");
+  const rec = FRD.recent.find(q => q.c === c); FRD.no.delete(c);
+  const nf = { c, n: rec ? rec.n : "", p: true, conn: null, on: false, st: null }; FRD.list.push(nf); frSave(); frDial(nf); FRD.tab = "friends"; FRD.pg = 0;
+  frNote("Request sent. They'll see it when you're both online.");
+}
+function frAccept(c) {
+  const i = FRD.reqs.findIndex(q => q.c === c); if (i < 0) return; if (FRD.list.length >= FR_MAX) return frNote("Your friends list is full (" + FR_MAX + ").");
+  const r = FRD.reqs.splice(i, 1)[0], f = { c, n: r.n === "Someone" ? "" : r.n, p: false, conn: r.conn || null, dialed: false, on: !!(r.conn && r.conn.open), st: null, rx: performance.now(), stJ: "" };
+  FRD.list.push(f); frSave(); frSend(f, { t: "acc", n: MP.tag }); FRD.stT = 0; FRD.dialT = 0; frNote((f.n || "They") + " is your friend now");
+}
+function frDeny(c) { const i = FRD.reqs.findIndex(q => q.c === c); if (i < 0) return; const r = FRD.reqs.splice(i, 1)[0]; FRD.no.add(c); frSendOn(r.conn, { t: "no" }); setTimeout(() => frShut(r.conn), 600); frDraw(); }
+function frRemove(c) { const f = frGet(c); if (!f) return; frSend(f, { t: "bye" }); const cn = f.conn; setTimeout(() => frShut(cn), 600); FRD.list = FRD.list.filter(q => q !== f); FRD.invs = FRD.invs.filter(v => v.c !== c); frSave(); frDraw(); }
+function frJoin(room) { FRD.invs = FRD.invs.filter(v => v.room !== room); mpJoin(room); vruiOpen("lobby"); }
+async function frInvite(c) {                                    // into my room (a private one is opened if I have none)
+  const f = frGet(c); if (!f || !f.on || f.p) return;
+  if (!MP.code) { set.geoNet = false; set.comp = false; if (set.huntMap === "globe") set.huntMap = "endless"; await mpHost(); mapRules(); renderSetup();
+    for (let i = 0; i < 50 && MP.peer && !MP.peer.open; i++) await new Promise(r => setTimeout(r, 200)); }
+  if (!MP.code || !MP.peer || !MP.peer.open) return frNote("Couldn't open a room right now. Try again.");
+  frSend(f, { t: "inv", n: MP.tag, room: MP.code, w: frStatus().w }); f.invAt = performance.now(); frNote("Invite sent to " + (f.n || "your friend") + ".");
+}
+function frSeen(fc, tag) {                                      // someone in my room: remembered under Recent
+  const c = String(fc || ""); if (!DEV.ok || !FR_RE.test(c) || c === FRD.code) return; const n = frName(tag), f = frGet(c);
+  if (f) { if (n && n !== f.n && !/^Joining/.test(n)) { f.n = n; frSave(); } return; }
+  FRD.recent = [{ c, n: n || "Player" }].concat(FRD.recent.filter(q => q.c !== c)).slice(0, 20); frSave(); FRD.dirty = true;
+}
+function frRows() {                                             // what the Friends panel lists, top to bottom
+  if (FRD.tab === "recent") return FRD.recent.filter(r => !frGet(r.c)).map(r => ({ k: "rec", c: r.c, n: r.n }));
+  const rank = f => f.p ? 2 : f.on ? 0 : 1;
+  return FRD.reqs.map(r => ({ k: "req", c: r.c, n: r.n })).concat(FRD.invs.map(v => ({ k: "inv", c: v.c, n: v.n, room: v.room, w: v.w })),
+    FRD.list.slice().sort((a, b) => rank(a) - rank(b) || (a.n || "").localeCompare(b.n || "")).map(f => ({ k: "fr", c: f.c, n: f.n, f })));
+}
+// ---- the home screen ----
+const HOME_ARC = 62, HSIDE_ARC = 42, HSIDE_YAW = 53.5;
+const HOME = { sel: "geo", comp: "medium", ask: "" };
+const HOME_MODES = [
+  ["geo", "Treeocashing", "Find caches on a whole planet", "A public planet for up to 8. You land on one that's already running if there's room, or start a new one. Find caches, level up, earn gear."],
+  ["comp", "Competitive", "Race to the top, last one standing", "Treeocashing as a contest. Everyone climbs to Bigg Wigg, then the zone closes in. Your own public room: start when it fills."],
+  ["hunt", "Hunting", "Track animals with a rifle", "Deer, elk, bears and more. Quiet feet and a steady hand. A new place every time you press Play."],
+  ["hike", "Hiking", "Just trees. No weapons", "Walk, climb and look around. A new place every time you press Play."],
+  ["pvp", "Deathmatch", "Fight bots, or your friends", "On your own it's a battle against bots. With friends in your party it's all of you against each other."],
+  ["join", "Join a game", "Public rooms, or a room code", "See the rooms that are open right now, or type the 4-number code a friend gave you."]];
+const homeParty = () => !!MP.code && mpOpen().length > 0;
+const vruiMain = () => vruiOpen(DEV.ok && !VRUI.classic ? "home" : "mode");   // back to the first menu without leaving your party
+async function homePlay(custom) {
+  const k = HOME.sel, party = homeParty(), sync = () => { mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); };
+  if (mpGuest()) return;
+  if (k === "join") { MP.rooms = null; MP.roomPg = 0; MP.roomsT = 0; MP.entry = ""; vruiOpen("rooms"); return; }
+  if (k === "geo") {
+    if (!party) { geoNetGo(); return; }
+    if (!set.geoNet) { MP.pubWas = !!MP.pub; setMode("hunt"); set.comp = false; set.huntMap = "globe"; set.geoNet = true; roomsSetPublic(true); sync(); }
+    vruiOpen("lobby"); return;
+  }
+  if (k === "comp") {
+    const pl = HOME.comp === "globe";
+    if (!party) { if (!pl) set.size = HOME.comp; await compGo(); if (pl) { set.huntMap = "globe"; sync(); vruiShow(); } return; }
+    setMode("hunt"); set.comp = true; set.geoNet = false; set.arena = null; set.huntMap = pl ? "globe" : "island"; set.edges = "island"; if (!pl) set.size = HOME.comp;
+    roomsSetPublic(true); sync(); vruiOpen("lobby"); return;
+  }
+  if (set.geoNet || set.comp) { const was = !!set.geoNet; set.geoNet = false; set.comp = false; compStop(); if (MP.host) roomsSetPublic(was ? !!MP.pubWas : false); }
+  if (set.huntMap === "globe") set.huntMap = "endless";
+  if (gameMode !== k) setMode(k);
+  if (!custom && !party) { const hm = set.huntMap, km = set.hikeMap, dn = set.dino; set.arena = null; $("randomBtn").click(); set.huntMap = hm; set.hikeMap = km; set.dino = dn; }   // a new place each time
+  sync(); vbFit();
+  if (party || custom) vruiOpen(MP.code ? "lobby" : "setup"); else startNew();
+}
+function homePanels() {
+  const exitVR = () => { const s = renderer.xr.getSession(); if (s) s.end(); };
+  // ---- left: you ----
+  const Me = uiPanel("hme", 1080, 1170, 2.1, HSIDE_ARC, 1.4, HSIDE_YAW), x0 = 480, VW = [40, 120, 400, 720];
+  chpScene(); Me.view = uiRect(Me, ...VW, new THREE.MeshBasicMaterial({ map: CHP.rt.texture, fog: false, toneMapped: false }));
+  const party = () => MP.code ? mpRoster().filter(r => !r.bot).slice(0, 8) : [];
+  Me.paint = (g, P) => {
+    uiBg(g, P); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("YOU", 50, 88);
+    g.fillStyle = "#22392b"; uiRound(g, ...VW, 18); g.fill();
+    g.textAlign = "center"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText(charOn() ? "Loading…" : "Shows in the headset", VW[0] + VW[2] / 2, VW[1] + VW[3] / 2);
+    g.textAlign = "left"; g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Gamer tag", x0, 150);
+    g.font = "bold 64px sans-serif"; g.fillStyle = UIC.sun; g.fillText(fitText(g, MP.tag, 550), x0, 218);
+    g.font = "30px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Your friend code", x0, 352);
+    g.font = "bold 76px sans-serif"; g.fillStyle = UIC.text; g.fillText(frShow(FRD.code), x0, 428);
+    g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText("Friends type this to add you", x0, 468);
+    { const c = geoChar(); if (c && c.n) { g.font = "bold 30px sans-serif"; g.fillStyle = "#ffd65a"; g.fillText("Treeocashing level " + c.n, x0, 506); } }
+    const rows = party(); g.font = "bold 36px sans-serif"; g.fillStyle = UIC.text; g.fillText("Your party", 50, 908);
+    if (MP.code) { g.textAlign = "right"; g.font = "bold 34px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Room " + MP.code.split("").join(" "), P.W - 50, 908); g.textAlign = "left"; }
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
+    if (!MP.code) uiWrap(g, "Just you. Invite a friend from the list on the right and you play together.", 50, 960, 980, 38);
+    else if (rows.length < 2) g.fillText(MP.on || MP.host ? "Waiting for your friend to join…" : MP.status || "Connecting…", 50, 1120);
+    else if (MP.host) g.fillText("Tap someone to make them the host.", 50, 1160);
+  };
+  uiBtn(Me, x0, 240, 260, 64, "Change tag", () => { VRUI.tagNext = "home"; vruiOpen("tag"); }, { fs: 30 });
+  uiBtn(Me, x0, 530, 550, 80, "Your character", () => vruiOpen("char"), { fs: 38 });
+  uiBtn(Me, x0, 622, 268, 76, "Set height", () => vrHeightCheck("home"), { fs: 32 });
+  uiBtn(Me, x0 + 282, 622, 268, 76, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 32 });
+  uiBtn(Me, x0, 710, 268, 76, "Leave party", () => { mpLeave(); vruiOpen("home"); }, { fs: 32, hide: () => !MP.code, paintCol: "#8a3a32" });
+  uiBtn(Me, x0 + 282, 710, 268, 76, "Exit VR", exitVR, { fs: 32 });
+  uiBtn(Me, x0, 798, 268, 64, "Dev", () => vruiOpen("dev"), { fs: 30, paintCol: "#3a4a6a" });
+  uiBtn(Me, x0 + 282, 798, 268, 64, "Old menu", () => { VRUI.classic = true; vruiOpen("mode"); }, { fs: 30 });
+  for (let i = 0; i < 8; i++) uiBtn(Me, 40 + (i % 2) * 505, 928 + Math.floor(i / 2) * 52, 495, 46, "", () => { const r = party()[i]; if (!r || r.me || !MP.host || rows2() < 2) return;
+      if (HOME.ask !== r.id) { HOME.ask = r.id; uiDraw(Me); return; } HOME.ask = ""; mpGiveHost(r.id); },
+    { fs: 26, hide: () => !party()[i] || party().length < 2, paintColFn: () => { const r = party()[i]; return r && HOME.ask === r.id ? "#8a6a2a" : "rgba(255,255,255,.09)"; },
+      labelFn: () => { const r = party()[i]; return !r ? "" : HOME.ask === r.id ? "Make " + r.tag + " host? Tap again" : r.tag + (r.host ? " · host" : "") + (r.me ? " · you" : ""); } });
+  function rows2() { return party().length; }
+  // ---- middle: the ways to play ----
+  const Pl = uiPanel("hplay", 1400, 1000, 2.0, HOME_ARC, 1.45), px = 640, sel = () => HOME_MODES.find(m => m[0] === HOME.sel) || HOME_MODES[0], guest = () => mpGuest();
+  Pl.paint = (g, P) => {
+    uiBg(g, P, "WAYS TO PLAY"); const m = sel();
+    g.fillStyle = "rgba(0,0,0,.18)"; uiRound(g, px - 20, 130, 740, 810, 22); g.fill();
+    g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 62px sans-serif"; g.fillStyle = UIC.sun; g.fillText(m[1], px + 10, 212);
+    g.font = "32px sans-serif"; g.fillStyle = UIC.text; uiWrap(g, m[3], px + 10, 266, 680, 42);
+    if (HOME.sel === "comp") uiLabel(g, px + 10, 492, "Map size", HOME.comp === "globe" ? "Planet · top level 50" : "top level " + (COMP_SIZES.find(z => z[0] === HOME.comp) || [0, 0, 0])[2]);
+    if (HOME.sel === "hunt" || HOME.sel === "hike") uiLabel(g, px + 10, 492, "Map");
+    g.font = "28px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left";
+    const note = guest() ? "You're in a party. The host picks the game." : homeParty() ? "Your party comes with you. Press Start in the lobby when you're ready." : MP.status && HOME.sel === "geo" ? MP.status : "";
+    if (note) uiWrap(g, note, px + 10, 716, 680, 36);
+    if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 26px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", 700, 978); }
+  };
+  HOME_MODES.forEach((m, i) => uiBtn(Pl, 50, 136 + i * 134, 540, 122, m[1], () => { HOME.sel = m[0]; uiDraw(Pl); }, { sub: m[2], fs: 46, active: () => HOME.sel === m[0] }));
+  const opt = k => () => HOME.sel !== k || guest();
+  COMP_SIZES.forEach(([k, l], i) => uiBtn(Pl, px + 10 + i * 108, 512, 100, 70, l, () => { HOME.comp = k; uiDraw(Pl); }, { active: () => HOME.comp === k, hide: opt("comp"), fs: 30 }));
+  uiBtn(Pl, px + 10 + 5 * 108, 512, 140, 70, "Planet", () => { HOME.comp = "globe"; uiDraw(Pl); }, { active: () => HOME.comp === "globe", hide: opt("comp"), fs: 30 });
+  const mapSet = (v) => { if (HOME.sel === "hike") set.hikeMap = v; else set.huntMap = v; if (MP.host && MP.code) { mapRules(); mpHostSetSync(); mpLobSync(true); } uiDraw(Pl); };
+  const mapIs = v => (HOME.sel === "hike" ? set.hikeMap : set.huntMap === "globe" ? "endless" : set.huntMap) === v;
+  uiBtn(Pl, px + 10, 512, 335, 70, "Island · 3 km", () => mapSet("island"), { active: () => !mapIs("endless"), hide: () => (HOME.sel !== "hunt" && HOME.sel !== "hike") || guest(), fs: 32 });
+  uiBtn(Pl, px + 355, 512, 335, 70, "Planet · 50 km", () => mapSet("endless"), { active: () => mapIs("endless"), hide: () => (HOME.sel !== "hunt" && HOME.sel !== "hike") || guest(), fs: 32 });
+  uiBtn(Pl, px + 10, 600, 335, 70, "Prehistoric", () => { set.dino = !set.dino; if (MP.host && MP.code) { mpHostSetSync(); mpLobSync(true); } uiDraw(Pl); }, { active: () => !!set.dino, hide: opt("hunt"), fs: 32, labelFn: () => set.dino ? "Prehistoric · on" : "Prehistoric · off" });
+  uiBtn(Pl, px + 10, 790, 440, 130, "Play", () => homePlay(false), { primary: true, fs: 64, hide: guest, labelFn: () => HOME.sel === "join" ? "See rooms" : homeParty() ? "To the lobby" : "Play" });
+  uiBtn(Pl, px + 470, 790, 220, 130, "Custom", () => homePlay(true), { fs: 36, hide: () => guest() || HOME.sel === "join" || HOME.sel === "geo" || (HOME.sel === "comp" && !homeParty()) || homeParty() });
+  uiBtn(Pl, px + 10, 790, 440, 130, "Back to the lobby", () => vruiOpen("lobby"), { fs: 44, hide: () => !guest() });
+  // ---- right: your friends ----
+  const Fr = uiPanel("hfr", 1080, 1170, 2.1, HSIDE_ARC, 1.4, -HSIDE_YAW), RY = i => 232 + i * 118, PER = 7;
+  const rowAt = i => frRows()[FRD.pg * PER + i], pages = () => Math.max(1, Math.ceil(frRows().length / PER));
+  const canJoin = r => r && r.k === "fr" && r.f.on && !r.f.p && r.f.st && r.f.st.room && !r.f.st.full && r.f.st.room !== MP.code;
+  Fr.paint = (g, P) => {
+    uiBg(g, P); g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 56px sans-serif"; g.fillStyle = UIC.text; g.fillText("FRIENDS", 50, 88);
+    const onl = FRD.list.filter(f => f.on && !f.p).length; g.textAlign = "right"; g.font = "bold 32px sans-serif"; g.fillStyle = UIC.sun;
+    g.fillText(FRD.peer && FRD.up ? onl + " online" : typeof Peer === "undefined" ? "Not available here" : "Connecting…", P.W - 50, 88);
+    if (FRD.pg >= pages()) FRD.pg = pages() - 1;
+    const rows = frRows(); g.textAlign = "left";
+    g.font = "28px sans-serif"; g.fillStyle = FRD.msg ? UIC.sun : UIC.dim;
+    g.fillText(fitText(g, FRD.msg || (FRD.tab === "recent" ? "People you played with lately." : "Online friends come first."), P.W - 100), 50, 212);
+    if (!rows.length) { g.font = "32px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "center";
+      uiWrap(g, FRD.tab === "recent" ? "Nobody yet. People you play online with show up here, so you can add them." : "No friends yet. Tell a friend your code (" + frShow(FRD.code) + "), or press Add by code and type theirs.", P.W / 2, 420, 860, 46); g.textAlign = "left"; }
+    for (let i = 0; i < PER; i++) { const r = rowAt(i); if (!r) break; const y = RY(i), f = r.f, on = r.k === "fr" && f.on && !f.p;
+      g.fillStyle = r.k === "req" || r.k === "inv" ? "rgba(255,212,90,.2)" : "rgba(255,255,255,.07)"; uiRound(g, 40, y, P.W - 80, 108, 16); g.fill();
+      g.fillStyle = on ? "#6dff8a" : r.k === "fr" ? "rgba(255,255,255,.25)" : UIC.sun; g.beginPath(); g.arc(72, y + 38, 11, 0, 6.283); g.fill();
+      g.font = "bold 36px sans-serif"; g.fillStyle = r.k === "fr" && !on ? UIC.dim : UIC.text; g.fillText(fitText(g, r.n || "Code " + frShow(r.c), 470), 98, y + 50);
+      const st = r.k === "req" ? "wants to be your friend" : r.k === "inv" ? "invites you" + (r.w ? " · " + r.w : "") : r.k === "rec" ? "Played together" :
+        f.p ? "Request sent · waiting for them" : !f.on ? "Offline" : !f.st ? "Online" : f.st.room === MP.code && MP.code ? "In your party" : f.st.w + (f.st.room ? " · " + f.st.k + (f.st.full ? " (full)" : f.st.k === 1 ? " player" : " players") : "");
+      g.font = "26px sans-serif"; g.fillStyle = UIC.dim; g.fillText(fitText(g, st, 470), 98, y + 88); }
+    g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; if (pages() > 1) g.fillText((FRD.pg + 1) + " / " + pages(), 300, 1118);
+  };
+  uiBtn(Fr, 50, 112, 220, 60, "Friends", () => { FRD.tab = "friends"; FRD.pg = 0; uiDraw(Fr); }, { active: () => FRD.tab === "friends", fs: 30, labelFn: () => "Friends" + (FRD.reqs.length + FRD.invs.length ? " (" + (FRD.reqs.length + FRD.invs.length) + ")" : "") });
+  uiBtn(Fr, 282, 112, 220, 60, "Recent", () => { FRD.tab = "recent"; FRD.pg = 0; uiDraw(Fr); }, { active: () => FRD.tab === "recent", fs: 30 });
+  uiBtn(Fr, 760, 112, 270, 60, "Add by code", () => { VRUI.keyFor = "friend"; vruiOpen("tag"); }, { primary: true, fs: 30 });
+  for (let i = 0; i < PER; i++) { const y = RY(i) + 22;
+    uiBtn(Fr, 590, y, 160, 64, "", () => { const r = rowAt(i); if (!r) return; if (r.k === "req") frAccept(r.c); else if (r.k === "inv") frJoin(r.room); else if (r.k === "rec") frAdd(r.c); else if (canJoin(r)) frJoin(r.f.st.room); },
+      { fs: 30, primary: true, hide: () => { const r = rowAt(i); return !r || (r.k === "fr" && !canJoin(r)); }, labelFn: () => { const r = rowAt(i); return !r ? "" : r.k === "req" ? "Accept" : r.k === "rec" ? "Add" : "Join"; } });
+    uiBtn(Fr, 760, y, 150, 64, "", () => { const r = rowAt(i); if (r && r.k === "fr") frInvite(r.c); },
+      { fs: 30, hide: () => { const r = rowAt(i); return !r || r.k !== "fr" || !r.f.on || r.f.p || mpGuest() || (!!MP.code && r.f.st && r.f.st.room === MP.code); }, labelFn: () => { const r = rowAt(i); return r && r.f && performance.now() - (r.f.invAt || -1e9) < 8000 ? "Sent" : "Invite"; } });
+    uiBtn(Fr, 920, y, 110, 64, "", () => { const r = rowAt(i); if (!r) return; if (r.k === "req") frDeny(r.c); else if (r.k === "inv") { FRD.invs = FRD.invs.filter(v => v.c !== r.c); uiDraw(Fr); } else if (r.k === "fr") { if (FRD.ask !== r.c) { FRD.ask = r.c; uiDraw(Fr); } else { FRD.ask = ""; frRemove(r.c); } } },
+      { fs: 26, hide: () => { const r = rowAt(i); return !r || r.k === "rec"; }, labelFn: () => { const r = rowAt(i); return !r ? "" : r.k === "fr" ? (FRD.ask === r.c ? "Sure?" : "Remove") : "No"; }, paintColFn: () => { const r = rowAt(i); return r && r.k === "fr" && FRD.ask === r.c ? "#8a3a32" : null; } });
+  }
+  uiBtn(Fr, 50, 1076, 110, 64, "‹", () => { FRD.pg = Math.max(0, FRD.pg - 1); uiDraw(Fr); }, { fs: 40, hide: () => pages() < 2 });
+  uiBtn(Fr, 440, 1076, 110, 64, "›", () => { FRD.pg = Math.min(pages() - 1, FRD.pg + 1); uiDraw(Fr); }, { fs: 40, hide: () => pages() < 2 });
+}
+function mpGiveHost(id) { if (!MP.host || !MP.links.get(id) || state === "play") return; mpSend({ t: "host", id, pub: MP.pub ? 1 : 0 }); if (MP.pub && MP.code) roomsPost({ op: "gone", code: MP.code }); geoNetSetHost(id, !!MP.pub); }   // in the menus: someone else runs the room now
 // ---- the host's side of the lobby: whatever the host sees, everyone sees
 function mpHostSetSync() {                                  // a setting changed: send it (only when it really changed)
   if (!(MP.host && MP.on)) return;
@@ -16500,7 +16784,7 @@ function mpRecv(o, L) {
   L.lastRx = performance.now();
   if (o.t === "ping") return;
   if (o.t === "hi") {
-    L.v = o.v; if (typeof o.idx === "number") L.idx = o.idx; if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look;
+    L.v = o.v; if (typeof o.idx === "number") L.idx = o.idx; if (o.tag) L.tag = String(o.tag).slice(0, 14); if (typeof o.col === "number") L.col = o.col; if (o.lk) L.look = lookParse(o.lk) || L.look; if (o.fc) frSeen(o.fc, L.tag);
     if (o.v !== MP.netV) {                                    // can't play together: tell both sides who needs to update
       L.bad = true; mpOnUpdate(); const theirs = o.ver || o.v, old = verNum(theirs) < verNum(VERSION);
       if (MP.host) mpWarn((L.tag || "A friend") + " has version " + theirs + " (you have " + VERSION + "). " + (old ? "They need to" : "You need to") + " exit VR and refresh the page.");
@@ -16516,7 +16800,7 @@ function mpRecv(o, L) {
   }
   if (L.bad) return;
   if (o.t === "hostis") { if (!MP.host && o.id && o.id !== mpMyId()) { MP.hostId = String(o.id); mpMeet(MP.hostId); } return; }
-  if (o.t === "host") { if (o.id) geoNetSetHost(String(o.id)); return; }
+  if (o.t === "host") { if (o.id) geoNetSetHost(String(o.id), o.pub === undefined ? undefined : !!o.pub); return; }
   if (o.t === "welcome") { MP.idx = o.idx; for (const id of o.peers || []) mpMeet(id); mpStatus("Joined! The host is setting up the game…"); mpLobbyDraw(); return; }
   if (mpRecv2(o, L)) return;
   if (o.t === "ui") { if (!MP.host) mpGuestUi(o); return; }
@@ -18577,6 +18861,7 @@ function loop(now) {
   if (state === "play" || state === "fly") { if (!UNDER.on) updatePrecip(dt, now); soundTick(dt); }
   if (vr.on && VRUI.root && (VRUI.on || VRUI.fadeV > 0 || VRUI.fadeGo)) vruiTick(dt);
   if (MP.peer || (vr.on && gameMode === "pvp")) mpTick(dt);
+  frTick(dt);
   if (VB.shown && state !== "play" && state !== "pause") vbHide();
   if (state === "play") {
     const pu0 = pf0 ? perfT() : 0;
