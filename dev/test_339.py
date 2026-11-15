@@ -1,5 +1,5 @@
-"""3.39 (Dev for now): the home screen and friends. The first menu is three panels (you, the ways to play, your friends); without Dev
-it's the old menu and no friends line is opened. Friend codes: A asks B by code, B accepts, both see each other online with what they're
+"""3.39 (live for everyone since 3.40): the home screen and friends. The first menu is three panels (you, the ways to play, your friends);
+without Dev there is no Competitive row. Friend codes: A asks B by code, B accepts, both see each other online with what they're
 doing. A invites B: a private room opens, B joins from the invite, A stays on the home screen with the party listed. A hands the host to B;
 B picks Hunting (the party goes to the lobby) and starts: both play. C joins by code: A finds C under Recent, asks, C says no. A removes B:
 gone on both sides. Alone, Play on Hiking goes straight into a map. Needs the PeerJS server.
@@ -10,7 +10,7 @@ here = os.path.dirname(os.path.abspath(__file__)); tmp = tempfile.mkdtemp(prefix
 web = subprocess.Popen([sys.executable, "-m", "http.server", "8771", "--bind", "127.0.0.1"], cwd=tmp, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1)
 T = "http://127.0.0.1:8771/g.html"
 SETUP = re.search(r'SETUP = """(.*?)"""', open(os.path.join(here, "test_280.py")).read(), re.S).group(1)
-SETUP = SETUP.replace("return true; }", "D.VRUI.ageOk = true; D.VRUI.rulesOk = true; D.set.size = 'small'; window.W = (p, l) => D.VRUI.panels[p].widgets.find(w => w.label === l); window.ft = n => { for (let i = 0; i < n; i++) D.frTick(1); }; return true; }")
+SETUP = SETUP.replace("return true; }", "D.FRD.tryT = 0; D.VRUI.ageOk = true; D.VRUI.rulesOk = true; D.set.size = 'small'; window.W = (p, l) => D.VRUI.panels[p].widgets.find(w => w.label === l); window.ft = n => { for (let i = 0; i < n; i++) D.frTick(1); }; return true; }")
 async def run(pages, n, chunk=4):
     for _ in range(n // chunk):
         for pg in pages: await pg.evaluate(f"() => {{ frames({chunk}); ft(3); }}")
@@ -27,8 +27,8 @@ async def main():
         for nm, pg in zip("ABC", pgs): pg.on("pageerror", lambda e, nm=nm: errs.append(nm + " PE " + str(e)[:200]))
         for i, pg in enumerate(pgs): await pg.goto(T); await pg.wait_for_timeout(500); await pg.evaluate(SETUP, [12, 30, 3][i])
         out = {}
-        # without Dev: the old menu, no friends line, no code sent
-        out["plain"] = await C.evaluate("() => { D.DEV.ok = false; D.vruiOpen('mode'); ft(5); const r = [D.VRUI.stage, !!D.FRD.peer, D.VRUI.panels.hme.mesh.visible]; D.DEV.ok = true; return r; }")
+        # without Dev (3.40: live for everyone): the same home screen, but no Competitive row, no Dev or Old menu button
+        out["plain"] = await C.evaluate("() => { D.DEV.ok = false; D.vruiOpen('mode'); const P = D.VRUI.panels.hplay; D.uiDraw(P); const r = [D.VRUI.stage, W('hplay', 'Competitive').hide(), W('hme', 'Dev').hide(), W('hme', 'Old menu').hide(), W('hplay', 'Join a game').y, W('hplay', 'Hunting').hide()]; D.DEV.ok = true; D.uiDraw(P); r.push(W('hplay', 'Join a game').y); return r; }")
         # Dev: the home screen; the old menu and back
         out["home"] = await A.evaluate("() => { D.vruiOpen('mode'); const v = k => D.VRUI.panels[k].mesh.visible; const r = [D.VRUI.stage, v('hme'), v('hplay'), v('hfr'), v('mode')]; W('hme', 'Old menu').on(); r.push(D.VRUI.stage); W('mode', 'New menu').on(); r.push(D.VRUI.stage); return r; }")
         await B.evaluate("() => { D.vruiOpen('mode'); return 1; }"); await C.evaluate("() => { D.vruiOpen('mode'); return 1; }")
@@ -81,7 +81,7 @@ async def main():
         await C.evaluate("() => { W('preview', 'Play this map').on(); return 1; }")
         out["solo"] = await until([C], "() => D.state === 'play' && D.gameMode === 'hike' && !D.MP.code", 300)
         print(json.dumps(out))
-        ok = out["plain"] == ["mode", False, False] and out["home"] == ["home", True, True, True, False, "mode", "home"] and out["up"] and out["codes"] \
+        ok = out["plain"] == ["home", True, True, True, 136 + 4 * 161, False, 136 + 5 * 134] and out["home"] == ["home", True, True, True, False, "mode", "home"] and out["up"] and out["codes"] \
              and out["bad"][2] == 0 and out["asked"] == [["friend", "home"], [[True, False]]] and out["req"] and out["pendingStill"] and out["friends"] \
              and out["see"] == [["P30", "In the menus", "fr"], ["P12", "In the menus"]] and out["inv"] and out["aRoom"] == [True, False, 4, "home"] and out["joined"] \
              and out["party"][0] == "home" and out["party"][1] == "P12,P30" and out["party"][2] and out["party"][3] == 0 and out["bStage"] == ["lobby", True, 0] \

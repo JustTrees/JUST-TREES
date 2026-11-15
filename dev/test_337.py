@@ -16,9 +16,9 @@ async def main():
           D.SPD.off = { trees: true, cards: true, ground: true, far: true, water: true, animals: true, sky: true }; D.perfApply();
           o.off = [D.ENDLESS.far ? D.ENDLESS.far.visible : null, D.ENDLESS.water ? D.ENDLESS.water.visible : null, D.tiles.every(t => !t.lo.visible)];
           D.SPD.off = {}; D.perfApply(); o.back = [D.ENDLESS.far ? D.ENDLESS.far.visible : null, D.ENDLESS.water ? D.ENDLESS.water.visible : null, D.tiles.every(t => t.lo.visible)];
-          D.vruiOpen('perf'); D.uiDraw(D.VRUI.panels.perf); const cv = document.createElement('canvas'); cv.width = cv.height = 512; cv.id = 'vrMap'; D.drawMap(cv); o.drawn = true;
+          D.state = 'play'; D.vruiOpen('perf'); o.perfShown = [D.VRUI.panels.perf.mesh.visible, D.VRUI.inWorld, D.state, D.world.visible]; D.uiDraw(D.VRUI.panels.perf); const cv = document.createElement('canvas'); cv.width = cv.height = 512; cv.id = 'vrMap'; D.drawMap(cv); o.drawn = true;
           return o; }""")
         print(json.dumps(r)); print("errors:", errs[:5] or "none")
-        ok = all(r["timed"]) and r["calls"] > 0 and r["off"] == [False, False, True] and r["back"] == [True, True, True] and r["drawn"] and not errs
+        ok = all(r["timed"]) and r["calls"] > 0 and r["off"] == [False, False, True] and r["back"] == [True, True, True] and r["drawn"] and r["perfShown"] == [True, True, "play", True] and not errs
         print("PASS" if ok else "FAIL"); await b.close(); return ok
 sys.exit(0 if asyncio.run(main()) else 1)

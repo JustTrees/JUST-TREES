@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.39";              // Just Trees
+const VERSION = "3.40";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -13594,7 +13594,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], home: ["hme", "hplay", "hfr"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], home: ["hme", "hplay", "hfr"], perf: ["perf"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -13612,7 +13612,7 @@ const ageOk = () => !!VRUI.ageOk || ageGet() === "ok", ageNo = () => !!VRUI.ageN
 const rulesOk = () => { if (ageNo() || !ageOk()) return false; if (VRUI.rulesOk) return true; try { return localStorage.getItem("jt-rules") === RULES_V; } catch (_) { return false; } };
 function vruiOpen(stage) {
   vruiParts();
-  if (stage === "mode" && DEV.ok && !VRUI.classic) { if (MP.code) mpLeave(); stage = "home"; }   // (Dev for now) the new first menu
+  if (stage === "mode" && !VRUI.classic) { if (MP.code) mpLeave(); stage = "home"; }   // 3.40: the home screen is the first menu for everyone
   if ((stage === "mode" || stage === "home") && !rulesOk()) stage = "rules";       // the rules come first, once
   if (stage !== "tag") VRUI.keyFor = null;
   if (LAB.on && stage !== "lab" && stage !== "tag" && stage !== "pause" && stage !== "height") labLeave();   // out of Map Lab // the keyboard types a gamer tag unless it was opened for the dev key or a creature's name
@@ -13621,7 +13621,7 @@ function vruiOpen(stage) {
   if (stage === "setup" && MP.code) stage = "lobby";             // online, the map settings sit beside the lobby
   if (stage !== "lobby" || VRUI.stage !== "lobby") VRUI.edit = false;
   const I = vr.readInputs ? vr.readInputs() : null;
-  const inWorld = stage === "pause" || (stage === "height" && VRUI.afterH === "pause");   // set your height without leaving the game
+  const inWorld = stage === "pause" || stage === "perf" || (stage === "height" && VRUI.afterH === "pause");   // set your height without leaving the game
   vruiPlace(I, inWorld);
   if (!inWorld && renderer.xr.isPresenting && vr.base) { renderer.xr.setReferenceSpace(vr.base); vr.ox = vr.oy = vr.oz = 0; vr.yaw = 0; }
   VRUI.inWorld = inWorld;
@@ -15898,7 +15898,7 @@ function mpWire(c, out) {
     pc.addEventListener("iceconnectionstatechange", () => { if (pc.iceConnectionState === "failed" && L.conn === c) { try { c.close(); } catch (e) {} } }); };
   watchIce();
   c.on("open", () => { clearTimeout(stuck); L.lastRx = performance.now(); L.open = true; mpOnUpdate(); if (!MP.host && id === mpHostId()) { MP.kills = MP.deaths = 0; }
-    try { c.send({ t: "hi", door: out && id === MP_PREFIX + MP.code && !MP.host ? 1 : 0, v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: DEV.ok ? FRD.code : undefined }); } catch (e) {} });
+    try { c.send({ t: "hi", door: out && id === MP_PREFIX + MP.code && !MP.host ? 1 : 0, v: MP.netV, ver: VERSION, idx: MP.idx, tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: FRD.code }); } catch (e) {} });
   c.on("data", o => mpRecv(o, L));
   c.on("close", () => { if (L.conn === c) mpLinkGone(L, false); });
   c.on("error", () => {});
@@ -15970,7 +15970,7 @@ function verCheck() {                                         // a newer version
   fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" }).then(r => r.text()).then(t => { const m = t.match(/const VERSION = "([\d.]+)"/);
     if (m && verNum(m[1]) > verNum(VERSION)) { VRUI.newVer = m[1]; for (const k of ["mode", "mp", "rooms", "lobby"]) if (VRUI.panels[k] && VRUI.panels[k].mesh.visible) uiDraw(VRUI.panels[k]); } }).catch(() => {});
 }
-function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: DEV.ok ? FRD.code : undefined }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
+function mpSendMe() { mpSend({ t: "me", tag: MP.tag, col: MP.col, lk: lookStr(MP.look), fc: FRD.code }); try { localStorage.setItem("jt-tag", MP.tag); localStorage.setItem("jt-col", String(MP.col)); } catch (_) {} mpLobbyDraw(); }
 function mpTeamFix() {                                       // host: everyone has a side; a newcomer joins the side with fewer people
   if (!MP.host && MP.code) return; const people = [mpMyId(), ...mpOpen().map(L => L.id)], bots = VB.list.map(B => B.id), ids = people.concat(bots);   // (solo too)
   for (const id of Object.keys(MP.teams)) if (!ids.includes(id)) delete MP.teams[id];
@@ -16194,7 +16194,7 @@ function mpLobbyPanels() {
     uiBtn(Lb, x, y, CW, CH, "", () => { const r = rowAt(i); if (r && r.me) { VRUI.edit = true; vruiShow(); } }, { personal: true, paintCol: "rgba(0,0,0,0)", hide: () => !rowAt(i) || !rowAt(i).me }); }
   uiBtn(Lb, 330, 112, 180, 56, "Private", () => { roomsSetPublic(false); }, { active: () => !MP.pub, hide: hostOnly, fs: 28 });   // listed for everyone, or code only
   uiBtn(Lb, 520, 112, 180, 56, "Public", () => { roomsSetPublic(true); }, { active: () => !!MP.pub, hide: hostOnly, fs: 28 });
-  uiBtn(Lb, 50, 112, 180, 56, "Friends", () => vruiOpen("home"), { hide: () => !DEV.ok, fs: 28, personal: true, paintCol: "#3a4a6a" });   // (Dev) the home screen, still in your room
+  uiBtn(Lb, 50, 112, 180, 56, "Friends", () => vruiOpen("home"), { fs: 28, personal: true, paintCol: "#3a4a6a" });   // the home screen, still in your room
   uiBtn(Lb, lx, 1048, 380, 80, "Change tag", () => { VRUI.tagNext = null; vruiOpen("tag"); }, { personal: true, fs: 30, labelFn: () => "Tag · " + MP.tag });
   uiBtn(Lb, lx + 400, 1048, 300, 80, "Leave room", () => vruiOpen("mode"), { personal: true, fs: 34 });
   uiBtn(Lb, lx + 720, 1048, 260, 80, "Exit VR", () => { const s = renderer.xr.getSession(); if (s) s.end(); }, { personal: true, fs: 32 });
@@ -16290,7 +16290,7 @@ function frStop() { const p = FRD.peer; FRD.peer = null; FRD.up = false; try { i
 async function frStart() {
   if (FRD.peer || FRD.starting || typeof Peer === "undefined") return;
   FRD.starting = true; try { await mpRelay(); } catch (_) {} FRD.starting = false;
-  if (FRD.peer || !DEV.ok) return;
+  if (FRD.peer) return;
   const p = mpNewPeer("jtf-" + FRD.code); if (!p) return; FRD.peer = p; FRD.up = false;
   p.on("open", () => { if (FRD.peer === p) { FRD.up = true; FRD.dialT = 0; } });
   p.on("connection", c => { if (FRD.peer === p) frWire(c, false); });
@@ -16300,7 +16300,7 @@ async function frStart() {
     if (e.type === "unavailable-id" || e.type === "network" || e.type === "server-error" || e.type === "socket-error" || e.type === "socket-closed") { frStop(); FRD.tryT = 25; } });
 }
 function frTick(dt) {                                           // every frame (cheap: it only acts every couple of seconds)
-  if (!DEV.ok || !vr.on) return;
+  if (!vr.on) return;
   if (VRUI.on && VRUI.stage === "home" && (FRD.drawT = (FRD.drawT || 0) - dt) <= 0) { FRD.drawT = 1; FRD.dirty = false; frDraw(); }   // the party and the friends stay fresh
   if (!FRD.peer) { if ((FRD.tryT -= dt) <= 0) { FRD.tryT = 20; frStart(); } return; }
   if (!FRD.up) return;
@@ -16344,7 +16344,7 @@ async function frInvite(c) {                                    // into my room 
   frSend(f, { t: "inv", n: MP.tag, room: MP.code, w: frStatus().w }); f.invAt = performance.now(); frNote("Invite sent to " + (f.n || "your friend") + ".");
 }
 function frSeen(fc, tag) {                                      // someone in my room: remembered under Recent
-  const c = String(fc || ""); if (!DEV.ok || !FR_RE.test(c) || c === FRD.code) return; const n = frName(tag), f = frGet(c);
+  const c = String(fc || ""); if (!FR_RE.test(c) || c === FRD.code) return; const n = frName(tag), f = frGet(c);
   if (f) { if (n && n !== f.n && !/^Joining/.test(n)) { f.n = n; frSave(); } return; }
   FRD.recent = [{ c, n: n || "Player" }].concat(FRD.recent.filter(q => q.c !== c)).slice(0, 20); frSave(); FRD.dirty = true;
 }
@@ -16365,7 +16365,7 @@ const HOME_MODES = [
   ["pvp", "Deathmatch", "Fight bots, or your friends", "On your own it's a battle against bots. With friends in your party it's all of you against each other."],
   ["join", "Join a game", "Public rooms, or a room code", "See the rooms that are open right now, or type the 4-number code a friend gave you."]];
 const homeParty = () => !!MP.code && mpOpen().length > 0;
-const vruiMain = () => vruiOpen(DEV.ok && !VRUI.classic ? "home" : "mode");   // back to the first menu without leaving your party
+const vruiMain = () => vruiOpen(!VRUI.classic ? "home" : "mode");   // back to the first menu without leaving your party
 async function homePlay(custom) {
   const k = HOME.sel, party = homeParty(), sync = () => { mapRules(); renderSetup(); mpHostSetSync(); mpLobSync(true); };
   if (mpGuest()) return;
@@ -16417,8 +16417,8 @@ function homePanels() {
   uiBtn(Me, x0 + 282, 622, 268, 76, "Rules", () => { VRUI.rulesOk = false; try { localStorage.removeItem("jt-rules"); } catch (_) {} vruiOpen("rules"); }, { fs: 32 });
   uiBtn(Me, x0, 710, 268, 76, "Leave party", () => { mpLeave(); vruiOpen("home"); }, { fs: 32, hide: () => !MP.code, paintCol: "#8a3a32" });
   uiBtn(Me, x0 + 282, 710, 268, 76, "Exit VR", exitVR, { fs: 32 });
-  uiBtn(Me, x0, 798, 268, 64, "Dev", () => vruiOpen("dev"), { fs: 30, paintCol: "#3a4a6a" });
-  uiBtn(Me, x0 + 282, 798, 268, 64, "Old menu", () => { VRUI.classic = true; vruiOpen("mode"); }, { fs: 30 });
+  uiBtn(Me, x0, 798, 268, 64, "Dev", () => vruiOpen("dev"), { fs: 30, paintCol: "#3a4a6a", hide: () => !DEV.ok });
+  uiBtn(Me, x0 + 282, 798, 268, 64, "Old menu", () => { VRUI.classic = true; vruiOpen("mode"); }, { fs: 30, hide: () => !DEV.ok });
   for (let i = 0; i < 8; i++) uiBtn(Me, 40 + (i % 2) * 505, 928 + Math.floor(i / 2) * 52, 495, 46, "", () => { const r = party()[i]; if (!r || r.me || !MP.host || rows2() < 2) return;
       if (HOME.ask !== r.id) { HOME.ask = r.id; uiDraw(Me); return; } HOME.ask = ""; mpGiveHost(r.id); },
     { fs: 26, hide: () => !party()[i] || party().length < 2, paintColFn: () => { const r = party()[i]; return r && HOME.ask === r.id ? "#8a6a2a" : "rgba(255,255,255,.09)"; },
@@ -16427,6 +16427,8 @@ function homePanels() {
   // ---- middle: the ways to play ----
   const Pl = uiPanel("hplay", 1400, 1000, 2.0, HOME_ARC, 1.45), px = 640, sel = () => HOME_MODES.find(m => m[0] === HOME.sel) || HOME_MODES[0], guest = () => mpGuest();
   Pl.paint = (g, P) => {
+    if (HOME.sel === "comp" && !DEV.ok) HOME.sel = "geo";
+    { let k = 0; const step = DEV.ok ? 134 : 161; for (const w of rowsB) if (!w.hide()) w.y = 136 + k++ * step; }   // the rows that show, evenly down the panel
     uiBg(g, P, "WAYS TO PLAY"); const m = sel();
     g.fillStyle = "rgba(0,0,0,.18)"; uiRound(g, px - 20, 130, 740, 810, 22); g.fill();
     g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 62px sans-serif"; g.fillStyle = UIC.sun; g.fillText(m[1], px + 10, 212);
@@ -16438,7 +16440,8 @@ function homePanels() {
     if (note) uiWrap(g, note, px + 10, 716, 680, 36);
     if (VRUI.newVer) { g.textAlign = "center"; g.font = "bold 26px sans-serif"; g.fillStyle = UIC.sun; g.fillText("Version " + VRUI.newVer + " is out: exit VR and refresh the page to update.", 700, 978); }
   };
-  HOME_MODES.forEach((m, i) => uiBtn(Pl, 50, 136 + i * 134, 540, 122, m[1], () => { HOME.sel = m[0]; uiDraw(Pl); }, { sub: m[2], fs: 46, active: () => HOME.sel === m[0] }));
+  const rowsB = HOME_MODES.map((m, i) => uiBtn(Pl, 50, 136 + i * 134, 540, 122, m[1], () => { HOME.sel = m[0]; uiDraw(Pl); }, { sub: m[2], fs: 46, active: () => HOME.sel === m[0], hide: () => m[0] === "comp" && !DEV.ok }));   // (Competitive: Dev for now)
+  uiBtn(Pl, 300, 20, 800, 110, "", () => devTitleTap(), { ghost: true });
   const opt = k => () => HOME.sel !== k || guest();
   COMP_SIZES.forEach(([k, l], i) => uiBtn(Pl, px + 10 + i * 108, 512, 100, 70, l, () => { HOME.comp = k; uiDraw(Pl); }, { active: () => HOME.comp === k, hide: opt("comp"), fs: 30 }));
   uiBtn(Pl, px + 10 + 5 * 108, 512, 140, 70, "Planet", () => { HOME.comp = "globe"; uiDraw(Pl); }, { active: () => HOME.comp === "globe", hide: opt("comp"), fs: 30 });

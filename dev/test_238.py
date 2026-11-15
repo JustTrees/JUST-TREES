@@ -30,7 +30,7 @@ async def main():
         pg.on("pageerror", lambda e: errs.append("PE " + str(e)))
         await pg.goto(f"http://127.0.0.1:{PORT}/dbg.html", timeout=120000); await pg.wait_for_timeout(800)
         await pg.evaluate(SETUP); imgs = {}; out = {}
-        out["mode"] = await pg.evaluate("() => { D.vruiOpen('mode'); return { stage: D.VRUI.stage, vis: vis(), labels: D.VRUI.panels.mode.widgets.map(w => w.label) }; }")
+        out["mode"] = await pg.evaluate("() => { D.VRUI.classic = true; D.vruiOpen('mode'); return { stage: D.VRUI.stage, vis: vis(), labels: D.VRUI.panels.mode.widgets.map(w => w.label) }; }")
         imgs["menu"] = await pg.evaluate("() => panel('mode')")
         # Solo: your character beside the map settings
         out["solo"] = await pg.evaluate("() => { W('mode', 'Solo').on(); return { stage: D.VRUI.stage, vis: vis() }; }")

@@ -50,6 +50,6 @@ async def main():
         Y = out["a"]["want"] + 21
         good = (out["a"]["stage"] == "rules" and out["a"]["blankStays"] and out["a"]["year"] == Y - 21 and out["b"]["saved"] == "no" and out["b"]["exitShown"]
                 and out["c"]["stage"] == "rules" and out["c"]["stillNo"] and out["d"]["year"] == Y - 22 and out["d"]["saved"] == "ok" and out["d"]["agreeShown"]
-                and not out["d"]["yearKept"] and out["e"]["stage"] == "mode" and out["e"]["ok"])
+                and not out["d"]["yearKept"] and out["e"]["stage"] == "home" and out["e"]["ok"])
         print(json.dumps(out)); print("errors:", errs or ("none" if good else "CHECKS FAILED")); await b.close(); sys.exit(0 if good else 1)
 asyncio.run(main())

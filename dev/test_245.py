@@ -70,7 +70,7 @@ async def main():
             if OUT: open(os.path.join(OUT, nm), "wb").write(base64.b64decode(url.split(",")[1]))
         # ---- the hidden way in
         light0 = await pg.evaluate("() => [D.hemi.intensity, D.sunL.intensity, !!D.scene.fog]")
-        await pg.evaluate("() => { D.vruiOpen('mode'); return 1; }")
+        await pg.evaluate("() => { D.VRUI.classic = true; D.vruiOpen('mode'); return 1; }")
         out["devHidden"] = await pg.evaluate("() => !W('mode', 'Dev')")
         await pg.evaluate("() => { const g = D.VRUI.panels.mode.widgets.find(w => w.ghost); for (let i = 0; i < 5; i++) g.on(); return 1; }")
         out["keyboard"] = await pg.evaluate("() => D.VRUI.stage + ' ' + D.VRUI.keyFor")
