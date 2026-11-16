@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.40";              // Just Trees
+const VERSION = "3.41";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -731,7 +731,7 @@ const skyMat = new THREE.ShaderMaterial({
     float fbm(vec2 p, int oct){ float s = 0.0, a = 0.5; mat2 R = mat2(0.8, -0.6, 0.6, 0.8);
       for (int i = 0; i < 6; i++){ if (i >= oct) break; s += gnoise(p) * a; p = R * p * 2.03 + 17.0; a *= 0.5; } return s + 0.5; }
     void main(){
-      vec3 d = normalize(vDir); float h = max(d.y, 0.0);
+      vec3 d = normalize(vDir); float h = max(d.y, 0.0); float T = 1.0;   // T: how much of what's behind (sun, moon, shooting stars) still shows (the painted sky keeps it)
       vec3 sd3 = normalize(sunDir); float sd = max(dot(d, sd3), 0.0);
       vec3 c = mix(hor, top, pow(h, 0.5));
       c = mix(c, hor * 1.04, exp(-h * 12.0) * 0.3);                                   // haze along the horizon
@@ -744,9 +744,15 @@ const skyMat = new THREE.ShaderMaterial({
       float sdot = dot(d, sd3);
       vec3 sset = mix(mix(uFar, uMid, smoothstep(-0.3, 0.55, sdot)), uNear, smoothstep(0.55, 0.96, sdot));
       c = mix(c, c * 0.6 + sset * 0.75, glowAmt * uSpread * (0.35 + 0.65 * smoothstep(0.55, 0.0, h)));
+#ifdef SKY_PAINT
+      c += sunCol * pow(sd, 16.0) * 0.16 * sunVis;
+      float md = max(dot(d, normalize(moonDir)), 0.0);
+      c += vec3(0.92, 0.94, 1.0) * pow(md, 12.0) * 0.04 * moonVis;
+#else
       c += sunCol * (smoothstep(0.9994, 0.9997, sd) * 2.2 + pow(sd, 350.0) * 0.6 + pow(sd, 16.0) * 0.16) * sunVis;
       float md = max(dot(d, normalize(moonDir)), 0.0);
       c += vec3(0.92, 0.94, 1.0) * (smoothstep(0.99955, 0.9998, md) * 1.4 + pow(md, 180.0) * 0.18 + pow(md, 12.0) * 0.04) * moonVis;
+#endif
       c += vec3(0.7, 0.78, 1.0) * (pow(md, 40.0) * 0.22 + pow(md, 6.0) * 0.05) * moonVis;                           // soft moon halo
       {
         float sang = acos(clamp(dot(d, sd3), -1.0, 1.0));
@@ -761,7 +767,11 @@ const skyMat = new THREE.ShaderMaterial({
           vec3 hc = mix(vec3(1.0, 0.62, 0.45), vec3(0.85, 0.92, 1.0), smoothstep(0.37, 0.4, sang));
           vec3 s1 = vec3(sd3.x * cos(0.4) - sd3.z * sin(0.4), sd3.y, sd3.x * sin(0.4) + sd3.z * cos(0.4));
           vec3 s2 = vec3(sd3.x * cos(-0.4) - sd3.z * sin(-0.4), sd3.y, sd3.x * sin(-0.4) + sd3.z * cos(-0.4));
+#ifdef SKY_PAINT
+          float dogs = 0.0;
+#else
           float dogs = pow(max(dot(d, normalize(s1)), 0.0), 2600.0) + pow(max(dot(d, normalize(s2)), 0.0), 2600.0);
+#endif
           c += (hc * ring * 0.16 + vec3(1.0, 0.9, 0.78) * dogs * 0.9) * uHalo * sunVis;
         }
         if (uBow > 0.01 && d.y > 0.0) {                                                 // rainbow opposite the sun, faint second bow outside
@@ -783,6 +793,7 @@ const skyMat = new THREE.ShaderMaterial({
         float mwd = dot(d, uMwN), mwn = fbm(d.xz / (d.y + 1.2) * 5.0 + skySeed, 5);
         float mw = exp(-mwd * mwd * 22.0) * smoothstep(0.35, 0.75, mwn) * (1.0 - 0.7 * exp(-mwd * mwd * 400.0) * smoothstep(0.5, 0.6, mwn));
         c += vec3(0.62, 0.66, 0.9) * mw * uMw * uNight * 0.3 * smoothstep(0.0, 0.25, d.y);
+#ifndef SKY_PAINT
         if (uMeteor > 0.01) {                                                           // shooting stars: a few a minute, now and then a bright one
           for (int k = 0; k < 2; k++) {
             float per = 7.0 + float(k) * 4.0, id = floor(time / per + float(k) * 0.37), lt = fract(time / per + float(k) * 0.37) * per;
@@ -800,6 +811,7 @@ const skyMat = new THREE.ShaderMaterial({
             }
           }
         }
+#endif
         if (uAur > 0.01) {                                                              // aurora: slow curtains of light with fine rays
           float az = atan(d.x, d.z);
           float base = 0.1 + 0.16 * fbm(vec2(az * 1.8 + time * 0.01, time * 0.015) + skySeed, 3);
@@ -815,16 +827,17 @@ const skyMat = new THREE.ShaderMaterial({
         if (cB.x > 0.01) {                                                             // high cirrus streaks
           vec2 cu = d.xz / (d.y + 0.3) * vec2(0.5, 2.4) + skySeed * 3.0 + drift * 0.5;
           float ci = smoothstep(0.52, 0.82, fbm(cu, 4)) * cB.x * smoothstep(0.03, 0.3, d.y);
-          c = mix(c, cloudCol * 1.03 + sunCol * pow(sd, 6.0) * 0.3 * sunVis + glowCol * glowAmt * 0.4 + sset * glowAmt * uSpread * 0.6, ci * 0.55);
+          c = mix(c, cloudCol * 1.03 + sunCol * pow(sd, 6.0) * 0.3 * sunVis + glowCol * glowAmt * 0.4 + sset * glowAmt * uSpread * 0.6, ci * 0.55); T *= 1.0 - ci * 0.55;
         }
         if (cB.y > 0.01) {                                                             // mackerel ripples
           vec2 mu = d.xz / (d.y + 0.3) * 2.2 + skySeed + drift * 0.6;
           float rip = sin((mu.x * 0.8 + mu.y * 0.6) * 9.0 + fbm(mu * 1.5, 3) * 5.0) * 0.5 + 0.5;
           float mk = smoothstep(0.45, 0.68, fbm(mu * 0.5, 3)) * smoothstep(0.35, 0.85, rip) * cB.y * smoothstep(0.05, 0.35, d.y);
-          c = mix(c, cloudCol * 1.02 + glowCol * glowAmt * 0.45 + sset * glowAmt * uSpread * 0.6, mk * 0.6);
+          c = mix(c, cloudCol * 1.02 + glowCol * glowAmt * 0.45 + sset * glowAmt * uSpread * 0.6, mk * 0.6); T *= 1.0 - mk * 0.6;
         }
-        if (cB.z > 0.01)                                                               // thin veil
-          c = mix(c, cloudCol * 0.95 + glowCol * glowAmt * 0.3, cB.z * smoothstep(0.0, 0.3, d.y) * (0.45 + 0.55 * fbm(d.xz / (d.y + 0.3) * 0.7 + skySeed, 3)));
+        if (cB.z > 0.01) {                                                             // thin veil
+          float vl = cB.z * smoothstep(0.0, 0.3, d.y) * (0.45 + 0.55 * fbm(d.xz / (d.y + 0.3) * 0.7 + skySeed, 3));
+          c = mix(c, cloudCol * 0.95 + glowCol * glowAmt * 0.3, vl); T *= 1.0 - clamp(vl, 0.0, 1.0); }
         if (cA.x > 0.01) {                                                             // billowing cumulus, softly edged
           vec2 uv = d.xz / (d.y + 0.22) * 0.8 * cA.y; uv.y *= cB.w; uv += skySeed + drift;
           vec2 w = vec2(fbm(uv * 0.5 + 3.1, 3), fbm(uv * 0.5 + 7.7, 3)) - 0.5;
@@ -838,13 +851,16 @@ const skyMat = new THREE.ShaderMaterial({
           float edge = cov * (1.0 - thick);
           cc += vec3(0.75, 0.8, 0.95) * edge * (0.3 + pow(md, 4.0) * 1.2) * moonVis * uNight;   // moonlit silver edges
           cc = mix(cc, hor, smoothstep(0.25, 0.0, d.y) * 0.6);                         // far clouds melt into the haze
-          c = mix(c, cc, cov * 0.96);
+          c = mix(c, cc, cov * 0.96); T *= 1.0 - cov * 0.96;
         }
       }
       float az = atan(d.z, d.x);                                                       // distant ridges, faded into the haze
       float ridge = 0.012 + fbm(vec2(az * 2.2 + skySeed.x, 0.5), 4) * 0.05 + fbm(vec2(az * 9.0, 2.0 + skySeed.y), 3) * 0.012;
       float rm = smoothstep(ridge + 0.002, ridge - 0.002, d.y) * smoothstep(-0.06, 0.0, d.y);
-      c = mix(c, ridgeCol, rm * 0.55);
+      c = mix(c, ridgeCol, rm * 0.55); T *= 1.0 - rm * 0.55;
+#ifdef SKY_PAINT
+      gl_FragColor = vec4(c, T);
+#else
 #ifdef JT_FX
       c = mix(c, vec3(0.012, 0.01, 0.01), uThermal);                  // through thermal glasses the sky is simply black
       if (uHell > 0.001) {                                            // hell glasses: a blood-red sky choked with churning smoke, the horizon on fire
@@ -898,11 +914,83 @@ const skyMat = new THREE.ShaderMaterial({
       gl_FragColor = vec4(c, 1.0);
       #include <tonemapping_fragment>
       gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0 * 1.5;   // dither: no colour banding
+#endif
       }`,
   side: THREE.BackSide, depthWrite: false, fog: false
 });
 const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 24, 16), skyMat);
 sky.renderOrder = -2; sky.frustumCulled = false; scene.add(sky);
+
+/* ---- (3.41) the sky, painted small. Working the clouds and colours out for every pixel of both eyes, every frame, cost about a third of
+   the frame rate in the headset. Now the same sky is painted into a small six-sided picture round you (one side per frame, so the clouds
+   keep drifting; all six at once when the light changes) and the headset just shows that picture: soft things don't need to be sharp.
+   The sharp things are still worked out on top every frame, sharp: the sun, the moon, sun dogs, shooting stars (the stars are their own
+   points already). The painted picture also keeps how much cloud is in front of each spot, so the sun still hides behind clouds.
+   The thermal, hell and neon glasses still use the full sky (their skies have sharp details of their own). Speed check: "New sky". */
+const SKYP = { ok: null, rt: null, scene: null, cams: null, face: 0, all: true, mat: null, mesh: null };
+function skyPaintOk() {
+  if (SKYP.ok === null) { SKYP.ok = false;
+    try { SKYP.ok = renderer.capabilities.isWebGL2 && (renderer.extensions.has("EXT_color_buffer_float") || renderer.extensions.has("EXT_color_buffer_half_float")); } catch (_) {} }
+  return SKYP.ok;
+}
+function skyPaintParts() {
+  if (SKYP.rt) return;
+  SKYP.rt = new THREE.WebGLCubeRenderTarget(384, { type: THREE.HalfFloatType, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+  const pm = new THREE.ShaderMaterial({ uniforms: skyMat.uniforms, vertexShader: skyMat.vertexShader, fragmentShader: skyMat.fragmentShader, defines: { SKY_PAINT: "" }, side: THREE.BackSide, depthWrite: false, depthTest: false, fog: false, toneMapped: false });
+  SKYP.scene = new THREE.Scene(); SKYP.scene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 24, 16), pm));
+  const cc = new THREE.CubeCamera(.1, 100, SKYP.rt); SKYP.cams = cc.children; SKYP.scene.add(cc); cc.updateMatrixWorld(true);
+  const U = skyMat.uniforms;
+  SKYP.mat = new THREE.ShaderMaterial({
+    uniforms: { uCube: { value: SKYP.rt.texture }, sunDir: U.sunDir, sunCol: U.sunCol, sunVis: U.sunVis, moonDir: U.moonDir, moonVis: U.moonVis, uHalo: U.uHalo, uMeteor: U.uMeteor, uNight: U.uNight, time: U.time },
+    vertexShader: skyMat.vertexShader,
+    fragmentShader: `uniform samplerCube uCube; uniform vec3 sunDir; uniform vec3 sunCol; uniform float sunVis; uniform vec3 moonDir; uniform float moonVis;
+      uniform float uHalo; uniform float uMeteor; uniform float uNight; uniform float time; varying vec3 vDir;
+      void main(){
+        vec3 d = normalize(vDir); vec4 P = textureCube(uCube, d); vec3 c = P.rgb, sh = vec3(0.0);
+        vec3 sd3 = normalize(sunDir); float sd = max(dot(d, sd3), 0.0);
+        sh += sunCol * (smoothstep(0.9994, 0.9997, sd) * 2.2 + pow(sd, 350.0) * 0.6) * sunVis;
+        float md = max(dot(d, normalize(moonDir)), 0.0);
+        sh += vec3(0.92, 0.94, 1.0) * (smoothstep(0.99955, 0.9998, md) * 1.4 + pow(md, 180.0) * 0.18) * moonVis;
+        if (uHalo > 0.01) {
+          vec3 s1 = vec3(sd3.x * cos(0.4) - sd3.z * sin(0.4), sd3.y, sd3.x * sin(0.4) + sd3.z * cos(0.4));
+          vec3 s2 = vec3(sd3.x * cos(-0.4) - sd3.z * sin(-0.4), sd3.y, sd3.x * sin(-0.4) + sd3.z * cos(-0.4));
+          sh += vec3(1.0, 0.9, 0.78) * (pow(max(dot(d, normalize(s1)), 0.0), 2600.0) + pow(max(dot(d, normalize(s2)), 0.0), 2600.0)) * 0.9 * uHalo * sunVis;
+        }
+        if (uMeteor > 0.01 && uNight > 0.01) {
+          for (int k = 0; k < 2; k++) {
+            float per = 7.0 + float(k) * 4.0, id = floor(time / per + float(k) * 0.37), lt = fract(time / per + float(k) * 0.37) * per;
+            float h1 = fract(sin(id * 12.9898 + float(k) * 7.0) * 43758.55), h2 = fract(sin(id * 78.233 + 3.1) * 23421.63), h3 = fract(sin(id * 39.425) * 9137.1);
+            if (h3 < 0.75 && lt < 0.9) {
+              float az = h1 * 6.283, elv = 0.35 + h2 * 0.7;
+              vec3 st = vec3(cos(az) * cos(elv), sin(elv), sin(az) * cos(elv));
+              vec3 dirm = normalize(cross(st, vec3(0.3, 1.0, 0.2)) + vec3(0.0, -0.4, 0.0));
+              float big = step(h2, 0.12), len = 0.12 + big * 0.12, prog = lt / 0.9;
+              vec3 head = normalize(st + dirm * len * prog * 1.6), tail = normalize(st + dirm * len * max(0.0, prog * 1.6 - 0.35));
+              vec3 ab = head - tail; float tt = clamp(dot(d - tail, ab) / max(dot(ab, ab), 1e-6), 0.0, 1.0);
+              float dist = length(d - (tail + ab * tt));
+              float core = 1.0 - smoothstep(0.0, 0.003 + big * 0.002, dist), glow = exp(-dist / (0.006 + big * 0.004)) * 0.35;
+              sh += vec3(0.92, 0.95, 1.0) * (core + glow) * tt * sin(prog * 3.14159) * (1.0 + big * 1.5) * uMeteor * uNight;
+            }
+          }
+        }
+        gl_FragColor = vec4(c + sh * P.a, 1.0);
+        #include <tonemapping_fragment>
+        gl_FragColor.rgb += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0 * 1.5;
+      }`,
+    side: THREE.BackSide, depthWrite: false, fog: false });
+  SKYP.mesh = new THREE.Mesh(sky.geometry, SKYP.mat); SKYP.mesh.renderOrder = -2; SKYP.mesh.frustumCulled = false; SKYP.mesh.visible = false; scene.add(SKYP.mesh);
+}
+function skyPaintTick() {                                          // (each frame, just before drawing) which sky shows, and paint a side of the small one
+  const U = skyMat.uniforms, want = !(DEV.ok && SPD.off.newsky) && sky.visible && U.uThermal.value < .001 && U.uHell.value < .001 && U.uNeon.value < .001 && skyPaintOk();
+  if (!want) { SKYP.all = true; return; }
+  skyPaintParts();
+  const rt0 = renderer.getRenderTarget(), xr0 = renderer.xr.enabled, ac0 = renderer.autoClear;
+  renderer.xr.enabled = false; renderer.autoClear = true;
+  try { const n = SKYP.all ? 6 : 1; for (let i = 0; i < n; i++) { const f = SKYP.all ? i : SKYP.face; renderer.setRenderTarget(SKYP.rt, f); renderer.render(SKYP.scene, SKYP.cams[f]); } SKYP.face = (SKYP.face + 1) % 6; SKYP.all = false; }
+  finally { renderer.xr.enabled = xr0; renderer.autoClear = ac0; renderer.setRenderTarget(rt0); }
+  SKYP.mesh.position.copy(sky.position); SKYP.mesh.visible = true; sky.visible = false;   // (put back right after the picture is drawn: skyPaintAfter)
+}
+function skyPaintAfter() { if (SKYP.mesh && SKYP.mesh.visible) { SKYP.mesh.visible = false; sky.visible = true; } }
 
 const starGeo = new THREE.BufferGeometry(); {          // coloured, twinkling stars; a few big bright ones
   const n = 2400, a = new Float32Array(n * 3), col = new Float32Array(n * 3), size = new Float32Array(n), ph = new Float32Array(n);
@@ -1151,7 +1239,30 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uHLG: { value: 0 } };
 const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };   // materials that skip the ground fog still see the dream
 const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };
-THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };      // every material picks up the ground fog settings
+THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };
+/* (3.41) leaf edges in a headset. The leaves were cut out pixel by pixel (in or out), so at full sharpness their edges flickered as you moved.
+   three.js r149 also threw away the "how much" for solid materials, so the headset's edge smoothing never saw it. Now the cut-out edge is
+   turned into a soft step one pixel wide and handed to the 4x edge smoothing (alpha to coverage): smooth edges, no flicker. Same trick fades
+   trees from one kind to the next (see fadeify), instead of punching holes in them. */
+THREE.ShaderChunk.alphatest_fragment = `#ifdef USE_ALPHATEST
+#if defined(JT_A2C) && __VERSION__ >= 300
+  diffuseColor.a = clamp((diffuseColor.a - alphaTest) / max(fwidth(diffuseColor.a), 0.0001) + 0.5, 0.0, 1.0);
+#ifdef JT_FADE
+  diffuseColor.a *= jtFadeK;
+#endif
+  if (diffuseColor.a < 0.01) discard;
+#else
+  if ( diffuseColor.a < alphaTest ) discard;
+#endif
+#endif`;
+const A2C_HEAD = "#define JT_A2C\n#ifdef OPAQUE\n#undef OPAQUE\n#endif\n";   // (put first in a soft-edged material's own code: keeps its "how much")
+function a2cify(mat) {                                    // soft cut-out edges for a material with alpha to coverage (in a headset)
+  if (!mat.alphaToCoverage) return mat;
+  const prev = mat.onBeforeCompile, prevKey = mat.customProgramCacheKey ? mat.customProgramCacheKey() : "";
+  mat.onBeforeCompile = (sh, r) => { if (prev) prev.call(mat, sh, r); if (sh.fragmentShader.indexOf("#define JT_A2C") < 0) sh.fragmentShader = A2C_HEAD + sh.fragmentShader; };
+  mat.customProgramCacheKey = () => prevKey + "|a2c";
+  return mat;
+}      // every material picks up the ground fog settings
 const GRADE = { uFloor: { value: new THREE.Color(0, 0, 0) }, uLift: { value: 0 }, uShTint: { value: new THREE.Color(1, 1, 1) }, uLtTint: { value: new THREE.Color(1, 1, 1) }, uSat: { value: 1 },
   uSunW: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uTrans: { value: 0 },
   uShadowTex: { value: null }, uShadowTex2: { value: null }, uShadowMix: { value: 0 }, uShadowCol: { value: new THREE.Color(1, 1, 1) }, uShadowOn: { value: 0 }, uMapHalf: { value: 320 }, uMapS: { value: 640 } };
@@ -1778,7 +1889,7 @@ const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), EU = new THREE.Euler
       fallen logs) the same way, but only within SMALL_D.
    2. Tree cards: past the full-detail range every tree is a flat picture of itself that turns to face you (painted once per map
       from the real tree, in this map's light): one draw per square of forest instead of dozens, a few triangles per tree. */
-const SMALL_D = 150, MID_D = 600, CELL = 80;   /* near sets: an 80 m grid of their own */
+const SMALL_D = 150, CELL = 80; let MID_D = 600;   /* near sets: an 80 m grid of their own (3.41: boulders out to 380 m in a headset, was 600: see cullTiles) */
 let NCELL = 1; const cellOf = (x, z) => Math.min(NCELL - 1, Math.max(0, Math.floor((x + HALF) / CELL))) * NCELL + Math.min(NCELL - 1, Math.max(0, Math.floor((z + HALF) / CELL)));                                       // bushes, pebbles and fallen logs: only drawn this close (m)
 let NEAR = null, CARD = null;
 const _nWhite = new THREE.Color(1, 1, 1);
@@ -1819,7 +1930,10 @@ function nearTick(NS, flags) {                              // refill only when 
    from one to the next over a stretch of distance (a fine screen-door dither, per tree), so nothing pops. Cards now turn toward the
    middle of your head (one point for both eyes) instead of each eye on its own, which made them look flat and twisted in a headset. */
 const FADE = { uHead: { value: new THREE.Vector3() }, uFA: { value: new THREE.Vector2(170, 200) }, uFB: { value: new THREE.Vector2(430, 480) } };
-const FADE_D = () => VR_ON ? [120, 150, 430, 480] : isTouch ? [140, 170, 330, 380] : [240, 270, 620, 680];   // detail -> simple (a0..a1), simple -> card (b0..b1), metres
+/* (3.41) in a headset the simpler 3D trees now give way to cards at 320-360 m (was 430-480) and full detail ends at 105-130 m (was 120-150):
+   the near trees were the second biggest cost on the headset (about 14 fps). With the new smooth fade the change is hard to see.
+   Speed check: "Closer cards" off puts the old distances back. */
+const FADE_D = () => VR_ON ? (DEV.ok && SPD.off.closecards ? [120, 150, 430, 480] : [105, 130, 320, 360]) : isTouch ? [140, 170, 330, 380] : [240, 270, 620, 680];   // detail -> simple (a0..a1), simple -> card (b0..b1), metres
 const FADE_VS = role => `
   #ifdef USE_INSTANCING
     vec3 fdC = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
@@ -1837,16 +1951,18 @@ function fadeify(mat, role) {                              // role 0 = full deta
     sh.vertexShader = "uniform vec3 uHead; uniform vec2 uFA; uniform vec2 uFB; varying float vFade;\n" + sh.vertexShader
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n" + FADE_VS(role))
       .replace(/}\s*$/, "  if (vFade < 0.002) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);\n}\n");   // fully faded: the whole tree is skipped
-    sh.fragmentShader = "uniform float uSolid; varying float vFade;\n" + sh.fragmentShader.replace("#include <clipping_planes_fragment>",
-      "#include <clipping_planes_fragment>\n  if (vFade < 0.998 && mix(fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453), 0.5, uSolid) > vFade) discard;");   // uSolid: no dots (the thermal picture swaps at the halfway point instead)
+    const soft = mat.alphaToCoverage && !(DEV.ok && SPD.off.softfade);
+    sh.fragmentShader = (soft ? A2C_HEAD + "#define JT_FADE\n" : "") + "uniform float uSolid; varying float vFade;\n" + sh.fragmentShader.replace("#include <clipping_planes_fragment>",
+      soft ? "#include <clipping_planes_fragment>\n  float jtFadeK = uSolid > 0.5 ? step(0.5, vFade) : vFade;"   // (3.41) in a headset: faded through the edge smoothing, no holes
+           : "#include <clipping_planes_fragment>\n  if (vFade < 0.998 && mix(fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453), 0.5, uSolid) > vFade) discard;");   // uSolid: no dots (the thermal picture swaps at the halfway point instead)
   };
-  mat.customProgramCacheKey = () => prevKey + "|fade" + role;
+  mat.customProgramCacheKey = () => prevKey + "|fade" + role + (mat.alphaToCoverage && !(DEV.ok && SPD.off.softfade) ? "s" : "");
   return mat;
 }
 function cardMaterial(tex, role) {
   const m = new THREE.MeshBasicMaterial({ map: tex, alphaTest: VR_ON ? .3 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, fog: true });
   m.onBeforeCompile = sh => {
-    addDream(sh); sh.uniforms.uCardTint = CARD_TINT; sh.fragmentShader = "#define DREAM_CARD\nuniform vec3 uCardTint;\n" + sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n  diffuseColor.rgb *= uCardTint;");
+    addHF(sh); sh.uniforms.uCardTint = CARD_TINT;   // (3.41: with the ground fog, like the trees; they stood out bright in fog) sh.fragmentShader = "#define DREAM_CARD\nuniform vec3 uCardTint;\n" + sh.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\n  diffuseColor.rgb *= uCardTint;");
     sh.vertexShader = "attribute vec4 aCell;\n" + sh.vertexShader
       .replace("#include <uv_vertex>", "#include <uv_vertex>\n  vUv = aCell.xy + vUv * aCell.zw;")
       .replace("#include <project_vertex>", `
@@ -2244,7 +2360,7 @@ function makeRockTex() {
 function rockMaterial(moss, lichen, snow, mossCol, lichenCol, snowLine = 1e9, snowBand = 1, wet = 0) {
   if (!rockTex) rockTex = makeRockTex();
   if (!groundDetail) groundDetail = makeGroundDetail();
-  const m = phong(0xffffff);
+  const m = phong(0xffffff); m.userData.rock = true;   // (the speed check's Rocks switch finds them by this)
   m.onBeforeCompile = sh => { addHF(sh);
     Object.assign(sh.uniforms, { uRock: { value: rockTex }, uMossAmt: { value: moss }, uLichenAmt: { value: lichen }, uSnow: { value: snow },
       uMoss: { value: C(mossCol) }, uLichen: { value: C(lichenCol) },
@@ -3157,7 +3273,15 @@ function perfApply() {                                             // what's swi
   O.treesWas = !!O.trees;
   for (const t of tiles) { if (t.lo) t.lo.visible = !O.cards; if (t.group && t.group.children[0]) t.group.children[0].visible = !O.ground; }
   if (ENDLESS && ENDLESS.far) ENDLESS.far.visible = !O.far; if (ENDLESS && ENDLESS.water) ENDLESS.water.visible = !O.water;
-  if (animalGroup) animalGroup.visible = !O.animals; if (sky) sky.visible = !O.sky && !UNDER.on;
+  if (animalGroup) { animalGroup.visible = !O.animals; animalGroup.matrixWorldAutoUpdate = !O.animals; } if (sky) sky.visible = !O.sky && !UNDER.on;   // (hidden animals: their parts aren't even worked out)
+  if (O.rocks || O.rocksWas) { if (NEAR) for (const NS of [NEAR.small, NEAR.mid]) for (const it of NS.items) if (it.mesh) it.mesh.visible = !O.rocks && it.mesh.count > 0;
+    if (world) world.traverse(o => { if (o.isMesh && o.material && o.material.userData && o.material.userData.rock) o.visible = !O.rocks; }); }
+  O.rocksWas = !!O.rocks;
+  if (precipFx && (O.weather || O.weatherWas)) precipFx.visible = !O.weather; O.weatherWas = !!O.weather;
+}
+function perfFresh(k) {                                            // (a switch that needs things rebuilt)
+  if (k === "softfade") scene.traverse(o => { const m = o.material; if (m && !Array.isArray(m) && m.customProgramCacheKey && /\|fade/.test(m.customProgramCacheKey())) m.needsUpdate = true; });
+  if (k === "simplestat") { for (const S of STAT.kinds.values()) if (S) { scene.remove(S.im); S.im.geometry.dispose(); S.im.dispose(); } STAT.kinds.clear(); }
 }
 function fpsTick(raw) { if (!(raw > 0) || raw > 2) return; FPSM.t += raw; FPSM.n++; FPSM.worst = Math.max(FPSM.worst, raw); if (FPSM.t >= 2) { FPSM.fps = Math.round(FPSM.n / FPSM.t); FPSM.low = Math.round(FPSM.worst * 1000); FPSM.t = 0; FPSM.n = 0; FPSM.worst = 0; } }
 function mapMates() {                                       /* your teammates (people and bots) as dots on the VR map; PvP with teams only, never with Team · fist bump comms online */
@@ -7995,6 +8119,7 @@ function makeSkyStyle(rand, biome) {            // every map gets its own sky pe
 function liftLum(c, min) { const l = c.r * .3 + c.g * .59 + c.b * .11; if (l < min) c.multiplyScalar(min / Math.max(l, .02)); return c; }
 const fogFar = () => scene.fog ? scene.fog.far : 1200;     // Map Lab and the Workshop take the fog away: everything that reads it goes through here (a crash every frame froze the headset)
 function setLighting(lat, biome, topMix) {
+  SKYP.all = true;                                                // the light changed: repaint the whole small sky
   const sp = sunPos(lat, set.month, hourNow), el = sp.el, oc = weather.overcast, Q = skyP || makeSkyStyle(Math.random, biome);
   const pmW = smooth(11, 13.5, hourNow);                                             // morning palette blends into the evening one
   const pal = arr => keyCol(arr, el, 1, new THREE.Color()).lerp(keyCol(arr, el, 2, new THREE.Color()), pmW);
@@ -8719,9 +8844,28 @@ function statueOf(A) {
     for (let i = 0; i < P0.count; i++) { pos.push(P0.getX(i), P0.getY(i), P0.getZ(i)); if (N0) nrm.push(N0.getX(i), N0.getY(i), N0.getZ(i)); else nrm.push(0, 1, 0); if (C0) col.push(C0.getX(i), C0.getY(i), C0.getZ(i)); else col.push(1, 1, 1); }
     g.dispose(); });
   if (!mat || !pos.length || Array.isArray(mat)) { STAT.kinds.set(A.kind, null); return null; }
+  if (!(DEV.ok && SPD.off.simplestat)) statueSimplify(pos, nrm, col);
   const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nrm, 3)); if (mat.vertexColors) geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
   const im = new THREE.InstancedMesh(geo, mat, 96); im.count = 0; im.frustumCulled = false; scene.add(im);
   S = { im, mat }; STAT.kinds.set(A.kind, S); return S;
+}
+/* (3.41) a statue only needs its shape from 200 m: each was a full copy (about 7,000 triangles; 90 of them were 650,000, a third of
+   everything drawn). Points closer than about 1/14 of the animal's size are merged into one (their average), and triangles that
+   collapse are dropped: a few hundred triangles each. Speed check: "Simple far animals" off brings the full copies back. */
+function statueSimplify(pos, nrm, col) {
+  let x0 = 1e9, y0 = 1e9, z0 = 1e9, x1 = -1e9, y1 = -1e9, z1 = -1e9; const n = pos.length / 3;
+  for (let i = 0; i < n; i++) { const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+  const cs = Math.max(x1 - x0, y1 - y0, z1 - z0) / 14 || 1, id = new Int32Array(n), cl = new Map(), acc = [];
+  for (let i = 0; i < n; i++) { const k = Math.floor((pos[i * 3] - x0) / cs) + "," + Math.floor((pos[i * 3 + 1] - y0) / cs) + "," + Math.floor((pos[i * 3 + 2] - z0) / cs);
+    let c = cl.get(k); if (c === undefined) { c = acc.length / 10; cl.set(k, c); acc.push(0, 0, 0, 0, 0, 0, 0, 0, 0, 0); }
+    const o = c * 10; for (let j = 0; j < 3; j++) { acc[o + j] += pos[i * 3 + j]; acc[o + 3 + j] += nrm[i * 3 + j]; acc[o + 6 + j] += col[i * 3 + j]; } acc[o + 9]++; id[i] = c; }
+  const P = [], N = [], C = [], seen = new Set();
+  for (let t = 0; t < n; t += 3) { const a = id[t], b = id[t + 1], c = id[t + 2]; if (a === b || b === c || a === c) continue;
+    const key = [a, b, c].sort((u, v) => u - v).join(","); if (seen.has(key)) continue; seen.add(key);
+    for (const q of [a, b, c]) { const o = q * 10, w = acc[o + 9], nl = Math.hypot(acc[o + 3], acc[o + 4], acc[o + 5]) || 1;
+      P.push(acc[o] / w, acc[o + 1] / w, acc[o + 2] / w); N.push(acc[o + 3] / nl, acc[o + 4] / nl, acc[o + 5] / nl); C.push(acc[o + 6] / w, acc[o + 7] / w, acc[o + 8] / w); } }
+  if (P.length < 36) return;                                         // (too small to keep a shape: keep the full copy)
+  pos.length = nrm.length = col.length = 0; for (let i = 0; i < P.length; i++) { pos.push(P[i]); nrm.push(N[i]); col.push(C[i]); }
 }
 function statuesBefore() {                                        // (just before drawing) far animals: their statue instead
   for (const S of STAT.kinds.values()) if (S) S.im.count = 0;
@@ -12250,7 +12394,7 @@ function menuGrove() {                                           // the trees an
   const fu = VRUI.floor.material.uniforms; fu.uA.value.copy(C3(G.g[0])); fu.uB.value.copy(C3(G.g[1])); fu.uFar.value.copy(C3(G.g[1]).lerp(C3(G.sky[1]), .35).multiplyScalar(.85));
   const types = []; let wsum = 0;
   for (const [kind, cols, bark, w, opt] of G.k) {
-    const mat = new THREE.MeshBasicMaterial({ map: makeAtlas(kind, cols[0], !!G.snow, bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true, fog: false });
+    const mat = a2cify(new THREE.MeshBasicMaterial({ map: makeAtlas(kind, cols[0], !!G.snow, bark), alphaTest: VR_ON ? .2 : .45, alphaToCoverage: VR_ON, side: THREE.DoubleSide, vertexColors: true, fog: false }));
     mat.color.setScalar(1.08);
     for (let v = 0; v < 2; v++) { const T = treeVariant(kind, false, false, opt); types.push({ T, mat, w: w / 2, near: [], far: [] }); wsum += w / 2; }
   }
@@ -12524,19 +12668,23 @@ function vruiParts() {
   uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
   mpLobbyPanels(); homePanels();
   // ---- (Dev) the speed check: switch things off and back on, then look at the numbers on your wrist ----
-  const Pf = uiPanel("perf", 1300, 1000, 1.9, 58, 1.4);
+  const Pf = uiPanel("perf", 1300, 1240, 1.9, 58, 1.4);
   Pf.paint = (g, P) => { uiBg(g, P, "SPEED CHECK"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
-    uiWrap(g, "Turn something off, go back to the game and look at your wrist: if the fps jumps, that's what's costing. 'game' is our own work each frame; the rest of the frame is the headset drawing the picture.", 650, 140, 1150, 36);
+    uiWrap(g, "Turn something off, go back to the game and open your map: if the fps jumps, that's what's costing. 'game' is our own work each frame; the rest of the frame is the headset drawing the picture.", 650, 140, 1150, 36);
     const S = SPD.show, f = v => (v || 0).toFixed(1); g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun;
-    g.fillText(FPSM.fps + " fps · game " + f(S.all) + " ms (move " + f(S.move) + ", land " + f(S.land) + ", animals " + f(S.anim) + ", send " + f(S.draw) + ") · " + SPD.calls + " draws", 650, 262); };
-  const tog = (k, l, x, y) => uiBtn(Pf, x, y, 360, 96, "", () => { SPD.off[k] = !SPD.off[k]; uiDraw(Pf); }, { labelFn: () => l + ": " + (SPD.off[k] ? "OFF" : "on"), active: () => !SPD.off[k], fs: 32, personal: true });
-  tog("trees", "Trees near", 90, 300); tog("cards", "Trees far", 470, 300); tog("ground", "Ground", 850, 300);
-  tog("far", "Far land", 90, 410); tog("water", "Water", 470, 410); tog("animals", "Animals", 850, 410); tog("sky", "Sky", 90, 520);
-  [[0, "Fov 0"], [.5, "Fov ½"], [1, "Fov 1"]].forEach(([v, l], i) => uiBtn(Pf, 470 + i * 250, 520, 230, 96, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 30, personal: true }));
-  [[.6, "Sharp .6"], [.7, ".7"], [.8, ".8 (now)"], [1, "1.0"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 290, 650, 270, 96, l, () => { SPD.scale = v; try { localStorage.setItem("jt-dev-scale", String(v)); } catch (_) {} uiDraw(Pf); }, { active: () => (SPD.scale || .8) === v, fs: 30, personal: true }));
-  uiBtn(Pf, 90, 770, 1120, 60, "", () => {}, { ghost: true, labelFn: () => "Sharpness takes effect the next time you go into VR (exit VR and come back)", fs: 24 });
-  uiBtn(Pf, 90, 860, 380, 96, "Back", () => vruiOpen("pause"), { fs: 34, personal: true });
-  uiBtn(Pf, 830, 860, 380, 96, "Resume", () => vruiResume(), { fs: 34, primary: true, personal: true });
+    g.fillText(FPSM.fps + " fps · game " + f(S.all) + " ms (move " + f(S.move) + ", land " + f(S.land) + ", animals " + f(S.anim) + ", send " + f(S.draw) + ") · " + SPD.calls + " draws", 650, 262);
+    g.font = "bold 26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText("What's drawn", 90, 300); g.fillText("New in 3.41 (off = the old way)", 90, 636); };
+  const tog = (k, l, x, y, w) => uiBtn(Pf, x, y, w || 270, 84, "", () => { SPD.off[k] = !SPD.off[k]; perfFresh(k); uiDraw(Pf); }, { labelFn: () => l + ": " + (SPD.off[k] ? "OFF" : "on"), active: () => !SPD.off[k], fs: 28, personal: true });
+  tog("trees", "Trees near", 90, 316); tog("cards", "Trees far", 370, 316); tog("ground", "Ground", 650, 316); tog("far", "Far land", 930, 316);
+  tog("water", "Water", 90, 410); tog("animals", "Animals", 370, 410); tog("sky", "Sky", 650, 410); tog("rocks", "Rocks", 930, 410);
+  tog("weather", "Rain / snow", 90, 504, 360);
+  tog("newsky", "New sky", 90, 652, 360); tog("softfade", "Smooth fade", 470, 652, 360); tog("closecards", "Closer cards", 850, 652, 360);
+  tog("simplestat", "Simple far animals", 90, 746, 560);
+  [[0, "Edge blur 0"], [.5, "Edge blur ½"], [1, "Edge blur 1"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 380, 860, 360, 84, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 28, personal: true }));
+  [[.6, "Sharp .6"], [.7, ".7"], [.8, ".8"], [1, "1.0"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 290, 960, 270, 84, l, () => { SPD.scale = v; try { localStorage.setItem("jt-dev-scale", String(v)); } catch (_) {} uiDraw(Pf); }, { active: () => (SPD.scale || .8) === v, fs: 28, personal: true }));
+  uiBtn(Pf, 90, 1050, 1120, 50, "", () => {}, { ghost: true, labelFn: () => "Edge blur: the outer edges of your view drawn softer (saves work). Sharpness changes when you next go into VR.", fs: 22 });
+  uiBtn(Pf, 90, 1120, 380, 90, "Back", () => vruiOpen("pause"), { fs: 34, personal: true });
+  uiBtn(Pf, 830, 1120, 380, 90, "Resume", () => vruiResume(), { fs: 34, primary: true, personal: true });
   // ---- paused ----
   const Pa = uiPanel("pause", 1100, 1000, 1.7, 58, 1.4);
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 140, 1000, 34);
@@ -18839,6 +18987,7 @@ function cullTiles() {
   PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);
   const pf = PERF(), lodD = pf.lod * Math.max(1, vr.on ? Math.min(vr.zoomK, pf.zoomLod) : 72 / camera.fov);   // full-detail trees nearby (and further out through a scope, but not all the way to the horizon)
   const NC = NCELL * NCELL, fT = cullFT, fS = cullFS, fM = cullFM, fL = cullFL; fT.length = fS.length = fM.length = fL.length = NC;
+  MID_D = VR_ON && !(DEV.ok && SPD.off.closecards) ? 380 : 600;
   const zk = lodD / pf.lod, [a0, a1, b0q, b1q] = FADE_D(), dk = GEO.ghostK > .5 && !(vr.scoped || vr.binos || zoomed) ? 1.25 : 1,   /* (less far out, and not at all through a scope: it was dropping frames) */ b0 = b0q * dk, b1 = b1q * dk;     // a scope pushes every distance out together (dreaming, the trees reach much further out)
   FADE.uFA.value.set(a0 * zk, a1 * zk); FADE.uFB.value.set(b0 * zk, b1 * zk); FADE.uHead.value.copy(camera.position);
   for (let i = 0; i < tiles.length; i++) {
@@ -18923,10 +19072,10 @@ function loop(now) {
     { const pl0 = pf0 ? perfT() : 0; if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); } if (pf0) perfAdd("land", perfT() - pl0); }
     if (vr.on && TOOL.sightM) toolPrep();                  // the SMG's thermal mini-sight
     if (DEV.ok) perfApply();
-    statuesBefore();
+    statuesBefore(); skyPaintTick();
     const pr0 = pf0 ? perfT() : 0;
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
-    statuesAfter();
+    statuesAfter(); skyPaintAfter();
     if (pf0) { perfAdd("draw", perfT() - pr0); SPD.calls = renderer.info.render.calls; SPD.tris = renderer.info.render.triangles; }
     if (PHOTO.want) { try { photoShoot(); } catch (e) { PHOTO.want = false; console.warn("photo", e); } }
     if (gun.visible && !vr.on) { renderer.autoClear = false; renderer.clearDepth(); renderer.render(gunScene, gunCam); renderer.autoClear = true; }
