@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.41";              // Just Trees
+const VERSION = "3.42";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -8867,7 +8867,17 @@ function statueSimplify(pos, nrm, col) {
   if (P.length < 36) return;                                         // (too small to keep a shape: keep the full copy)
   pos.length = nrm.length = col.length = 0; for (let i = 0; i < P.length; i++) { pos.push(P[i]); nrm.push(N[i]); col.push(C[i]); }
 }
+/* (3.42) while the picture is drawn, three.js works out where every object is, hidden ones too: about two thirds of that work was hidden
+   parts (mostly the old hand-built rig inside every animal, kept for its hit boxes). Just for the drawing, hidden things are now skipped.
+   Anything that needs a hidden thing's place works it out itself (shots do: animalRay updates the animal first). Speed check: "Skip hidden". */
+const UMW_ALL = THREE.Object3D.prototype.updateMatrixWorld;
+function UMW_SEEN(force) {
+  if (this.matrixAutoUpdate) this.updateMatrix();
+  if (this.matrixWorldNeedsUpdate || force) { if (this.parent === null) this.matrixWorld.copy(this.matrix); else this.matrixWorld.multiplyMatrices(this.parent.matrixWorld, this.matrix); this.matrixWorldNeedsUpdate = false; force = true; }
+  const ch = this.children; for (let i = 0, l = ch.length; i < l; i++) { const c = ch[i]; if (!c.visible) { if (force) c.matrixWorldNeedsUpdate = true; continue; } if (c.matrixWorldAutoUpdate === true || force === true) c.updateMatrixWorld(force); }   // (a skipped one is worked out when it shows again)
+}
 function statuesBefore() {                                        // (just before drawing) far animals: their statue instead
+  if (!(DEV.ok && SPD.off.skiphid)) THREE.Object3D.prototype.updateMatrixWorld = UMW_SEEN;
   for (const S of STAT.kinds.values()) if (S) S.im.count = 0;
   if (!animalGroup || !animalGroup.visible || state !== "play" || UNDER.on) return;
   const lim = 200 * (vr.on && vr.zoomK > 1.3 ? vr.zoomK * .7 : 1), cx = camera.position.x, cz = camera.position.z;
@@ -8879,7 +8889,7 @@ function statuesBefore() {                                        // (just befor
   }
   for (const S of STAT.kinds.values()) if (S) { S.im.visible = S.im.count > 0; if (S.im.count) S.im.instanceMatrix.needsUpdate = true; }
 }
-function statuesAfter() { for (const A of STAT.hid) { A.root.visible = true; A.root.matrixWorldAutoUpdate = true; } STAT.hid.length = 0; }
+function statuesAfter() { THREE.Object3D.prototype.updateMatrixWorld = UMW_ALL; for (const A of STAT.hid) { A.root.visible = true; A.root.matrixWorldAutoUpdate = true; } STAT.hid.length = 0; }
 function clearAnimals() {
   if (animalGroup) { scene.remove(animalGroup); animalGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); if (o.skeleton) o.skeleton.dispose(); }); }
   animalGroup = null; beasts.length = 0; if (typeof MP !== "undefined") { MP.byNid.clear(); MP.nb.clear(); }
@@ -12673,13 +12683,13 @@ function vruiParts() {
     uiWrap(g, "Turn something off, go back to the game and open your map: if the fps jumps, that's what's costing. 'game' is our own work each frame; the rest of the frame is the headset drawing the picture.", 650, 140, 1150, 36);
     const S = SPD.show, f = v => (v || 0).toFixed(1); g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun;
     g.fillText(FPSM.fps + " fps · game " + f(S.all) + " ms (move " + f(S.move) + ", land " + f(S.land) + ", animals " + f(S.anim) + ", send " + f(S.draw) + ") · " + SPD.calls + " draws", 650, 262);
-    g.font = "bold 26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText("What's drawn", 90, 300); g.fillText("New in 3.41 (off = the old way)", 90, 636); };
+    g.font = "bold 26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText("What's drawn", 90, 300); g.fillText("New in 3.41 / 3.42 (off = the old way)", 90, 636); };
   const tog = (k, l, x, y, w) => uiBtn(Pf, x, y, w || 270, 84, "", () => { SPD.off[k] = !SPD.off[k]; perfFresh(k); uiDraw(Pf); }, { labelFn: () => l + ": " + (SPD.off[k] ? "OFF" : "on"), active: () => !SPD.off[k], fs: 28, personal: true });
   tog("trees", "Trees near", 90, 316); tog("cards", "Trees far", 370, 316); tog("ground", "Ground", 650, 316); tog("far", "Far land", 930, 316);
   tog("water", "Water", 90, 410); tog("animals", "Animals", 370, 410); tog("sky", "Sky", 650, 410); tog("rocks", "Rocks", 930, 410);
   tog("weather", "Rain / snow", 90, 504, 360);
   tog("newsky", "New sky", 90, 652, 360); tog("softfade", "Smooth fade", 470, 652, 360); tog("closecards", "Closer cards", 850, 652, 360);
-  tog("simplestat", "Simple far animals", 90, 746, 560);
+  tog("simplestat", "Simple far animals", 90, 746, 560); tog("skiphid", "Skip hidden", 670, 746, 540);
   [[0, "Edge blur 0"], [.5, "Edge blur ½"], [1, "Edge blur 1"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 380, 860, 360, 84, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 28, personal: true }));
   [[.6, "Sharp .6"], [.7, ".7"], [.8, ".8"], [1, "1.0"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 290, 960, 270, 84, l, () => { SPD.scale = v; try { localStorage.setItem("jt-dev-scale", String(v)); } catch (_) {} uiDraw(Pf); }, { active: () => (SPD.scale || .8) === v, fs: 28, personal: true }));
   uiBtn(Pf, 90, 1050, 1120, 50, "", () => {}, { ghost: true, labelFn: () => "Edge blur: the outer edges of your view drawn softer (saves work). Sharpness changes when you next go into VR.", fs: 22 });
