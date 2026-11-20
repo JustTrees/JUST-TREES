@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.43";              // Just Trees
+const VERSION = "3.44";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -4979,7 +4979,7 @@ const GI_LIST = [
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
   ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "In your other hand: hold its trigger, swing and let go to cast; grip the reel handle and turn it to reel; strike when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
-  ["pack2", "Big backpack", "12 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
+  ["pack2", "Big backpack", "20 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
@@ -5003,13 +5003,13 @@ function geoRewardOf(n) {                                     // what the nth fi
 const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "hlglass", "fglass"];   // levels 51-55 (3.32: the golden hour glasses are gone)
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
   const own = {}, items = new Set(); if (GEO.full || GEO.lab) for (const k of GLASSES) items.add(k);   // (Dev: Full level and the Test Lab have the glasses)
-  if (DEV.ok) for (const k of LV_KINDS) items.add(k);           // (3.43: the land vehicles, in Dev for now)
+  if (DEV.ok || GEO.full || GEO.lab || n >= GEO_N) for (const k of LV_KINDS) items.add(k);   // (3.44: the land vehicles come with the jet ski at cache #50; Dev and the labs have them anyway)
   for (let i = 1; i <= n; i++) { const r = geoRewardOf(i); if (r.gun) own[r.gun] = Math.max(own[r.gun] || 0, r.star); if (r.item) items.add(r.item); }
   return { own, items };
 }
 const geoNadeCap = () => geoHas("pouch2") ? 10 : geoHas("pouch1") ? 5 : 0;
-const geoSlots = () => geoHas("pack2") ? (DEV.ok ? 20 : 16) : geoHas("pack1") ? 6 : 3;   // (the big pack holds 16) (3.43 Dev: 20, room for the land vehicles)
-const PK_C = () => DEV.ok ? 5 : 4, PK_W = () => DEV.ok ? 114 : 146;   // the pack's grid: columns, cell width
+const geoSlots = () => geoHas("pack2") ? 20 : geoHas("pack1") ? 6 : 3;   // (the big pack holds 20 since 3.44: room for the land vehicles)
+const PK_C = () => geoSlots() > 16 ? 5 : 4, PK_W = () => geoSlots() > 16 ? 114 : 146;   // the pack's grid: columns, cell width
 function geoGearApply(n, fresh) {                             // your guns and items for this many finds
   const g = geoGearFromCount(n); GEO.items = g.items;
   vr.own = Object.assign({}, g.own);
@@ -5848,7 +5848,7 @@ const LV_DEF = {
   buggy: { name: "dune buggy", max: 22, turn: .9, eye: 1.22, seat: [0, .56, .15], grip: { L: [-.19, .9, -.42], R: [.19, .9, -.42] }, climb: .7, lean: .12, pump: 6, snowK: .55, sandK: 1.1, wheel: true },
 };
 const LV = { list: [], ride: null, aim: null, ring: null, snd: null, others: new Map() };
-const lvOn = () => GEO.on && !!GLOBE && DEV.ok;
+const lvOn = () => GEO.on && !!GLOBE;   // (3.44: live)
 const lvG = (x, z) => (ENDLESS && enIcedAt(x, z)) ? Math.max(H(x, z), water) : H(x, z);   // the ground a vehicle rolls on (a frozen lake counts)
 function lvSnowy(x, z) { const b = ENDLESS && ENDLESS.here && ENDLESS.here.b; return b === "polar" || !!(footEnv && footEnv.snow) || (footEnv && footEnv.snowLine < 1e8 && H(x, z) > footEnv.snowLine) || !!(ENDLESS && enIcedAt(x, z)); }
 function lvModel(kind) {

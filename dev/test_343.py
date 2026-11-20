@@ -1,4 +1,4 @@
-"""3.43 (Dev for now): the land vehicles, a dirt bike, a snowmobile and a dune buggy, working like the jet ski. In the pack (Dev); taken out
+"""3.43 (live since 3.44, they come with the jet ski at cache #50): the land vehicles, a dirt bike, a snowmobile and a dune buggy, working like the jet ski. In the pack (Dev); taken out
 on dry land it's in front of you; climb on, grab both grips (the engine starts), trigger: throttle; you ride along with it on the ground;
 a tree stops it; pulling the bars up hard pops the bike into the air; thumbstick back reverses; the snowmobile crawls off snow; hands off
 and point at the ground to hop off. Others see what you ride (lv). Usage: python3 dev/test_343.py dbg.html"""
@@ -14,7 +14,7 @@ async def main():
         await pg.goto("file://" + sys.argv[1]); await pg.wait_for_timeout(500)
         await pg.evaluate(GEN, 10)
         r = await pg.evaluate("""() => { const o = {}, T = D.THREE, P = D.P, LV = D.LV;
-          o.items = D.LV_KINDS.map(k => D.GEO.items.has(k)); o.pack = D.LV_KINDS.map(k => D.geoPackItems().includes(k));
+          o.items = D.LV_KINDS.map(k => D.GEO.items.has(k)); { D.DEV.ok = false; const g10 = D.geoGearFromCount(10).items, g50 = D.geoGearFromCount(50).items; o.live = [D.LV_KINDS.some(k => g10.has(k)), D.LV_KINDS.every(k => g50.has(k)), g50.has('jetski')]; D.DEV.ok = true; }   /* (3.44: live, with the jet ski at #50) */ o.pack = D.LV_KINDS.map(k => D.geoPackItems().includes(k));
           // a clear, flat, dry spot with room in front
           tick(40); let spot = null, seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
           for (let k = 0; k < 4000 && !spot; k++) { const x = P.x + (rnd() - .5) * 500, z = P.z + (rnd() - .5) * 500;
@@ -56,7 +56,7 @@ async def main():
           o.count = LV.list.length; D.lvClear(); o.cleared = LV.list.length === 0;
           return o; }""")
         print(json.dumps(r))
-        ok = r.get("spot") and r["items"] == [True] * 3 and r["pack"] == [True] * 3 and r["out"] and r["placed"][0] and 1.5 < r["placed"][1] < 3 and r["glow"] and r["mounted"] \
+        ok = r.get("spot") and r["items"] == [True] * 3 and r["live"] == [False, True, True] and r["pack"] == [True] * 3 and r["out"] and r["placed"][0] and 1.5 < r["placed"][1] < 3 and r["glow"] and r["mounted"] \
              and r["engine"] == [True, True, True] and r["moved"] > 40 and r["speed"] > 15 and r["withIt"] < 1.5 and r["onGround"] < .3 and 1.1 < r["eye"] < 1.7 \
              and r["hop"] and r["landed"] and r["reverse"] < -1.5 and (r.get("tree") is None or r["tree"] > .5) and r["net"] and r["off"] \
              and r["sled"] and r["sledSlow"] < 9 and r["buggy"] and r["buggyEng"] and r["count"] == 3 and r["cleared"]
