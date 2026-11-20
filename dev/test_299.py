@@ -31,9 +31,9 @@ async def main():
               const H0 = D.H(D.P.x, D.P.z); o.feat = Math.round(H0 - G.landAt(D.glToSphere(D.P.x, D.P.z, [0, 0, 0])));
               return o; }""", sd)
             out.append(r); print(json.dumps(r))
-        DINO = {"triceratops", "parasaur", "stego", "bronto"}
+        DINO = {"triceratops", "parasaur", "stego", "bronto", "trex", "ptero"}   # (3.45: the T. rex and pteranodons live there too now)
         ok = all(r["oceans"] >= 3 and abs(r["bigLat"]) <= 4 and r["bigA"] > 1.2 and 3000 <= r["isle"][0] <= 4000 and abs(r["isle"][1]) < 1 and r["isle"][2] and r["isle"][3]
-                 and r["seaRing"] >= 20 and r["isleCaches"] == 3 and r["dist"][0] < r["dist"][1] < r["dist"][2] and r["dinos"][2] and 0 < r["dinos"][0] < 80 and abs(r["dist"][1] - 1350) < 400
+                 and r["seaRing"] >= 20 and r["isleCaches"] == 3 and r["dist"][0] < r["dist"][1] < r["dist"][2] and r["dinos"][2] and 0 < r["dinos"][0] < 200 and abs(r["dist"][1] - 1350) < 400
                  and set(filter(None, r["dinos"][1].split(","))) <= DINO for r in out)
         print("PASS" if ok and not errs else "FAIL", errs[:5]); await b.close()
         if not ok or errs: sys.exit(1)

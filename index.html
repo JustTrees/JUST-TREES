@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.44";              // Just Trees
+const VERSION = "3.45";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -3861,7 +3861,7 @@ function enEnvFree(b) {
 const EA_C = 500, EA_N = EN_P / EA_C, EA_ON = 850, EA_OFF = 1250, EA_SEEN = 790;
 function enAnimInit() {
   const E = ENDLESS; clearAnimals(); animalGroup = new THREE.Group(); scene.add(animalGroup);
-  HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.hunter = null; DINO.pack = []; STOCK.land = [];
+  HAB.g = null; HAB.ranges = {}; HAB.top = {}; HAB.homes = []; HAB.gid = 0; DINO.on = false; DINO.isle = false; DINO.hunter = null; DINO.pack = []; STOCK.land = [];
   E.acG = new Map(); E.acB = new Map(); E.acL = new Map(); E.aQ = []; E.aInit = true; E.aT = 0; E.aMade = 0; E.aDropped = 0; E.taken = new Set();
   if (gameMode === "hunt") {                                   // hunting (Prehistoric: dinosaurs), as spawnAnimals starts it on the island maps
     DINO.on = !!set.dino && VR_ON; DINO.pending = 0; DINO.gap = 45 + Math.random() * 60; DINO.hunts = 0; DINO.rexHeard = false; droneLevel(0, true);
@@ -3882,12 +3882,12 @@ function enAnimSpot(kind, x, z) {                             // somewhere this 
 }
 const geoDinoAt = (x, z) => !!(GLOBE && GLOBE.isle && glArc(glToSphere(x, z, [0, 0, 0]), GLOBE.isle.c) < GLOBE.isle.r + .01);   // the dinosaur island
 function enAnimPick(b, R, birds, dino) {                            // one kind from this environment's list, the commoner ones more often
-  const list = (DINO.on && gameMode === "hunt" ? DINO_NATIVE : dino ? DINO_NATIVE.filter(e => e[0] !== "trex") : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
+  const list = (DINO.on && !DINO.isle && gameMode === "hunt" ? DINO_NATIVE : dino ? DINO_NATIVE.filter(e => e[0] !== "trex") : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
   let tot = 0; for (const [k, n] of list) tot += k === "rabbit" ? Math.min(n, 6) : n; let u = R() * tot;
   for (const e of list) { u -= e[0] === "rabbit" ? Math.min(e[1], 6) : e[1]; if (u <= 0) return e; } return list[list.length - 1] || null;
 }
 function enAnimFill(i, j, ps, init) {                         // a square's ground animals, queued to be made a few a frame
-  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), dIs = geoDinoAt((i + .5) * EA_C, (j + .5) * EA_C), nG = dIs ? (R() < .35 ? 1 : 0) : Math.round((DINO.on && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3)) * (nightNow() ? NIGHT.more : 1)), x0 = i * EA_C, z0 = j * EA_C;
+  const E = ENDLESS, key = enKey(i, j), R = mulberry32(enHash(seed * 41 + 9, ((i % EA_N) + EA_N) % EA_N, ((j % EA_N) + EA_N) % EA_N)), dIs = geoDinoAt((i + .5) * EA_C, (j + .5) * EA_C), nG = dIs ? 2 + (R() < .5 ? 1 : 0) : Math.round((DINO.on && !DINO.isle && gameMode === "hunt" ? 3 + Math.floor(R() * 3) : (gameMode === "hunt" ? 6 : 3) + Math.floor(R() * 3)) * (nightNow() ? NIGHT.more : 1)), x0 = i * EA_C, z0 = j * EA_C;
   for (let g = 0; g < nG; g++) for (let t = 0; t < 14; t++) {
     const x = x0 + R() * EA_C, z = z0 + R() * EA_C, e = enAnimPick(enDom(x, z).b, R, false, geoDinoAt(x, z)); if (!e) break;
     const [k, , grp] = e; if (!enAnimSpot(k, x, z)) continue;
@@ -3898,7 +3898,7 @@ function enAnimFill(i, j, ps, init) {                         // a square's grou
   }
   if (gameMode !== "hunt") return;
   const far = (x, z) => enAnimNear(ps, x, z) >= (init ? 150 : EA_SEEN);
-  if (DINO.on) {
+  if ((DINO.on && !DINO.isle) || dIs) {                      // (3.45: the dinosaur island too)
     if (R() < .18) for (let t = 0; t < 14; t++) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (enAnimOk(x, z) && far(x, z)) { E.aQ.unshift({ k: "trex", x, z, hx: x, hz: z, gid: ++HAB.gid, key, reg: enDom(x, z).key }); break; } }   // a T. rex in every region (one alive in each)
     if (R() < .45) { const x = x0 + R() * EA_C, z = z0 + R() * EA_C; if (far(x, z)) E.aQ.unshift({ k: "ptero", x, z, hx: x, hz: z, gid: -1, key }); }
   } else if (!dIs && R() < .05) {                             // Bigfoot (the Yeti in the cold) in about 1 square in 20
@@ -4543,6 +4543,15 @@ function globeSetup(E, rnd) {
     const keepW = weather; weather = wx; const sky = makeSkyStyle(Rr, b); weather = keepW;
     g = { b, r: set.rough, jx: 0, jz: 0, wx, sky, key }; regs.set(key, g); return g;
   };
+  /* (3.45) the dinosaur island: always a dark thunderstorm (rain, lightning, as dark as dusk). Same land and trees as the region it's in;
+     only its weather and sky are swapped, so walking up the beach the storm closes in. */
+  const isleRegs = new Map();
+  const isleReg = g => { let r = isleRegs.get(g.key); if (r) return r;
+    const L = E.envL[g.b], w0 = set.weather; set.weather = "storm";
+    const wx = weatherFor(mulberry32(g.key * 7 + 3), g.b, L.season, false, enHash(seed * 13 + 1, 77, g.key)); set.weather = w0;
+    Object.assign(wx, { type: "storm", storm: true, precip: "rain", snowStyle: null, dim: .2, fogMul: .4, overcast: 1, wet: .95 });
+    const keepW = weather; weather = wx; const sky = makeSkyStyle(mulberry32(g.key * 11 + 5), g.b); weather = keepW;
+    r = Object.assign({}, g, { wx, sky, key: g.key + 100000, isle: true }); isleRegs.set(g.key, r); return r; };
   const cand = [];
   G.regionsP = (p, X, Y, Z) => {
     const lat = Math.asin(Math.max(-1, Math.min(1, p[1]))) * 57.2958, L = Math.abs(lat) + f3(nW, X, Y, Z, 1 / 2600, 2) * 6.5 + n3(nW2, X, Y, Z, 1 / 700) * 1.5;
@@ -4561,6 +4570,7 @@ function globeSetup(E, rnd) {
     cand.sort((a, b) => b[0] - a[0]); const n = Math.min(3, cand.length); let tot = 0;
     for (let q = 0; q < n; q++) tot += cand[q][0];
     for (let q = 0; q < n; q++) { EN_RL[q].reg = reg(cand[q][1], cand[q][2]); EN_RL[q].w = cand[q][0] / tot; }
+    if (G.isle && glArc(p, G.isle.c) < G.isle.r + .05) for (let q = 0; q < n; q++) EN_RL[q].reg = isleReg(EN_RL[q].reg);   // (the dinosaur island's storm)
     return n;
   };
   const roughAt = (X, Y, Z) => Math.max(0, Math.min(1, set.rough + f3(nR, X, Y, Z, 1 / 5000, 2) * .9));
@@ -4850,7 +4860,7 @@ function geoTick(dt) {
           if (geoCacheClear(x, z)) { c.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(c.p); c.lat = ll[0]; c.lon = ll[1]; out[0] = x; out[1] = z; break; } } }
       o.position.set(out[0], groundAt(out[0], out[1]), out[1]); c.x = out[0]; c.z = out[1];
     }
-    jetsTick(dt); lvTick(dt);
+    jetsTick(dt); lvTick(dt); geoDinoIsleTick();
     GEO.reAt = false;
   }
   for (const [id, o] of GEO.objs) {
@@ -10032,6 +10042,16 @@ function spookTick(A, dt) {                                   // sets where it's
   if (!K.ax) { const a = Math.atan2(-ux, -uz) + (Math.random() - .5) * 1.2; K.ax = Math.sin(a); K.az = Math.cos(a); }   // off and away, each its own way
   A.mode = "walk"; A.want = 14; A.target = [A.x + K.ax * 60, A.z + K.az * 60];
   if ((d > 70 && !inView) || K.t > 10) A.gone = true;
+}
+/* (3.45) standing on the dinosaur island (the big one on the Treeocashing planet) switches the Prehistoric behaviour on: raptors hunt
+   you, they creep up and scare you, the dinosaurs call, the T. rex comes for you. Leaving the island ends any hunt. */
+function geoDinoIsleTick() {
+  const on = !!GLOBE && GEO.on && !set.dino && gameMode === "hunt" && VR_ON && state === "play" && geoDinoAt(P.x, P.z);
+  if (on === !!DINO.isle) return;
+  DINO.isle = on; DINO.on = on || (!!set.dino && VR_ON && gameMode === "hunt");
+  if (on) { DINO.gap = 25 + Math.random() * 35; DINO.pending = 0; vrBanner("Dinosaur island", 3, 0); return; }
+  for (const B of beasts.filter(B => B.hunter || B.spook)) dinoRemove(B);
+  DINO.hunter = null; DINO.pack = []; DINO.pending = 0; SPOOK.list = []; SPOOK.A = null; droneLevel(0, true);
 }
 function dinoRemove(A) { if (animalGroup) animalGroup.remove(A.root); const i = beasts.indexOf(A); if (i >= 0) beasts.splice(i, 1); }
 function dinoCharge(A) { const now = performance.now(); if (DINO.pack && DINO.pack.length > 1 && now - (DINO.lastCharge || 0) < 1600) return; DINO.lastCharge = now;   // a pack charges one after another, not all at once
