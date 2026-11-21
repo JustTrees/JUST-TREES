@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.45";              // Just Trees
+const VERSION = "3.46";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -1094,6 +1094,9 @@ uniform float fogDensity;
 #else
 uniform float fogNear; uniform float fogFar;
 #endif
+#ifdef JT_TORCH
+uniform vec4 uTorch[4]; uniform vec3 uTorchCol;   // (3.46) up to four glows: where (xyz) and how bright (w)
+#endif
 uniform vec4 uHFog; uniform vec3 uHFogB; uniform vec3 uHFogCol; uniform vec3 uCamP; uniform vec2 uDream; uniform float uThG; uniform float uBBG; uniform float uMVG; uniform float uMVT; uniform float uHLG;   // our own camera position: three.js only sends cameraPosition to some materials
 float hfH(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float hfN(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -1106,6 +1109,10 @@ float fxRim(vec3 n, vec3 v, float d, vec3 w) {   // the glasses' outline: a thin
 #endif
 #endif`;
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+#ifdef JT_TORCH
+  { vec3 tl = vec3(0.0); for (int i = 0; i < 4; i++) { vec4 T = uTorch[i]; if (T.w > 0.001) { float d = length(vFogW - T.xyz); tl += vec3(T.w * (1.0 - smoothstep(1.5, 13.0, d)) / (1.0 + d * 0.22)); } }
+    gl_FragColor.rgb += diffuseColor.rgb * uTorchCol * tl; }   // a torch's warm glow: the surface's own colour, brighter near it, gone by 13 m (no rays, no shadows: cheap)
+#endif
   vec3 preFogC = gl_FragColor.rgb;
 #ifdef FOG_EXP2
   float fogFactor = 1.0 - exp(- fogDensity * fogDensity * vFogDepth * vFogDepth);
@@ -1238,7 +1245,11 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
 #endif`;
 const HFOG = { uCamP: { value: new THREE.Vector3() }, uHFog: { value: new THREE.Vector4(0, 10, 0, 0) }, uHFogB: { value: new THREE.Vector3() }, uHFogCol: { value: new THREE.Color(.7, .72, .74) }, uDream: { value: new THREE.Vector2() }, uThG: { value: 0 }, uBBG: { value: 0 }, uMVG: { value: 0 }, uMVT: { value: 0 }, uHLG: { value: 0 } };
 const addDream = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };   // materials that skip the ground fog still see the dream
-const addHF = sh => { sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };
+/* (3.46) torches and the headlamp: a glow added to every lit surface near them (fog_fragment, JT_TORCH), not real lights (those would
+   cost frames on everything). Slot 0 your torch, 1 your headlamp (a pool where you look), 2-3 the nearest other players' lights. */
+const TORCH = { u: { value: [new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4(), new THREE.Vector4()] }, col: { value: new THREE.Color(1.0, .58, .26) }, at: 0, obj: null, fl: 0 };
+const addTorch = sh => { if (sh.fragmentShader.indexOf("vec4 diffuseColor") >= 0 && sh.fragmentShader.indexOf("#define JT_TORCH") < 0) { sh.fragmentShader = "#define JT_TORCH\n" + sh.fragmentShader; sh.uniforms.uTorch = TORCH.u; sh.uniforms.uTorchCol = TORCH.col; } };
+const addHF = sh => { addTorch(sh); sh.uniforms.uCamP = HFOG.uCamP; sh.uniforms.uHFog = HFOG.uHFog; sh.uniforms.uHFogB = HFOG.uHFogB; sh.uniforms.uHFogCol = HFOG.uHFogCol; sh.uniforms.uDream = HFOG.uDream; sh.uniforms.uThG = HFOG.uThG; sh.uniforms.uBBG = HFOG.uBBG; sh.uniforms.uMVG = HFOG.uMVG; sh.uniforms.uMVT = HFOG.uMVT; sh.uniforms.uHLG = HFOG.uHLG; };
 THREE.Material.prototype.onBeforeCompile = function (sh) { addHF(sh); };
 /* (3.41) leaf edges in a headset. The leaves were cut out pixel by pixel (in or out), so at full sharpness their edges flickered as you moved.
    three.js r149 also threw away the "how much" for solid materials, so the headset's edge smoothing never saw it. Now the cut-out edge is
@@ -3880,7 +3891,7 @@ function enAnimSpot(kind, x, z) {                             // somewhere this 
   if (kind === "goat" || kind === "bighorn") return H(x, z) > water + ENDLESS.envL[enDom(x, z).b].span * .45;
   return true;
 }
-const geoDinoAt = (x, z) => !!(GLOBE && GLOBE.isle && glArc(glToSphere(x, z, [0, 0, 0]), GLOBE.isle.c) < GLOBE.isle.r + .01);   // the dinosaur island
+const geoDinoAt = (x, z) => !!(GLOBE && GLOBE.isle && GLOBE.isleArc(glToSphere(x, z, [0, 0, 0])) < GLOBE.isle.r + .01);   // the dinosaur island
 function enAnimPick(b, R, birds, dino) {                            // one kind from this environment's list, the commoner ones more often
   const list = (DINO.on && !DINO.isle && gameMode === "hunt" ? DINO_NATIVE : dino ? DINO_NATIVE.filter(e => e[0] !== "trex") : NATIVE[b] || NATIVE.temperate).filter(([k]) => !LEGEND[k] && k !== "monkey" && !!FLY[k] === birds);
   let tot = 0; for (const [k, n] of list) tot += k === "rabbit" ? Math.min(n, 6) : n; let u = R() * tot;
@@ -4515,6 +4526,18 @@ function globeSetup(E, rnd) {
   G.basins = basins;
   // in the large ocean, on the equator: the biggest island in the game (3–4 km across), with its own landform, and dinosaurs
   if (basins[0]) { const ll = glLatLon(basins[0].c); G.isle = { c: glFromLL(0, ll[1]), r: (1500 + r0() * 500) / R }; }
+  /* (3.46) the island's outline, made the way the Island maps make theirs: its reach from the middle swells and shrinks round the compass
+     (six waves laid over each other, pushed further than the Island maps': 62% to 128% of its size, plus two deep bays), so it has
+     headlands and coves instead of being a circle. About the same size overall.
+     G.isleArc(p): how far p is from the middle, measured against the outline (so "< I.r" is "on the island" everywhere). */
+  if (G.isle) { const I = G.isle, fr = glFrame(I.c), Rk = mulberry32(seed * 613 + 17), k = [];
+    for (let i = 0; i < 7; i++) k.push([Rk() * 6.283, (.5 + Rk() * .5) / (i + 1.3)]);
+    const bays = [[Rk() * 6.283, .18 + Rk() * .12], [Rk() * 6.283, .14 + Rk() * .1]];   // (where, how deep)
+    const raw = a => { let v = 0; for (let i = 0; i < 7; i++) v += Math.sin(a * (i + 1) + k[i][0]) * k[i][1];
+      for (const [ba, bd] of bays) { let d = Math.abs(a - ba) % 6.283; if (d > Math.PI) d = 6.283 - d; v -= bd * 3 * Math.exp(-d * d * 60); } return v; };
+    let lo = 1e9, hi = -1e9; for (let i = 0; i < 720; i++) { const v = raw(i / 720 * 6.283); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    I.k = a => .62 + .66 * (raw(a) - lo) / (hi - lo || 1);
+    G.isleArc = p => glArc(p, I.c) / I.k(Math.atan2(glDot(p, fr.N), glDot(p, fr.E))); }
   const contS = (p, X, Y, Z) => {                              // > 0 land, < 0 sea (unit p; X, Y, Z the same point in metres)
     let s = .3 + f3(nc, X, Y, Z, 1 / 9000, 4) * 1.15, oc = 0, big = 0;
     const wob = f3(nCoast, X, Y, Z, 1 / 2600, 3) * .13 + n3(nCoast, X, Y, Z, 1 / 700, 5) * .025;   // (ragged shores, not circles)
@@ -4527,7 +4550,7 @@ function globeSetup(E, rnd) {
       big = Math.max(big, smooth(B.ba, B.ba * .3, glArc(p, B.bc) + n3(nBig, X, Y, Z, 1 / 900) * .02)); }
     if (oc > 0) { let ch = 1 - Math.abs(f3(nI, X, Y, Z, 1 / 1700, 2)); ch = ch * ch * ch * ch * ch; const bl = smooth(-.05, .45, f3(nB, X, Y, Z, 1 / 520, 2));
       s += oc * (-1.5 + ch * bl * 2.1 + big * 2.2); }
-    if (G.isle) { const I = G.isle, dI = glArc(p, I.c) + wob * .35;   // (the big island, open sea all round it)
+    if (G.isle) { const I = G.isle, dI = G.isleArc(p) + wob * .6;   // (the big island, open sea all round it)
       if (dI < I.r + .2) { const land = smooth(I.r + .01, I.r - .035, dI), sea = smooth(I.r + .2, I.r + .05, dI) * (1 - land); s = lerp(s, Math.min(s, -.9), sea); s = lerp(s, Math.max(s, .6), land); } }
     return s;
   };
@@ -4570,7 +4593,7 @@ function globeSetup(E, rnd) {
     cand.sort((a, b) => b[0] - a[0]); const n = Math.min(3, cand.length); let tot = 0;
     for (let q = 0; q < n; q++) tot += cand[q][0];
     for (let q = 0; q < n; q++) { EN_RL[q].reg = reg(cand[q][1], cand[q][2]); EN_RL[q].w = cand[q][0] / tot; }
-    if (G.isle && glArc(p, G.isle.c) < G.isle.r + .05) for (let q = 0; q < n; q++) EN_RL[q].reg = isleReg(EN_RL[q].reg);   // (the dinosaur island's storm)
+    if (G.isle && G.isleArc(p) < G.isle.r + .05) for (let q = 0; q < n; q++) EN_RL[q].reg = isleReg(EN_RL[q].reg);   // (the dinosaur island's storm)
     return n;
   };
   const roughAt = (X, Y, Z) => Math.max(0, Math.min(1, set.rough + f3(nR, X, Y, Z, 1 / 5000, 2) * .9));
@@ -4637,7 +4660,7 @@ function globeSetup(E, rnd) {
     const I = G.isle, f = glFrame(I.c), q = [0, 0, 0], inv = (u, v) => glNorm([I.c[0] + (f.E[0] * u + f.N[0] * v) / R, I.c[1] + (f.E[1] * u + f.N[1] * v) / R, I.c[2] + (f.E[2] * u + f.N[2] * v) / R]);
     const Rf = mulberry32(seed * 977 + 31), kH = HALF, kE = EDGE; HALF = 1500; EDGE = 1e9;
     let F = null; try { F = makeFeature(Rf, (u, v) => landAt(inv(u, v)), water); } catch (_) { F = null; } finally { HALF = kH; EDGE = kE; }
-    I.feat = F; const cosL = Math.cos(I.r + .05);
+    I.feat = F; const cosL = Math.cos(I.r * 1.3 + .05);   // (the outline reaches out to 128%)
     if (F) E.hW = (x, z) => { const pp = glToSphere(x, z, sp), h = landAt(pp), d = glDot(pp, I.c); if (d < cosL) return h; q[0] = pp[0]; q[1] = pp[1]; q[2] = pp[2];
       const u = R * glDot(q, f.E) / d, v = R * glDot(q, f.N) / d; return F.apply(u, v, h); };
   }
@@ -4650,7 +4673,7 @@ function globeStart(sv) {
   const dry = p => { const s = G.contS(p, p[0] * R, p[1] * R, p[2] * R); return s > .12 && G.landAt(p) > 1.5; };
   let p = sv && isFinite(sv.lat) && isFinite(sv.lon) ? glFromLL(sv.lat, sv.lon) : null;
   if (p && !dry(p)) p = null;
-  const own = !geoMode(), L0 = Math.max(-75, Math.min(75, set.lat * set.hemi)), offIsle = q => !G.isle || glArc(q, G.isle.c) > G.isle.r + 800 / R;   // (the open-world modes start at your latitude)
+  const own = !geoMode(), L0 = Math.max(-75, Math.min(75, set.lat * set.hemi)), offIsle = q => !G.isle || G.isleArc(q) > G.isle.r + 800 / R;   // (the open-world modes start at your latitude)
   for (let t = 0; t < 3000 && !p; t++) { const q = own ? glFromLL(Math.max(-80, Math.min(80, L0 + (rr() - .5) * (t < 1500 ? 10 : t < 2500 ? 24 : 60))), rr() * 360 - 180) : glFromLL((t < 1500 ? 38 + rr() * 12 : (rr() * 2 - 1) * 60) * (t < 2500 || rr() < .5 ? 1 : -1), rr() * 360 - 180); if (dry(q) && (!own || offIsle(q))) p = q; }
   p = p || glFromLL(45, 0);
   const f = glFrame(p); G.c = p; G.e = f.E; G.n = [-f.N[0], -f.N[1], -f.N[2]]; G.ox = 0; G.oz = 0;     // flat -z = north at the start
@@ -4818,7 +4841,7 @@ function geoTarget() {                                         // the next cache
     const f = glFrame(G.p), rr = mulberry32(enHash(seed * 5 + 3, lv, best.id));
     for (let t = 0; t < 80; t++) { const a = rr() * 6.283, d = want * (.85 + rr() * .3), k = Math.tan(d);
       const q = glNorm([G.p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * k, G.p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * k, G.p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * k]);
-      if (G.landAt(q) > 1.5 && !(G.isle && glArc(q, G.isle.c) < G.isle.r + .05)) { best.p = q; const ll = glLatLon(q); best.lat = ll[0]; best.lon = ll[1]; best.chk = false; best.ok = false; break; } }
+      if (G.landAt(q) > 1.5 && !(G.isle && G.isleArc(q) < G.isle.r + .05)) { best.p = q; const ll = glLatLon(q); best.lat = ll[0]; best.lon = ll[1]; best.chk = false; best.ok = false; break; } }
     best.placed = true; }
   if (!best) for (const c of isle) { const d = glArc(G.p, c.p); if (d < bd) { bd = d; best = c; } }
   GEO.target = best;
@@ -4989,7 +5012,7 @@ const GI_LIST = [
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
   ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "In your other hand: hold its trigger, swing and let go to cast; grip the reel handle and turn it to reel; strike when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
-  ["pack2", "Big backpack", "20 slots", 0], ["headlamp", "Headlamp", "A light for your head (not working yet)", 0], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
+  ["pack2", "Big backpack", "20 slots", 0], ["headlamp", "Headlamp", "Put it on: a pool of warm light wherever you look", 1], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
@@ -4998,6 +5021,7 @@ const GI_LIST = [
   ["dirtbike", "Dirt bike", "Take it out on dry land and climb on: rides anywhere, jumps off crests, pull the bars up to hop", 1],   // (3.43: the land vehicles, Dev only for now)
   ["snowmobile", "Snowmobile", "Take it out and climb on: fast on snow and ice, slow anywhere else", 1],
   ["buggy", "Dune buggy", "Take it out on dry land and climb on: steady, quick on sand", 1],
+  ["torch", "Torch", "Light it and carry it in your other hand: a warm glow round you, for nights, caves and the dinosaur island", 1],   // (3.46: everyone has one)
   
 ];
 const GI = {}; GI_LIST.forEach(([k, name, desc, use], i) => { GI[k] = { k, name, desc, use: !!use, n: i + 1 }; });
@@ -5013,6 +5037,7 @@ function geoRewardOf(n) {                                     // what the nth fi
 const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "hlglass", "fglass"];   // levels 51-55 (3.32: the golden hour glasses are gone)
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
   const own = {}, items = new Set(); if (GEO.full || GEO.lab) for (const k of GLASSES) items.add(k);   // (Dev: Full level and the Test Lab have the glasses)
+  items.add("torch");                                          // (3.46: everyone starts with a torch)
   if (DEV.ok || GEO.full || GEO.lab || n >= GEO_N) for (const k of LV_KINDS) items.add(k);   // (3.44: the land vehicles come with the jet ski at cache #50; Dev and the labs have them anyway)
   for (let i = 1; i <= n; i++) { const r = geoRewardOf(i); if (r.gun) own[r.gun] = Math.max(own[r.gun] || 0, r.star); if (r.item) items.add(r.item); }
   return { own, items };
@@ -5067,6 +5092,10 @@ function giModel(k) {                                         // (about hand siz
     case "pouch1": case "pouch2": { const s = k === "pouch2" ? 1.25 : 1; P(giBox(.16 * s, .1 * s, .05), 0x4a5a32, 0, 0, 0); for (let i = 0; i < (k === "pouch2" ? 4 : 3); i++) P(giBall(.022, 8), 0x3a4a2a, -.05 * s + i * .035 * s, .07 * s, 0); break; }
     case "wings": case "wings2": { const s = k === "wings2" ? 1.35 : 1, c = k === "wings2" ? 0xf2f2f2 : 0x3a8ad0; for (const sd of [-1, 1]) { const m = P(giBox(.3 * s, .004, .12 * s), c, sd * .16 * s, 0, 0, 0, 0, sd * .15); } P(giBox(.04, .03, .14), 0x2a2a2a, 0, 0, 0); break; }
     case "machete": P(giBox(.045, .006, .34), 0xc8ccd0, 0, 0, -.17); P(giBox(.03, .02, .11), 0x2a1a10, 0, 0, .05); break;
+    case "torch": { P(giCyl(.016, .013, .42, 8), 0x6a4a2a, 0, -.12, 0); P(giCyl(.03, .024, .09, 10), 0x2a2018, 0, .1, 0);   // a stick, a wrapped head
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(.045, .16, 10), new THREE.MeshBasicMaterial({ color: 0xffa040, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      fl.position.y = .21; g.add(fl); const f2 = new THREE.Mesh(new THREE.ConeGeometry(.025, .1, 8), new THREE.MeshBasicMaterial({ color: 0xfff0a0, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      f2.position.y = .19; g.add(f2); g.userData.flame = [fl, f2]; break; }
     case "headlamp": P(giCyl(.065, .065, .02, 18, 1), 0x222222, 0, 0, 0); P(giBox(.04, .03, .02), 0x3a3a3a, 0, 0, -.07); P(giCyl(.012, .012, .006, 12), 0xfff6c0, 0, 0, -.081, Math.PI / 2); break;
     case "thermos": P(giCyl(.03, .03, .2, 14), 0x2a6a4a, 0, 0, 0); P(giCyl(.032, .032, .04, 14), 0x999999, 0, .12, 0); break;
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
@@ -5427,10 +5456,25 @@ function geoSprayTick(dt) {
     pa.needsUpdate = ca.needsUpdate = true; if (S.t > 1.4) { scene.remove(S.pts); S.pts.geometry.dispose(); S.pts.material.dispose(); GEO.sprays.splice(i, 1); } }
 }
 // worn things: the headlamp and the night-vision goggles
+function torchTick(I) {                                         // (3.46) your torch in your other hand, your headlamp, and the others' lights
+  const U = TORCH.u.value, t = performance.now() / 1000; TORCH.at = performance.now();
+  for (const v of U) v.w = 0;
+  const offN = set.hand === "right" ? "left" : "right", oh = I.hands && I.hands[offN], tOn = GEO.worn.has("torch") && !GEO.sleep && !!oh;
+  if (tOn) { if (!TORCH.obj) { TORCH.obj = giModel("torch"); scene.add(TORCH.obj); }
+    const o = TORCH.obj; o.visible = true; o.position.copy(oh.pos); o.quaternion.copy(oh.rayQ).multiply(_q1.setFromAxisAngle(_v2.set(1, 0, 0), -1.1)); o.updateMatrixWorld(true);
+    const fk = .82 + .1 * Math.sin(t * 17) + .08 * Math.sin(t * 29.3 + 1.7);
+    for (const f of o.userData.flame) f.scale.set(1, fk * (1.05 + .1 * Math.sin(t * 23)), 1);
+    const tip = o.localToWorld(_v1.set(0, .24, 0)); U[0].set(tip.x, tip.y, tip.z, 1.5 * fk);
+    if ((TORCH.crackT = (TORCH.crackT || 0) - 1 / 60) <= 0) { TORCH.crackT = .4 + Math.random() * 1.2; gunFoley([[0, 1800 + Math.random() * 1500, .03, .015]]); }
+  } else if (TORCH.obj) TORCH.obj.visible = false;
+  if (GEO.worn.has("headlamp") && !GEO.sleep) { const f = _v1.set(0, 0, -1).applyQuaternion(I.headQ); U[1].set(I.head.x + f.x * 4.5, I.head.y + f.y * 4.5 - .5, I.head.z + f.z * 4.5, 1.2); }
+  let k = 2; const near = [];
+  for (const L of mpOpen()) if (L.tc && L.R && L.R.cur && L.R.alive) { const h = L.R.head, d = Math.hypot(h.x - P.x, h.z - P.z); if (d < 120) near.push([d, h, L.tc]); }
+  near.sort((a, b) => a[0] - b[0]); for (const [d, h, tc] of near) { if (k > 3) break; U[k++].set(h.x, h.y - .35, h.z, (tc & 1 ? 1.4 : 0) + (tc & 2 ? .8 : 0)); }
+}
+function torchStale() { if (performance.now() - TORCH.at > 250) { for (const v of TORCH.u.value) v.w = 0; if (TORCH.obj) TORCH.obj.visible = false; } }   // (not in a game with a pack: no glows)
 function geoWornTick(I) {
-  const lamp = false;                                              // the headlamp is a placeholder for now: never on (it came on by itself in the dark)
-  if (lamp) { const L = GEO.lampHold || (GEO.lampHold = new THREE.Object3D()); L.position.copy(I.head); L.quaternion.copy(I.headQ); L.updateMatrixWorld(); GEO.lampFx = GEO.lampFx || toolFxMake(); toolFxShow(GEO.lampFx, 1, L, [0, .06, -.08], false); }
-  else toolFxHide(GEO.lampFx);
+  torchTick(I); toolFxHide(GEO.lampFx);
   const nv = GEO.worn.has("nvg"); GEO.nvK += ((nv ? 1 : 0) - GEO.nvK) * .2;
   if (!GEO.nvM) { GEO.nvM = new THREE.Mesh(new THREE.SphereGeometry(.25, 16, 10), new THREE.MeshBasicMaterial({ color: 0x66ff77, side: THREE.BackSide, transparent: true, depthTest: false, depthWrite: false, fog: false, blending: THREE.MultiplyBlending, premultipliedAlpha: true })); GEO.nvM.renderOrder = 1000; GEO.nvM.frustumCulled = false; scene.add(GEO.nvM); }
   GEO.nvM.visible = GEO.nvK > .02; GEO.nvM.position.copy(I.head);
@@ -5540,6 +5584,7 @@ function geoPackTick(I, main, off, dt) {
     const k = L[sel]; if (!k) return;
     if (k === "jetski") { if (jetTakeOut()) { GEO.packOpen = false; m.visible = false; } return; }   // (it isn't held: it appears in the sea)
     if (LV_KINDS.includes(k)) { if (lvTakeOut(k)) { GEO.packOpen = false; m.visible = false; } return; }   // (nor these: on the ground in front of you)
+    if (k === "torch" || k === "headlamp") { const on = !GEO.worn.has(k); if (on) GEO.worn.add(k); else GEO.worn.delete(k); GEO.packOpen = false; m.visible = false; gunFoley(on && k === "torch" ? [[0, 900, .3, .1], [.05, 300, .4, .12]] : SFX.swap); if (on) vrBanner(k === "torch" ? "Torch lit: it's in your other hand" : "Headlamp on", 2, 1); return; }   // (3.46: lit / put away, like the glasses)
     if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "hlglass" || k === "fglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "hlglass", "fglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
   }
@@ -6512,7 +6557,7 @@ function geoIsland() {                                               // one big 
   const G = GLOBE, R = G.R, rr = mulberry32(seed * 2027 + 9), land = p => G.landAt(p) > 1.5;
   const at = (p, d, a) => { const f = glFrame(p), k = Math.tan(d / R); return glNorm([p[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * k, p[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * k, p[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * k]); };
   let best = null, bs = 0;
-  for (let t = 0; t < 1400; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .8 || !land(p) || (G.isle && glArc(p, G.isle.c) < G.isle.r + .3)) continue;
+  for (let t = 0; t < 1400; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]); if (Math.abs(p[1]) > .8 || !land(p) || (G.isle && G.isleArc(p) < G.isle.r + .3)) continue;
     let enc = 0, ext = 0; for (let d = 150; d <= 1500; d += 150) { let n = 0; for (let q = 0; q < 10; q++) if (land(at(p, d, q / 10 * 6.283))) n++; if (n >= 5) ext = d; if (n === 0) { enc = d; break; } }
     if (enc && ext >= 300 && ext > bs) { bs = ext; best = p; } }
   if (!best) best = geoRandomSpot();
@@ -7392,7 +7437,7 @@ function geoHurtTick(dt) {                                    // the red flash w
 // dying (or drowning): you wake somewhere random on the planet
 function geoRandomSpot() {
   const G = GLOBE, R = G.R;
-  for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (t < 3000 && G.p && glArc(p, G.p) * R < 4000) continue; if (G.isle && glArc(p, G.isle.c) < G.isle.r + 600 / R) continue;   /* (not onto the dinosaur island) */ if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }   // (at least 4 km away)
+  for (let t = 0; t < 4000; t++) { const p = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(p[1]) > .97) continue; if (t < 3000 && G.p && glArc(p, G.p) * R < 4000) continue; if (G.isle && G.isleArc(p) < G.isle.r + 600 / R) continue;   /* (not onto the dinosaur island) */ if (G.contS(p, p[0] * R, p[1] * R, p[2] * R) > .12 && G.landAt(p) > 1.5) return p; }   // (at least 4 km away)
   return G.p.slice();
 }
 function geoTeleport(p, Fr) {                                     // the land round you, built fresh at another spot on the planet (behind the dark)
@@ -17090,7 +17135,7 @@ const _cmpMarkGeo = new THREE.OctahedronGeometry(.11, 0);
 const BEAM = [[0, 1], [1800, 5000], [3000, 300], [3600, 40]];   // (seconds, zone radius in metres; the first is the whole planet)
 function compBeamPick() {                                       // somewhere dry, the further from everyone the better
   const G = GLOBE, me = G.p; let best = null, bs = -1;
-  for (let t = 0; t < 600; t++) { const q = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(q[1]) > .9 || G.landAt(q) < 1.5 || (G.isle && glArc(q, G.isle.c) < G.isle.r + .05)) continue;
+  for (let t = 0; t < 600; t++) { const q = glNorm([Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1]); if (Math.abs(q[1]) > .9 || G.landAt(q) < 1.5 || (G.isle && G.isleArc(q) < G.isle.r + .05)) continue;
     const sc = glArc(q, me) + Math.random() * .6; if (sc > bs) { bs = sc; best = q; } }
   return best || geoRandomSpot();
 }
@@ -17266,7 +17311,7 @@ function mpRecv(o, L) {
   if (o.t === "s" && ENDLESS && !GLOBE && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
   if (o.t === "fj") { fishJumpSee(o); return; }
-  if (o.t === "s") { L.js = Array.isArray(o.js) ? o.js : null; L.lv = Array.isArray(o.lv) && o.lv.every(v => typeof v === "number" && isFinite(v)) ? o.lv : null; L.cl = o.cl | 0; L.cbw = !!o.cbw; L.co = !!o.co; L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.tc = (o.tc | 0) & 3; L.js = Array.isArray(o.js) ? o.js : null; L.lv = Array.isArray(o.lv) && o.lv.every(v => typeof v === "number" && isFinite(v)) ? o.lv : null; L.cl = o.cl | 0; L.cbw = !!o.cbw; L.co = !!o.co; L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (or the host's bot)
   if (o.t === "die") { if (Array.isArray(o.dd) && o.dd.length === 4) dropDead(String(o.dd[0]), +o.dd[1], +o.dd[2], +o.dd[3]); if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
@@ -18622,7 +18667,7 @@ function mpTick(dt) {                                       // (also runs offlin
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // asleep, the others see your body in the hammock (not where your spirit is)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: SB ? SB.h : pose7(I.head, I.headQ), l: SB ? SB.l : Lh ? pose7(Lh.pos, Lh.q) : null, r: SB ? SB.r : Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0 && !COMP.out, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), js: JET.ride && JET.ride.J.obj ? pose7(JET.ride.J.obj.position, JET.ride.J.obj.quaternion) : undefined, lv: LV.ride && LV.ride.V.obj ? [LV_KINDS.indexOf(LV.ride.V.kind)].concat(pose7(LV.ride.V.obj.position, LV.ride.V.obj.quaternion)) : undefined, cl: COMP.on ? COMP.lv : undefined, cbw: compBW() ? 1 : undefined, co: COMP.out ? 1 : undefined, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), js: JET.ride && JET.ride.J.obj ? pose7(JET.ride.J.obj.position, JET.ride.J.obj.quaternion) : undefined, tc: GEO.on ? (GEO.worn.has("torch") ? 1 : 0) | (GEO.worn.has("headlamp") ? 2 : 0) || undefined : undefined, lv: LV.ride && LV.ride.V.obj ? [LV_KINDS.indexOf(LV.ride.V.kind)].concat(pose7(LV.ride.V.obj.position, LV.ride.V.obj.quaternion)) : undefined, cl: COMP.on ? COMP.lv : undefined, cbw: compBW() ? 1 : undefined, co: COMP.out ? 1 : undefined, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);
@@ -19368,7 +19413,7 @@ function loop(now) {
     { const pl0 = pf0 ? perfT() : 0; if (world) { if (!UNDER.on) { if (ENDLESS) endlessTick(dt); cullTiles(); } updateGun(dt); } if (pf0) perfAdd("land", perfT() - pl0); }
     if (vr.on && TOOL.sightM) toolPrep();                  // the SMG's thermal mini-sight
     if (DEV.ok) perfApply();
-    statuesBefore(); skyPaintTick();
+    statuesBefore(); skyPaintTick(); torchStale();
     const pr0 = pf0 ? perfT() : 0;
     if (vr.on && state === "play" && (vr.scoped || vr.binos) && renderer.xr.isPresenting) vrZoomRender(); else renderer.render(scene, camera);
     statuesAfter(); skyPaintAfter();
