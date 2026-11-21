@@ -20,7 +20,7 @@ What the game is, where everything lives, how to build and test it, the design d
 
 ---
 
-## 2. The game now (v3.46)
+## 2. The game now (v3.47)
 
 ### Modes
 - **Hiking** (no guns, no fog; **in a headset, solo or online, the map is Island = the 3 km XXXL island, or Endless** — 2.19, `set.hikeMap`, `HIKEMAP`; PC/phone hiking keeps the normal sizes), **Hunting** (animals; VR has loot guns, bow, grenades; Prehistoric switch = dinosaurs), **PvP** (VR: solo against bots, or online with bots filling the room; PC/phone have the old bots version, on hold). **Online works in every mode** (2.00).
@@ -177,6 +177,12 @@ What the game is, where everything lives, how to build and test it, the design d
 - **Online**: the "s" update carries `tc` (1 torch, 2 headlamp); others glow at your head.
 - **Island outline** (`G.isleArc`, `I.k`): made like the Island maps' outline (seven waves round the compass) but pushed further (62%–128% of the radius) plus two deep bays, so it has headlands and coves. Every "on the island" check uses `G.isleArc(p) < I.r` (contS, regions/storm, `geoDinoAt`, caches, start spots). The landform's reach (`cosL`) covers 130%.
 - Test: `dev/test_346.py`. `test_272` / `test_279` count the torch.
+
+### 3.47 The Trail guide
+- **Pause menu → "Trail guide"** (Treeocashing only, not Competitive; the button says how many pages are new). Panel `"guide"` (`guidePanel`, stage `"guide"` is in-world like pause): a list on the left (9 a page), the page on the right, Back / Resume.
+- **Pages** (`guidePages()`): 4 basics (`GUIDE_BASICS`: Treeocashing, map, backpack, food and water); a page per gun you own (`GUIDE_GUN`, stars in the title); a page per item you have (`GUIDE_MORE` text where written, else the item's pack line); "Dinosaur island" from level 50; then the next 3 levels' rewards shown locked ("find N more caches"). Seen pages are kept in localStorage `jt-guide-seen`.
+- The pause menu's buttons now squeeze to fit the panel (8+ buttons ran off the bottom).
+- Test: `dev/test_347.py`.
 
 ## 3. How to build and test
 
@@ -354,6 +360,7 @@ What the game is, where everything lives, how to build and test it, the design d
 - **3.44** Dirt bike, snowmobile and dune buggy live: they come with the jet ski at level 50; the big pack holds 20.
 - **3.45** Dinosaur island: always a dark thunderstorm, full of dinosaurs (T. rex and pteranodons too), raptors hunt you while you're on it.
 - **3.46** Torch (everyone has one) and a working headlamp: a warm glow round you, no real lights; others see your light. The dinosaur island has a real coastline (bays, headlands) instead of a circle.
+- **3.47** Trail guide in the pause menu: a page for each thing you've found, growing as you level up, the next few locked.
 - **2.86** **Rule from Ron: new Treeocashing features go into ONLINE Treeocashing (Dev) first** (`geoNet()`), solo public Treeocashing stays as is. Online, the tent (#14) is a **hammock** (`giNm`/`giDesc`, rolled model): hold it, trigger at a trunk (`hamTrunk`: an obstacle with a trunk radius `tr`, hand 0.2–2.6 m up), then a second trunk 3–5 m away (`HAMMOCK`) → `hamMesh` (sagging cloth, ropes, rings). Trigger at it at night (21:00–05:00, `sleepNight`) → `sleepStart`; hold 1.2 s to pack it. **Sleep:** `GEO.sleep` phases settle (fade, lie at the hammock looking up, no forced view tilt for comfort) → blink ×3 → dark → rise (3.2 m out of the body) → ghost. While asleep P stays at the body (AI, chunks, globe, network all use it); your view is `GEO.sleep.view` (`vrTick`/`vrAfterMove` use it), `update` → `sleepMove` (left stick flies where you look 32 m/s, right stick up/down, ≤1.2 km from the body, ≥0.8 m above ground, ≤400 m up). Ghost look: `GEO.ghostK` → desaturated blue grading, fog, stars, brighter exposure at night, a blue multiply sphere, drifting sparkles; hint "B: wake up …". Others see your body at the hammock (`sleepBody` in the "s" message). `sleepTick` checks 4×/s: a hit → wake at once; a predator ≤70 m or any animal ≤12 m or a player ≤60 m → warn (heartbeat, red pulse, 1.4 s) → yanked back, standing beside the hammock. B wakes any time; daylight wakes you. Guns, marks, the pack, fruit etc. are off while asleep; health +0.6/s (test_286).
 - **2.85** Sunset/sunrise no longer snap to blue: `setLighting` used to switch from sun to moon in one frame at sun −4° (sun light colour/direction/intensity, hemisphere fill, leaf glow, soft shadows, the water's highlight) and to switch the plum dusk tint at +2°. Now `sw = smooth(-9, -1, el)` crossfades every one of them (directions blended and normalised), and the dusk tint fades with `smooth(4, 0, el)`. Biggest one-minute change across dusk: 0.85 → 0.026.
 - **2.84** **Gun Lab** (Dev menu; the Dev menu rearranged: Workshop on top, Map Lab · Gear Lab, Gun Lab · Online Treeocashing): a hunting island (medium, sparse trees, gentle, no dinosaurs; your old map settings come back after) with every gun at the chosen stars. `gunLabRange` picks the clearest of 32 directions from where you stand and puts dummies at ~10/25/50/100/200/400 m, each a little to the side (none in front of another) on dry ground, with a yellow pole and a label (distance, shield/health bars, last hit, then "N hits (h head) · t s" when it drops; back up after 2.5 s). Bullets: `gunLabHit` (head sphere .14 at 1.62 m, body cylinder .25) in `bulletStep`, damage via `shotDmg` (so the sniper's distance rule and head × count). Y → "Gun Lab tools" (`gunlab` panel): per gun damage, fire rate (shots a minute), magazine, bullet speed, reach, recoil ×, head shot ×, size ×, auto/semi; stars 1–5; shield on/off; standing/strafing; re-lay the range; reset gun/all. Tweaks saved in "jt-guntune" and only applied inside the Gun Lab (`gunLabApply`; `generate` restores the game's numbers). New gun fields used everywhere with defaults: `W.recoil` (×1), `W.head` (2), `W.size` (1) (test_284).

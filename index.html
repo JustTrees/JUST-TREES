@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.46";              // Just Trees
+const VERSION = "3.47";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -13006,7 +13006,7 @@ function vruiParts() {
   uiBtn(Ov, 90, 680, 590, 110, "New map", () => startNew(), { primary: true, fs: 44, hide: () => mpGuest() });
   uiBtn(Ov, 720, 680, 590, 110, "Settings", () => vruiSettings(), { fs: 40, hide: () => mpGuest() });
   uiBtn(Ov, 90, 810, 380, 70, "Leave", () => vruiOpen("mode"), { fs: 34 });
-  mpLobbyPanels(); homePanels();
+  mpLobbyPanels(); homePanels(); guidePanel();
   // ---- (Dev) the speed check: switch things off and back on, then look at the numbers on your wrist ----
   const Pf = uiPanel("perf", 1300, 1240, 1.9, 58, 1.4);
   Pf.paint = (g, P) => { uiBg(g, P, "SPEED CHECK"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim;
@@ -13030,6 +13030,8 @@ function vruiParts() {
   Pa.paint = (g, P) => { uiBg(g, P, "Paused"); g.textAlign = "center"; g.font = "28px sans-serif"; g.fillStyle = UIC.dim; uiWrap(g, gameMode === "hunt" ? $("huntStats").textContent : mapSummary()[0], 550, 140, 1000, 34);
     if (state === "play") { g.font = "bold 28px sans-serif"; g.fillStyle = UIC.sun; g.fillText("The game keeps going for everyone while this is open", 550, 184); } };   // online, only you stop
   [["Resume", () => vruiResume(), { primary: true, personal: true }],
+   ["Trail guide", () => { GUIDE.sel = 0; GUIDE.pg = 0; const L = guidePages(), i = L.findIndex(p => !p.lock && !GUIDE.seen.has(p.k)); if (i >= 0) { GUIDE.sel = i; GUIDE.pg = Math.floor(i / 9); } vruiOpen("guide"); },
+     { personal: true, hide: () => !GEO.on || set.comp, labelFn: () => { const n = guideNew(); return "Trail guide" + (n ? " · " + n + " new" : ""); } }],   // (3.47)
    ["Back to Map Lab", () => { LAB.testing = false; vruiOpen("lab"); }, { personal: true, hide: () => !LAB.testing }],
    ["Hand over the host", () => vruiOpen("ghost"), { personal: true, hide: () => !(MP.host && set.geoNet && mpOpen().length) }],
    ["Test Lab: guns", () => vruiOpen("gunlab"), { personal: true, hide: () => !GUNLAB.on || GEO.lab }],
@@ -13056,6 +13058,73 @@ function lookSet(ch) {                                          // change your l
   mpSendMe();
 }
 function fitText(g, t, w) { t = String(t || ""); if (g.measureText(t).width <= w) return t; while (t.length > 1 && g.measureText(t + "…").width > w) t = t.slice(0, -1); return t + "…"; }
+/* ---- (3.47) the Trail guide: a book in the pause menu (Treeocashing) that grows as you level up. A page for the basics, then one for each
+   gun and piece of gear the moment you have it, and the next few levels' pages shown locked. Pages you haven't opened yet are marked new. ---- */
+const GUIDE_GUN = {
+  pistol: ["Pistol", "Your first gun. Quick, light, good up close. Its tool is a laser: tap X to switch tools. Each new star (from more caches) makes it hit harder and hold more."],
+  smg: ["SMG", "Lots of shots, fast. Its tool is a little thermal sight: warm animals and people glow in it. Stars make it stronger."],
+  bow: ["Bow", "Silent: nothing hears it. Draw back with your other hand and let go. In Hunting its tool is flaming arrows. Stars make it stronger."],
+  ar: ["Assault rifle", "Strong and steady at any range. Its tool is a flashlight that everyone can see. Stars make it stronger."],
+  hunt: ["Sniper rifle", "For long shots: bring the scope up to your eye to zoom. With the thermal scope (later), X shows warm bodies through it. Stars make it stronger."],
+};
+const GUIDE_MORE = {                                            // a bit more than the pack's one line, where it helps
+  canteen: "Hold it upright under a lake or river to fill it (not the sea: it's salty). Tip it up at your mouth to drink. The water filter later makes every drink count double.",
+  campfire: "Point at the ground and pull the trigger to build it. Meat you cook at it heals twice as much. It also lights up the night.",
+  spray: "When an animal charges, point and pull the trigger: it turns and runs. You carry a few; they refill at caches.",
+  aid: "Pull the trigger: full health at once. It refills every time you find a cache.",
+  tent: "Point at a flat spot and pull the trigger to pitch it. Stand by it and pull the trigger to sleep till morning. Online it's a hammock: touch one tree, then another a few metres away.",
+  rod: "Hold its trigger, swing, and let go to cast. Grip the reel handle and turn it to reel. When something bites, jerk to strike. Big ocean fish jump: jerk while they're in the air to stun them.",
+  machete: "Swing it through bushes to chop them down. Bushes slow you; a path doesn't.",
+  headlamp: "Take it out of your pack to put it on: a pool of warm light wherever you look. Take it out again to switch it off.",
+  nvg: "See in the dark, everything in green. Take them out of your pack again to switch back.",
+  jetski: "Wade into the sea and take it out of your pack. Point at it and pull the trigger to climb on, grab both grips to start, trigger for throttle, turn the bars to steer. Hands off and point at a beach to hop off.",
+  dirtbike: "Take it out on dry land, point at it, trigger to climb on. Both grips start it, trigger is throttle, thumbstick back brakes and reverses. Pull the bars up hard to hop; crests send you flying.",
+  snowmobile: "Like the dirt bike, but it wants snow or ice: fast there, slow anywhere else.",
+  buggy: "Like the dirt bike, but you hold both sides of the wheel: right hand down turns right. Steady, quick on sand, not for steep hills.",
+  torch: "Take it out of your pack to light it: it goes in your other hand, so your gun hand stays free. Everything near you glows warm. Take it out again to put it out. Others see your light.",
+  fglass: "Wear them on your jet ski: you see the fish under the water. Cast at a shoal for a bite; the deep ones are the big ones.",
+};
+const GUIDE_BASICS = [
+  ["start", "Treeocashing", "Caches are hidden all over the planet. Find one and you level up, and every level gives you something: a gun, or a star that makes one better, on the odd levels; a piece of gear on the even ones. At level 50 you get your own jet ski (and the land vehicles with it). Each new thing gets a page in this guide."],
+  ["map", "Your map", "Pull the trigger on your other hand to hold up your map: it shows where the caches are. The compass and the satellite phone (later) make finding them easier."],
+  ["pack", "Your backpack", "Hold X to open it. Point at something and pull your gun hand's trigger to take it out; let go of X to close it. Hands free puts things away. It starts with 3 slots; bigger backpacks come later."],
+  ["food", "Food and water", "Hunger and thirst go down as you walk, faster when you run or it's cold. Drink at lakes and rivers (the sea is salty) and eat what you hunt. Cooked meat heals more."],
+];
+const GUIDE = { sel: 0, pg: 0, seen: new Set() };
+try { for (const k of JSON.parse(localStorage.getItem("jt-guide-seen") || "[]")) GUIDE.seen.add(String(k)); } catch (_) {}
+function guidePages() {                                          // the guide as it stands: what you have, then the next few levels locked
+  const n = GEO.found ? GEO.found.size : 0, out = GUIDE_BASICS.map(([k, t, x]) => ({ k: "b:" + k, t, x }));
+  const own = vr.own || {};
+  for (const g of GI_GUNS) if (own[g] > 0) { const [t, x] = GUIDE_GUN[g]; out.push({ k: "g:" + g, t: t + (own[g] > 1 ? "  " + "★".repeat(own[g]) : ""), x }); }
+  for (const [k] of GI_LIST) if (GEO.items && GEO.items.has(k)) out.push({ k: "i:" + k, t: giNm(k), x: GUIDE_MORE[k] || (giDesc(k) + (GI[k].use ? "." : ". You don't have to do anything: it just works.")) });
+  if (n >= GEO_N) out.push({ k: "b:isle", t: "Dinosaur island", x: "The big island in the open ocean on the equator. It's always a dark thunderstorm there, it's full of dinosaurs, and while you're on it raptors hunt you. Take a torch, and your jet ski to get there." });
+  let shown = 0; for (let m = n + 1; m <= GEO_N + GLASSES.length && shown < 3; m++) { const r = geoRewardOf(m); if (!r.gun && !r.item) continue;
+    if (r.gun && own[r.gun] >= r.star) continue; if (r.item && GEO.items && GEO.items.has(r.item)) continue;
+    out.push({ k: "l:" + m, t: "Level " + m, x: "Find " + (m - n) + " more cache" + (m - n === 1 ? "" : "s") + " to open this page: " + (r.gun ? (own[r.gun] ? "a better " + GUIDE_GUN[r.gun][0].toLowerCase() : "a new gun") : "new gear") + ".", lock: true }); shown++; }
+  return out;
+}
+const guideNew = () => guidePages().filter(p => !p.lock && !GUIDE.seen.has(p.k)).length;
+function guideSeen(p) { if (!p || p.lock || GUIDE.seen.has(p.k)) return; GUIDE.seen.add(p.k); try { localStorage.setItem("jt-guide-seen", JSON.stringify([...GUIDE.seen])); } catch (_) {} }
+function guidePanel() {
+  const Gp = uiPanel("guide", 1500, 1000, 2.0, 80, 1.42), PER = 9, RY = i => 130 + i * 84;
+  const pages = () => guidePages(), at = i => pages()[GUIDE.pg * PER + i], npg = () => Math.max(1, Math.ceil(pages().length / PER));
+  Gp.paint = (g, P) => {
+    uiBg(g, P, "TRAIL GUIDE"); const L = pages(); if (GUIDE.sel >= L.length) GUIDE.sel = 0; if (GUIDE.pg >= npg()) GUIDE.pg = npg() - 1;
+    const p = L[GUIDE.sel]; guideSeen(p);
+    g.fillStyle = "rgba(0,0,0,.18)"; uiRound(g, 640, 120, 810, 790, 22); g.fill();
+    if (p) { g.textAlign = "left"; g.textBaseline = "alphabetic"; g.font = "bold 58px sans-serif"; g.fillStyle = p.lock ? UIC.dim : UIC.sun; g.fillText(fitText(g, p.lock ? "🔒 " + p.t : p.t, 760), 680, 200);
+      g.font = "34px sans-serif"; g.fillStyle = p.lock ? UIC.dim : UIC.text; uiWrap(g, p.x, 680, 262, 740, 46); }
+    g.textAlign = "center"; g.font = "26px sans-serif"; g.fillStyle = UIC.dim; if (npg() > 1) g.fillText((GUIDE.pg + 1) + " / " + npg(), 340, 940);
+    g.fillText("Level " + (GEO.found ? GEO.found.size : 0) + " · the guide grows as you level up", 1045, 960);
+  };
+  for (let i = 0; i < PER; i++) uiBtn(Gp, 50, RY(i), 560, 76, "", () => { const q = at(i); if (!q) return; GUIDE.sel = GUIDE.pg * PER + i; uiDraw(Gp); },
+    { fs: 32, hide: () => !at(i), active: () => GUIDE.sel === GUIDE.pg * PER + i, paintColFn: () => { const q = at(i); return q && q.lock ? "rgba(255,255,255,.05)" : null; },
+      labelFn: () => { const q = at(i); return !q ? "" : q.lock ? "🔒 " + q.t : (GUIDE.seen.has(q.k) ? "" : "● ") + q.t.replace(/ +★+$/, ""); } });
+  uiBtn(Gp, 50, 902, 110, 60, "‹", () => { GUIDE.pg = Math.max(0, GUIDE.pg - 1); uiDraw(Gp); }, { fs: 40, hide: () => npg() < 2 });
+  uiBtn(Gp, 500, 902, 110, 60, "›", () => { GUIDE.pg = Math.min(npg() - 1, GUIDE.pg + 1); uiDraw(Gp); }, { fs: 40, hide: () => npg() < 2 });
+  uiBtn(Gp, 680, 838, 300, 60, "Back", () => vruiOpen("pause"), { fs: 32, personal: true });
+  uiBtn(Gp, 1110, 838, 300, 60, "Resume", () => vruiResume(), { fs: 32, primary: true, personal: true });
+}
 const vruiSettings = () => vruiOpen(MP.code ? "lobby" : "setup");      // online, the settings live in the lobby
 function personalUi(Pn, x, y, hide) {                          // your own settings (Hand, Turn, Fling): never locked, never sent to anyone
   uiBtn(Pn, x, y + 18, 140, 62, "Right", () => { set.hand = "right"; }, { active: () => set.hand === "right", personal: true, hide });
@@ -14082,7 +14151,7 @@ function arenasPanel() {
 }
 function vruiShow() {                                           // which panels this stage shows (Solo and the lobby show two side by side)
   const st = VRUI.stage, show = { intro: ["intro"], title: ["title"], mode: ["mode"], setup: ["me", "setup"], loading: ["loading"], preview: ["preview"], pause: ["pause"], mp: ["mp"], over: ["over"],
-    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], home: ["hme", "hplay", "hfr"], perf: ["perf"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
+    height: ["height"], lobby: [VRUI.edit ? "me" : "lobby", "setup"], tag: ["tag"], rules: ["rules"], rooms: ["rooms"], char: ["char"], home: ["hme", "hplay", "hfr"], perf: ["perf"], guide: ["guide"], dev: ["dev"], glab: ["glab"], gunlab: ["gunlab"], ghost: ["ghost"], work: ["work"], lab: ["lab"], arenas: ["arenas"], bots: [MP.code ? "lobby" : "me", "bots"] }[st] || [];
   if (WS.group) WS.group.visible = st === "work"; if (LAB.tbl) LAB.tbl.root.visible = st === "lab"; wsEnv(st === "work" || st === "lab");
   for (const k in VRUI.panels) { const Pn = VRUI.panels[k], on = show.includes(k); if (on !== Pn.mesh.visible) Pn.hov = []; Pn.mesh.visible = on; if (Pn.view && !on) Pn.view.visible = false; if (on) uiDraw(Pn); }
 }
@@ -14109,7 +14178,7 @@ function vruiOpen(stage) {
   if (stage === "setup" && MP.code) stage = "lobby";             // online, the map settings sit beside the lobby
   if (stage !== "lobby" || VRUI.stage !== "lobby") VRUI.edit = false;
   const I = vr.readInputs ? vr.readInputs() : null;
-  const inWorld = stage === "pause" || stage === "perf" || (stage === "height" && VRUI.afterH === "pause");   // set your height without leaving the game
+  const inWorld = stage === "pause" || stage === "perf" || stage === "guide" || (stage === "height" && VRUI.afterH === "pause");   // set your height without leaving the game
   vruiPlace(I, inWorld);
   if (!inWorld && renderer.xr.isPresenting && vr.base) { renderer.xr.setReferenceSpace(vr.base); vr.ox = vr.oy = vr.oz = 0; vr.yaw = 0; }
   VRUI.inWorld = inWorld;
@@ -14117,7 +14186,7 @@ function vruiOpen(stage) {
   VRUI.env.visible = !inWorld;
   if (!inWorld && (!VRUI.grove || groveOld)) { groveOld = false; try { menuGrove(); } catch (e) { console.warn("menu grove", e); } }   // a new clearing after each map
   VRUI.root.visible = true; VRUI.on = true; VRUI.stage = stage; VRUI.t = 0; VRUI.drag = null;
-  if (stage === "pause") { let k = 0; for (const w of VRUI.panels.pause.widgets) if (!(w.hide && w.hide())) w.y = 205 + k++ * 124; }   // only the buttons that apply, packed together
+  if (stage === "pause") { const W = VRUI.panels.pause.widgets.filter(w => !(w.hide && w.hide())), st = Math.min(124, (980 - 205) / Math.max(1, W.length)); W.forEach((w, k) => { w.y = 205 + k * st; w.h = Math.min(106, st - 14); }); }   // only the buttons that apply, packed together (3.47: and squeezed to fit)
   vruiShow();
   if (vr.gun) vr.gun.visible = false; if (binos) binos.visible = false; if (vr.avatar) vr.avatar.group.visible = false; if (vr.meC) vr.meC.top.visible = false;
   for (const o of [wrist, vrMap, vignette, vr.mark, zoomOv, vr.wheelM, vr.cross, UW.mesh, VHUD.m, CAPT && CAPT.ring, CAPT && CAPT.flag]) if (o) o.visible = false; if (vr.wh) vr.wh.open = false;
