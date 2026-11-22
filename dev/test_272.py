@@ -21,7 +21,7 @@ async def main():
         await pg.goto("file://" + sys.argv[1]); await pg.wait_for_timeout(500)
         await pg.evaluate(GEN, None)
         r = await pg.evaluate("""() => { const o = {}, G = D.GLOBE, V = D.vr, T = D.THREE;
-          o.startOwn = Object.keys(V.own).filter(k => V.own[k] > 0); o.startItems = [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch').length;   /* (3.43: the land vehicles are in every Dev pack) */ o.wheel = D.wheelKeys();
+          o.startOwn = Object.keys(V.own).filter(k => V.own[k] > 0); o.startItems = [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch' && k !== 'boat').length;   /* (3.43: the land vehicles are in every Dev pack) */ o.wheel = D.wheelKeys();
           o.first = Math.round(Math.min(...D.GEO.caches.map(c => D.glArc(G.p, c.p))) * G.R);
           o.order = [1, 2, 3, 4, 5, 9, 11, 47, 48, 49, 50].map(n => { const r = D.geoRewardOf(n); return r.gun ? r.gun + r.star : r.item || 'refill'; });
           const g49 = D.geoGearFromCount(49); o.at49 = [Object.values(g49.own).every(v => v === 5) && Object.keys(g49.own).length === 5, g49.items.size];
@@ -85,13 +85,13 @@ async def main():
           // the watch's compass draws; a save and a new game keep the count, the gear follows it
           D.drawWatch(600); D.GEO.found = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]); D.GEO.food = 66; D.GEO.water = 55; D.geoSave(); D.generate(); D.state = 'play';
           { const ok0 = D.DEV.ok; D.DEV.ok = false; D.set.huntMap = 'globe'; D.generate(); D.state = 'play'; o.noDev = [!!D.GLOBE, D.GEO.on]; D.DEV.ok = ok0; D.generate(); D.state = 'play'; }   // (not public yet: only with Dev Mode)
-          o.resume = [D.GEO.found.size, [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch').length, Object.keys(D.vr.own).filter(k => D.vr.own[k] > 0).sort().join(','), Math.round(D.GEO.food), Math.round(D.GEO.water)];
+          o.resume = [D.GEO.found.size, [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch' && k !== 'boat').length, Object.keys(D.vr.own).filter(k => D.vr.own[k] > 0).sort().join(','), Math.round(D.GEO.food), Math.round(D.GEO.water)];
           return o; }""")
         print("world", json.dumps(w))
-        # (3.43: in Dev the pack also has the 3 land vehicles, and the big pack 20 slots; 3.46: and everyone's torch)
+        # (3.43: in Dev the pack also has the 3 land vehicles, and the big pack 20 slots; 3.46: and everyone's torch; 3.48: the boat, and 24 slots)
         ok = r["startOwn"] == [] and r["startItems"] == 0 and r["first"] < 160 and r["order"] == ["pistol1", "canteen", "smg1", "campfire", "bow1", "hunt1", "pistol2", "ar5", "tscope", "hunt5", "jetski"] \
-             and r["at49"] == [True, 28] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 35 \
-             and r["g48"][:6] == [28, 10, 20, 10, .42, 7] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
+             and r["at49"] == [True, 29] and r["got1"][:2] == [1, 1] and r["got1"][2] == "pistol" and r["models"] == 36 \
+             and r["g48"][:6] == [29, 10, 24, 10, .42, 7] and r["g48"][6] == 3 and r["g48"][7] and r["g48"][8] > 0 and r["tools"] and not r["toolsHurt"] \
              and r["speed"] == 1.15 and r["snowSlow"] < 1 and 2 < r["drain"][0] < 4.5 and 3.5 < r["drain"][1] < 6.5 and r["starve"] > 2 \
              and r["packOpen"] and not r["xEarly"] and len(r["packItems"]) >= 6 and r["held"] == r["packItems"][0] and r["aid"] == [100, 0] and r["fireLit"] and r["cooked"] == 40 and 6.5 <= r["slept"] <= 7.5 \
              and (not w["lake"] or (w["drank"] > 60 and w["tipped"] == 0 and w["filled"] == 4 and w["sipped"][0] > 60 and w["sipped"][1] < 3)) \

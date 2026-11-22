@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.47";              // Just Trees
+const VERSION = "3.48";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -338,7 +338,7 @@ const VR_NADE_G = 9.81;                                    // VR grenades still 
 const WATER_PEN = 1.5;                                     // how far a bullet goes into water (m)
 const NADE = { MAX: 10, V: 21, R: 7, FUSE: .9, GIVE: 1 };  // grenades: most you can carry, throw speed, blast radius (m), fuse after landing (s), per pickup (one floating grenade each)
 const RECOIL = { up: [0, .25, .3, .36, .42, .5, 1.6], ads: .85, max: 14, back: 12, hold: 3 };   // auto guns climb per shot (degrees) by level: 1 = 5 stars … 5 = 1 star, 6 = held in one hand; looking down the gun 15% less; most climb; settle-back speed (gentler below red, and it pulls back a little while you keep firing: hold)
-const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2], rate: [0, 1, 1.1, 1.2, 1.32, 1.45], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75] };   // gun stars 1-5: magazine, fire rate, damage
+const TIER = { mag: [0, 1, 1.25, 1.5, 1.75, 2.2, 2.5], rate: [0, 1, 1.1, 1.2, 1.32, 1.45, 1.55], dmg: [0, 1, 1.15, 1.3, 1.5, 1.75, 2.0] };   // (3.48: star 6 = gold)   // gun stars 1-5: magazine, fire rate, damage
 const TIER_COL = [null, "#e8ecef", "#4f9bff", "#b56cff", "#ffc93a", "#ff4a3a"];   // star colours: normal, blue, purple, gold, red
 const NEON_COL = [null, "#ffffff", "#2f7bff", "#a63cff", "#ffb400", "#ff1e1e"];   // the glow round a gun on the ground (stronger versions of the star colours)
 const TIER_ODDS = [.46, .74, .88, .95];                       // a gun on the map: 50% 1 star, 28% blue, 14% purple, 6% gold, 2% red
@@ -539,6 +539,10 @@ function tuneStep(D, s) { const [k, , , st, lo, hi] = D; TUNE[k] = Math.round(Ma
 function testLabSave() { tuneSave(); gunLabSave(); LAB_DIRTY.v = false; }
 const tuneFmt = (v, st) => st >= 1 ? String(Math.round(v)) : v.toFixed(st >= .1 ? (st % .1 ? 2 : 1) : 2);
 const GEO_N = 50, GEO_UNLOCK = { dist: 3, arrow: 10, beep: 20 };
+/* (3.48) past 50: the vehicles and glasses spread over 51-59, the boat at 60, then a gold 6th star for each gun (62-70). After that every
+   level still counts (no cap): each cache refills you. The planet keeps making caches so there's always more to find. */
+const GEO_TOP = 70, GEO_LATE = { 51: "dirtbike", 52: "bblock", 53: "tglass", 54: "snowmobile", 55: "dglass", 56: "mvglass", 57: "buggy", 58: "hlglass", 59: "fglass", 60: "boat" },
+  GEO_GOLD = { 62: "pistol", 64: "smg", 66: "bow", 68: "ar", 70: "hunt" };
 function sunPos(lat, month, hour) {
   if (GLOBE && GLOBE.Nf) lat = GLOBE.lat;                       // the globe: the sun where you really are
   const doy = month * 30.44 + 15;
@@ -4761,9 +4765,10 @@ function geoRestart() { try { localStorage.setItem(geoCharKey, JSON.stringify({ 
 const GEO_ASK = { k: "", t: 0 };                                // the restart buttons ask for a second tap
 function geoAsk(k, go) { const now = performance.now(); if (GEO_ASK.k === k && now - GEO_ASK.t < 4000) { GEO_ASK.k = ""; go(); return; } GEO_ASK.k = k; GEO_ASK.t = now; }
 const geoAsking = k => GEO_ASK.k === k && performance.now() - GEO_ASK.t < 4000;
-function geoPlace() {                                          // the caches: the same 100 for this planet every time
-  const G = GLOBE, R = G.R, rr = mulberry32(seed * 101 + 7), L = [], per = new Array(7).fill(0), cap = Math.ceil(GEO_N / 7) + 3;
-  for (let t = 0; t < 40000 && L.length < GEO_N; t++) {
+const GEO_NC = 150;                                             // (3.48) caches a planet starts with (it makes more as you go: geoMore)
+function geoPlace() {                                          // the caches: the same ones for this planet every time
+  const G = GLOBE, R = G.R, rr = mulberry32(seed * 101 + 7), L = [], per = new Array(7).fill(0), cap = Math.ceil(GEO_NC / 7) + 3;
+  for (let t = 0; t < 60000 && L.length < GEO_NC; t++) {
     const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]), X = p[0] * R, Y = p[1] * R, Z = p[2] * R;
     if (G.contS(p, X, Y, Z) < .06) continue;
     const lat = Math.abs(Math.asin(p[1]) * 57.3); let gi = 0; while (gi < 6 && lat > GL_BANDS[gi]) gi++;
@@ -4773,16 +4778,26 @@ function geoPlace() {                                          // the caches: th
     const ll = glLatLon(p); per[gi]++; L.push({ id: L.length + 1, p, lat: ll[0], lon: ll[1], b, diff: 1 + Math.floor(rr() * 5), terr: 1 + Math.floor(rr() * 5) });
   }
   if (G.isle && L.length >= 40) {                                // three of the high caches are out on the dinosaur island
-    const I = G.isle, f = glFrame(I.c), put = [], mv = [L.length - 1, L.length - 5, L.length - 9], others = L.filter((c, k) => !mv.includes(k)); for (let t = 0; t < 2000 && put.length < 3; t++) { const a = rr() * 6.283, d = Math.sqrt(rr()) * I.r * .75;
+    const I = G.isle, f = glFrame(I.c), put = [], mv = [59, 55, 51].filter(k => k < L.length), others = L.filter((c, k) => !mv.includes(k)); for (let t = 0; t < 2000 && put.length < 3; t++) { const a = rr() * 6.283, d = Math.sqrt(rr()) * I.r * .75;
       const q = glNorm([I.c[0] + (f.E[0] * Math.cos(a) + f.N[0] * Math.sin(a)) * Math.tan(d), I.c[1] + (f.E[1] * Math.cos(a) + f.N[1] * Math.sin(a)) * Math.tan(d), I.c[2] + (f.E[2] * Math.cos(a) + f.N[2] * Math.sin(a)) * Math.tan(d)]);
       if (G.landAt(q) > 2 && put.every(o => glArc(o, q) * R > 900) && others.every(c => glArc(c.p, q) * R > 900)) put.push(q); }
-    put.forEach((q, k) => { const c = L[L.length - 1 - k * 4], ll = glLatLon(q); c.p = q; c.lat = ll[0]; c.lon = ll[1]; c.isle = true; });
+    put.forEach((q, k) => { const c = L[mv[k]], ll = glLatLon(q); c.p = q; c.lat = ll[0]; c.lon = ll[1]; c.isle = true; });   // (3.48: caches #52, #56 and #60)
   }
   return L;
 }
+function geoMore(need) {                                        // (3.48) the planet makes more caches when few are left to find (the same ones every time for this planet)
+  const G = GLOBE; if (!G || !GEO.caches) return; const R = G.R, L = GEO.caches;
+  const want = Math.max(need || 0, (GEO.found ? GEO.found.size : 0) + 30);
+  for (let tries = 0; L.length < want && tries < 20; tries++) {
+    const rr = mulberry32(seed * 977 + L.length * 31 + tries);
+    for (let t = 0; t < 4000 && L.length < want; t++) { const p = glNorm([rr() * 2 - 1, rr() * 2 - 1, rr() * 2 - 1]), X = p[0] * R, Y = p[1] * R, Z = p[2] * R;
+      if (G.contS(p, X, Y, Z) < .06 || G.landAt(p) < 1.2 || (G.isle && G.isleArc(p) < G.isle.r + .05) || L.some(c => glArc(c.p, p) * R < 600)) continue;
+      const ll = glLatLon(p); L.push({ id: L.length + 1, p, lat: ll[0], lon: ll[1], b: "temperate", diff: 1 + Math.floor(rr() * 5), terr: 1 + Math.floor(rr() * 5) }); }
+  }
+}
 function geoStart(sv) {
   GEO.lab = !!GEO.labWant; GEO.labWant = false; GEO.full = !!GEO.fullWant; GEO.fullWant = false; jtFxSession(GEO.lab || GEO.full);
-  GEO.on = true; GEO.caches = geoPlace(); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
+  GEO.on = true; GEO.caches = geoPlace(); GEO.found = new Set(); geoMore(sv && sv.n ? sv.n + 30 : 0); jetClear(); JET.list = jetPlace(); GEO.found = new Set(sv && Array.isArray(sv.found) ? sv.found : []); GEO.target = null; GEO.tT = 0; GEO.saveT = 5; GEO.mz = 0; GEO.warn = 100;
   for (const o of GEO.objs.values()) scene.remove(o); GEO.objs.clear(); for (const F of GEO.foods) scene.remove(F.obj); GEO.foods = [];
   MP.hp = 100; MP.sh = 0; MP.dead = 0;
   if (sv) { hunt.score = sv.score || 0; hunt.kills = sv.kills || 0; showHuntScore(); }
@@ -4792,7 +4807,7 @@ function geoStart(sv) {
   const num = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
   GEO.food = Math.max(30, num(sv && sv.food, 100)); GEO.water = Math.max(30, num(sv && sv.water, 100)); GEO.cant = num(sv && sv.cant, 0); GEO.aid = num(sv && sv.aid, 1); GEO.spray = num(sv && sv.spray, 4);
   if (sv && typeof sv.nades === "number") vr.nades = Math.min(geoNadeCap(), sv.nades); if (sv && typeof sv.flares === "number" && geoHas("flares")) vr.flares = sv.flares;
-  if (GEO.found.size && GEO.found.size < GEO_N) {             // a new planet at your level: the next cache a few hundred metres off
+  if (GEO.found.size) {             // a new planet at your level: the next cache a few hundred metres off
     let best = null, bd = 1e9; for (const c of GEO.caches) { if (GEO.found.has(c.id)) continue; const d = glArc(GLOBE.p, c.p); if (d < bd) { bd = d; best = c; } }
     if (best) best.placed = true;
     if (best && bd * GLOBE.R > 700) for (let k = 0; k < 60; k++) { const a = k * 2.4, r = 300 + k * 4, x = P.x + Math.cos(a) * r, z = P.z + Math.sin(a) * r; if (geoCacheClear(x, z)) { best.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(best.p); best.lat = ll[0]; best.lon = ll[1]; break; } }
@@ -4883,7 +4898,7 @@ function geoTick(dt) {
           if (geoCacheClear(x, z)) { c.p = glToSphere(x, z, [0, 0, 0]); const ll = glLatLon(c.p); c.lat = ll[0]; c.lon = ll[1]; out[0] = x; out[1] = z; break; } } }
       o.position.set(out[0], groundAt(out[0], out[1]), out[1]); c.x = out[0]; c.z = out[1];
     }
-    jetsTick(dt); lvTick(dt); geoDinoIsleTick();
+    jetsTick(dt); lvTick(dt); btTick(dt); geoDinoIsleTick();
     GEO.reAt = false;
   }
   for (const [id, o] of GEO.objs) {
@@ -4891,7 +4906,7 @@ function geoTick(dt) {
     o.userData.glint.material.size = .35 + .25 * Math.abs(Math.sin(performance.now() / 300 + id)) + d * .004;
     if (d < 2 && Math.abs(o.position.y - P.y) < 2.5) {
       GEO.found.add(id); scene.remove(o); GEO.objs.delete(id); hunt.score += 25; showHuntScore(); geoReward(GEO.found.size);   // what's inside
-      if (GEO.found.size < JET_UNLOCK) vrBanner("Treeocache found! " + (geoNet() ? "Level " + GEO.found.size : GEO.found.size + " / " + GEO_N) + "  (+25)", 2.5, 2);   // (online, no telling how far it goes) if (typeof fxPlay === "function") fxPlay("kill_3", .5); else bing;
+      vrBanner("Treeocache found! Level " + GEO.found.size + "  (+25)", 2.5, 2); geoMore();   // (online, no telling how far it goes) if (typeof fxPlay === "function") fxPlay("kill_3", .5); else bing;
       for (const [k, n] of Object.entries(GEO_UNLOCK)) if (GEO.found.size === n) vrBanner("GPS unlocked: " + (k === "dist" ? "distance" : k === "arrow" ? "direction arrow" : "hot/cold beep"), 4, 3);
       geoTarget(); geoSave();
     }
@@ -4933,7 +4948,7 @@ function geoGpsDraw() {
       x.save(); x.translate(200, 290); x.rotate(a); x.fillStyle = "#ffd65a"; x.beginPath(); x.moveTo(0, -26); x.lineTo(17, 18); x.lineTo(0, 8); x.lineTo(-17, 18); x.closePath(); x.fill(); x.restore();
     }
   }
-  x.fillStyle = "#3a5a40"; x.fillRect(12, 322, 232, 3); x.fillStyle = "#cfe8c0"; x.font = "bold 24px sans-serif"; x.font = "bold 21px sans-serif"; x.fillText("Found " + nf + "/" + GEO_N, 12, 358);
+  x.fillStyle = "#3a5a40"; x.fillRect(12, 322, 232, 3); x.fillStyle = "#cfe8c0"; x.font = "bold 24px sans-serif"; x.font = "bold 21px sans-serif"; x.fillText("Level " + nf, 12, 358);
   x.textAlign = "right"; x.font = "bold 20px sans-serif"; x.fillStyle = GEO.food < 25 ? "#ff8a6a" : "#e8c890"; x.fillText("F " + Math.round(GEO.food), 196, 358); x.fillStyle = GEO.water < 25 ? "#ff8a6a" : "#8ad0ff"; x.fillText("W " + Math.round(GEO.water), 248, 358); x.textAlign = "left";
   x.textAlign = "center"; x.fillStyle = "#8aa890"; x.font = "20px sans-serif"; x.fillText(hourText(hourNow), 136, 31);
   g.userData.scr.material.map.needsUpdate = true;
@@ -4976,7 +4991,7 @@ function geoGlobe() {
   const sph = new THREE.Mesh(new THREE.SphereGeometry(.1, 48, 32), new THREE.MeshBasicMaterial({ map: GLOBE.tex, fog: false, toneMapped: false, transparent: true }));
   inner.add(sph);
   const dot = new THREE.Mesh(new THREE.SphereGeometry(.006, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff3020, fog: false, toneMapped: false })); inner.add(dot);
-  const cg = new THREE.BufferGeometry(); cg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(GEO_N * 3), 3)); cg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(GEO_N * 3), 3));
+  const cg = new THREE.BufferGeometry(); cg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(600 * 3), 3)); cg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(600 * 3), 3));
   const cpts = new THREE.Points(cg, new THREE.PointsMaterial({ size: .005, vertexColors: true, fog: false, toneMapped: false, sizeAttenuation: true })); inner.add(cpts);
   grp.add(inner); grp.visible = false; scene.add(grp);
   GEO.globe = grp; grp.userData = { inner, sph, dot, cpts, spin: 0 }; return grp;
@@ -4997,7 +5012,7 @@ function geoMapTick(I, main, dt) {                              // (each frame w
   if (!U.beam) { U.beam = new THREE.Mesh(new THREE.CylinderGeometry(.0025, .0025, .03, 8).translate(0, .015, 0), new THREE.MeshBasicMaterial({ color: 0xfff2b0, fog: false, toneMapped: false })); U.inner.add(U.beam); }
   U.beam.visible = !!(COMP.on && COMP.beam); if (U.beam.visible) { const b = COMP.beam.p; U.beam.position.set(b[0] * .1, b[1] * .1, b[2] * .1); U.beam.quaternion.setFromUnitVectors(_v1.set(0, 1, 0), _v2.set(b[0], b[1], b[2])); }   // Competitive: where the beam came down
   const pa = U.cpts.geometry.attributes.position, ca = U.cpts.geometry.attributes.color; let n = 0;
-  for (const c of geoMapCaches()) { pa.setXYZ(n, c.p[0] * .101, c.p[1] * .101, c.p[2] * .101); const t = c === GEO.target; ca.setXYZ(n, 1, t ? .9 : .78, t ? .3 : .2); n++; }
+  for (const c of geoMapCaches()) { if (n >= 600) break; pa.setXYZ(n, c.p[0] * .101, c.p[1] * .101, c.p[2] * .101); const t = c === GEO.target; ca.setXYZ(n, 1, t ? .9 : .78, t ? .3 : .2); n++; }
   U.cpts.geometry.setDrawRange(0, n); pa.needsUpdate = ca.needsUpdate = true;
 }
 const _giV = new THREE.Vector3(), _v3c = new THREE.Vector3();
@@ -5012,7 +5027,7 @@ const GI_LIST = [
   ["boots", "Trail boots", "Walk and run 15% faster", 0], ["tent", "Tent", "Pitch it, then pull the trigger by it to sleep till morning", 1],
   ["tbinos", "Thermal binoculars", "More zoom, the distance, and X shows warm animals", 0], ["rod", "Fishing rod", "In your other hand: hold its trigger, swing and let go to cast; grip the reel handle and turn it to reel; strike when it bites", 1], ["snowshoes", "Snowshoes", "Full speed on snow and ice", 0],
   ["pouch1", "Grenade pouch", "Carry 5 grenades (refill at caches)", 0], ["wings", "Glider wings", "Glides go 50% farther", 0], ["machete", "Machete", "Swing it through bushes to chop them (bushes slow you down)", 1],
-  ["pack2", "Big backpack", "20 slots", 0], ["headlamp", "Headlamp", "Put it on: a pool of warm light wherever you look", 1], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
+  ["pack2", "Big backpack", "24 slots", 0], ["headlamp", "Headlamp", "Put it on: a pool of warm light wherever you look", 1], ["thermos", "Thermos", "The cold no longer makes you hungry", 0],
   ["flares", "Flare kit", "3 flares on the wheel (refill at caches)", 0], ["nvg", "Night-vision goggles", "See in the dark (take them out to switch)", 1], ["satphone", "Satellite phone", "The 3 nearest caches on your map", 0],
   ["wings2", "Ultralight wings", "Glide right across the sea", 0], ["pouch2", "Big grenade pouch", "Carry 10 grenades", 0], ["compass", "Compass", "Your watch points to the next cache", 0],
   ["filter", "Water filter", "Every drink counts double", 0], ["tscope", "Thermal scope", "On your sniper: X shows warm bodies through the scope", 0],
@@ -5021,6 +5036,7 @@ const GI_LIST = [
   ["dirtbike", "Dirt bike", "Take it out on dry land and climb on: rides anywhere, jumps off crests, pull the bars up to hop", 1],   // (3.43: the land vehicles, Dev only for now)
   ["snowmobile", "Snowmobile", "Take it out and climb on: fast on snow and ice, slow anywhere else", 1],
   ["buggy", "Dune buggy", "Take it out on dry land and climb on: steady, quick on sand", 1],
+  ["boat", "Boat", "Wade into the sea and take it out: drive it, take friends aboard, and pull a water skier behind it", 1],   // (3.48: the level-60 prize)
   ["torch", "Torch", "Light it and carry it in your other hand: a warm glow round you, for nights, caves and the dinosaur island", 1],   // (3.46: everyone has one)
   
 ];
@@ -5030,21 +5046,22 @@ const geoHas = k => (GEO.on && GEO.items.has(k)) || (COMP.on && COMP.items.has(k
 function geoRewardOf(n) {                                     // what the nth find gives
   if (n <= 49 && n % 2 === 1) { const k = (n + 1) / 2; return { gun: GI_GUNS[(k - 1) % 5], star: Math.floor((k - 1) / 5) + 1 }; }
   if (n <= 48) return { item: GI_LIST[n / 2 - 1][0] };
-  if (n === GEO_N) return { item: "jetski", last: true };     // the last cache: your own jet ski
-  if (n > GEO_N && n <= GEO_N + GLASSES.length) return { item: GLASSES[n - GEO_N - 1] };   // (the glasses: levels 51-56, Dev only for now)
-  return { refill: true, last: n >= GEO_N };
+  if (n === GEO_N) return { item: "jetski" };                  // cache #50: your own jet ski
+  if (GEO_LATE[n]) return { item: GEO_LATE[n] };                // 51-60: the land vehicles, the glasses, the boat
+  if (GEO_GOLD[n]) return { gun: GEO_GOLD[n], star: 6, gold: true };   // 62-70: a gold gun
+  return { refill: true };
 }
 const GLASSES = ["bblock", "tglass", "dglass", "mvglass", "hlglass", "fglass"];   // levels 51-55 (3.32: the golden hour glasses are gone)
 function geoGearFromCount(n) {                                // everything you'd have after n finds (so nothing but the count needs saving)
   const own = {}, items = new Set(); if (GEO.full || GEO.lab) for (const k of GLASSES) items.add(k);   // (Dev: Full level and the Test Lab have the glasses)
   items.add("torch");                                          // (3.46: everyone starts with a torch)
-  if (DEV.ok || GEO.full || GEO.lab || n >= GEO_N) for (const k of LV_KINDS) items.add(k);   // (3.44: the land vehicles come with the jet ski at cache #50; Dev and the labs have them anyway)
+  if (DEV.ok || GEO.full || GEO.lab) { for (const k of LV_KINDS) items.add(k); items.add("boat"); }   // (Dev and the labs have the vehicles anyway; 3.48: everyone else earns them at 51-60)
   for (let i = 1; i <= n; i++) { const r = geoRewardOf(i); if (r.gun) own[r.gun] = Math.max(own[r.gun] || 0, r.star); if (r.item) items.add(r.item); }
   return { own, items };
 }
 const geoNadeCap = () => geoHas("pouch2") ? 10 : geoHas("pouch1") ? 5 : 0;
-const geoSlots = () => geoHas("pack2") ? 20 : geoHas("pack1") ? 6 : 3;   // (the big pack holds 20 since 3.44: room for the land vehicles)
-const PK_C = () => geoSlots() > 16 ? 5 : 4, PK_W = () => geoSlots() > 16 ? 114 : 146;   // the pack's grid: columns, cell width
+const geoSlots = () => geoHas("pack2") ? 24 : geoHas("pack1") ? 6 : 3;   // (the big pack holds 24 since 3.48: room for the vehicles and the boat)
+const PK_C = () => geoSlots() > 20 ? 6 : geoSlots() > 16 ? 5 : 4, PK_W = () => [146, 146, 146, 146, 146, 114, 92][PK_C()];   // the pack's grid: columns, cell width
 function geoGearApply(n, fresh) {                             // your guns and items for this many finds
   const g = geoGearFromCount(n); GEO.items = g.items;
   vr.own = Object.assign({}, g.own);
@@ -5067,7 +5084,7 @@ function geoReward(n) {                                       // a cache found: 
     if (r.item === "flares") vr.flares = FLARE.N;
     if (r.item === "tscope") TOOL.on.hunt = true; if (r.item === "tbinos") TOOL.on.binos = true;
     vrBanner(giNm(r.item) + ": " + giDesc(r.item), 5, 3); geoShow({ item: r.item });
-  } else if (n < JET_UNLOCK) vrBanner("Supplies refilled", 4, 3);   // from #50 on there are no banners: just the easter eggs out there to come across
+  } else vrBanner("Level " + n + ": supplies refilled", 3, 3);   // (3.48: past the prizes the levels keep counting)
   if (vr.wheelM && vr.wheelM.visible) drawWheel(vr.wh ? vr.wh.sel : -1);
 }
 // models: every item, low-poly, in plain colours
@@ -5101,6 +5118,7 @@ function giModel(k) {                                         // (about hand siz
     case "flares": P(giBox(.12, .07, .04), 0xe0602a, 0, 0, 0); for (let i = 0; i < 3; i++) P(giCyl(.01, .01, .09, 8), 0xff3a1a, -.03 + i * .03, .06, 0); break;
     case "jetski": { const j = jetModel(); j.scale.setScalar(.12); g.add(j); break; }   // (a little one, for the pack and the reward)
     case "dirtbike": case "snowmobile": case "buggy": { const j = lvModel(k); j.scale.setScalar(.12); g.add(j); break; }
+    case "boat": { const j = boatModel(); j.scale.setScalar(.06); g.add(j); break; }
     case "bblock": case "tglass": case "dglass": case "mvglass": case "hlglass": case "fglass": { const fr = k === "fglass" ? 0x1a3a4a : k === "hlglass" ? 0x161010 : k === "mvglass" ? 0xf2f2f2 : k === "dglass" ? 0x241a3a : k === "tglass" ? 0x1a1a1a : 0x3a2a1a, ln = k === "fglass" ? 0x3ae0ff : k === "hlglass" ? 0xff2a08 : k === "mvglass" ? 0xff3aa8 : k === "dglass" ? 0x8a5aff : k === "tglass" ? 0xd0301a : 0xffa830;   // (dream glasses, neon shades)
       for (const sx of [-1, 1]) { P(giCyl(.026, .026, .006, 16), fr, sx * .034, 0, 0, Math.PI / 2); const L = P(giCyl(.022, .022, .007, 16), ln, sx * .034, 0, .001, Math.PI / 2); L.material = new THREE.MeshBasicMaterial({ color: ln }); P(giBox(.004, .006, .1), fr, sx * .062, .005, -.05); }
       P(giBox(.02, .006, .006), fr, 0, .008, 0); break; }
@@ -5583,7 +5601,8 @@ function geoPackTick(I, main, off, dt) {
     if (sel === -2) { geoHeld(null); GEO.packOpen = false; m.visible = false; return; }
     const k = L[sel]; if (!k) return;
     if (k === "jetski") { if (jetTakeOut()) { GEO.packOpen = false; m.visible = false; } return; }   // (it isn't held: it appears in the sea)
-    if (LV_KINDS.includes(k)) { if (lvTakeOut(k)) { GEO.packOpen = false; m.visible = false; } return; }   // (nor these: on the ground in front of you)
+    if (LV_KINDS.includes(k)) { if (lvTakeOut(k)) { GEO.packOpen = false; m.visible = false; } return; }
+    if (k === "boat") { if (btTakeOut()) { GEO.packOpen = false; m.visible = false; } return; }   // (3.48)   // (nor these: on the ground in front of you)
     if (k === "torch" || k === "headlamp") { const on = !GEO.worn.has(k); if (on) GEO.worn.add(k); else GEO.worn.delete(k); GEO.packOpen = false; m.visible = false; gunFoley(on && k === "torch" ? [[0, 900, .3, .1], [.05, 300, .4, .12]] : SFX.swap); if (on) vrBanner(k === "torch" ? "Torch lit: it's in your other hand" : "Headlamp on", 2, 1); return; }   // (3.46: lit / put away, like the glasses)
     if (k === "nvg" || k === "bblock" || k === "tglass" || k === "dglass" || k === "mvglass" || k === "hlglass" || k === "fglass") { if (GEO.worn.has(k)) GEO.worn.delete(k); else { for (const e of ["nvg", "bblock", "tglass", "dglass", "mvglass", "hlglass", "fglass"]) GEO.worn.delete(e); GEO.worn.add(k); }   /* (one pair of eyewear at a time) */ vrBanner(GI[k].name + (GEO.worn.has(k) ? " on" : " off"), 1.5, 1); geoPackDraw(sel); gunFoley(TOOL.click[GEO.worn.has(k) ? "on" : "off"]); return; }
     geoHeld(k); GEO.packOpen = false; m.visible = false; gunFoley(SFX.swap);
@@ -5620,7 +5639,7 @@ function geoGearTick(I, main, off, dt) {                      // (each frame in 
   if (geoNet()) hamTick(I, main, off, dt); sleepTick(I, main, dt);   // the hammock, and dreaming
   if (GEO.sleep) { HFOG.uThG.value = 0; bodySwapTick(GEO.ghostK > .01); geoFireTick(dt); geoSprayTick(dt); geoLeafTick(dt); return; }
   seaTick(dt);                                                    // the shoals, the others' jet skis and the chop
-  if (JET.ride) jetHandsTick(I, main); else if (LV.ride) lvHandsTick(I, main); else { if (jetOn()) jetAimTick(I, main, off); if (lvOn() && !JET.aim) lvAimTick(I, main, off); }   // the jet skis (3.43: and the land vehicles)
+  if (JET.ride) jetHandsTick(I, main); else if (LV.ride) lvHandsTick(I, main); else if (btBusy()) btHandsTick(I, main); else { if (jetOn()) jetAimTick(I, main, off); if (lvOn() && !JET.aim) lvAimTick(I, main, off); if (GEO.on && !JET.aim && !LV.aim) btAimTick(I, main, off); }   // the jet skis (3.43: and the land vehicles)
   geoPackTick(I, main, off, dt); geoHeldTick(I, main, dt); geoWaterTick(I, dt); geoFruitTick(I, dt); geoWornTick(I); geoFireTick(dt); geoSprayTick(dt); geoShowTick(dt); geoLeafTick(dt);
 }
 function geoGearClear() {
@@ -5888,7 +5907,7 @@ function jetTakeOut() {                                       // out of the pack
   if (J.obj) { scene.remove(J.obj); J.obj = null; } GEO.tT = 0; jetsTick(0);
   geoPop(new THREE.Vector3(J.x, water, J.z), 0xd8f0ff, 14, "splash"); gunFoley([[0, 300, .2, .12], [.05, 700, .12, .1]]); vrBanner("Your jet ski: point at it and pull the trigger to climb on", 3, 1); return true;
 }
-function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; if (typeof lvClear === "function") lvClear(); }   // (the spots stay: a new game makes new ones)
+function jetClear() { jetOff(); for (const J of JET.list) if (J.obj) { scene.remove(J.obj); J.obj = null; } JET.aim = null; if (typeof lvClear === "function") lvClear(); if (typeof btClear === "function") btClear(); }   // (the spots stay: a new game makes new ones)
 /* ---- (3.43, Dev for now) land vehicles: a dirt bike, a snowmobile and a dune buggy. They work like the jet ski: take one out of your pack
    (standing on dry land) and it's there in front of you; point at it and pull the trigger to climb on; hands on the bars (the buggy: both
    sides of its wheel) and squeeze both grips to start; trigger is throttle; turn the bars to steer; either thumbstick pulled back reverses.
@@ -6146,6 +6165,286 @@ function lvTakeOut(kind) {                                       // out of the p
   V.obj = lvModel(kind); scene.add(V.obj); lvPark(V);
   gunFoley([[0, 300, .2, .12], [.05, 700, .12, .1]]); vrBanner("Your " + D.name + ": point at it and pull the trigger to climb on", 3, 1); return true;
 }
+/* ---- (3.48) the boat: the level-60 prize. Take it out wading in the sea (like the jet ski); climb on and you drive: both hands on the wheel
+   and squeeze to start, trigger is throttle, turn the wheel to steer (right hand down turns right). Your friends can climb aboard too:
+   point at your boat and pull the trigger to take a seat, or point at the tow handle off the back to water ski. Water skiing: hold the
+   handle (either grip), look where you want to go and you carve that way; the boat leaves a V-shaped wake. Crouch, then stand up fast as
+   you cross the wake: you pop into the air. Let go and you're in the water. If nobody's driving, your own boat drives itself while you
+   ski behind it (big loops, away from land), so you can ski alone. ---- */
+const BT = { me: null, ride: null, pass: null, ski: null, aim: null, ring: null, snd: null, others: new Map(), wakes: new Map(), rope: null, skis: null, handle: null, rskis: new Map() };
+const BT_SEATS = [[.45, .55, -.5], [-.45, .55, -.5], [.45, .55, .85], [-.45, .55, .85]];   // x, seat height, z: the driver's (0), then 3 for friends
+const BT_WHEEL = new THREE.Vector3(.45, 1.02, -1.0), BT_TOW = new THREE.Vector3(0, 1.45, 1.55), BT_ROPE = 16, BT_LEN = 2.9;
+const btOn = () => GEO.on && !!GLOBE && geoHas("boat");
+function boatModel() {
+  const g = new THREE.Group(), white = new THREE.MeshLambertMaterial({ color: 0xf4f4f0 }), teal = new THREE.MeshLambertMaterial({ color: 0x1fa2b0 }), purple = new THREE.MeshLambertMaterial({ color: 0x5a3aa8 }),
+    cream = new THREE.MeshLambertMaterial({ color: 0xe8dcc0 }), dark = new THREE.MeshLambertMaterial({ color: 0x26282c }), metal = new THREE.MeshLambertMaterial({ color: 0xa8aeb4 }),
+    glass = new THREE.MeshLambertMaterial({ color: 0x8ab8d0, transparent: true, opacity: .4, side: THREE.DoubleSide, depthWrite: false });
+  const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); g.add(o); return o; };
+  // the hull: its outline from above (pointed bow at -z), pushed down into a deep V
+  const sh = new THREE.Shape(); sh.moveTo(-1.0, 2.6); sh.lineTo(1.0, 2.6); sh.lineTo(1.05, .6); sh.quadraticCurveTo(1.0, -1.6, 0, -3.0); sh.quadraticCurveTo(-1.0, -1.6, -1.05, .6); sh.closePath();
+  const hullG = new THREE.ExtrudeGeometry(sh, { depth: .75, bevelEnabled: true, bevelThickness: .12, bevelSize: .1, bevelSegments: 2, curveSegments: 10 });
+  hullG.rotateX(Math.PI / 2); const pa = hullG.attributes.position;
+  for (let i = 0; i < pa.count; i++) { const y = pa.getY(i), x = pa.getX(i); if (y < -.3) pa.setX(i, x * (1 - .55 * Math.min(1, (-y - .3) / .55))); }   // narrower at the keel: a V
+  hullG.computeVertexNormals(); add(hullG, white, 0, .8, 0);
+  const stripe = new THREE.ExtrudeGeometry(sh, { depth: .12, bevelEnabled: false, curveSegments: 10 }); stripe.rotateX(Math.PI / 2); stripe.scale(1.012, 1, 1.004); add(stripe, teal, 0, .62, 0);
+  const deckS = new THREE.Shape(); deckS.moveTo(-.88, 2.45); deckS.lineTo(.88, 2.45); deckS.lineTo(.92, .6); deckS.quadraticCurveTo(.86, -1.4, 0, -2.6); deckS.quadraticCurveTo(-.86, -1.4, -.92, .6); deckS.closePath();
+  const deck = new THREE.Mesh(new THREE.ShapeGeometry(deckS, 10), new THREE.MeshLambertMaterial({ color: 0xe8dcc0, side: THREE.DoubleSide })); deck.rotation.x = Math.PI / 2; deck.position.y = .82; g.add(deck);
+  for (const [x, , z] of BT_SEATS) { add(new THREE.BoxGeometry(.6, .16, .55), cream, x, .5 + .3, z); add(new THREE.BoxGeometry(.6, .5, .12), cream, x, 1.08, z + .3, -.15); }   // seats with backs
+  add(new THREE.BoxGeometry(1.7, .5, .5), white, 0, 1.0, -1.2);                                                // the dash
+  const ws = add(new THREE.PlaneGeometry(1.8, .45), glass, 0, 1.42, -1.38, -.5); ws.renderOrder = 3;            // the windshield
+  add(new THREE.BoxGeometry(1.84, .05, .05), dark, 0, 1.64, -1.5, -.5);
+  const col = add(new THREE.CylinderGeometry(.025, .025, .3, 8), dark, BT_WHEEL.x, .92, -1.08, -.9);
+  const wheel = new THREE.Group(); wheel.position.copy(BT_WHEEL); wheel.rotation.x = -.9; g.add(wheel);
+  wheel.add(new THREE.Mesh(new THREE.TorusGeometry(.18, .018, 8, 22), dark)); wheel.add(new THREE.Mesh(new THREE.BoxGeometry(.34, .025, .02), dark));
+  add(new THREE.BoxGeometry(.5, .5, .4), dark, 0, .95, 2.75); add(new THREE.BoxGeometry(.18, .7, .18), dark, 0, .45, 2.85);   // the outboard motor
+  add(new THREE.BoxGeometry(.36, .2, .3), purple, 0, 1.25, 2.75);
+  add(new THREE.CylinderGeometry(.04, .05, .7, 8), metal, BT_TOW.x, 1.12, BT_TOW.z); add(new THREE.TorusGeometry(.07, .02, 6, 12), metal, BT_TOW.x, BT_TOW.y, BT_TOW.z, Math.PI / 2);   // the tow pylon
+  add(new THREE.BoxGeometry(.06, .5, .06), metal, .95, 1.15, -2.2); add(new THREE.BoxGeometry(.06, .5, .06), metal, -.95, 1.15, -2.2);   // bow rails
+  g.userData = { wheel, mats: [white, teal] };
+  g.traverse(m => { if (m.isMesh) m.castShadow = true; });
+  return g;
+}
+function btGlow(o, on) { if (o) for (const m of o.userData.mats) m.emissive.setHex(on ? 0x5a4410 : 0x000000); }
+function btTakeOut() {
+  const g = H(P.x, P.z);
+  if (!(g < water - .15) || !geoSalty(P) || (ENDLESS && enIcedAt(P.x, P.z))) { vrBanner("Wade into the sea first (your feet in the water)", 2, 0); return false; }
+  const fx = -Math.sin(P.yaw), fz = -Math.cos(P.yaw), x = P.x + fx * 4, z = P.z + fz * 4;
+  if (H(x, z) > water - .6) { vrBanner("Too shallow here: wade out a bit further", 2, 0); return false; }
+  if (BT.ride || (BT.ski && BT.ski.own === "me")) return false;
+  const V = BT.me || (BT.me = { x: 0, z: 0, yaw: 0, obj: null, sp: 0, steer: 0, t: 0, auto: false });
+  V.x = x; V.z = z; V.yaw = P.yaw; V.sp = 0; V.steer = 0; V.hy = undefined; if (!V.obj) { V.obj = boatModel(); scene.add(V.obj); }
+  btFloat(V, 0); geoPop(new THREE.Vector3(x, water, z), 0xd8f0ff, 20, "splash"); gunFoley([[0, 250, .25, .14], [.06, 600, .15, .1]]);
+  vrBanner("Your boat: point at it and pull the trigger to climb aboard", 3, 1); return true;
+}
+function btFloat(V, dt) {                                        // the hull on the swells: bow up as it gets going, a lean into turns
+  const o = V.obj, t = performance.now() / 1000, fx = -Math.sin(V.yaw), fz = -Math.cos(V.yaw), sk = Math.min(1, Math.abs(V.sp) / 20);
+  const sw = jetSwell(V.x, V.z, t) * .6, front = jetSwell(V.x + fx * 2, V.z + fz * 2, t), back = jetSwell(V.x - fx * 2, V.z - fz * 2, t);
+  const rest = water + sw - .12 + .1 * sk; V.hy = V.hy === undefined ? rest : V.hy + (rest - V.hy) * Math.min(1, dt * 4);
+  const plane = .1 * Math.max(0, Math.sin(Math.min(1, sk * 1.6) * Math.PI)) + .03 * sk;   // the bow rises getting onto the plane, then settles
+  V.pitch = (V.pitch || 0) + ((front - back) * .12 + plane - (V.pitch || 0)) * Math.min(1, dt * 3);
+  V.roll = (V.roll || 0) + (-V.steer * .14 * sk + .02 * Math.sin(t * .7) - (V.roll || 0)) * Math.min(1, dt * 2.5);
+  o.position.set(V.x, V.hy, V.z); o.rotation.set(V.pitch, V.yaw, V.roll, "YXZ"); o.userData.wheel.rotation.z = V.steer * 1.4; o.updateMatrixWorld(true);
+}
+function btMove(V, dt, want, steer) {                            // speed, steering, and not running aground (it bumps off land and shallows)
+  V.sp += (want - V.sp) * Math.min(1, dt * (want > V.sp ? .55 : .4)); V.steer += (steer - V.steer) * Math.min(1, dt * 4);
+  const turn = -V.steer * (.15 + .5 * Math.min(1, Math.abs(V.sp) / 8)) * TUNE.jetTurn * dt * (Math.abs(V.sp) > .3 ? Math.sign(V.sp) : 0);
+  V.yaw += turn; let mv = V.sp * dt; const fx = -Math.sin(V.yaw), fz = -Math.cos(V.yaw);
+  if (mv !== 0) { const d = Math.sign(mv), nx = V.x + fx * (BT_LEN + Math.abs(mv)) * d, nz = V.z + fz * (BT_LEN + Math.abs(mv)) * d;
+    if (H(nx, nz) > water - .7 || rockAround(nx, nz, 1, water, 1.4, .05) > water + .2) { if ((V.bumpT || 0) <= 0) { V.bumpT = .6; gunFoley([[0, 120, .35, .25], [.03, 380, .15, .12]]); if (BT.ride && BT.ride.V === V) { buzz("L", .9, 120); buzz("R", .9, 120); vrBanner("Too shallow for the boat", 2, 0); } } V.sp = -Math.min(2, Math.abs(V.sp) * .25) * d; mv = 0; } }
+  V.bumpT = (V.bumpT || 0) - dt;
+  V.x += fx * mv; V.z += fz * mv; btFloat(V, dt);
+  return turn;
+}
+function btAutoSteer(V) {                                        // (nobody driving, you skiing behind it) big loops, turning away from land
+  const fx = -Math.sin(V.yaw), fz = -Math.cos(V.yaw), rx = Math.cos(V.yaw), rz = -Math.sin(V.yaw); let st = .22;
+  const look = d => H(V.x + fx * d, V.z + fz * d) > water - 2.5;
+  if (look(35) || look(60)) { const L = H(V.x + (fx - rx) * 40, V.z + (fz - rz) * 40), R = H(V.x + (fx + rx) * 40, V.z + (fz + rz) * 40); st = L < R ? -.9 : .9; }
+  return st;
+}
+function btWake(id, V, sp, dt) {                                     // the wake: foam in a V behind the boat, spreading and fading
+  let W = BT.wakes.get(id);
+  if (!W) { const N = 50, geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(N * 6 * 3), 3)); geo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * 6 * 3), 3));
+    const idx = []; for (let i = 0; i < N - 1; i++) for (let b = 0; b < 3; b++) { const a = i * 6 + b * 2, c = a + 6; idx.push(a, a + 1, c, a + 1, c + 1, c); } geo.setIndex(idx);
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: true, side: THREE.DoubleSide }));
+    m.frustumCulled = false; m.renderOrder = 2; scene.add(m); W = { m, pts: [], t: 0, N }; BT.wakes.set(id, W); }
+  W.clk = (W.clk || 0) + (dt || 0); const now = W.clk, fx = -Math.sin(V.yaw), fz = -Math.cos(V.yaw);   // (game time)
+  if (now - W.t > .12) { W.t = now; W.pts.unshift({ x: V.x - fx * 2.6, z: V.z - fz * 2.6, yaw: V.yaw, sp: Math.abs(sp), t: now }); if (W.pts.length > W.N) W.pts.length = W.N; }
+  const pa = W.m.geometry.attributes.position, ca = W.m.geometry.attributes.color; let n = 0;
+  for (const q of W.pts) { const a = now - q.t, k = Math.max(0, 1 - a / 6) * Math.min(1, q.sp / 8), rx = Math.cos(q.yaw), rz = -Math.sin(q.yaw), hw = Math.min(16, .9 + a * q.sp * .36), bw = .35 + a * .45, y = water + .05;
+    const set = (j, d, c) => { pa.setXYZ(n * 6 + j, q.x + rx * d, y, q.z + rz * d); ca.setXYZ(n * 6 + j, c, c, c); };
+    const f = k * k;                                              // (soft foam: brightest just behind the boat, gone in a few seconds)
+    set(0, -hw - bw / 2, 0); set(1, -hw + bw / 2, .22 * f); set(2, -.7 - a * .3, .12 * f); set(3, .7 + a * .3, .12 * f); set(4, hw - bw / 2, .22 * f); set(5, hw + bw / 2, 0); n++; }
+  W.m.geometry.setDrawRange(0, Math.max(0, n - 1) * 18); pa.needsUpdate = ca.needsUpdate = true; W.m.visible = n > 1;
+}
+function btWakeH(V, sp, x, z) {                                  // how high the wake lifts the water here (two ridges in a V behind the boat)
+  const fx = -Math.sin(V.yaw), fz = -Math.cos(V.yaw), rx = Math.cos(V.yaw), rz = -Math.sin(V.yaw), dx = x - (V.x - fx * 2.6), dz = z - (V.z - fz * 2.6);
+  const along = -(dx * fx + dz * fz), lat = Math.abs(dx * rx + dz * rz); if (along < 1) return 0;
+  const ridge = .9 + along * .36, k = Math.min(1, Math.abs(sp) / 12) * Math.exp(-along / 45);
+  return .55 * k * Math.exp(-Math.pow((lat - ridge) / 1.1, 2)) - .12 * k * Math.exp(-Math.pow(lat / 1.4, 2));
+}
+function btOtherPose(id) {                                       // someone else's boat, as I'm drawing it: { x, z, yaw, sp, obj }
+  const B = BT.others.get(id); return B && B.obj && B.obj.visible ? B : null;
+}
+function btTick(dt) {                                            // (in geoTick) your boat, the others' boats, the wakes, the boat driving itself
+  const V = BT.me;
+  if (V && V.obj) {
+    if (!btOn() || Math.hypot(V.x - P.x, V.z - P.z) > 900) { scene.remove(V.obj); V.obj = null; }
+    else if (!BT.ride) { const auto = BT.ski && BT.ski.own === "me"; V.auto = auto; btMove(V, dt, auto ? 13 : 0, auto ? btAutoSteer(V) : 0); if (auto) btEngine(true, Math.min(1, V.sp / 20), .6, .45); else if (BT.snd && !BT.ride) btEngine(false); }
+    if (V.obj) btWake("me", V, V.sp, dt);
+  }
+  for (const L of mpOpen()) { let B = BT.others.get(L.id); const a = L.bt, ok = Array.isArray(a) && a.length === 8 && L.R && L.R.alive;
+    if (!ok) { if (B && B.obj) B.obj.visible = false; continue; }
+    if (!B) { B = { obj: boatModel(), x: a[0], z: a[2], yaw: 0, sp: 0 }; scene.add(B.obj); BT.others.set(L.id, B); }
+    const q = _q1.set(a[3], a[4], a[5], a[6]), e = new THREE.Euler().setFromQuaternion(q, "YXZ"), k = Math.min(1, dt * 8);
+    B.sp = a[7]; B.x += (a[0] + -Math.sin(e.y) * B.sp * .08 - B.x) * k; B.z += (a[2] + -Math.cos(e.y) * B.sp * .08 - B.z) * k;   // (a little ahead: their updates come a moment late)
+    let dy = e.y - B.yaw; while (dy > Math.PI) dy -= 2 * Math.PI; while (dy < -Math.PI) dy += 2 * Math.PI; B.dYaw = dy * k; B.yaw += B.dYaw;
+    B.obj.visible = true; B.obj.position.set(B.x, a[1] + (B.obj.position.y - a[1]) * .5, B.z); B.obj.rotation.set(e.x, B.yaw, e.z, "YXZ"); B.obj.updateMatrixWorld(true); btWake(L.id, B, B.sp, dt); }
+  for (const [id, B] of BT.others) if (!MP.links.get(id)) { scene.remove(B.obj); BT.others.delete(id); const W = BT.wakes.get(id); if (W) { scene.remove(W.m); BT.wakes.delete(id); } }
+  for (const [id, W] of BT.wakes) if (id !== "me" && !BT.others.has(id)) { scene.remove(W.m); BT.wakes.delete(id); }
+  // others water skiing: skis under them and a rope to the boat
+  for (const L of mpOpen()) { let S = BT.rskis.get(L.id); const on = Array.isArray(L.bo) && L.bo[1] === -1 && L.R && L.R.alive;
+    if (!on) { if (S) S.skis.visible = S.rope.visible = false; continue; }
+    if (!S) { S = { skis: btSkiModel(), rope: btRopeLine() }; scene.add(S.skis); BT.rskis.set(L.id, S); }
+    const h = L.R.head, Bo = L.bo[0] === mpMyId() ? BT.me : btOtherPose(L.bo[0]); S.skis.visible = true; S.skis.position.set(h.x, water + .03, h.z); S.skis.rotation.set(0, Bo ? Bo.yaw : 0, 0);
+    S.rope.visible = !!(Bo && Bo.obj); if (S.rope.visible) { const T = Bo.obj.localToWorld(BT_TOW.clone()), p = S.rope.geometry.attributes.position; p.setXYZ(0, h.x, h.y - .55, h.z); p.setXYZ(1, T.x, T.y, T.z); p.needsUpdate = true; } }
+}
+function btRopeLine() { const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(6), 3)); const ln = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xf0e0a0 })); ln.frustumCulled = false; scene.add(ln); return ln; }
+function btSkiModel() {
+  const g = new THREE.Group(), m = new THREE.MeshLambertMaterial({ color: 0xffb030 });
+  for (const s of [-1, 1]) { const k = new THREE.Mesh(new THREE.BoxGeometry(.13, .03, 1.5), m); k.position.set(s * .14, 0, -.1); g.add(k); const tip = new THREE.Mesh(new THREE.BoxGeometry(.13, .03, .2), m); tip.position.set(s * .14, .05, -.9); tip.rotation.x = .5; g.add(tip); }
+  return g;
+}
+function btEngine(on, k, thr, vol = 1) {                          // a deeper motor than the jet ski: a low burble that rises with speed, and the hull slapping the water
+  if (!SND.ctx) return; const c = SND.ctx;
+  if (on && !BT.snd) {
+    const o = c.createOscillator(), o2 = c.createOscillator(), lp = c.createBiquadFilter(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+    o.type = "sawtooth"; o2.type = "sine"; lp.type = "lowpass"; lp.frequency.value = 220; lp.Q.value = .5; g.gain.value = 0; lfo.type = "sine"; lfo.frequency.value = 7; lg.gain.value = 0; lfo.connect(lg).connect(g.gain);
+    const nb = c.createBufferSource(); nb.buffer = SND.noise; nb.loop = true; const wf = c.createBiquadFilter(); wf.type = "bandpass"; wf.frequency.value = 500; wf.Q.value = .6; const ng = c.createGain(); ng.gain.value = 0;
+    o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(SND.master); nb.connect(wf).connect(ng).connect(SND.master); o.start(); o2.start(); lfo.start(); nb.start();
+    BT.snd = { o, o2, lp, g, nb, ng, wf, lg, lfo }; gunFoley([[0, 90, .35, .14], [.2, 130, .3, .12]]);
+  }
+  const S = BT.snd; if (!S) return; const t = c.currentTime;
+  if (!on) { S.g.gain.setTargetAtTime(0, t, .25); S.ng.gain.setTargetAtTime(0, t, .25); S.lg.gain.setTargetAtTime(0, t, .25); BT.snd = null; setTimeout(() => { try { S.o.stop(); S.o2.stop(); S.nb.stop(); S.lfo.stop(); } catch (_) {} }, 900); return; }
+  const f = 34 + 46 * k + 8 * thr; S.o.frequency.setTargetAtTime(f, t, .15); S.o2.frequency.setTargetAtTime(f * .5, t, .15); S.lp.frequency.setTargetAtTime(200 + 420 * Math.max(k, thr * .6), t, .2);
+  S.g.gain.setTargetAtTime((.03 + .045 * Math.max(k, thr * .8)) * vol, t, .15); S.lg.gain.setTargetAtTime(.012 * (1 - k) * vol, t, .2);
+  S.ng.gain.setTargetAtTime(.035 * k * vol, t, .15); S.wf.frequency.setTargetAtTime(380 + 600 * k, t, .2);
+}
+// ---- climbing aboard: your own boat (you drive), a friend's (a seat), or the tow handle behind either (water skiing)
+function btTargets() {                                           // the boats I could climb onto: [owner id, boat]
+  const L = []; if (BT.me && BT.me.obj) L.push(["me", BT.me]); for (const [id, B] of BT.others) if (B.obj && B.obj.visible) L.push([id, B]); return L;
+}
+function btAimTick(I, main, off) {
+  const gunUp = vr.gun && vr.gun.visible, h = gunUp ? off : main; let best = null;
+  if (h && !GEO.packOpen && !GEO.held) {
+    const o = h.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(h.rayQ);
+    for (const [id, B] of btTargets()) { const fx = -Math.sin(B.yaw), fz = -Math.cos(B.yaw);
+      for (const [what, px, pz, r, rng] of [["ski", B.x - fx * (2.6 + BT_ROPE), B.z - fz * (2.6 + BT_ROPE), 2.5, 9], ["ski", B.x - fx * 3.4, B.z - fz * 3.4, 1.2, 9], ["on", B.x, B.z, 2.4, 10]]) {
+        if (Math.hypot(px - P.x, pz - P.z) > rng + r) continue; const c = _v2.set(px, water + .8, pz), toC = c.clone().sub(o), t = toC.dot(d);
+        if (t > 0 && toC.lengthSq() - t * t < r * r) { best = { id, B, what }; break; } }
+      if (best) break; }
+  }
+  const was = BT.aim; if ((best && best.B) !== (was && was.B)) { if (was) btGlow(was.B.obj, false); if (best) { btGlow(best.B.obj, true); buzz(h === main ? (set.hand === "right" ? "R" : "L") : (set.hand === "right" ? "L" : "R"), .15, 15); } }
+  BT.aim = best;
+  if (best && h && edge(h === main ? "btM" : "btO", h.trig)) { btGlow(best.B.obj, false); BT.aim = null;
+    if (best.what === "ski") btSkiStart(best.id); else if (best.id === "me") btDrive(); else btSit(best.id); }
+  else if (h) edge(h === main ? "btM" : "btO", h.trig);
+  if (best && (BT.aimSaidT = (BT.aimSaidT || 0) - 1 / 60) <= 0) { BT.aimSaidT = 6; vrBanner(best.what === "ski" ? "Pull the trigger to grab the tow rope and water ski" : best.id === "me" ? "Pull the trigger to climb aboard and drive" : "Pull the trigger to climb aboard", 2, 1); }
+}
+function btSeatPose(B, k) { const s = BT_SEATS[k]; return B.obj.localToWorld(new THREE.Vector3(s[0], s[1] + .3, s[2])); }
+function btCommonOn() { geoHeld(null); vr.gunOut = false; vr.nadeMode = vr.bowMode = vr.flareMode = vr.gpsMode = false; vr.binos = vr.scoped = false; P.vy = 0; P.onGround = true; P.gliding = false; vr.cl = null; vr.climbing = false; vr.goodX = undefined; }
+function btDrive() {
+  const V = BT.me; if (!V || !V.obj) return; btSkiEnd(); btCommonOn();
+  BT.ride = { V, grab: { L: false, R: false }, eng: false, said: false, eyeOff: 1.72 - Math.max(1, Math.min(1.9, vr.headLocalY || 1.6)) };   // (seated: your eyes 1.72 m above the hull's bottom)
+  let d = V.yaw - P.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; BT.ride.turn0 = d;
+  const s = btSeatPose(V, 0); P.x = s.x; P.z = s.z; P.y = V.hy + BT.ride.eyeOff;
+  gunFoley([[0, 400, .2, .12]]); vrBanner("Both hands on the wheel and squeeze to start", 3, 1);
+}
+function btSit(id) {
+  const B = BT.others.get(id); if (!B) return;
+  const taken = new Set(mpOpen().filter(L => Array.isArray(L.bo) && L.bo[0] === id).map(L => L.bo[1]));
+  const k = [1, 2, 3].find(q => !taken.has(q)); if (!k) { vrBanner("No seats left on that boat", 2, 0); return; }
+  btSkiEnd(); btCommonOn(); BT.pass = { id, seat: k, eyeOff: 1.72 - Math.max(1, Math.min(1.9, vr.headLocalY || 1.6)) };
+  let d = B.yaw - P.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; BT.pass.turn0 = d;
+  gunFoley([[0, 400, .2, .12]]); vrBanner("Aboard! Hands free and point at the water or land to hop off", 3, 1);
+}
+function btSkiStart(own) {
+  const B = own === "me" ? BT.me : BT.others.get(own); if (!B || !B.obj) return;
+  btOffBoat(); btCommonOn();
+  const fx = -Math.sin(B.yaw), fz = -Math.cos(B.yaw), T = B.obj.localToWorld(BT_TOW.clone());
+  BT.ski = { own, x: T.x - fx * (BT_ROPE - 2), z: T.z - fz * (BT_ROPE - 2), lat: 0, hy: water, vy: 0, air: false, crouchT: 9, stand: vr.headLocalY || 1.6, hl0: vr.headLocalY || 1.6, slowT: 0, said: false, surf0: water };
+  let d = B.yaw - P.yaw; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; BT.ski.turn0 = d;
+  P.x = BT.ski.x; P.z = BT.ski.z; P.y = water;
+  if (!BT.skis) { BT.skis = btSkiModel(); scene.add(BT.skis); }
+  if (!BT.rope) BT.rope = btRopeLine();
+  if (!BT.handle) { BT.handle = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, .36, 8), new THREE.MeshLambertMaterial({ color: 0x2a2a2a })); BT.handle.rotation.z = Math.PI / 2; scene.add(BT.handle); }
+  BT.skis.visible = BT.rope.visible = BT.handle.visible = true;
+  vrBanner(own === "me" ? "Hold the handle (a grip). Look where you want to go. Crouch, then stand up fast at the wake to jump." : "Hold the handle (a grip). Look where you want to go. Crouch, then stand up fast at the wake to jump.", 5, 1);
+}
+function btSkiEnd(fell) {
+  if (!BT.ski) return; BT.ski = null; if (BT.skis) BT.skis.visible = false; if (BT.rope) BT.rope.visible = false; if (BT.handle) BT.handle.visible = false;
+  if (fell) { geoPop(new THREE.Vector3(P.x, water, P.z), 0xd8f0ff, 24, "splash"); gunFoley([[0, 160, .4, .2], [.05, 700, .3, .12]]); buzz("L", .8, 150); buzz("R", .8, 150); vrBanner(fell === "slow" ? "The boat slowed down: you sank" : "Wipeout!", 2, 0); }
+  P.y = Math.max(groundAt(P.x, P.z), water - 1.1); P.vy = 0;
+}
+function btOffBoat(x, z) {                                        // off the boat (driver or passenger): onto the spot you pointed at, land or water
+  if (BT.ride) { BT.ride = null; btEngine(false); } BT.pass = null; if (BT.ring) BT.ring.visible = false;
+  if (x !== undefined) { P.x = x; P.z = z; P.y = Math.max(groundAt(x, z), water - 1.1); P.vy = 0; geoPop(new THREE.Vector3(x, Math.max(water, groundAt(x, z)), z), 0xd8f0ff, H(x, z) < water ? 14 : 2, "splash"); gunFoley([[0, 300, .15, .12]]); }
+}
+function btHandsTick(I, main) {                                   // on the boat: the wheel (driving), and hopping off; skiing: the handle
+  if (BT.ski) { const S = BT.ski, L = I.hands.left, R = I.hands.right, held = (L && L.grip > .5) || (R && R.grip > .5);
+    if (!held && (S.heldT = (S.heldT || 0) + 1 / 60) > .25) btSkiEnd(true); else if (held) S.heldT = 0; return; }
+  if (BT.ride) { const Rd = BT.ride, U = Rd.V.obj.userData;
+    for (const [s, hn] of [["L", "left"], ["R", "right"]]) { const h = I.hands[hn], gp = btWheelGrip(s);
+      if (!Rd.grab[s] && h && gp && h.grip > .6 && h.pos.distanceTo(gp) < .3) { Rd.grab[s] = true; buzz(s, .3, 30); }
+      else if (Rd.grab[s] && (!h || h.grip < .35)) Rd.grab[s] = false; }
+    const both = Rd.grab.L && Rd.grab.R; if (both && !Rd.eng) { Rd.eng = true; btEngine(true, 0, 0); if (!Rd.said) { Rd.said = true; vrBanner("Trigger: throttle · turn the wheel to steer", 3, 1); } } else if (!both && Rd.eng) Rd.eng = false; }
+  const free = !(BT.ride && (BT.ride.grab.L || BT.ride.grab.R)) && !(vr.gun && vr.gun.visible) && main; let spot = null;
+  if (free) { const o = main.rayPos, d = _v1.set(0, 0, -1).applyQuaternion(main.rayQ), ht = castShot(o, d.clone(), 14), B = BT.ride ? BT.ride.V : btOtherPose(BT.pass && BT.pass.id);
+    if (ht.p && B && Math.hypot(ht.p.x - B.x, ht.p.z - B.z) > 3.2 && (H(ht.p.x, ht.p.z) < water - .5 || slopeNy(ht.p.x, ht.p.z) > .7)) spot = ht.p; }
+  if (!BT.ring) { BT.ring = new THREE.Mesh(new THREE.RingGeometry(.35, .5, 24), new THREE.MeshBasicMaterial({ color: 0xffd65a, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, fog: false })); BT.ring.rotation.x = -Math.PI / 2; BT.ring.renderOrder = 5; scene.add(BT.ring); }
+  BT.ring.visible = !!spot; if (spot) BT.ring.position.set(spot.x, Math.max(water, groundAt(spot.x, spot.z)) + .06, spot.z);
+  if (main && edge("btOff", main.trig) && spot) btOffBoat(spot.x, spot.z);
+}
+function btWheelGrip(side) { const Rd = BT.ride; if (!Rd || !Rd.V.obj) return null; const w = Rd.V.obj.userData.wheel; w.updateMatrixWorld(true); return w.localToWorld(new THREE.Vector3(side === "L" ? -.18 : .18, 0, 0)); }
+function btGripAt(side) { if (BT.ride && BT.ride.grab[side]) return btWheelGrip(side); return null; }
+function btRide(dt) {                                             // (instead of walking: driving, sitting, or skiing)
+  const I = vr.I;
+  if (BT.ride) { const Rd = BT.ride, V = Rd.V, L = I && I.hands.left, Rh = I && I.hands.right, both = Rd.eng && Rd.grab.L && Rd.grab.R && L && Rh;
+    const thr = both ? Math.max(L.trig || 0, Rh.trig || 0) : 0, rx = Math.cos(V.yaw), rz = -Math.sin(V.yaw);
+    let st = 0; if (both) { const lx = Math.max(.05, (Rh.pos.x - L.pos.x) * rx + (Rh.pos.z - L.pos.z) * rz); st = Math.max(-1, Math.min(1, Math.atan2(L.pos.y - Rh.pos.y, lx) / .9)); }   // the wheel: right hand down turns right
+    const ox = V.x, oz = V.z, turn = btMove(V, dt, thr * 20 * TUNE.jetMax / 20, st);
+    const px = P.x - ox, pz = P.z - oz, c = Math.cos(turn), s = Math.sin(turn); P.x = V.x + px * c + pz * s; P.z = V.z - px * s + pz * c;
+    P.y = V.hy + Rd.eyeOff; P.vy = 0; P.onGround = true; P.crouch = false; vr.pendTurn = turn + (Rd.turn0 || 0); Rd.turn0 = 0;
+    if (Rd.eng) btEngine(true, Math.min(1, Math.abs(V.sp) / 20), thr); else if (BT.snd) btEngine(false);
+    input.run = V.sp > 12; return; }
+  if (BT.pass) { const B = btOtherPose(BT.pass.id); if (!B) { vrBanner("The boat's gone", 2, 0); btOffBoat(P.x, P.z); return; }
+    const s = btSeatPose(B, BT.pass.seat); P.x = s.x; P.z = s.z; P.y = B.obj.position.y + BT.pass.eyeOff; P.vy = 0; P.onGround = true; P.crouch = false;
+    vr.pendTurn = (B.dYaw || 0) + (BT.pass.turn0 || 0); BT.pass.turn0 = 0; return; }
+  if (BT.ski) btSkiRide(dt, I);
+}
+function btSkiRide(dt, I) {                                       // water skiing behind a boat: pulled by the rope, carving where you look, popping off the wake
+  const S = BT.ski, B = S.own === "me" ? BT.me : btOtherPose(S.own);
+  if (!B || !B.obj) { btSkiEnd(true); return; }
+  const sp = B.sp || 0, bf = [-Math.sin(B.yaw), -Math.cos(B.yaw)], br = [Math.cos(B.yaw), -Math.sin(B.yaw)], T = B.obj.localToWorld(BT_TOW.clone());
+  if (sp < 4) { if ((S.slowT += dt) > 1.6) { btSkiEnd("slow"); return; } } else S.slowT = 0;
+  // steering: the way your head faces, against the boat's heading
+  const hq = I ? I.headQ : null; let a = 0;
+  if (hq) { const f = _v1.set(0, 0, -1).applyQuaternion(hq); const hy = Math.atan2(-f.x, -f.z); a = hy - B.yaw; while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; }
+  const latW = Math.max(-.9, Math.min(.9, -Math.sin(a) * 1.5)) * Math.max(6, sp);   // look right (a < 0): carve right
+  S.lat += (latW - S.lat) * Math.min(1, dt * (S.air ? .3 : 2.2));
+  S.x += (bf[0] * sp + br[0] * S.lat) * dt; S.z += (bf[1] * sp + br[1] * S.lat) * dt;
+  const dx = S.x - T.x, dz = S.z - T.z, dd = Math.hypot(dx, dz);
+  if (dd > BT_ROPE) { S.x = T.x + dx / dd * BT_ROPE; S.z = T.z + dz / dd * BT_ROPE; }   // the rope holds you
+  if (H(S.x, S.z) > water - .3) { btSkiEnd(true); return; }                              // ran onto the shore
+  // up and down: the swells, the wake, and you
+  const t = performance.now() / 1000, surf = water + jetSwell(S.x, S.z, t) * .4 + btWakeH(B, sp, S.x, S.z), sv = (surf - S.surf0) / Math.max(dt, 1e-3); S.surf0 = surf;
+  const hl = vr.headLocalY || 1.6, hv = (hl - S.hl0) / Math.max(dt, 1e-3); S.hl0 = hl; S.stand = Math.max(hl, S.stand - dt * .02);
+  if (hl < S.stand - .2) S.crouchT = 0; else S.crouchT += dt;
+  if (!S.air) {
+    S.hy = surf;
+    if (hv > 1.0 && S.crouchT < .8) { S.air = true; S.vy = .5 + hv * .9 + Math.max(0, sv) * .9; S.crouchT = 9; gunFoley([[0, 900, .2, .1]]); }   // crouched, then stood up fast: pop
+    else if (sv > 2.2) { S.air = true; S.vy = sv * .45; }                                  // straight over the wake, standing: a little hop
+    if (S.air) { geoPop(new THREE.Vector3(S.x, water, S.z), 0xd8f0ff, 8, "splash"); buzz("L", .3, 40); buzz("R", .3, 40); }
+  } else {
+    S.vy -= 9.8 * dt; S.hy += S.vy * dt;
+    if (S.hy <= surf) { const hit = -S.vy; S.air = false; S.hy = surf;
+      if (hit > 7.5) { btSkiEnd(true); return; }
+      geoPop(new THREE.Vector3(S.x, water, S.z), 0xd8f0ff, 6 + Math.round(hit * 2), "splash"); gunFoley([[0, 200, .2, .08 + hit * .015]]); buzz("L", .3 + hit * .06, 70); buzz("R", .3 + hit * .06, 70);
+      if (hit > 3 && !S.said) { S.said = true; vrBanner("Nice jump!", 1.5, 2); } }
+  }
+  if (!S.air && Math.abs(S.lat) > 4 && (S.sprT = (S.sprT || 0) - dt) <= 0) { S.sprT = .12; geoPop(new THREE.Vector3(S.x - bf[0] * .8, water, S.z - bf[1] * .8), 0xd8f0ff, 3, "splash"); }   // spray as you carve
+  P.x = S.x; P.z = S.z; P.y = S.hy + .03; P.vy = 0; P.onGround = true; P.crouch = false; vr.pendTurn = S.turn0 || 0; S.turn0 = 0;
+  // the skis under you, the handle in your hands, the rope to the boat
+  BT.skis.position.set(S.x, S.hy + .02, S.z); BT.skis.rotation.set(0, B.yaw + Math.atan2(-S.lat, Math.max(4, sp)) * .8, -S.lat * .02);
+  const L = I && I.hands.left, R = I && I.hands.right, hp = L && R ? L.pos.clone().add(R.pos).multiplyScalar(.5) : new THREE.Vector3(P.x, P.y + 1.1, P.z);
+  BT.handle.position.copy(hp); BT.handle.rotation.set(0, B.yaw, Math.PI / 2);
+  const p = BT.rope.geometry.attributes.position; p.setXYZ(0, hp.x, hp.y, hp.z); p.setXYZ(1, T.x, T.y, T.z); p.needsUpdate = true;
+  if ((S.buzzT = (S.buzzT || 0) - dt) <= 0) { S.buzzT = .12; const k = S.air ? 0 : .05 + .05 * Math.min(1, Math.abs(S.lat) / 8); buzz("L", k, 15); buzz("R", k, 15); }
+  input.run = true;
+}
+function btClear() { btSkiEnd(); btOffBoat(); if (BT.me && BT.me.obj) scene.remove(BT.me.obj); BT.me = null; for (const B of BT.others.values()) scene.remove(B.obj); BT.others.clear();
+  for (const W of BT.wakes.values()) scene.remove(W.m); BT.wakes.clear(); for (const S of BT.rskis.values()) scene.remove(S); BT.rskis.clear(); BT.aim = null; btEngine(false); }
+const btBusy = () => !!(BT.ride || BT.pass || BT.ski);
+
 function lvClear() { lvOff(); for (const V of LV.list) if (V.obj) { scene.remove(V.obj); V.obj = null; } LV.list.length = 0; LV.aim = null; for (const O of LV.others.values()) scene.remove(O); LV.others.clear(); }
 /* ---- the Gear Lab (Dev menu): a Treeocashing planet with every item and every gun at red, nothing saved to your character. Y →
    "Gear Lab tools": quick helpers (go to a lake or a sea beach, a jet ski here, predators, day or night, refill, the next cache close) and
@@ -7617,7 +7916,7 @@ function generate() {
   GLOBE = EN ? { R: GLB.R, tp: [0, 0, 0], llT: 0, utc: 0, lat: 0, lon: 0, p: [0, 0, 1], ax: [1, 0, 0], az: [0, 0, 1], Nf: null, Ef: null } : null;   // Geocaching: the little globe
   CURVE.x = GLOBE ? 1 / (2 * GLB.R) : 0; if (GEO.on && !(GLOBE && geoMode())) geoStop();   // (every endless map is the planet; Treeocashing only when it's Treeocashing)
   const full = !GEO.labWant && DEV.ok && DEV.full && set.geoNet && !set.comp; GEO.fullWant = full;   // Dev: Full level
-  if (GLOBE) GLOBE.sv = !geoMode() || set.comp ? null : GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_N, found: Array.from({ length: GEO_N }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (the Gear Lab: everything, saved nowhere) // (the planet is this game's own; only your level carries over)
+  if (GLOBE) GLOBE.sv = !geoMode() || set.comp ? null : GEO.labWant ? { n: 49, found: Array.from({ length: 49 }, (_, i) => i + 1), score: 0, kills: 0 } : full ? { n: GEO_TOP, found: Array.from({ length: GEO_TOP }, (_, i) => i + 1), score: 0, kills: 0 } : geoLoad();   // (the Gear Lab: everything, saved nowhere) // (the planet is this game's own; only your level carries over)
   ENDLESS = EN ? { chunks: new Map(), cells: new Set(), want: [], job: null, cur: null, scanT: 0, scanX: 1e9, scanZ: 1e9, solidQ: new Set(), shQ: new Set(), dropQ: new Set(), ts: 0, slice: 1e9, seen: new Set(), shoreC: [0, 0], farC0: [0, 0], farT: 0, nearDirty: true, mapBusy: false } : null;
   applySize();
   starMat.uniforms.uPx.value = renderer.getPixelRatio();
@@ -11531,7 +11830,7 @@ function qgunFor(kind, tier) {                               // the pack gun for
   return QGUN.models[key] || null;
 }
 function vrGun() {
-  const kind = ARMED() ? (vr.weapon || "hunt") : "pvp", tier = Math.max(1, tierOf(kind) || 1), Q = qgunFor(kind, tier), key = Q ? qgunKey(kind, tier) : kind;
+  const kind = ARMED() ? (vr.weapon || "hunt") : "pvp", tier = Math.max(1, tierOf(kind) || 1), Q = qgunFor(kind, tier), key = (Q ? qgunKey(kind, tier) : kind) + (tier >= 6 ? "g" : "");
   if (vr.gun && vr.gunKind === kind && vr.gunKey === key) return vr.gun;
   if (vr.gun) vr.gun.visible = false;
   vr.guns = vr.guns || {};
@@ -11541,6 +11840,7 @@ function vrGun() {
     g = new THREE.Group(); const model = (Q ? Q.group : kind === "hunt" ? sniper : kind === "pvp" ? pvpRifle : GUNMODEL[kind]).clone(true); model.visible = true; g.add(model);
     if (kind === "hunt" && !Q) model.scale.multiply(new THREE.Vector3(...SNIPER_SC));
     if (Q) model.traverse(o => { if (o.isMesh) o.material = o.material.clone(); });
+    if (tier >= 6) model.traverse(o => { if (o.isMesh && o.material) { o.material = o.material.clone(); if (o.material.color) o.material.color.setRGB(1.7, 1.28, .48); if (o.material.specular) o.material.specular.setHex(0xb08a3a); if (o.material.shininess !== undefined) o.material.shininess = 90; } });   // (3.48) the gold star: a gold gun
     if (kind === "hunt" && !Q) { const t = camoTex("mixed").clone(); t.needsUpdate = true; t.repeat.set(7, 7);
       model.traverse(o => { if (o.isMesh && o.material.color && o.material.color.getHex() === 0x3d4632) { o.material = o.material.clone(); o.material.map = t; o.material.color.set("#ffffff"); o.material.needsUpdate = true; } }); }   // camo sniper stock
     if (kind === "hunt" || kind === "pvp") { const lens = makeLens(kind === "hunt" ? (Q && Q.lensR ? Math.max(.016, Q.lensR * 1.05) : .024 * SNIPER_SC[1]) : .019); lens.position.set(...GUNSPOT[kind].eye); g.add(lens); g.userData.lens = lens; }
@@ -12271,7 +12571,7 @@ function vrHands() {
     poseHand(H, .08 + .92 * g, onGun && isMain ? .35 + .45 * t : .08 + .92 * Math.max(g * .9, t), Math.max(g, t * .6));
     const glow = !!(C.was[side + "in"] || C.hold === side);          // inside something you can hold: the hand shows through it in x-ray blue
     for (const gp of H.ghostParts) gp.visible = glow;
-    const jg = (JET.ride && JET.ride.grab[side] && jetGripAt(side)) || (LV.ride && LV.ride.grab[side] && lvGripAt(side)); if (jg) { H.g.position.copy(jg); poseHand(H, 1, 1, 1); }   // hands stuck to the bars
+    const jg = (JET.ride && JET.ride.grab[side] && jetGripAt(side)) || (LV.ride && LV.ride.grab[side] && lvGripAt(side)) || btGripAt(side); if (jg) { H.g.position.copy(jg); poseHand(H, 1, 1, 1); }   // hands stuck to the bars
   }
 }
 // the scope and binocular view: the whole headset view zooms in, black round the lens (one mono view, so it stays comfortable)
@@ -13082,6 +13382,7 @@ const GUIDE_MORE = {                                            // a bit more th
   snowmobile: "Like the dirt bike, but it wants snow or ice: fast there, slow anywhere else.",
   buggy: "Like the dirt bike, but you hold both sides of the wheel: right hand down turns right. Steady, quick on sand, not for steep hills.",
   torch: "Take it out of your pack to light it: it goes in your other hand, so your gun hand stays free. Everything near you glows warm. Take it out again to put it out. Others see your light.",
+  boat: "Wade into the sea and take it out. Climb aboard to drive: both hands on the wheel and squeeze to start, trigger for throttle, turn the wheel to steer. Friends point at your boat to take a seat, or at the tow handle behind it to water ski. Water skiing: hold the handle, look where you want to go, and crouch then stand up fast as you cross the wake to jump. If nobody's driving, your own boat drives itself while you ski.",
   fglass: "Wear them on your jet ski: you see the fish under the water. Cast at a shoal for a bite; the deep ones are the big ones.",
 };
 const GUIDE_BASICS = [
@@ -13098,7 +13399,7 @@ function guidePages() {                                          // the guide as
   for (const g of GI_GUNS) if (own[g] > 0) { const [t, x] = GUIDE_GUN[g]; out.push({ k: "g:" + g, t: t + (own[g] > 1 ? "  " + "★".repeat(own[g]) : ""), x }); }
   for (const [k] of GI_LIST) if (GEO.items && GEO.items.has(k)) out.push({ k: "i:" + k, t: giNm(k), x: GUIDE_MORE[k] || (giDesc(k) + (GI[k].use ? "." : ". You don't have to do anything: it just works.")) });
   if (n >= GEO_N) out.push({ k: "b:isle", t: "Dinosaur island", x: "The big island in the open ocean on the equator. It's always a dark thunderstorm there, it's full of dinosaurs, and while you're on it raptors hunt you. Take a torch, and your jet ski to get there." });
-  let shown = 0; for (let m = n + 1; m <= GEO_N + GLASSES.length && shown < 3; m++) { const r = geoRewardOf(m); if (!r.gun && !r.item) continue;
+  let shown = 0; for (let m = n + 1; m <= GEO_TOP && shown < 3; m++) { const r = geoRewardOf(m); if (!r.gun && !r.item) continue;
     if (r.gun && own[r.gun] >= r.star) continue; if (r.item && GEO.items && GEO.items.has(r.item)) continue;
     out.push({ k: "l:" + m, t: "Level " + m, x: "Find " + (m - n) + " more cache" + (m - n === 1 ? "" : "s") + " to open this page: " + (r.gun ? (own[r.gun] ? "a better " + GUIDE_GUN[r.gun][0].toLowerCase() : "a new gun") : "new gear") + ".", lock: true }); shown++; }
   return out;
@@ -14445,6 +14746,7 @@ const keys = {};
 function update(dt) {
   if (JET.ride && vr.on && state === "play") { jetRide(dt); return; }
   if (LV.ride && vr.on && state === "play") { lvRide(dt); return; }
+  if (btBusy() && vr.on && state === "play") { btRide(dt); return; }
   if (GEO.sleep && vr.on && state === "play") { sleepMove(dt); return; }
   if ((UNDER.on || UNDER.go) && vr.on && state === "play") { if (UNDER.on) ugMove(dt); return; }   // the Underworld // in the hammock / out of your body // riding a jet ski
   pcLavaTick(dt);
@@ -17380,7 +17682,7 @@ function mpRecv(o, L) {
   if (o.t === "s" && ENDLESS && !GLOBE && o.h) { const dx = Math.round((o.h[0] - P.x) / EN_P) * EN_P, dz = Math.round((o.h[2] - P.z) / EN_P) * EN_P;   // the 25 km loop
     if (dx || dz) for (const a of [o.h, o.l, o.r, o.g && o.g.p]) if (a) { a[0] -= dx; a[2] -= dz; } }
   if (o.t === "fj") { fishJumpSee(o); return; }
-  if (o.t === "s") { L.tc = (o.tc | 0) & 3; L.js = Array.isArray(o.js) ? o.js : null; L.lv = Array.isArray(o.lv) && o.lv.every(v => typeof v === "number" && isFinite(v)) ? o.lv : null; L.cl = o.cl | 0; L.cbw = !!o.cbw; L.co = !!o.co; L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
+  if (o.t === "s") { L.tc = (o.tc | 0) & 3; L.bt = Array.isArray(o.bt) && o.bt.length === 8 && o.bt.every(v => typeof v === "number" && isFinite(v)) ? o.bt : null; L.bo = Array.isArray(o.bo) && o.bo.length === 2 && typeof o.bo[0] === "string" && [-1, 1, 2, 3].includes(o.bo[1]) ? o.bo : null; L.js = Array.isArray(o.js) ? o.js : null; L.lv = Array.isArray(o.lv) && o.lv.every(v => typeof v === "number" && isFinite(v)) ? o.lv : null; L.cl = o.cl | 0; L.cbw = !!o.cbw; L.co = !!o.co; L.gh = Array.isArray(o.gh) ? o.gh : null; if (L.gh) L.ghT = performance.now(); L.k = o.k || 0; L.dd = o.dd || 0; L.pts = o.pts || 0; L.dm = o.dm || 0; L.sr = o.sr || 0; L.hi = !!o.hi; L.rd = !!o.rd; L.rx.push(Object.assign(o, { at: mpStamp(L, o) })); if (L.rx.length > 40) L.rx.shift(); return; }
   if (o.t === "f") { o.by = L.id; mpRemoteShot(o); L.shotAt = performance.now() / 1000; if (MP.host && Array.isArray(o.o)) vbHeard({ x: o.o[0], y: o.o[1], z: o.o[2] }, o.k, L.id); return; }   // (the bots hear it)
   if (o.t === "hit") { MP.lastHitBy = o.b !== undefined && o.b !== null ? vbId(o.b) : L.id; mpTakeHit(o.d, o.hd); return; }   // (or the host's bot)
   if (o.t === "die") { if (Array.isArray(o.dd) && o.dd.length === 4) dropDead(String(o.dd[0]), +o.dd[1], +o.dd[2], +o.dd[3]); if (MP.host) vbCredit(o.by); L.dieBy = o.by; L.dieHead = !!o.hd; if (o.by && o.by === mpMyId()) { MP.kills++; downChime(MP.lastDmg); vr.wristT = 0; vrBanner("You got " + (L.tag || "them"), 2.5, 1); } return; }
@@ -18736,7 +19038,7 @@ function mpTick(dt) {                                       // (also runs offlin
     const SB = GEO.sleep && GEO.hm ? sleepBody() : null;   // asleep, the others see your body in the hammock (not where your spirit is)
     mpSend({ t: "s", ts: Math.round(performance.now()), h: SB ? SB.h : pose7(I.head, I.headQ), l: SB ? SB.l : Lh ? pose7(Lh.pos, Lh.q) : null, r: SB ? SB.r : Rh ? pose7(Rh.pos, Rh.q) : null, f: +P.y.toFixed(3),
       g: G ? { k: vr.gunKind, o: 1, p: pose7(G.position, G.quaternion) } : null, a: MP.dead <= 0 && !COMP.out, gl: !!P.gliding, hp: MP.hp, k: gameMode === "hunt" ? hunt.kills : MP.kills, dd: MP.deaths, pts: gameMode === "hunt" ? +hunt.score.toFixed(1) : MP.pts, dm: MP.dmg | 0,
-      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), js: JET.ride && JET.ride.J.obj ? pose7(JET.ride.J.obj.position, JET.ride.J.obj.quaternion) : undefined, tc: GEO.on ? (GEO.worn.has("torch") ? 1 : 0) | (GEO.worn.has("headlamp") ? 2 : 0) || undefined : undefined, lv: LV.ride && LV.ride.V.obj ? [LV_KINDS.indexOf(LV.ride.V.kind)].concat(pose7(LV.ride.V.obj.position, LV.ride.V.obj.quaternion)) : undefined, cl: COMP.on ? COMP.lv : undefined, cbw: compBW() ? 1 : undefined, co: COMP.out ? 1 : undefined, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
+      gh: GEO.sleep && GEO.sleep.view && GEO.ghostK > .3 ? [+I.head.x.toFixed(2), +I.head.y.toFixed(2), +I.head.z.toFixed(2)] : undefined, sr: Math.round(sense.R || 0), hi: playerHigh() ? 1 : 0, rd: legendSeen() ? 1 : 0, tl: toolNet(), js: JET.ride && JET.ride.J.obj ? pose7(JET.ride.J.obj.position, JET.ride.J.obj.quaternion) : undefined, tc: GEO.on ? (GEO.worn.has("torch") ? 1 : 0) | (GEO.worn.has("headlamp") ? 2 : 0) || undefined : undefined, bt: BT.me && BT.me.obj ? pose7(BT.me.obj.position, BT.me.obj.quaternion).concat([+BT.me.sp.toFixed(2)]) : undefined, bo: BT.pass ? [BT.pass.id, BT.pass.seat] : BT.ski ? [BT.ski.own === "me" ? mpMyId() : BT.ski.own, -1] : undefined, lv: LV.ride && LV.ride.V.obj ? [LV_KINDS.indexOf(LV.ride.V.kind)].concat(pose7(LV.ride.V.obj.position, LV.ride.V.obj.quaternion)) : undefined, cl: COMP.on ? COMP.lv : undefined, cbw: compBW() ? 1 : undefined, co: COMP.out ? 1 : undefined, gp: (Lh && Lh.grip > .5 ? 1 : 0) | (Rh && Rh.grip > .5 ? 2 : 0) });
   }
   for (const L of MP.links.values()) { if (L.open && !L.bad) mpRemoteTick(L, dt); else if (L.R) mpRemoteDrop(L); mpTrailTick(L, dt); }
   mpOnlineTick(dt, playing);

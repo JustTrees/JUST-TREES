@@ -14,7 +14,7 @@ async def main():
         await pg.goto("file://" + sys.argv[1]); await pg.wait_for_timeout(500)
         await pg.evaluate(GEN, 10)
         r = await pg.evaluate("""() => { const o = {}, T = D.THREE, P = D.P, LV = D.LV;
-          o.items = D.LV_KINDS.map(k => D.GEO.items.has(k)); { D.DEV.ok = false; const g10 = D.geoGearFromCount(10).items, g50 = D.geoGearFromCount(50).items; o.live = [D.LV_KINDS.some(k => g10.has(k)), D.LV_KINDS.every(k => g50.has(k)), g50.has('jetski')]; D.DEV.ok = true; }   /* (3.44: live, with the jet ski at #50) */ o.pack = D.LV_KINDS.map(k => D.geoPackItems().includes(k));
+          o.items = D.LV_KINDS.map(k => D.GEO.items.has(k)); { D.DEV.ok = false; const g10 = D.geoGearFromCount(10).items, g50 = D.geoGearFromCount(57).items;   /* (3.48: the vehicles come at 51, 54 and 57) */ o.live = [D.LV_KINDS.some(k => g10.has(k)), D.LV_KINDS.every(k => g50.has(k)), g50.has('jetski')]; D.DEV.ok = true; }   /* (3.44: live, with the jet ski at #50) */ o.pack = D.LV_KINDS.map(k => D.geoPackItems().includes(k));
           // a clear, flat, dry spot with room in front
           tick(40); let spot = null, seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
           for (let k = 0; k < 4000 && !spot; k++) { const x = P.x + (rnd() - .5) * 500, z = P.z + (rnd() - .5) * 500;

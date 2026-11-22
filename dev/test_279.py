@@ -13,7 +13,7 @@ async def main():
           D.DEV.ok = true; D.setSeed(4242); D.setVR(true); D.setMode('hunt'); D.vr.on = true; Object.assign(D.set, { env: 'climate', land: 'natural', lat: 45, hemi: 1, month: 6, hour: 11, weather: 'clear', density: .5, rough: .5, huntMap: 'globe', dino: false });
           D.GEO.labWant = true; D.generate(); D.state = 'play'; const tick = n => { for (let i = 0; i < n; i++) { D.endlessTick(1 / 30); D.geoTick(1 / 30); } }; tick(30);
           const o = {}, V = D.vr, P = D.P;
-          o.lab = [D.GEO.lab, [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch').length, Object.values(V.own).filter(v => v >= 5).length, D.jetOn()];
+          o.lab = [D.GEO.lab, [...D.GEO.items].filter(k => !D.LV_KINDS.includes(k) && k !== 'torch' && k !== 'boat').length, Object.values(V.own).filter(v => v >= 5).length, D.jetOn()];
           D.geoSave(); o.charKept = JSON.parse(localStorage.getItem('jt-geochar')).n;
           // tweaks
           const s0 = D.geoSpeedMul(); D.tuneStep(D.TUNE_DEF.find(d => d[0] === 'boots'), 1); D.testLabSave(); o.tweak = [+s0.toFixed(2), +D.geoSpeedMul().toFixed(2), JSON.parse(localStorage.getItem('jt-tune')).boots];
