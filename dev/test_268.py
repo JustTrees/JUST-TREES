@@ -10,7 +10,7 @@ srvdir = tempfile.mkdtemp(); shutil.copy(sys.argv[1], os.path.join(srvdir, "dbg.
 for d in ("models", "sounds"): os.symlink(os.path.join(REPO, d), os.path.join(srvdir, d))
 srv = subprocess.Popen([sys.executable, "-m", "http.server", "8798", "--bind", "127.0.0.1"], cwd=srvdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); time.sleep(1.2)
 JS = """async () => { const T = D.THREE, o = {}; window.FREEZE = true;
-  D.setSeed(5); D.setVR(true); D.setMode('pvp'); Object.assign(D.set, { size: 'large', teams: 'solo', zone: 'off', capture: 'off', weather: 'clear', hour: 23, lat: 40, density: .3 }); D.generate(); D.state = 'play';
+  D.setSeed(5); D.setVR(true); D.setMode('pvp'); Object.assign(D.set, { size: 'large', teams: 'solo', zone: 'off', capture: 'off', weather: 'clear', hour: 23, lat: 40, density: .3 }); const dv = D.DEV.ok; D.DEV.ok = true; D.SPD.off.thintrees = true; D.generate(); D.DEV.ok = dv; D.SPD.off.thintrees = false;   /* (3.49: the same forest as before, so the same test spot) */ D.state = 'play';
   const V = D.vr, full = () => { V.own = { hunt: 5, ar: 5, smg: 5, pistol: 5 }; V.nades = 10; D.MP.hp = 100; D.MP.sh = 100; D.MP.dead = 0; };
   const X = () => { D.toolTick({ a: 1 }); D.toolTick({ a: 0 }); };
   const hold = (kind, e, t) => { V.weapon = kind; V.scoped = false; V.binos = false; V.nadeMode = V.flareMode = V.bowMode = false; const G = D.vrGun(); G.visible = true;
@@ -43,8 +43,8 @@ JS = """async () => { const T = D.THREE, o = {}; window.FREEZE = true;
   // the SMG's thermal mini-sight: a bot standing in front glows on it
   D.vbFit(); const B = D.VB.list[0]; for (const O of D.VB.list) if (O !== B) { O.alive = false; O.x = 1e5; }
   const bt = eye.clone().lerp(tgt, .6); D.vbJoin(B, true); B.alive = true; B.x = bt.x; B.z = bt.z; B.y = D.H(B.x, B.z);
-  for (let w = 0; w < 120 && !(B.C && B.C.top); w++) { await new Promise(r => setTimeout(r, 150)); B.thinkT = 1e9; B.mv = { x: B.x, z: B.z, spd: 0, crouch: 0 }; B.cool = 1e9; D.vbTick(1 / 30); }
-  for (let i = 0; i < 10; i++) { B.thinkT = 1e9; B.mv = { x: B.x, z: B.z, spd: 0, crouch: 0 }; B.cool = 1e9; D.vbTick(1 / 30); }
+  for (let w = 0; w < 120 && !(B.C && B.C.top); w++) { await new Promise(r => setTimeout(r, 150)); B.thinkT = 1e9; B.mv = { x: B.x, z: B.z, spd: 0, crouch: 0 }; B.cool = 1e9; D.camera.position.copy(eye); D.camera.updateMatrixWorld(); D.vbTick(1 / 30); }
+  for (let i = 0; i < 10; i++) { B.thinkT = 1e9; B.mv = { x: B.x, z: B.z, spd: 0, crouch: 0 }; B.cool = 1e9; D.camera.position.copy(eye); D.camera.updateMatrixWorld(); D.vbTick(1 / 30); }
   const se = eye.clone(), st = new T.Vector3(B.x, B.y + 1.1, B.z); G = hold('smg', se, st); X(); o.smgOn = D.TOOL.on.smg;
   const M = G.userData.tsight; o.sight = !!(M && M.visible);
   M.updateMatrixWorld(true); V.head.copy(M.children[0].getWorldPosition(new T.Vector3())).add(new T.Vector3(0, 0, 0).addScaledVector(new T.Vector3(0, 0, 1).applyQuaternion(G.quaternion), .14));

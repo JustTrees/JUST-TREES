@@ -24,9 +24,9 @@ async def main():
         out["button"] = await pg.evaluate("() => { const w = W('setup', 'Big heads'); if (!w) return null; const a = !!D.set.bigHead; w.on(); const b = !!D.set.bigHead; w.on(); return [a, b, !!D.set.bigHead]; }")
         await pg.evaluate("() => { D.setSeed(4242); Object.assign(D.set, { size: 'medium', zone: 'off', capture: 'off', teams: 'solo', hour: 13, weather: 'clear', botFill: 3 }); D.generate(); D.state = 'play'; D.vbFit(); D.vbRoundStart(); return 1; }")
         for _ in range(240):
-            if await pg.evaluate("() => { for (let i = 0; i < 3; i++) D.vbTick(1 / 30); return D.VB.list.some(B => B.C && B.alive) || D.CHAR.failed > 0; }"): break
+            if await pg.evaluate("() => { const N = D.VB.list.find(B => B.alive); if (N) { D.camera.position.set(N.x + 4, N.y + 1.6, N.z); D.camera.updateMatrixWorld(); } for (let i = 0; i < 3; i++) D.vbTick(1 / 30); return D.VB.list.some(B => B.C && B.alive) || D.CHAR.failed > 0; }"): break
             await pg.wait_for_timeout(250)
-        out["shots"] = await pg.evaluate("""() => { const B = D.VB.list.find(B => B.C && B.alive); if (!B) return null; const T = D.THREE, res = {};
+        out["shots"] = await pg.evaluate("""() => { const B = D.VB.list.find(B => B.alive); if (!B) return null; D.camera.position.set(B.x + 4, B.y + 1.6, B.z); D.camera.updateMatrixWorld(); for (let i = 0; i < 40 && !B.C; i++) D.vbTick(1 / 30); if (!B.C) return null;   /* (3.49: far bots are a simple stand-in, so stand next to it first) */ const T = D.THREE, res = {};
           for (const on of [false, true]) { D.set.bigHead = on; D.camera.position.set(B.x + 4, B.y + 1.6, B.z); D.camera.updateMatrixWorld(); for (let i = 0; i < 6; i++) D.vbTick(1 / 30); B.C.top.updateMatrixWorld(true);
             const hp = B.C.by.Head.getWorldPosition(new T.Vector3()), sc = B.C.by.Head.scale.x; let hits = 0, heads = 0;
             for (let k = 0; k < 8; k++) { const a = k * .785, from = new T.Vector3(hp.x + Math.sin(a) * 6, hp.y + .45, hp.z + Math.cos(a) * 6), dir = new T.Vector3(hp.x, hp.y + .45, hp.z).sub(from).normalize();

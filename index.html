@@ -306,7 +306,7 @@ body:not(.touch) #jumpBtn,body:not(.touch) #zoomBtn,body:not(.touch) #fireBtn,bo
 <script>
 (() => {
 "use strict";
-const VERSION = "3.48";              // Just Trees
+const VERSION = "3.49";              // Just Trees
 document.title = "JUST TREES " + VERSION;           // the browser tab always shows the real version
 /* ================================================================================================
    JUST TREES: what's where (search for the words in quotes)
@@ -366,7 +366,7 @@ function applySize() {                      // map size from the setup screen; d
   SEG = Math.round(S / (S > 2000 ? 4 : isTouch ? 3.76 : 2.78)); /* 3 km: a vertex every 4 m (XXL: 2.8 m) */ TILE = S > 2000 ? 200 : 160; /* XXXL: a bit bigger squares */ NT = Math.ceil(S / TILE); AREA = (S / 640) * (S / 640);
   if (HIKEMAP === "endless") { S = EN_WIN; HALF = S / 2; EDGE = 1e9; SEG = 800; TILE = EN_C; NT = 0; AREA = (EN_C / 640) * (EN_C / 640); }   // counts per 200 m square; no edge
 }
-const EYE = 1.65, CH_BIG = 1.1;                             // (other players and bots are drawn 10% bigger)
+const EYE = 1.65, CH_BIG = 1.21;                            // (other players and bots are drawn bigger: 10%, 3.49 another 10%)
 /* ---- map shape: an organic outline inside the square (a coastline on islands, a soft boundary on endless maps) ---- */
 let edgeShape = { island: false, R0: 1e9, f: () => 1e9 };
 /* an arena = a map built in Map Lab: the usual settings and seed plus its own shape (length, width, roundness, coast wobble), a slide
@@ -1047,6 +1047,42 @@ function groundTest(list, r, base) {    // verify after placing; fix anything st
    so slopes and valleys come out shaped like real ground */
 /* ---------------- World generation ---------------- */
 let terrainMesh = null;
+const GCH = { list: [], on: false };                               // 3.49: the ground cut into squares (a headset): ones you can't see are skipped, far ones simpler
+function groundChunks(geo, mat) {                                  // geo: the whole ground (SEG x SEG squares); makes 3 levels of detail per square, with a short skirt hiding the gaps between levels
+  GCH.list = []; GCH.on = true;
+  const V1 = SEG + 1, P = geo.attributes.position, Cc = geo.attributes.color, Rk = geo.attributes.rocky, N = geo.attributes.normal, CN = Math.max(2, Math.ceil(SEG / 96)), b = [];
+  for (let k = 0; k <= CN; k++) b.push(Math.round(k * SEG / CN));
+  const run = (a0, a1, L) => { const r = []; for (let i = a0; i < a1; i += L) r.push(i); r.push(a1); return r; };
+  for (let cj = 0; cj < CN; cj++) for (let ci = 0; ci < CN; ci++) {
+    const ch = { lv: [], cx: 0, cz: 0, hx: 0, hz: 0, cur: -1 };
+    for (const L of [1, 2, 4]) {
+      const xs = run(b[ci], b[ci + 1], L), zs = run(b[cj], b[cj + 1], L), nx = xs.length, nz = zs.length, inner = nx * nz;
+      const ring = []; for (let a = 0; a < nx; a++) ring.push([a, 0]); for (let c = 1; c < nz; c++) ring.push([nx - 1, c]); for (let a = nx - 2; a >= 0; a--) ring.push([a, nz - 1]); for (let c = nz - 2; c > 0; c--) ring.push([0, c]);
+      const n = inner + ring.length, pos = new Float32Array(n * 3), col = new Float32Array(n * 3), rk = new Float32Array(n), nor = new Float32Array(n * 3), drop = 2 + L * 1.5;
+      const put = (o, k, dy) => { pos[o * 3] = P.getX(k); pos[o * 3 + 1] = P.getY(k) - dy; pos[o * 3 + 2] = P.getZ(k); col[o * 3] = Cc.getX(k); col[o * 3 + 1] = Cc.getY(k); col[o * 3 + 2] = Cc.getZ(k); rk[o] = Rk.getX(k); nor[o * 3] = N.getX(k); nor[o * 3 + 1] = N.getY(k); nor[o * 3 + 2] = N.getZ(k); };
+      for (let c = 0; c < nz; c++) for (let a = 0; a < nx; a++) put(c * nx + a, zs[c] * V1 + xs[a], 0);
+      ring.forEach(([a, c], r) => put(inner + r, zs[c] * V1 + xs[a], drop));
+      const idx = [];
+      for (let c = 0; c + 1 < nz; c++) for (let a = 0; a + 1 < nx; a++) { const i0 = c * nx + a, i1 = i0 + 1, i2 = i0 + nx, i3 = i2 + 1; idx.push(i0, i2, i1, i1, i2, i3); }   // (same winding as the plane)
+      for (let r = 0; r < ring.length; r++) { const r1 = (r + 1) % ring.length, t0 = ring[r][1] * nx + ring[r][0], t1 = ring[r1][1] * nx + ring[r1][0], s0 = inner + r, s1 = inner + r1; idx.push(t0, s0, t1, t1, s0, s1, t0, t1, s0, t1, s1, s0); }   // the skirt, both faces
+      const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.BufferAttribute(col, 3)); g.setAttribute("rocky", new THREE.BufferAttribute(rk, 1)); g.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); g.setIndex(idx); g.computeBoundingSphere(); g.computeBoundingBox();
+      const m = new THREE.Mesh(g, mat); m.visible = false; m.matrixAutoUpdate = false; world.add(m); ch.lv.push(m);
+    }
+    const bb = ch.lv[0].geometry.boundingBox; ch.cx = (bb.min.x + bb.max.x) / 2; ch.cz = (bb.min.z + bb.max.z) / 2; ch.hx = (bb.max.x - bb.min.x) / 2; ch.hz = (bb.max.z - bb.min.z) / 2;
+    GCH.list.push(ch);
+  }
+  groundLodTick(true);
+}
+const _gcP = new THREE.Vector3();
+function groundLodTick(force) {                                    // (each frame) which detail each square shows, by how far its nearest edge is
+  if (!GCH.on || !GCH.list.length) return;
+  camera.getWorldPosition(_gcP); const zk = vr.on && (vr.scoped || vr.binos) ? Math.max(1, vr.zoomK || 1) : 1, d1 = 360 * zk, d2 = 850 * zk;
+  for (const ch of GCH.list) {
+    const dx = Math.max(0, Math.abs(_gcP.x - ch.cx) - ch.hx), dz = Math.max(0, Math.abs(_gcP.z - ch.cz) - ch.hz), d = Math.hypot(dx, dz), want = d < d1 ? 0 : d < d2 ? 1 : 2;
+    if (want === ch.cur && !force) continue;
+    ch.lv.forEach((m, i) => m.visible = i === want); ch.cur = want;
+  }
+}
 let fogBase = 300, zoomed = false, tiles = [], world = null, water = 0, iced = false, snowFx = null, obstacles = new Map(), seed = 1;
 const C = h => new THREE.Color(h);
 const LEAVES = {
@@ -7793,7 +7829,7 @@ function* envGen(o) {
   const fluffPatch = (x, z) => biome === "birchmaple" || biome === "rainforest" ? 1 : lerp(.07, 3.8, smooth(.07, .37, fbm(fluN, x * .006 + 2, z * .006 - 5, 2)));   // stands with almost none, stands with a few more
   // Trees: slight species groupings with overlap, plus random loners, and more size variety
   const dens = { swamp: .42, badlands: .035, rainforest: 1.1, desert: .11, tropical: .95, temperate: .85, boreal: 1, tundra: .3, polar: 0 }[TBl(biome)] * (biome === "redwood" ? 1.1 : 1);
-  const DM = densMul(), maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees), attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25);
+  const DM = densMul(), thinK = VR_ON && HIKEMAP !== "endless" && !GLOBE && !(DEV.ok && SPD.off.thintrees) ? .65 : 1, maxTrees = Math.round((isTouch ? 4200 : 9000) * AREA * DM * PERF().trees * thinK),   /* 3.49: a headset on the 3 km maps: 35% fewer trees (they had nearly 3x the planet's near you) */ attempts = Math.round((isTouch ? 16000 : 30000) * AREA * DM * 1.25 * thinK);
   const g = biome === "redwood" ? ["#4c5e2e", "#5c4a30"] : Array.isArray(GRASS[TBl(biome)]) ? GRASS[TBl(biome)] : GRASS[TBl(biome)][season];
   const BANDS = ["#a8402a", "#c0552e", "#d26c36", "#b44a2c", "#e0a462", "#9a3a26", "#c86034", "#e8c088"].map(C);   // sandstone: deep red to orange, a few gold and cream layers
   const gA = C(g[0]), gB = C(g[1]), rockC = C(biome === "desert" ? "#a8623e" : biome === "badlands" ? "#b04a2e" : "#77736d"), snow = C("#eef3f8"), sand = C("#d8c48e"), bed = C("#4a5a4a"), mud = C("#5a5040"), basalt = C("#2a2624"), scorch = C("#7a2a12");
@@ -8049,7 +8085,7 @@ function generate() {
   if (EN) {                                            // endless: regions of every environment, built square by square as you walk
     const E = ENDLESS;
     water = 0; riverW = null; tiles = []; FEAT = null; LAVA = null; ARCHI = null; iced = false;
-    limbGrid = new Map(); limbHold = new Map(); rockGrid = null; rockLow = null; RS.ck.fill(-2147483648); soundSpots = { birds: [], crickets: [] }; terrainMesh = null;
+    limbGrid = new Map(); limbHold = new Map(); rockGrid = null; rockLow = null; RS.ck.fill(-2147483648); soundSpots = { birds: [], crickets: [] }; terrainMesh = null; GCH.on = false; GCH.list = [];
     E.clock = true; E.mapJob = null; E.envBase = { densN, spN, aspN, fluN, varN, nearRiver: () => false };
     E.kindCache = new Map(); E.envL = {}; E.envH = {}; E.regs = new Map(); E.feats = new Map(); E.lavas = []; E.prepQ = new Set();
     enWorldSetup(seed);
@@ -8371,7 +8407,9 @@ function generate() {
   geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
   geo.setAttribute("rocky", new THREE.BufferAttribute(rocky, 1));
   geo.computeVertexNormals();
-  terrainMesh = new THREE.Mesh(geo, groundMaterial(litter, TROPIC(biome) ? "#5a4a2a" : "#b5642a", weather.wet)); world.add(terrainMesh);
+  terrainMesh = new THREE.Mesh(geo, groundMaterial(litter, TROPIC(biome) ? "#5a4a2a" : "#b5642a", weather.wet));
+  GCH.on = false; GCH.list = [];
+  if (VR_ON && SEG >= 200 && !(DEV.ok && SPD.off.gchunks)) groundChunks(geo, terrainMesh.material); else world.add(terrainMesh);   // 3.49: in a headset, in squares (terrainMesh stays: the little maps read its colours)
 
   // Borderlands (endless maps): the same terrain carries on past the square, coarser further out, with forest on it
   if (!edgeShape.island) {
@@ -12687,7 +12725,7 @@ function thermHot() {                                          // the warm bodie
   for (const m of THERM.hot) m.layers.disable(THERM.lay);
   const L = [], add = o => { if (o) o.traverse(m => { if (m.isMesh) { m.layers.enable(THERM.lay); L.push(m); } }); };
   for (const A of beasts) if (!A.dead && !A.gone && A.root) add(A.root);
-  for (const B of VB.list) if (B.alive) { add(B.C && B.C.top); add(B.S && B.S.group); }
+  for (const B of VB.list) if (B.alive) { add(B.C && B.C.top); add(B.S && B.S.group); add(B.far); }   // (3.49: and a far one's stand-in)
   for (const Ln of MP.links.values()) if (Ln.R) { add(Ln.R.C && Ln.R.C.top); add(Ln.R.S && Ln.R.S.group); }
   return THERM.hot = L;
 }
@@ -13313,11 +13351,11 @@ function vruiParts() {
     uiWrap(g, "Turn something off, go back to the game and open your map: if the fps jumps, that's what's costing. 'game' is our own work each frame; the rest of the frame is the headset drawing the picture.", 650, 140, 1150, 36);
     const S = SPD.show, f = v => (v || 0).toFixed(1); g.font = "bold 30px sans-serif"; g.fillStyle = UIC.sun;
     g.fillText(FPSM.fps + " fps · game " + f(S.all) + " ms (move " + f(S.move) + ", land " + f(S.land) + ", animals " + f(S.anim) + ", send " + f(S.draw) + ") · " + SPD.calls + " draws", 650, 262);
-    g.font = "bold 26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText("What's drawn", 90, 300); g.fillText("New in 3.41 / 3.42 (off = the old way)", 90, 636); };
+    g.font = "bold 26px sans-serif"; g.fillStyle = UIC.dim; g.textAlign = "left"; g.fillText("What's drawn", 90, 300); g.fillText("New in 3.41 – 3.49 (off = the old way; * = next map)", 90, 636); };
   const tog = (k, l, x, y, w) => uiBtn(Pf, x, y, w || 270, 84, "", () => { SPD.off[k] = !SPD.off[k]; perfFresh(k); uiDraw(Pf); }, { labelFn: () => l + ": " + (SPD.off[k] ? "OFF" : "on"), active: () => !SPD.off[k], fs: 28, personal: true });
   tog("trees", "Trees near", 90, 316); tog("cards", "Trees far", 370, 316); tog("ground", "Ground", 650, 316); tog("far", "Far land", 930, 316);
   tog("water", "Water", 90, 410); tog("animals", "Animals", 370, 410); tog("sky", "Sky", 650, 410); tog("rocks", "Rocks", 930, 410);
-  tog("weather", "Rain / snow", 90, 504, 360);
+  tog("weather", "Rain / snow", 90, 504); tog("gchunks", "Ground sq.*", 370, 504); tog("farppl", "Far people", 650, 504); tog("thintrees", "Thin trees*", 930, 504);
   tog("newsky", "New sky", 90, 652, 360); tog("softfade", "Smooth fade", 470, 652, 360); tog("closecards", "Closer cards", 850, 652, 360);
   tog("simplestat", "Simple far animals", 90, 746, 560); tog("skiphid", "Skip hidden", 670, 746, 540);
   [[0, "Edge blur 0"], [.5, "Edge blur ½"], [1, "Edge blur 1"]].forEach(([v, l], i) => uiBtn(Pf, 90 + i * 380, 860, 360, 84, l, () => { SPD.fov = v; try { renderer.xr.setFoveation(v); } catch (_) {} uiDraw(Pf); }, { active: () => SPD.fov === v, fs: 28, personal: true }));
@@ -17803,6 +17841,7 @@ function vbBody(B) {
 function vbBodyDrop(B) {
   if (B.C) { charDrop(B.C); B.C = null; }
   if (B.S) { scene.remove(B.S.group, B.S.shadow); disposeSoldier(B.S); B.S = null; }
+  if (B.far) { scene.remove(B.far); B.far = null; }
   B.hold = null; B.holdKey = ""; B.skinOn = undefined;
 }
 function vbClear() { for (const B of VB.list) { vbBodyDrop(B); if (B.rx) B.rx = []; } for (const B of VB.pool) vbBodyDrop(B); VB.playing = false; }   // a new map: no bodies until the round starts
@@ -18391,11 +18430,49 @@ function vbPuppet(B, dt) {                                                    //
   if (B.alive && SND.ctx && vbStepOk(B)) mpStepTick({ id: B.id }, B, S, dt);
 }
 // ---- drawing: the soldier frame posed, the person over it (legs the way it walks, chest and gun the way it aims, head where it looks)
+const FARMAN = { geo: {}, mat: null }, PPL_NEAR = 45;                // 3.49: someone further than this (unless you're looking through a scope or binoculars) is one simple piece, not ~100
+function farManGeo(style) {                                          // a standing soldier in this camo, rifle up, baked into one shape with its colours painted on the corners
+  if (FARMAN.geo[style]) return FARMAN.geo[style];
+  const S = makeSoldier(style, 1); S.x = S.y = S.z = 0; S.yaw = -Math.PI; S.speed = 0; S.vx = S.vz = 0; S.onGround = true; S.crouchWant = 0; S.aimWant = 1; S.aim = 0;
+  for (let i = 0; i < 6; i++) poseSoldier(S, .2);
+  S.group.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(S.group.matrixWorld).invert(), M = new THREE.Matrix4(), avg = new Map(), pos = [], nor = [], col = [], c = new THREE.Color();
+  const avgOf = m => { if (!m.map || !m.map.image || !m.map.image.getContext) return null; if (avg.has(m.map)) return avg.get(m.map);
+    let r = 0, g = 0, b = 0; try { const im = m.map.image, d = im.getContext("2d").getImageData(0, 0, im.width, im.height).data; for (let i = 0; i < d.length; i += 16) { r += d[i]; g += d[i + 1]; b += d[i + 2]; } const n = d.length / 16; r /= n * 255; g /= n * 255; b /= n * 255; } catch (_) { r = g = b = .4; }
+    const v = new THREE.Color().setRGB(r, g, b).convertSRGBToLinear(); avg.set(m.map, v); return v; };
+  S.group.traverse(o => {
+    if (!o.isMesh) return; for (let q = o; q && q !== S.group; q = q.parent) if (!q.visible) return;
+    const m0 = Array.isArray(o.material) ? o.material[0] : o.material; if (!m0 || m0.visible === false || m0.transparent) return;
+    let gs = o.geometry;
+    if (o.isSkinnedMesh) { o.skeleton.update(); const P0 = gs.attributes.position, sk = new Float32Array(P0.count * 3), v = new THREE.Vector3();   // (the body bends with its bones: work out where each corner is now)
+      for (let i = 0; i < P0.count; i++) { v.fromBufferAttribute(P0, i); o.boneTransform(i, v); sk[i * 3] = v.x; sk[i * 3 + 1] = v.y; sk[i * 3 + 2] = v.z; }
+      gs = new THREE.BufferGeometry(); gs.setAttribute("position", new THREE.BufferAttribute(sk, 3)); if (o.geometry.index) gs.setIndex(o.geometry.index.clone()); gs.computeVertexNormals(); }
+    const g0 = gs.index ? gs.toNonIndexed() : gs.clone(); if (gs !== o.geometry) gs.dispose(); M.multiplyMatrices(inv, o.matrixWorld); g0.applyMatrix4(M); if (!g0.attributes.normal) g0.computeVertexNormals();
+    c.copy(m0.color || c.setRGB(1, 1, 1)); const a = avgOf(m0); if (a) c.multiply(a);
+    const P = g0.attributes.position, N = g0.attributes.normal; for (let i = 0; i < P.count; i++) { pos.push(P.getX(i), P.getY(i), P.getZ(i)); nor.push(N.getX(i), N.getY(i), N.getZ(i)); col.push(c.r, c.g, c.b); }
+    g0.dispose(); });
+  disposeSoldier(S);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3)); geo.setAttribute("color", new THREE.Float32BufferAttribute(col, 3)); geo.computeBoundingSphere();
+  return FARMAN.geo[style] = geo;
+}
+function vbFar(B) {                                                  // this bot's simple stand-in
+  if (B.far) return B.far;
+  if (!FARMAN.mat) FARMAN.mat = grade(new THREE.MeshLambertMaterial({ vertexColors: true }));
+  const m = new THREE.Mesh(farManGeo(UNIFORMS[B.u] || "green"), FARMAN.mat); m.rotation.order = "YXZ"; m.visible = false; scene.add(m); return B.far = m;
+}
+function vbFarHide(B) { if (B.far) B.far.visible = false; }
 function vbPose(B, dt) {
   const S = B.S; if (!S) return;
   const dc = Math.hypot(B.x - camera.position.x, B.z - camera.position.z), far = dc > (scene.fog ? scene.fog.far : 800) + 20;
-  if (far || !B.alive && B.deadT > PVP.bodyGone || state !== "play") { S.group.visible = false; S.shadow.visible = false; if (B.C) B.C.top.visible = false; B.posed = false; return; }
-  B.pacc = (B.pacc || 0) + dt; if (dc > 70 && B.pacc < (dc > 160 ? .1 : .05)) return; const adt = B.pacc; B.pacc = 0;
+  if (far || !B.alive && B.deadT > PVP.bodyGone || state !== "play") { S.group.visible = false; S.shadow.visible = false; if (B.C) B.C.top.visible = false; vbFarHide(B); B.posed = false; return; }
+  const zk = vr.scoped || vr.binos ? Math.max(1, vr.zoomK || 1) : 1, de = dc / zk;   // (through a scope they're as close as they look)
+  if (B.alive && de > PPL_NEAR && !(DEV.ok && SPD.off.farppl)) {     // far: the stand-in, moved every frame (smooth), nothing else drawn
+    S.group.visible = false; S.shadow.visible = false; if (B.C) B.C.top.visible = false; if (B.hold) B.hold.visible = false;
+    const m = vbFar(B), sp = S.speed || 0, ck = 1 - .28 * (S.crouchWant || 0); B.farT = (B.farT || 0) + dt * Math.min(9, sp) * 1.7;
+    m.visible = true; m.position.set(S.x, S.y + (sp > .5 && S.onGround ? Math.abs(Math.sin(B.farT)) * .07 : 0), S.z); m.rotation.set(0, S.yaw + Math.PI, 0); const bk = charOn() ? CH_BIG : 1; m.scale.set(bk, bk * ck, bk);
+    B.posed = false; B.pacc = 1; VB.shown = true; return;
+  }
+  vbFarHide(B);
+  B.pacc = (B.pacc || 0) + dt; if (de > 70 && B.pacc < (de > 160 ? .1 : .05)) return; const adt = B.pacc; B.pacc = 0;
   vbGunModel(B);
   if (!B.alive) {
     if (charOn() && vbChar(B, adt)) { S.group.visible = false; S.shadow.visible = false; return; }
@@ -18408,7 +18485,7 @@ function vbPose(B, dt) {
   if (B.alive && SND.ctx && !mpGuest() && vbStepOk(B)) mpStepTick({ id: B.id }, B, S, adt);
 }
 function vbHide() {                                                          // back in the menus: nobody standing about in the menu room
-  VB.shown = false; for (const B of VB.list) { if (B.S) { B.S.group.visible = false; B.S.shadow.visible = false; } if (B.C) B.C.top.visible = false; B.pacc = 1; }
+  VB.shown = false; for (const B of VB.list) { if (B.S) { B.S.group.visible = false; B.S.shadow.visible = false; } if (B.C) B.C.top.visible = false; vbFarHide(B); B.pacc = 1; }
 }
 function vbChar(B, dt) {
   const S = B.S;
@@ -18417,7 +18494,7 @@ function vbChar(B, dt) {
   const C = B.C; C.top.visible = true;
   if (!B.alive) { if (B.hold) B.hold.visible = false; if (C.deadT < 0) charKill(C, B.killFrom || null, B.killHead); C.top.visible = B.deadT < PVP.bodyGone; if (C.top.visible) charDeath(C, dt); return true; }
   if (C.deadT >= 0) vbRevive(C);
-  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)) * CH_BIG);   // (10% bigger: easier to see)
+  C.top.scale.setScalar(Math.max(.85, Math.min(1.2, EYE / C.rest.eye)) * CH_BIG);   // (bigger: easier to see)
   const sp = S.speed || 0, aimYaw = S.yaw; let legYaw = aimYaw, back = false;
   if (sp > .5) { const mv = Math.atan2(-S.vx, -S.vz), d = angDiff(mv, aimYaw); if (Math.abs(d) < 1.9) legYaw = mv; else { legYaw = mv + Math.PI; back = true; } }
   C.legY = C.legY === undefined ? legYaw : C.legY + angDiff(legYaw, C.legY) * Math.min(1, dt * 8);
@@ -19693,7 +19770,7 @@ const FR = new THREE.Frustum(), PM = new THREE.Matrix4(), SPH = new THREE.Sphere
 const cullCam = new THREE.PerspectiveCamera(118, 1.25, .1, 3000);   // a headset sees wider than the page camera
 const cullFT = [], cullFS = [], cullFM = [], cullFL = [];
 function cullTiles() {
-  camera.updateMatrixWorld();
+  camera.updateMatrixWorld(); groundLodTick();
   let cc = camera;
   if (vr.on && !(vr.scoped || vr.binos)) { cullCam.position.copy(camera.position); cullCam.quaternion.copy(camera.quaternion); cullCam.updateMatrixWorld(); cc = cullCam; }
   PM.multiplyMatrices(cc.projectionMatrix, cc.matrixWorldInverse); FR.setFromProjectionMatrix(PM);

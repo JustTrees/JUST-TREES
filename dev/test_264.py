@@ -31,8 +31,9 @@ JS = """async () => { const T = D.THREE, o = {}; window.FREEZE = true;
   o.spot = !!sp; if (!sp) return o; const [eye, tgt, a] = sp;
   D.vbJoin(A, true); D.vbJoin(B, true); A.alive = B.alive = true; A.x = tgt.x; A.z = tgt.z; A.y = D.H(A.x, A.z);
   B.x = tgt.x - Math.sin(a) * 4; B.z = tgt.z + Math.cos(a) * 4; B.y = D.H(B.x, B.z);
-  for (let w = 0; w < 120 && !(A.C && A.C.top && B.C && B.C.top); w++) { await new Promise(r => setTimeout(r, 150)); for (const X of [A, B]) { X.thinkT = 1e9; X.mv = { x: X.x, z: X.z, spd: 0, crouch: 0 }; X.cool = 1e9; } D.vbTick(1 / 30); }
-  for (let i = 0; i < 10; i++) { for (const X of [A, B]) { X.thinkT = 1e9; X.mv = { x: X.x, z: X.z, spd: 0, crouch: 0 }; X.cool = 1e9; } D.vbTick(1 / 30); }
+  V.scoped = true; V.zoomK = Math.tan(36 * Math.PI / 180) / Math.tan(5.5 * Math.PI / 360); D.camera.position.copy(eye); D.camera.updateMatrixWorld();   // (3.49: looking through the scope, so they're drawn in full)
+  for (let w = 0; w < 120 && !(A.C && A.C.top && B.C && B.C.top); w++) { await new Promise(r => setTimeout(r, 150)); for (const X of [A, B]) { X.thinkT = 1e9; X.mv = { x: X.x, z: X.z, spd: 0, crouch: 0 }; X.cool = 1e9; } D.camera.position.copy(eye); D.camera.updateMatrixWorld(); D.vbTick(1 / 30); }
+  for (let i = 0; i < 10; i++) { for (const X of [A, B]) { X.thinkT = 1e9; X.mv = { x: X.x, z: X.z, spd: 0, crouch: 0 }; X.cool = 1e9; } D.camera.position.copy(eye); D.camera.updateMatrixWorld(); D.vbTick(1 / 30); }
   V.head.copy(eye); const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().lookAt(eye, tgt, new T.Vector3(0, 1, 0))), k = Math.tan(36 * Math.PI / 180) / Math.tan(5.5 * Math.PI / 360);
   const r = D.renderer, rt0 = () => D.THERM.rt;
   const count = () => { const rt = D.THERM.rt, N = rt.width, px = new Uint8Array(N * N * 4); r.readRenderTargetPixels(rt, 0, 0, N, N, px); let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] > 220 && px[i + 1] < 40 && px[i + 2] > 220) n++; return n; };
